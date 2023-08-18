@@ -6,15 +6,18 @@ using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+
+using ScubaDiver.API;
+using ScubaDiver.API.Interactions.Dumps;
+using ScubaDiver.API.Utils;
+
 using RemoteNET.Internal;
 using RemoteNET.Internal.Extensions;
 using RemoteNET.Internal.Reflection;
 using RemoteNET.Internal.Utils;
 using RemoteNET.Properties;
 using RemoteNET.Utils;
-using ScubaDiver.API;
-using ScubaDiver.API.Interactions.Dumps;
-using ScubaDiver.API.Utils;
+
 
 namespace RemoteNET
 {

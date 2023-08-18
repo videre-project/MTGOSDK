@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using RemoteNET.Internal.Reflection;
+
 using ScubaDiver.API;
 using ScubaDiver.API.Interactions;
+
+using RemoteNET.Internal.Reflection;
+
 
 namespace RemoteNET
 {
