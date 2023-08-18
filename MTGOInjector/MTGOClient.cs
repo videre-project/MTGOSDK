@@ -55,6 +55,11 @@ public class MTGOClient : BaseClient
   /// </summary>
   public dynamic App => GetInstance(MTGOTypes.Get("App"));
 
+  /// <summary>
+  /// The MTGO client's modal dialog service.
+  /// </summary>
+  public dynamic DialogService => GetInstance(MTGOTypes.Get("DialogService"));
+
   //
   // Derived properties
   //
@@ -102,5 +107,31 @@ public class MTGOClient : BaseClient
       hookName: "prefix",
       callback: new((HookContext context, dynamic instance, dynamic[] args)
         => context.CallOriginal = false));
+  }
+
+  //
+  // MTGO interactive methods
+  //
+
+  public bool DialogWindow(string title,
+                           string text,
+                           string? okButton="Ok",
+                           string? cancelButton="Cancel")
+  {
+    dynamic viewModel = CreateInstance(MTGOTypes.Get("GenericDialogViewModel"));
+    viewModel.m_title = title;
+    viewModel.m_text = text;
+    viewModel.m_showOkButton = okButton != null;
+    if (okButton != null)
+      viewModel.m_okayButtonLabel = okButton;
+
+    viewModel.m_showCancelButton = okButton != null;
+    if (cancelButton != null)
+      viewModel.m_cancelButtonLabel = cancelButton;
+
+    bool result = DialogService.ShowModal<dynamic>(viewModel, -1);
+    DialogService.TryDisposeViewModel(viewModel);
+
+    return result;
   }
 }
