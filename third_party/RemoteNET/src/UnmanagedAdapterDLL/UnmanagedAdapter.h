@@ -1,5 +1,6 @@
 #pragma once
-#include "stdafx.h"
+#pragma comment(lib, "mscoree.lib")
+
 #include <metahost.h>
 #include <locale>
 #include <memory>
@@ -8,19 +9,18 @@
 #include <vector>
 #include <iostream>
 #include <stdexcept>
-#pragma comment(lib, "mscoree.lib")
+
+#include "stdafx.h"
+
 
 // For exporting functions without name-mangling
-#define DllExport extern "C" __declspec( dllexport )
+#define DllExport extern "C" __declspec(dllexport)
 
 // Our sole export for the time being
 DllExport void AdapterEntryPoint(const wchar_t* managedDllLocation);
 
 // Not exporting, so go ahead and name-mangle
 ICLRRuntimeHost* StartCLR(LPCWSTR dotNetVersion);
-
-ICLRRuntimeHost* StartCLRCore();
-
 
 static std::vector<std::wstring> split(const std::wstring& input, const std::wstring& delimiter)
 {
@@ -48,16 +48,3 @@ static bool icase_wchar_cmp(const wchar_t a, const wchar_t b)
 {
 	return std::tolower(a) == std::tolower(b);
 }
-
-static bool icase_cmp(std::wstring const& s1, std::wstring const& s2)
-{
-	return s1.size() == s2.size()
-		&& std::equal(s1.begin(), s1.end(), s2.begin(), icase_wchar_cmp);
-}
-
-enum class FrameworkType
-{
-	UNKNOWN,
-	NET_FRAMEWORK,
-	NET_CORE
-};

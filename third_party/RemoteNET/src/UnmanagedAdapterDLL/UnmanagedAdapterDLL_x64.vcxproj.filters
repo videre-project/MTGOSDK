@@ -21,9 +21,6 @@
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="msgboxf.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="UnmanagedAdapter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
