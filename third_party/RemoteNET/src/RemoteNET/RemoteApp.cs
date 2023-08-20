@@ -324,7 +324,7 @@ namespace RemoteNET
       }
 
       // Going over unzipped files and checking which of those we need to copy to our AppData directory
-      tempDirInfo = new DirectoryInfo(Path.Combine(tempDir, targetDiver));
+      tempDirInfo = new DirectoryInfo(Path.Combine(tempDir, "ScubaDiver"));
       foreach (FileInfo fileInfo in tempDirInfo.GetFiles())
       {
         string destPath = Path.Combine(scubaDestDirInfo.FullName, fileInfo.Name);

@@ -199,10 +199,10 @@ namespace ScubaDiver.API
         {
           HookContext hookContext = new(res.StackTrace);
 
-          // Run hook. No results expected directly (it might alter variabels inside the hook)
+          // Run hook. No results expected directly (it might alter variables inside the hook)
           hook(hookContext, res.Parameters.FirstOrDefault(), res.Parameters.Skip(1).ToArray());
 
-          // Report back whether to call the original function or no (Harmony wants this as the return value)
+          // Report back whether to call the original function or not (Harmony wants this as the return value)
           InvocationResults ir = new()
           {
             VoidReturnType = false,

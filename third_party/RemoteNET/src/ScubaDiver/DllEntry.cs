@@ -13,12 +13,14 @@ namespace ScubaDiver;
 public class DllEntry
 {
   #region P/Invoke Console Spawning
+
   [DllImport("kernel32.dll",
     EntryPoint = "GetStdHandle",
     SetLastError = true,
     CharSet = CharSet.Auto,
     CallingConvention = CallingConvention.StdCall)]
   private static extern IntPtr GetStdHandle(int nStdHandle);
+
   [DllImport("kernel32.dll",
     EntryPoint = "AllocConsole",
     SetLastError = true,
@@ -26,8 +28,9 @@ public class DllEntry
     CallingConvention = CallingConvention.StdCall)]
   [return: MarshalAs(UnmanagedType.Bool)]
   private static extern bool AllocConsole();
+
   private const int STD_OUTPUT_HANDLE = -11;
-  private const int MY_CODE_PAGE = 437;
+
   #endregion
 
   private static bool _assembliesResolverRegistered = false;
@@ -76,7 +79,6 @@ public class DllEntry
     }
   }
 
-
   public static int EntryPoint(string pwzArgument)
   {
     // UnmanagedAdapterDLL needs to call a C# function with exactly this signature.
@@ -91,8 +93,8 @@ public class DllEntry
       _assembliesResolverRegistered = true;
     }
 
-    if (Logger.DebugInRelease.Value &&
-      !Debugger.IsAttached)
+    // if (Logger.DebugInRelease.Value && !Debugger.IsAttached)
+    if (true)//FIXME: For Testing
     {
       // If we need to log and a debugger isn't attached then we can't use
       // the Debug.Write(Line) method. We need a console, which the app might not current have.
@@ -101,17 +103,16 @@ public class DllEntry
       if (AllocConsole())
       {
         IntPtr stdHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-        SafeFileHandle safeFileHandle = new SafeFileHandle(stdHandle, true);
-        FileStream fileStream = new FileStream(safeFileHandle, FileAccess.Write);
+        SafeFileHandle safeFileHandle = new(stdHandle, true);
+        FileStream fileStream = new(safeFileHandle, FileAccess.Write);
         Encoding encoding = Encoding.ASCII;
-        StreamWriter standardOutput = new StreamWriter(fileStream, encoding);
-        standardOutput.AutoFlush = true;
+        StreamWriter standardOutput = new(fileStream, encoding) { AutoFlush = true };
         Console.SetOut(standardOutput);
       }
     }
 
     ParameterizedThreadStart func = DiverHost;
-    Thread diverHostThread = new Thread(func);
+    Thread diverHostThread = new(func);
     diverHostThread.Start(pwzArgument);
 
     Logger.Debug("[EntryPoint] Returning");

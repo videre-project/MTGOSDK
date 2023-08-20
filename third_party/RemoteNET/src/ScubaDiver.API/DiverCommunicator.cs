@@ -27,7 +27,7 @@ namespace ScubaDiver.API
     readonly object _withErrors = NewtonsoftProxy.JsonSerializerSettingsWithErrors;
 
     private readonly string _hostname;
-    private readonly int _diverPort;
+    public int DiverPort { get; private set; }
 
     private int? _process_id = null;
     private CallbacksListener _listener;
@@ -35,7 +35,7 @@ namespace ScubaDiver.API
     public DiverCommunicator(string hostname, int diverPort)
     {
       _hostname = hostname;
-      _diverPort = diverPort;
+      DiverPort = diverPort;
       _listener = new CallbacksListener(this);
     }
     public DiverCommunicator(IPAddress ipa, int diverPort) : this(ipa.ToString(), diverPort) { }
@@ -55,7 +55,7 @@ namespace ScubaDiver.API
         queryString.Add(kvp.Key, kvp.Value);
       }
 
-      string url = $"http://{_hostname}:{_diverPort}/{path}?{queryString}";
+      string url = $"http://{_hostname}:{DiverPort}/{path}?{queryString}";
       HttpRequestMessage msg;
       if (jsonBody == null)
       {

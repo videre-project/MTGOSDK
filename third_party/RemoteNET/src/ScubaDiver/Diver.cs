@@ -62,7 +62,7 @@ public class Diver : IDisposable
   {
     _responseBodyCreators = new Dictionary<string, Func<HttpListenerRequest, string>>()
     {
-      // Divert maintenance
+      // Diver maintenance
       {"/ping", MakePingResponse},
       {"/die", MakeDieResponse},
       {"/register_client", MakeRegisterClientResponse},
