@@ -51,8 +51,7 @@ public class BaseClient
 
   public virtual void Dispose()
   {
-    // TODO: Call dispose method to clean up the lifeboat process
-    // Client.Dispose();
+    Client.Dispose();
     ClientProcess.Kill();
   }
 
@@ -156,22 +155,23 @@ public class BaseClient
                                  HookAction callback)
   {
     MethodInfo method = GetInstanceMethod(queryPath, methodName);
-    //FIXME: This breaks on subsequent connections if the original tracker
-    //       process exits and later reconnects.
-    // switch (hookName)
-    // {
-    //   case "prefix":
-    //     Client.Harmony.Patch(method, prefix: callback);
-    //     break;
-    //   case "postfix":
-    //     Client.Harmony.Patch(method, postfix: callback);
-    //     break;
-    //   case "finalizer":
-    //     Client.Harmony.Patch(method, finalizer: callback);
-    //     break;
-    //   default:
-    //     throw new Exception($"Unknown hook type: {hookName}");
-    // }
+    switch (hookName)
+    {
+      //
+      // FIXME: prefix/postfix patches break on subsequent client connections.
+      //
+      case "prefix":
+        Client.Harmony.Patch(method, prefix: callback);
+        break;
+      case "postfix":
+        Client.Harmony.Patch(method, postfix: callback);
+        break;
+      case "finalizer":
+        Client.Harmony.Patch(method, finalizer: callback);
+        break;
+      default:
+        throw new Exception($"Unknown hook type: {hookName}");
+    }
   }
 
   // TODO: Add unhooking methods + unhook all methods on exit
