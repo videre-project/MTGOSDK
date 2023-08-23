@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 
 using RemoteNET.Internal.Extensions;
 using RemoteNET.Properties;
@@ -12,19 +11,18 @@ namespace RemoteNET
 {
   public static class Bootstrapper
   {
-    public static string AppDataDir = Path.Combine(
+    public static string AppDataDir =>
+      Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        typeof(RemoteApp).Assembly.GetName().Name);
+        ExtractDir);
+    public static string ExtractDir = typeof(RemoteApp).Assembly.GetName().Name;
 
     public static void Inject(Process target, ushort diverPort)
     {
       // Not injected yet, Injecting adapter now (which should load the Diver)
-      string targetDotNetVer = target.GetSupportedTargetFramework();
-      GetInjectionToolkit(target,
-          out string launcherPath,
-          out string scubaDiverDllPath);
+      GetInjectionToolkit(target, out string launcherPath, out string diverPath);
       string adapterExecutionArg = string.Join("*",
-          scubaDiverDllPath,
+          diverPath,
           "ScubaDiver.DllEntry",
           "EntryPoint",
           diverPort.ToString());
@@ -48,16 +46,14 @@ namespace RemoteNET
       else
       {
         // Stdout must be read to prevent deadlock when injector process exits.
-        // _ = injectorProc.StandardOutput.ReadToEnd();
-        var stdout = injectorProc.StandardOutput.ReadToEnd();
-        Console.WriteLine("Injector stdout: " + stdout);
+        _ = injectorProc.StandardOutput.ReadToEnd();
       }
     }
 
     private static void GetInjectionToolkit(
       Process target,
       out string launcherPath,
-      out string scubaDiverDllPath)
+      out string diverPath)
     {
       // Dumping injector + adapter DLL to a %localappdata%\RemoteNET
       DirectoryInfo remoteNetAppDataDirInfo = new DirectoryInfo(AppDataDir);
@@ -81,20 +77,22 @@ namespace RemoteNET
       OverrideFileIfChanged(launcherPath, launcherResource);
       OverrideFileIfChanged(adapterPath, adapterResource);
 
+      // Get the path to the diver DLL
+      string diverDir = Path.Combine(AppDataDir, "ScubaDiver");
+      diverPath = Path.Combine(diverDir, "ScubaDiver.dll");
+
       // Unzip scuba diver and dependencies into their own directory
-      string targetDiver = "ScubaDiver_NetFramework";
-      var scubaDestDirInfo = new DirectoryInfo(Path.Combine(AppDataDir, targetDiver));
+      var scubaDestDirInfo = new DirectoryInfo(Path.Combine(AppDataDir, "ScubaDiver"));
       if (!scubaDestDirInfo.Exists)
       {
         scubaDestDirInfo.Create();
       }
 
-      // Temp dir to dump to before moving to app data (where it might have previously deployed files
-      // AND they might be in use by some application so they can't be overwritten)
+      // Temp dir to dump to before moving to app data (where it might have
+      // previously deployed files and they might be in use by some application
+      // so they can't be overwritten)
       Random rand = new Random();
-      var tempDir = Path.Combine(
-        Path.GetTempPath(),
-        rand.Next(100000).ToString());
+      var tempDir = Path.Combine(Path.GetTempPath(), rand.Next(100000).ToString());
       DirectoryInfo tempDirInfo = new DirectoryInfo(tempDir);
       if (tempDirInfo.Exists)
       {
@@ -130,11 +128,6 @@ namespace RemoteNET
 
       // We are done with our temp directory
       tempDirInfo.Delete(recursive: true);
-      var matches = scubaDestDirInfo
-        .EnumerateFiles()
-        .Where(scubaFile => scubaFile.Name.EndsWith($"{targetDiver}.dll"));
-
-      scubaDiverDllPath = matches.Single().FullName;
     }
 
     private static void OverrideFileIfChanged(string path, byte[] data)

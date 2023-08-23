@@ -4,13 +4,12 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net7.0</TargetFramework>
 		<LangVersion>Latest</LangVersion>
-    <!-- <RootNamespace>MTGOInjector</RootNamespace> -->
+    <RootNamespace>MTGOInjector</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- <PackageReference Include="RemoteNET" Version="1.0.1.27" /> -->
     <ProjectReference Include="..\third_party\RemoteNET\src\RemoteNET\RemoteNET.csproj" />
     <ProjectReference Include="..\third_party\RemoteNET\src\ScubaDiver.API\ScubaDiver.API.csproj" />
   </ItemGroup>

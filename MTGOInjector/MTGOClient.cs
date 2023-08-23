@@ -41,6 +41,9 @@ public class MTGOClient : BaseClient
       .FirstOrDefault()
         ?? throw new Exception("MTGO process not found.");
 
+  protected override string ExtractDir =>
+    Path.Join(/* %appdata%\..\Local\ */ "MTGOInjector", "bin");
+
   //
   // MTGO class instances
   //

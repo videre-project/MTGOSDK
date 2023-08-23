@@ -15,6 +15,7 @@ public class BaseClient
 {
   protected virtual Process ClientProcess { get; private set; } = default!;
   public readonly RemoteApp Client;
+  public bool Is_Reconnect { get; private set; } = false;
 
   /// <summary>
   /// A list of non-system modules loaded by the client.
@@ -26,10 +27,14 @@ public class BaseClient
         new string[] { "\\Windows\\", "\\ProgramData\\" }
           .All(s => m.FileName.Contains(s) == false));
 
-  public bool Is_Reconnect { get; private set; } = false;
+  /// <summary>
+  /// The directory path to extract runtime injector and diver assemblies to.
+  /// </summary>
+  protected virtual string ExtractDir { get; private set; } = "";
 
   public BaseClient()
   {
+    RemoteNET.Bootstrapper.ExtractDir = ExtractDir;
     Client = GetClientHandle();
   }
 
