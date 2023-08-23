@@ -63,9 +63,9 @@ namespace RemoteNET.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
-        internal static byte[] Injector {
+        internal static byte[] Launcher {
             get {
-                object obj = ResourceManager.GetObject("Injector", resourceCulture);
+                object obj = ResourceManager.GetObject("Launcher", resourceCulture);
                 return ((byte[])(obj));
             }
         }
@@ -73,9 +73,9 @@ namespace RemoteNET.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
-        internal static byte[] Injector_x64 {
+        internal static byte[] Launcher_x64 {
             get {
-                object obj = ResourceManager.GetObject("Injector_x64", resourceCulture);
+                object obj = ResourceManager.GetObject("Launcher_x64", resourceCulture);
                 return ((byte[])(obj));
             }
         }
@@ -93,9 +93,9 @@ namespace RemoteNET.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
-        internal static byte[] UnmanagedAdapterDLL {
+        internal static byte[] Bootstrapper {
             get {
-                object obj = ResourceManager.GetObject("UnmanagedAdapterDLL", resourceCulture);
+                object obj = ResourceManager.GetObject("Bootstrapper", resourceCulture);
                 return ((byte[])(obj));
             }
         }
@@ -103,9 +103,9 @@ namespace RemoteNET.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
-        internal static byte[] UnmanagedAdapterDLL_x64 {
+        internal static byte[] Bootstrapper_x64 {
             get {
-                object obj = ResourceManager.GetObject("UnmanagedAdapterDLL_x64", resourceCulture);
+                object obj = ResourceManager.GetObject("Bootstrapper_x64", resourceCulture);
                 return ((byte[])(obj));
             }
         }

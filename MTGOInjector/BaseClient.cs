@@ -37,7 +37,7 @@ public class BaseClient
   {
     // Check if the client injector is already loaded
     Is_Reconnect = ClientModules
-      .Any(m => m.FileName.Contains("UnmanagedAdapterDLL"));
+      .Any(m => m.FileName.Contains("Bootstrapper"));
 
     // Connect to the target process
     var Client = RemoteApp.Connect(ClientProcess);

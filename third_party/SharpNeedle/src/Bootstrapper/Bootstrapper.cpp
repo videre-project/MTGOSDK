@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 #include "stdafx.h"
-#include "UnmanagedAdapter.h"
+#include "Bootstrapper.h"
 
 
 DllExport void AdapterEntryPoint(const wchar_t* adapterDllArg)

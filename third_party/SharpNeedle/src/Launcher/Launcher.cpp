@@ -34,16 +34,16 @@ int main(int argc, char** argv)
 	mbstowcs_s(&convertedChars, adapterDllArg, MAX_PATH, argv[2], _TRUNCATE);
 
 
-	printf("UnmanagedAdapterDLL encoded argument: %ls\n", adapterDllArg);
+	printf("Bootstrapper encoded argument: %ls\n", adapterDllArg);
 
 	DWORD Pid = atoi(argv[1]);
 #ifdef _WIN64
-	strcat_s(DllName, "\\UnmanagedAdapterDLL_x64.dll");
+	strcat_s(DllName, "\\Bootstrapper_x64.dll");
 #else
-	strcat_s(DllName, "\\UnmanagedAdapterDLL.dll");
+	strcat_s(DllName, "\\Bootstrapper.dll");
 #endif
 
-	printf("[.] Injecting UnmanagedAdapterDLL into %d\n", Pid);
+	printf("[.] Injecting Bootstrapper into %d\n", Pid);
 	InjectAndRunThenUnload(Pid, DllName, "AdapterEntryPoint", adapterDllArg);
 
 	printf("[.] Done!");

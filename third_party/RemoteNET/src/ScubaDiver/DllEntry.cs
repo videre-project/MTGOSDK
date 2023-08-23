@@ -81,7 +81,7 @@ public class DllEntry
 
   public static int EntryPoint(string pwzArgument)
   {
-    // UnmanagedAdapterDLL needs to call a C# function with exactly this signature.
+    // Bootstrapper needs to call a C# function with exactly this signature.
     // So we use it to just create a diver, and run the Start func (blocking)
 
     // Diver needs some assemblies which might not be loaded in the target process

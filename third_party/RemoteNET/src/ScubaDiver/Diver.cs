@@ -196,7 +196,7 @@ public class Diver : IDisposable
       // Then our process attaches to the other one and reads its memory.
       //
       // NOTE: This subprocess inherits handles to DLLs in the current process so it might "lock"
-      // both UnmanagedAdapterDLL.dll and ScubaDiver.dll
+      // both Bootstrapper.dll and ScubaDiver.dll
       _dt = DataTarget.CreateSnapshotAndAttach(Process.GetCurrentProcess().Id);
       _runtime = _dt.ClrVersions.Single().CreateRuntime();
     }
