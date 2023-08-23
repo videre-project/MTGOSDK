@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 
 using ScubaDiver.API;
 
@@ -22,12 +19,11 @@ namespace RemoteNET.Internal
   }
   public static class DiverDiscovery
   {
-    public static DiverState QueryStatus(Process target)
+    public static DiverState QueryStatus(
+      Process target,
+      string diverAddr,
+      ushort diverPort)
     {
-      ushort diverPort = (ushort)target.Id;
-
-      // TODO: Make it configurable
-      string diverAddr = "127.0.0.1";
       DiverCommunicator com = new DiverCommunicator(diverAddr, diverPort);
 
       // We WANT to check liveness of the diver using HTTP but this might take a
@@ -50,12 +46,9 @@ namespace RemoteNET.Internal
         // Had some issues, perhapse it's the diver holding that port.
       }
 
-      if (!diverPortIsFree)
+      if (!diverPortIsFree && com.CheckAliveness())
       {
-        if (com.CheckAliveness())
-        {
-          return DiverState.Alive;
-        }
+        return DiverState.Alive;
       }
 
       // Diver isn't alive. It's possible that it was never injected or it was
@@ -64,7 +57,7 @@ namespace RemoteNET.Internal
       try
       {
         containsToolkitDll |= target.Modules.AsEnumerable()
-          .Any(module => module.ModuleName.Contains("UnmanagedAdapterDLL"));
+          .Any(module => module.ModuleName.Contains("Bootstrapper"));
       }
       catch
       {
@@ -75,8 +68,10 @@ namespace RemoteNET.Internal
         // Check if the this is a snapshot created by the diver.
         if (target.Threads.Count == 0)
           return DiverState.HollowSnapshot;
+  
         return DiverState.Corpse;
       }
+
       return DiverState.NoDiver;
     }
   }

@@ -93,8 +93,7 @@ public class DllEntry
       _assembliesResolverRegistered = true;
     }
 
-    // if (Logger.DebugInRelease.Value && !Debugger.IsAttached)
-    if (true)//FIXME: For Testing
+    if (Logger.DebugInRelease.Value && !Debugger.IsAttached)
     {
       // If we need to log and a debugger isn't attached then we can't use
       // the Debug.Write(Line) method. We need a console, which the app might not current have.
