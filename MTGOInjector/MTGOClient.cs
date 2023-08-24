@@ -117,6 +117,10 @@ public class MTGOClient : BaseClient
   // MTGO interactive methods
   //
 
+  /// <summary>
+  /// Displays a dialog window on the MTGO client with the given title and text.
+  /// </summary>
+  /// <returns>A boolean representing the user response</returns>
   public bool DialogWindow(string title,
                            string text,
                            string? okButton="Ok",
@@ -125,12 +129,9 @@ public class MTGOClient : BaseClient
     dynamic viewModel = CreateInstance(MTGOTypes.Get("GenericDialogViewModel"));
     viewModel.m_title = title;
     viewModel.m_text = text;
-    viewModel.m_showOkButton = okButton != null;
-    if (okButton != null)
+    if (viewModel.m_showOkButton = okButton != null)
       viewModel.m_okayButtonLabel = okButton;
-
-    viewModel.m_showCancelButton = okButton != null;
-    if (cancelButton != null)
+    if (viewModel.m_showCancelButton = cancelButton != null)
       viewModel.m_cancelButtonLabel = cancelButton;
 
     bool result = DialogService.ShowModal<dynamic>(viewModel, -1);
