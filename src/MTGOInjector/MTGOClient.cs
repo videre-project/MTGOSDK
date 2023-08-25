@@ -3,7 +3,6 @@
   SPDX-License-Identifier: BSD-3-Clause
 **/
 
-using System.IO;
 using System.Diagnostics;
 
 using ScubaDiver.API.Hooking;
@@ -42,6 +41,9 @@ public class MTGOClient : BaseClient
       .FirstOrDefault()
         ?? throw new Exception("MTGO process not found.");
 
+  /// <summary>
+  /// The Local AppData directory for storing MTGOInjector assemblies.
+  /// </summary>
   protected override string ExtractDir =>
     Path.Join(/* %appdata%\..\Local\ */ "MTGOInjector", "bin");
 
@@ -69,9 +71,15 @@ public class MTGOClient : BaseClient
   // Derived properties
   //
 
+  /// <summary>
+  /// Returns the path to the MTGO client's assembly directory.
+  /// </summary>
   public string AssemblyPath =>
     InvokeMethod(MTGOTypes.Get("Utility"), "GetAssemblyPath");
 
+  /// <summary>
+  /// Returns the path to the MTGO client's data directory.
+  /// </summary>
   public string DataRootPath =>
     InvokeMethod(MTGOTypes.Get("Utility"), "GetDataRootPath");
 
@@ -104,14 +112,14 @@ public class MTGOClient : BaseClient
   /// </summary>
   public void DisableTelemetry()
   {
-    // Disable the Gibraltar logging session
+    //
+    // This calls the `Log.EndSession` method on the Gibraltar.Agent class,
+    // which can be called multiple times safely.
+    //
+    // Refer to the 'Ending a Session' section of the Gibraltar docs:
+    // https://doc.onloupe.com/Gibraltar.Agent~Gibraltar.Agent.Log.html
+    //
     App.EndGibraltarSession("Normal Shutdown");
-
-    // // Disable subsequent calls to prevent invalid requests
-    // HookInstanceMethod(MTGOTypes.Get("App"), "EndGibraltarSession",
-    //   hookName: "prefix",
-    //   callback: new((HookContext context, dynamic instance, dynamic[] args)
-    //     => context.CallOriginal = false));
   }
 
   //
