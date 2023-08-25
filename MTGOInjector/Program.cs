@@ -16,6 +16,10 @@ int userId = FlsClient.m_loggedInUser.Id;
 string username = FlsClient.m_loggedInUser.Name;
 Console.WriteLine($"User #{userId} logged in as '{username}'");
 
+client.DialogWindow("MTGO Injector",
+                    $"User #{userId} logged in as '{username}'",
+                    cancelButton: null);
+
 
 while (true)
 {

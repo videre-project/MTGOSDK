@@ -82,7 +82,30 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PostBuildEvent>xcopy /Y /s "$(TargetDir)" "$(SolutionDir)dist\$(ConfigurationName)\$(ProjectName)\"</PostBuildEvent>
-  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ilmerge" Version="3.0.29" />
+  </ItemGroup>
+  <Target Name="ILMerge" AfterTargets="PostBuildEvent">
+    <Exec Command="$(ILMergeConsolePath) ^
+      ScubaDiver.dll /ndebug ^
+        0Harmony.dll /internalize ^
+        Microsoft.Bcl.AsyncInterfaces.dll ^
+        Microsoft.Diagnostics.NETCore.Client.dll ^
+        Microsoft.Diagnostics.Runtime.dll ^
+        Newtonsoft.Json.dll ^
+        ScubaDiver.API.dll ^
+        System.Buffers.dll ^
+        System.Collections.Immutable.dll ^
+        System.Memory.dll ^
+        System.Numerics.Vectors.dll ^
+        System.Reflection.Metadata.dll ^
+        System.Runtime.CompilerServices.Unsafe.dll ^
+        System.Threading.Tasks.Extensions.dll ^
+      /lib=$(TargetDir) ^
+      /out=$(TargetDir)Microsoft.Diagnostics.Utilities.dll"
+    />
+  </Target>
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="xcopy /Y &quot;$(TargetDir)&quot; &quot;$(SolutionDir)dist\$(ConfigurationName)\$(ProjectName)\&quot;" />
+  </Target>
 </Project>

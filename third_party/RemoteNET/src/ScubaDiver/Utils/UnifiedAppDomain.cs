@@ -45,7 +45,7 @@ public class UnifiedAppDomain
                 .GetObject(cand.Address, false, cand.Type, cand.HashCode)
                 .instance)
           .Cast<AppDomain>().ToArray();
-        Logger.Debug("[Diver][UnifiedAppDomain] All assemblies were retrieved from all AppDomains :)");
+        Logger.Debug("[Diver][UnifiedAppDomain] All assemblies were retrieved from all AppDomains");
       }
       catch (Exception ex)
       {

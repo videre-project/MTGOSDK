@@ -97,10 +97,6 @@ public class Diver : IDisposable
   {
     Logger.Debug("[Diver] Is logging debugs in release? " + Logger.DebugInRelease.Value);
 
-    // Load or Hijack Newtonsoft.Json
-    var nsJson = InitNewtonsoftJson();
-    Logger.Debug("[Diver] Newtonsoft.Json's module path: " + nsJson.Location);
-
     // Start session
     RefreshRuntime();
     HttpListener listener = new();
@@ -201,14 +197,7 @@ public class Diver : IDisposable
       _runtime = _dt.ClrVersions.Single().CreateRuntime();
     }
   }
-  private Assembly InitNewtonsoftJson()
-  {
-    // This will trigger our resolver to either get a pre-loaded Newtonsoft.Json version
-    // (used by our target) or, if not found, load our own dll.
-    Assembly ass = Assembly.Load(new AssemblyName("Newtonsoft.Json"));
-    NewtonsoftProxy.Init(ass);
-    return ass;
-  }
+
   private object ParseParameterObject(ObjectOrRemoteAddress param)
   {
     switch (param)

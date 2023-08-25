@@ -43,8 +43,7 @@ namespace ScubaDiver.API.Utils
     {
       Type convert = NewtonsoftProxy.JsonConvert;
 
-      List<object> args = new List<object>();
-      args.Add(o);
+      List<object> args = new List<object>() {o};
 
       var SerializeObject = convert.GetMethods((BindingFlags)0xffff)
         .Where(mi => mi.Name == "SerializeObject")
@@ -65,36 +64,17 @@ namespace ScubaDiver.API.Utils
 
   public static class NewtonsoftProxy
   {
-    private static Assembly _newtonsoft;
-
-    public static void Init(Assembly assembly)
-    {
-      _newtonsoft = assembly;
-    }
-
-    private static void AutoInit()
-    {
-      if(_newtonsoft == null)
-        _newtonsoft = AppDomain.CurrentDomain.Load(new AssemblyName("Newtonsoft.Json"));
-    }
-
     public static object JsonSerializerSettingsWithErrors
     {
       get
       {
-        AutoInit();
-        //JsonSerializerSettings _withErrors = new()
-        //{
-        //    MissingMemberHandling = MissingMemberHandling.Error
-        //};
-        Type MissingMemberHandlingEnum = _newtonsoft
-          .GetType("Newtonsoft.Json.MissingMemberHandling");
+        Type MissingMemberHandlingEnum = typeof(Newtonsoft.Json.MissingMemberHandling);
         var MissingMemberHandling_Error = Enum
           .GetValues(MissingMemberHandlingEnum)
           .Cast<object>()
           .Single(val => val.ToString() == "Error");
 
-        Type t = _newtonsoft.GetType("Newtonsoft.Json.JsonSerializerSettings");
+        Type t = typeof(Newtonsoft.Json.JsonSerializerSettings);
         var inst = Activator.CreateInstance(t);
         t.GetProperty("MissingMemberHandling")
           .SetValue(inst, MissingMemberHandling_Error);
@@ -103,13 +83,6 @@ namespace ScubaDiver.API.Utils
       }
     }
 
-    public static Type JsonConvert
-    {
-      get
-      {
-        AutoInit();
-        return _newtonsoft.GetType("Newtonsoft.Json.JsonConvert");
-      }
-    }
+    public static Type JsonConvert => typeof(Newtonsoft.Json.JsonConvert);
   }
 }

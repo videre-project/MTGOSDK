@@ -79,7 +79,7 @@ namespace RemoteNET
 
       // Get the path to the diver DLL
       string diverDir = Path.Combine(AppDataDir, "ScubaDiver");
-      diverPath = Path.Combine(diverDir, "ScubaDiver.dll");
+      diverPath = Path.Combine(diverDir, "Microsoft.Diagnostics.Utilities.dll");
 
       // Unzip scuba diver and dependencies into their own directory
       var scubaDestDirInfo = new DirectoryInfo(Path.Combine(AppDataDir, "ScubaDiver"));
