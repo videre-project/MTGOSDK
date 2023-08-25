@@ -3,6 +3,7 @@
   SPDX-License-Identifier: BSD-3-Clause
 **/
 
+using System.IO;
 using System.Diagnostics;
 
 using ScubaDiver.API.Hooking;

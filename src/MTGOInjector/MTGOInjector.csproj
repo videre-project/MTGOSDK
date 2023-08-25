@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net7.0</TargetFramework>
 		<LangVersion>Latest</LangVersion>
     <RootNamespace>MTGOInjector</RootNamespace>
@@ -10,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\third_party\RemoteNET\src\RemoteNET\RemoteNET.csproj" />
-    <ProjectReference Include="..\third_party\RemoteNET\src\ScubaDiver.API\ScubaDiver.API.csproj" />
+    <ProjectReference Include="..\..\third_party\RemoteNET\src\RemoteNET\RemoteNET.csproj" />
+    <ProjectReference Include="..\..\third_party\RemoteNET\src\ScubaDiver.API\ScubaDiver.API.csproj" />
   </ItemGroup>
 
 </Project>
