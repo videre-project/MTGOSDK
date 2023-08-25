@@ -13,9 +13,16 @@ namespace MTGOInjector;
 
 public class BaseClient
 {
+  
+  /// <summary>
+  /// The native process handle to the client.
+  /// </summary>
   protected virtual Process ClientProcess { get; private set; } = default!;
+
+  /// <summary>
+  /// The RemoteNET handle to interact with the client.
+  /// </summary>
   public readonly RemoteApp Client;
-  public bool Is_Reconnect { get; private set; } = false;
 
   /// <summary>
   /// A list of non-system modules loaded by the client.
@@ -32,12 +39,20 @@ public class BaseClient
   /// </summary>
   protected virtual string ExtractDir { get; private set; } = "";
 
+  /// <summary>
+  /// Indicates whether the client has reconnected to the diver.
+  /// </summary>
+  public bool Is_Reconnect { get; private set; } = false;
+
   public BaseClient()
   {
     RemoteNET.Bootstrapper.ExtractDir = ExtractDir;
     Client = GetClientHandle();
   }
 
+  /// <summary>
+  /// Connects to the target process and returns a RemoteNET client handle.
+  /// </summary>
   private RemoteApp GetClientHandle()
   {
     // Check if the client injector is already loaded
@@ -54,6 +69,9 @@ public class BaseClient
     return Client;
   }
 
+  /// <summary>
+  /// Disconnects from the target process and disposes of the client handle.
+  /// </summary>
   public virtual void Dispose()
   {
     Client.Dispose();
@@ -81,9 +99,7 @@ public class BaseClient
 
   public Type GetInstanceType(string queryPath)
   {
-    return Client.GetRemoteType(queryPath)
-      ?? throw new Exception($"Type not found: {queryPath}");
-    // return GetInstanceTypes(queryPath).Single();
+    return GetInstanceTypes(queryPath).Single();
   }
 
   public IEnumerable<Type> GetInstanceTypes(string queryPath)
