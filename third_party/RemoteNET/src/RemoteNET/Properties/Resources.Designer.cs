@@ -114,7 +114,7 @@ namespace RemoteNET.Properties {
         ///   Looks up a localized resource of type System.String.
         /// </summary>
         internal static string ScubaDiver_AsmName {
-            get => "Microsoft.Diagnostics.Utilities.dll";
+            get => "Microsoft.Diagnostics.Runtime.dll";
         }
     }
 }
