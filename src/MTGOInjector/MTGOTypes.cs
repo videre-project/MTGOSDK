@@ -8,48 +8,48 @@ namespace MTGOInjector;
 
 public static class MTGOTypes
 {
+  public static Tuple<string, string?, string?> TypeProps(
+    string Class,
+    string? Base=null,
+    string? Interface=null)
+  {
+    return new (Class, Base, Interface);
+  }
+
   public static Dictionary<string, Tuple<string, string?, string?>> Map =>
     new()
     {
       // Core
       {"DialogService",
-        new ( "Shiny.Core.DialogManagement.DialogService",
-              null,
-              "Shiny.Core.Interfaces.IDialogService" )},
+        TypeProps( Class: "Shiny.Core.DialogManagement.DialogService",
+                   Interface: "Shiny.Core.Interfaces.IDialogService" )},
       {"GenericDialogViewModel",
-        new ( "Shiny.ViewModels.GenericDialogViewModel",
-              "Shiny.ViewModels.BasicDialogViewModelBase",
-              null )},
+        TypeProps( Class: "Shiny.ViewModels.GenericDialogViewModel",
+                   Base: "Shiny.ViewModels.BasicDialogViewModelBase" )},
       // FlsClient
       {"FlsClientSession",
-        new ( "FlsClient.FlsClientSession",
-              "FlsClient.ClientSessionBase",
-              "FlsClient.Interface.IFlsClientSession" )},
+        TypeProps( Class: "FlsClient.FlsClientSession",
+                   Base: "FlsClient.ClientSessionBase",
+                   Interface: "FlsClient.Interface.IFlsClientSession" )},
       // MTGO -> Shiny
       {"App",
-        new ( "Shiny.App",
-              "System.Windows.Application",
-              null )},
+        TypeProps( Class: "Shiny.App",
+                   Base: "System.Windows.Application" )},
       // PlayScene -> Shiny.Play
       {"PlaySceneViewModel",
-        new ( "Shiny.Play.PlaySceneViewModel",
-              "Shiny.Core.SceneViewModel",
-              "Shiny.Core.Interfaces.IPlaySceneViewModel" )},
+        TypeProps( Class: "Shiny.Play.PlaySceneViewModel",
+                   Base: "Shiny.Core.SceneViewModel",
+                   Interface: "Shiny.Core.Interfaces.IPlaySceneViewModel" )},
       // WotC.MtGO.Client.Common
       {"ObjectProvider",
-        new ( "WotC.MtGO.Client.Common.ServiceLocation.ObjectProvider",
-              null,
-              null )},
+        TypeProps( Class: "WotC.MtGO.Client.Common.ServiceLocation.ObjectProvider" )},
       // WotC.MtGO.Client.Model.Core
       {"Utility",
-        new ( "WotC.MtGO.Client.Model.Core.Utility",
-              null,
-              null )},
+        TypeProps( Class: "WotC.MtGO.Client.Model.Core.Utility" )},
       // WotC.MtGO.Client.Model.Play
       {"Match",
-        new ( "WotC.MtGO.Client.Model.Play.MatchEvent.Match",
-              "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase",
-              null )},
+        TypeProps( Class: "WotC.MtGO.Client.Model.Play.MatchEvent.Match",
+                   Base: "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase" )},
     };
 
   public static string Get(string name, string key = "Class") =>
