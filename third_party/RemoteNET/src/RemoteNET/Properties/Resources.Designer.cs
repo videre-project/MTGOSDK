@@ -83,16 +83,6 @@ namespace RemoteNET.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
-        internal static byte[] ScubaDivers {
-            get {
-                object obj = ResourceManager.GetObject("ScubaDivers", resourceCulture);
-                return ((byte[])(obj));
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized resource of type System.Byte[].
-        /// </summary>
         internal static byte[] Bootstrapper {
             get {
                 object obj = ResourceManager.GetObject("Bootstrapper", resourceCulture);
@@ -108,6 +98,23 @@ namespace RemoteNET.Properties {
                 object obj = ResourceManager.GetObject("Bootstrapper_x64", resourceCulture);
                 return ((byte[])(obj));
             }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Byte[].
+        /// </summary>
+        internal static byte[] ScubaDiver {
+            get {
+                object obj = ResourceManager.GetObject("ScubaDiver", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.String.
+        /// </summary>
+        internal static string ScubaDiver_AsmName {
+            get => "Microsoft.Diagnostics.Utilities.dll";
         }
     }
 }

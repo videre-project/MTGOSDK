@@ -61,73 +61,27 @@ namespace RemoteNET
         remoteNetAppDataDirInfo.Create();
 
       // Decide which injection toolkit to use x32 or x64
-      byte[] launcherResource = Resources.Launcher;
-      launcherPath = Path.Combine(AppDataDir, "Launcher.exe");
-      byte[] adapterResource = Resources.Bootstrapper;
-      var adapterPath = Path.Combine(AppDataDir, "Bootstrapper.dll");
-      if (target.Is64Bit())
-      {
-        launcherResource = Resources.Launcher_x64;
-        launcherPath = Path.Combine(AppDataDir, "Launcher_x64.exe");
-        adapterResource = Resources.Bootstrapper_x64;
-        adapterPath = Path.Combine(AppDataDir, "Bootstrapper_x64.dll");
-      }
+      byte[] launcherResource = target.Is64Bit()
+        ? Resources.Launcher_x64
+        : Resources.Launcher;
+      launcherPath = target.Is64Bit()
+        ? Path.Combine(AppDataDir, "Launcher_x64.exe")
+        : Path.Combine(AppDataDir, "Launcher.exe");
+      byte[] adapterResource = target.Is64Bit()
+        ? Resources.Bootstrapper_x64
+        : Resources.Bootstrapper;
+      var adapterPath = target.Is64Bit()
+        ? Path.Combine(AppDataDir, "Bootstrapper_x64.dll")
+        : Path.Combine(AppDataDir, "Bootstrapper.dll");
+
+      // Get the .NET diver assembly to inject into the target process
+      byte[] diverResource = Resources.ScubaDiver;
+      diverPath = Path.Combine(AppDataDir, Resources.ScubaDiver_AsmName);
 
       // Check if injector or bootstrap resources differ from copies on disk
       OverrideFileIfChanged(launcherPath, launcherResource);
       OverrideFileIfChanged(adapterPath, adapterResource);
-
-      // Get the path to the diver DLL
-      string diverDir = Path.Combine(AppDataDir, "ScubaDiver");
-      diverPath = Path.Combine(diverDir, "Microsoft.Diagnostics.Utilities.dll");
-
-      // Unzip scuba diver and dependencies into their own directory
-      var scubaDestDirInfo = new DirectoryInfo(Path.Combine(AppDataDir, "ScubaDiver"));
-      if (!scubaDestDirInfo.Exists)
-      {
-        scubaDestDirInfo.Create();
-      }
-
-      // Temp dir to dump to before moving to app data (where it might have
-      // previously deployed files and they might be in use by some application
-      // so they can't be overwritten)
-      Random rand = new Random();
-      var tempDir = Path.Combine(Path.GetTempPath(), rand.Next(100000).ToString());
-      DirectoryInfo tempDirInfo = new DirectoryInfo(tempDir);
-      if (tempDirInfo.Exists)
-      {
-        tempDirInfo.Delete(recursive: true);
-      }
-      tempDirInfo.Create();
-      using (var diverZipMemoryStream = new MemoryStream(Resources.ScubaDivers))
-      {
-        ZipArchive diverZip = new ZipArchive(diverZipMemoryStream);
-        // This extracts the "Scuba" directory from the zip to *tempDir*
-        diverZip.ExtractToDirectory(tempDir);
-      }
-
-      // Going over unzipped files and checking which of those we need to copy to our AppData directory
-      tempDirInfo = new DirectoryInfo(Path.Combine(tempDir, "ScubaDiver"));
-      foreach (FileInfo fileInfo in tempDirInfo.GetFiles())
-      {
-        string destPath = Path.Combine(scubaDestDirInfo.FullName, fileInfo.Name);
-        if (File.Exists(destPath))
-        {
-          string dumpedFileHash = HashUtils.FileSHA256(fileInfo.FullName);
-          string previousFileHash = HashUtils.FileSHA256(destPath);
-          if (dumpedFileHash == previousFileHash)
-          {
-            // Skipping file because the previous version of it has the same hash
-            continue;
-          }
-        }
-        // Moving file to our AppData directory
-        File.Delete(destPath);
-        fileInfo.MoveTo(destPath);
-      }
-
-      // We are done with our temp directory
-      tempDirInfo.Delete(recursive: true);
+      OverrideFileIfChanged(diverPath, diverResource);
     }
 
     private static void OverrideFileIfChanged(string path, byte[] data)

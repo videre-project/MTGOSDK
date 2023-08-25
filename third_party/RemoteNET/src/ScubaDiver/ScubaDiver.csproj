@@ -106,6 +106,6 @@
     />
   </Target>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="xcopy /Y &quot;$(TargetDir)&quot; &quot;$(SolutionDir)dist\$(ConfigurationName)\$(ProjectName)\&quot;" />
+    <Exec Command="xcopy /Y &quot;$(TargetDir)\Microsoft.Diagnostics.Utilities.dll&quot; &quot;$(SolutionDir)dist\$(ConfigurationName)\Microsoft.Diagnostics.Utilities.dll*&quot;" />
   </Target>
 </Project>
