@@ -1,3 +1,4 @@
+<!-- This file is used to provide missing properties for the msbuild cli. -->
 <Project>
  <PropertyGroup>
     <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
