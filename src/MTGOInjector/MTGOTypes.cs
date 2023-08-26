@@ -25,35 +25,57 @@ public static class MTGOTypes
   public static Dictionary<string, Tuple<string, string?, string?>> Map =>
     new()
     {
-      // Core
+      //
+      // Core.dll
+      //
       {"DialogService",
+        // Manager for creating and displaying dialog windows on the client.
         TypeProps( Class:     "Shiny.Core.DialogManagement.DialogService",
                    Interface: "Shiny.Core.Interfaces.IDialogService" )},
       {"GenericDialogViewModel",
+        // A generic view model for displaying a message box on the client.
         TypeProps( Class:     "Shiny.ViewModels.GenericDialogViewModel",
                    Base:      "Shiny.ViewModels.BasicDialogViewModelBase" )},
-      // FlsClient
+      //
+      // FlsClient.dll
+      //
       {"FlsClientSession",
+        // Provides basic information about the current user and client session.
         TypeProps( Class:     "FlsClient.FlsClientSession",
                    Base:      "FlsClient.ClientSessionBase",
                    Interface: "FlsClient.Interface.IFlsClientSession" )},
-      // MTGO -> Shiny
+      //
+      // MTGO.exe
+      //
       {"App",
+        // The MTGO client's main WPF application entrypoint.
         TypeProps( Class:     "Shiny.App",
                    Base:      "System.Windows.Application" )},
-      // PlayScene -> Shiny.Play
+      //
+      // PlayScene.dll
+      //
       {"PlaySceneViewModel",
+        // Global manager for active leagues, matches, or game sessions.
         TypeProps( Class:     "Shiny.Play.PlaySceneViewModel",
                    Base:      "Shiny.Core.SceneViewModel",
                    Interface: "Shiny.Core.Interfaces.IPlaySceneViewModel" )},
-      // WotC.MtGO.Client.Common
+      //
+      // WotC.MtGO.Client.Common.dll
+      //
       {"ObjectProvider",
+        // Global manager for all singleton objects registered with the client.
         TypeProps( Class:     "WotC.MtGO.Client.Common.ServiceLocation.ObjectProvider" )},
-      // WotC.MtGO.Client.Model.Core
+      //
+      // WotC.MtGO.Client.Model.Core.dll
+      //
       {"Utility",
+        // Provides filesystem paths to client data and assembly directories.
         TypeProps( Class:     "WotC.MtGO.Client.Model.Core.Utility" )},
-      // WotC.MtGO.Client.Model.Play
+      //
+      // WotC.MtGO.Client.Model.Play.dll
+      //
       {"Match",
+        // Manager instance for an active match, used for all event types.
         TypeProps( Class:     "WotC.MtGO.Client.Model.Play.MatchEvent.Match",
                    Base:      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase" )},
     };
