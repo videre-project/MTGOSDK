@@ -19,12 +19,9 @@ Building this project with [MSBuild](https://learn.microsoft.com/en-us/visualstu
 
 ## License
 
-[BSD-3-Clause License](/LICENSE).
+[Apache-2.0 License](/LICENSE).
 
 ## Disclaimer
-
-<!-- https://opensource.google.com/docs/releasing/publishing/#disclaimer -->
-*This is not an official Google product.*
 
 > [!NOTE]
 > This project is protected under U.S., **Section 103(f)** of the Digital Millennium Copyright Act (DMCA) ([17 USC § 1201 (f)](http://www.law.cornell.edu/uscode/text/17/1201)) protections for reverse-engineering for the purpose of enabling ‘cooperative interoperability’.
