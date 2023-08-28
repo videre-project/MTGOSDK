@@ -4,7 +4,6 @@
 **/
 
 using System;
-using System.Threading.Tasks;
 
 using MTGOInjector;
 
@@ -42,16 +41,11 @@ string username = FlsClientSession.m_loggedInUser.Name;
 Console.WriteLine($"User #{userId} logged in as '{username}'");
 
 //
-// This is a simple example of how to use the client's DialogWindow method to
-// display a message box modal on the client.
+// This is a simple example of how to use the client's Toast method to display
+// a simple toast modal on the client.
 //
-client.DialogWindow("MTGO Injector",
-                    $"User #{userId} logged in as '{username}'",
-                    cancelButton: null);
+client.Toast("MTGO Injector", $"User #{userId} logged in as '{username}'");
 
-
-// For this demo, wait indefinitely to ensure any invoked async methods fire.
-while (true)
-{
-  await Task.Delay(5000);
-}
+// For this demo, wait until key press to ensure any invoked async methods fire.
+Console.WriteLine("Press any key to exit...");
+Console.ReadKey();

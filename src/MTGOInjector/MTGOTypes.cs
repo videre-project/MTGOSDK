@@ -32,6 +32,10 @@ public static class MTGOTypes
         // Manager for creating and displaying dialog windows on the client.
         TypeProps( Class:     "Shiny.Core.DialogManagement.DialogService",
                    Interface: "Shiny.Core.Interfaces.IDialogService" )},
+      {"RelayCommand",
+        // A queueable implementation of the ICommand interface.
+        TypeProps ( Class:    "Shiny.Core.RelayCommand",
+                    Base:     "System.Windows.Input.ICommand" )},
       {"GenericDialogViewModel",
         // A generic view model for displaying a message box on the client.
         TypeProps( Class:     "Shiny.ViewModels.GenericDialogViewModel",
@@ -51,6 +55,27 @@ public static class MTGOTypes
         // The MTGO client's main WPF application entrypoint.
         TypeProps( Class:     "Shiny.App",
                    Base:      "System.Windows.Application" )},
+      {"ShellView",
+        // Main controller for all client windows and scenes / view models.
+        TypeProps( Class:     "Shiny.ShellView",
+                   Base:      "Shiny.Chat.Views.ChatWindowHost" )},
+      {"ShellViewModel",
+        // MainUI view model for the client's main window and scenes.
+        TypeProps( Class:     "Shiny.ShellViewModel",
+                   Base:      "Shiny.Core.ViewModelBase",
+                   Interface: "Shiny.Core.Interfaces.IShellViewModel" )},
+      {"ToastController",
+        // Main controller for all toast modals on the client.
+        TypeProps ( Class:    "Shiny.Toast.ToastController" )},
+      {"ToastViewManager",
+        // Manager for creating and displaying toast modal on the client.
+        TypeProps( Class:     "Shiny.Toast.ToastViewManager",
+                   Interface: "Shiny.Core.Interfaces.IToastViewManager" )},
+      {"BasicToastViewModel",
+        // A generic view model for displaying a toast modal on the client.
+        TypeProps( Class:     "Shiny.Toast.ViewModels.BasicToastViewModel",
+                   Base:      "Shiny.Core.ViewModelBase",
+                   Interface: "Shiny.IToastViewModel" )},
       //
       // PlayScene.dll
       //

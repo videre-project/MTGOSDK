@@ -52,12 +52,6 @@ public class MTGOClient : BaseClient
   //
 
   /// <summary>
-  /// <para>Type: System.Appdomain</para>
-  /// The logical memory boundary for the MTGO client.
-  /// </summary>
-  public dynamic AppDomain => GetInstance("System.AppDomain");
-
-  /// <summary>
   /// The MTGO client's main application entrypoint.
   /// </summary>
   public dynamic App => GetInstance(MTGOTypes.Get("App"));
@@ -66,6 +60,11 @@ public class MTGOClient : BaseClient
   /// The MTGO client's modal dialog service.
   /// </summary>
   public dynamic DialogService => GetInstance(MTGOTypes.Get("DialogService"));
+
+  /// <summary>
+  /// The MTGO client's toast notification service.
+  /// </summary>
+  dynamic ToastController => GetInstance(MTGOTypes.Get("ToastViewManager"));
 
   //
   // Derived properties
@@ -147,5 +146,18 @@ public class MTGOClient : BaseClient
     DialogService.TryDisposeViewModel(viewModel);
 
     return result;
+  }
+
+  public void Toast(string title, string text, Uri? uri=null)
+  {
+    var relatedView = ObjectProvider("ShellViewModel").MainRelatedView;
+    // if (uri is not null)
+    //   CreateInstance(MTGOTypes.Get("RelayCommand"), () =>
+    //     ToastController.WindowsShell.StartProcess(uri.OriginalString));
+
+    dynamic toastViewModel = CreateInstance(MTGOTypes.Get("BasicToastViewModel"),
+      text, relatedView, title, false);
+
+    ToastController.DisplayToast(toastViewModel);
   }
 }

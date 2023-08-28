@@ -46,7 +46,7 @@ public class BaseClient
 
   public BaseClient()
   {
-    RemoteNET.Bootstrapper.ExtractDir = ExtractDir;
+    Bootstrapper.ExtractDir = ExtractDir;
     Client = GetClientHandle();
   }
 
@@ -127,10 +127,10 @@ public class BaseClient
     return methods;
   }
 
-  public dynamic CreateInstance(string queryPath)
+  public dynamic CreateInstance(string queryPath, params object[] parameters)
   {
     RemoteActivator activator = Client.Activator;
-    RemoteObject queryObject = activator.CreateInstance(queryPath);
+    RemoteObject queryObject = activator.CreateInstance(queryPath, parameters);
     return queryObject.Dynamify();
   }
 
