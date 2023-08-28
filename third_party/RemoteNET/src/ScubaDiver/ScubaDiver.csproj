@@ -50,7 +50,6 @@
     <Compile Include="Utils\ObjectDumpFactory.cs" />
     <Compile Include="Utils\Pinnable.cs" />
     <Compile Include="Utils\SmartLocksDict.cs" />
-    <Compile Include="Utils\TypesResolver.cs" />
     <Compile Include="Utils\UnifiedAppDomain.cs" />
   </ItemGroup>
   <ItemGroup>

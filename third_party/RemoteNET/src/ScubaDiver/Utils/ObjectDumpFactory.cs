@@ -23,7 +23,7 @@ public static class ObjectDumpFactory
       od = new ObjectDump()
       {
         Type = instance.GetType().ToString(),
-        RetrivalAddress = retrievalAddr,
+        RetrievalAddress = retrievalAddr,
         PinnedAddress = pinAddr,
         PrimitiveValue = PrimitivesEncoder.Encode(instance),
         HashCode = instance.GetHashCode()
@@ -41,7 +41,7 @@ public static class ObjectDumpFactory
         {
           ObjectType = ObjectType.Array,
           SubObjectsType = ObjectType.Primitive,
-          RetrivalAddress = retrievalAddr,
+          RetrievalAddress = retrievalAddr,
           PinnedAddress = pinAddr,
           PrimitiveValue = PrimitivesEncoder.Encode(instance),
           SubObjectsCount = enumerable.Length,
@@ -57,7 +57,7 @@ public static class ObjectDumpFactory
         {
           ObjectType = ObjectType.Array,
           SubObjectsType = ObjectType.NonPrimitive,
-          RetrivalAddress = retrievalAddr,
+          RetrievalAddress = retrievalAddr,
           PinnedAddress = pinAddr,
           PrimitiveValue = "==UNUSED==",
           SubObjectsCount = enumerable.Length,
@@ -75,15 +75,12 @@ public static class ObjectDumpFactory
       od = new ObjectDump()
       {
         ObjectType = ObjectType.NonPrimitive,
-        RetrivalAddress = retrievalAddr,
+        RetrievalAddress = retrievalAddr,
         PinnedAddress = pinAddr,
         Type = dumpedObjType.FullName,
         HashCode = instance.GetHashCode()
       };
     }
-
-
-
 
     List<MemberDump> fields = new();
     var eventNames = dumpedObjType
@@ -116,7 +113,7 @@ public static class ObjectDumpFactory
         {
           Name = fieldInfo.Name,
           HasEncodedValue = false,
-          RetrivalError = $"Failed to read. Exception: {e}"
+          RetrievalError = $"Failed to read. Exception: {e}"
         });
       }
     }
@@ -124,16 +121,14 @@ public static class ObjectDumpFactory
     List<MemberDump> props = new();
     foreach (var propInfo in dumpedObjType.GetProperties((BindingFlags)0xffff))
     {
+      // Skip properties that don't have a getter
       if (propInfo.GetMethod == null)
-      {
-        // No getter, skipping
         continue;
-      }
 
       try
       {
         //
-        // Property dumping is disabled. It should be accessed on demend using th 'get_' function.
+        // Property dumping is disabled. It should be accessed using the 'get_' function.
         //
         
         //var propValue = propInfo.GetValue(instance);
@@ -158,16 +153,14 @@ public static class ObjectDumpFactory
         {
           Name = propInfo.Name,
           HasEncodedValue = false,
-          RetrivalError = $"Failed to read. Exception: {e}"
+          RetrievalError = $"Failed to read. Exception: {e}"
         });
       }
     }
 
-
-    // populate fields and properties
+    // Populate fields and properties
     od.Fields = fields;
     od.Properties = props;
-
 
     return od;
   }

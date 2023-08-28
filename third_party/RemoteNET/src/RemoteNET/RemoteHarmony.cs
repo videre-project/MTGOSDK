@@ -127,7 +127,7 @@ namespace RemoteNET
 				for (int i = 0; i < len; i++)
 				{
 					// Since this object isn't really a local array (just a proxy of a remote one) the index
-					// acceess causes a 'GetItem' function call and retrival of the remote object at the position
+					// acceess causes a 'GetItem' function call and retrieval of the remote object at the position
 					dynamic item = dro[i];
 					decodedParameters[i] = item;
 				}

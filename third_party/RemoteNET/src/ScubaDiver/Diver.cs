@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -453,7 +452,7 @@ public class Diver : IDisposable
 
     //
     // A GC collect might still happen between checking
-    // the CLR MD object and the retrival of the object
+    // the CLR MD object and the retrieval of the object
     // So we check the final object's type name one last time
     // (It's better to crash here then return bas objects)
     //
@@ -470,7 +469,7 @@ public class Diver : IDisposable
     }
 
     if (finalTypeName != typeName)
-      throw new Exception("A GC occurened between checking the CLR MD (twice) and the object retrival." +
+      throw new Exception("A GC occurened between checking the CLR MD (twice) and the object retrieval." +
                 "A different object was retrieved and its type is not the one we expected." +
                 $"Expected Type: {typeName}, Actual Type: {finalTypeName}");
 

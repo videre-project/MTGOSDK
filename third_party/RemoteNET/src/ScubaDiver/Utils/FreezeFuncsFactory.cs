@@ -1,12 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 
 namespace ScubaDiver;
@@ -30,7 +26,6 @@ public static class FreezeFuncsFactory
     }
     return func;
   }
-
 
   private static FreezeFunc GenerateInternal(int numArguments)
   {
@@ -110,7 +105,6 @@ public static class FreezeFuncsFactory
       il.Emit(OpCodes.Ldloc, i);
       il.Emit(OpCodes.Call, typeof(IntPtr).GetConstructor(new[] { typeof(void*) }));
 
-
       // Our fixed pointer to the first field of the class lets
       // us calculate the address to the object.
       // We have:
@@ -136,7 +130,6 @@ public static class FreezeFuncsFactory
       il.Emit(OpCodes.Stelem_I8);
     }
 
-
     // Signal that the objects have been pinned
     // `frozenFeedback.Set()`
     il.Emit(OpCodes.Ldarg_2);
@@ -148,7 +141,6 @@ public static class FreezeFuncsFactory
     il.Emit(OpCodes.Ldarg_3);
     il.Emit(OpCodes.Callvirt, typeof(WaitHandle).GetMethod("WaitOne", Array.Empty<Type>()));
     il.Emit(OpCodes.Pop);
-
 
     // Return
     il.Emit(OpCodes.Ret);

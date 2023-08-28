@@ -51,7 +51,8 @@ public class UnifiedAppDomain
       {
         Logger.Debug("[Diver][UnifiedAppDomain] Failed to search heap for Runtime Assemblies. Error: " + ex.Message);
 
-        // Fallback - Just return all assemblies in the current AppDomain. Obviously, it's not ALL of them but sometimes it's good enough.
+        // Fallback - Just return all assemblies in the current AppDomain.
+        // Obviously, it's not ALL of them but sometimes it's good enough.
         _domains = new[] { AppDomain.CurrentDomain };
       }
     }
@@ -65,8 +66,9 @@ public class UnifiedAppDomain
 
   public Type ResolveType(string typeFullName, string assembly = null)
   {
-    // TODO: Nullable gets a special case but in general we should switch to a recursive type-resolution.
-    // So stuff like: Dictionary<FirstAssembly.FirstType, SecondAssembly.SecondType> will always work
+    // TODO: Nullable gets a special case but in general we should switch to a
+    //       recursive type-resolution to account for types like:
+    //           Dictionary<FirstAssembly.FirstType, SecondAssembly.SecondType>
     if (typeFullName.StartsWith("System.Nullable`1[["))
     {
       return ResolveNullableType(typeFullName, assembly);

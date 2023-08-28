@@ -39,14 +39,14 @@ public static class ClrExt
     public ulong MethodTable { get; set; }
     public int Token { get; set; }
   }
-  public static IEnumerable<TypeDefToMethod> OldSchoolEnumerateTypeDefToMethodTableMap(this ClrModule mod)
+  public static IEnumerable<TypeDefToMethod> EnumerateTypeDefToMethodTableMap(this ClrModule mod)
   {
-    //EnumerateTypeDefToMethodTableMap wants to return an IEnumerable<(ulong,int)> to us but returning tuples costs
-    //us another dependency so we're avoiding it.
-    IEnumerable misteriousEnumerable = typeof(ClrModule)
+    // EnumerateTypeDefToMethodTableMap wants to return an IEnumerable<(ulong,int)>
+    // to us but returning tuples costs us another dependency so we're avoiding it.
+    IEnumerable unresolvedEnumerable = typeof(ClrModule)
       .GetMethod("EnumerateTypeDefToMethodTableMap")
       .Invoke(mod, new object[0]) as IEnumerable;
-    foreach (object o in misteriousEnumerable)
+    foreach (object o in unresolvedEnumerable)
     {
       var type = o.GetType();
       ulong mt = (ulong)type.GetField("Item1").GetValue(o);

@@ -26,6 +26,5 @@ internal class Logger
     {
       System.Diagnostics.Debug.WriteLine(s);
     }
-
   }
 }

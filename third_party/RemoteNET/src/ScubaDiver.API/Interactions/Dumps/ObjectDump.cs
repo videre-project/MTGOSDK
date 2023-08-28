@@ -19,7 +19,7 @@ namespace ScubaDiver.API.Interactions.Dumps
     /// <summary>
     /// Address where the item was retrieved from
     /// </summary>
-    public ulong RetrivalAddress { get; set; }
+    public ulong RetrievalAddress { get; set; }
     /// <summary>
     /// Address when the item was freezed at when pinning. This address won't change until unpinning.
     /// </summary>

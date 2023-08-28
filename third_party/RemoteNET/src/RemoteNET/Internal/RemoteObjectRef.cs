@@ -56,9 +56,9 @@ namespace RemoteNET.Internal
       }
 
       var field = _remoteObjectInfo.Fields.Single(fld => fld.Name == name);
-      if (!string.IsNullOrEmpty(field.RetrivalError))
+      if (!string.IsNullOrEmpty(field.RetrievalError))
         throw new Exception(
-          $"Field of the remote object could not be retrieved. Error: {field.RetrivalError}");
+          $"Field of the remote object could not be retrieved. Error: {field.RetrievalError}");
 
       // field has a value. Returning as-is for the user to parse
       return field;
@@ -77,10 +77,10 @@ namespace RemoteNET.Internal
       }
 
       var property = _remoteObjectInfo.Properties.Single(prop => prop.Name == name);
-      if (!string.IsNullOrEmpty(property.RetrivalError))
+      if (!string.IsNullOrEmpty(property.RetrievalError))
       {
         throw new Exception(
-          $"Property of the remote object could not be retrieved. Error: {property.RetrivalError}");
+          $"Property of the remote object could not be retrieved. Error: {property.RetrievalError}");
       }
 
       // property has a value. Returning as-is for the user to parse

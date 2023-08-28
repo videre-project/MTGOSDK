@@ -11,6 +11,7 @@ public class RegisteredMethodHookInfo
   /// The patch callback that was registered on the method
   /// </summary>
   public Delegate RegisteredProxy { get; set; }
+
   /// <summary>
   /// The method that was hooked
   /// </summary>

@@ -23,7 +23,7 @@ public class FrozenObjectsCollection
   }
 
   /// <summary>
-  /// Return the address where an object is pinned. If the object isn't pinned, false is returned.
+  /// Return the address where an object is pinned, otherwise returns false.
   /// </summary>
   /// <returns>True if it was pinned, False if it wasn't</returns>
   public bool TryGetPinningAddress(object o, out ulong addr)
@@ -55,7 +55,6 @@ public class FrozenObjectsCollection
 
       // Wait for the freezer task to signal to us
       frozenFeedback.WaitOne();
-
 
       // Dispose of last Freezer
       _unfreezeRequested?.Set();

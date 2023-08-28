@@ -9,8 +9,8 @@ namespace ScubaDiver;
 /// <summary>
 /// This collection allows saving a "lock" for every element where:
 /// 1. Multiple threads can lock the same element at the same time
-/// 2. If a thread tries to re-lock an element which it already lock it gets notified about it
-/// 3. Also there's an API to block threads for blocking ANY element (temporarily)
+/// 2. Notify a thread if it tries to lock an element which it already locked.
+/// 3. Also there's an API to temporarily block threads for blocking ANY element.
 /// </summary>
 public class SmartLocksDict<T>
 {
@@ -27,9 +27,13 @@ public class SmartLocksDict<T>
   [Flags]
   public enum SmartLockThreadState
   {
-    AllowAllLocks = 0, // Default state, if others aren't defined this one is implied
-    ForbidLocking, // This thread is not allowed to lock any of the locks
-    TemporarilyAllowLocks // When combined with ForbidLocking, it means the thread is GENERALLY not allowed to lock but temporarily it is.
+    // Default state, if others aren't defined this one is implied
+    AllowAllLocks = 0,
+    // This thread is not allowed to lock any of the locks
+    ForbidLocking,
+    // When combined with ForbidLocking, it means the thread is GENERALLY not
+    // allowed to lock but temporarily it is.
+    TemporarilyAllowLocks
   }
 
   public void SetSpecialThreadState(int tid, SmartLockThreadState state)
@@ -37,13 +41,9 @@ public class SmartLocksDict<T>
     if (_threadStates.TryGetValue(tid, out var current))
     {
       if (state == SmartLockThreadState.AllowAllLocks)
-      {
         _threadStates.TryRemove(tid, out _);
-      }
       else
-      {
         _threadStates.TryUpdate(tid, state, current);
-      }
     }
     else
     {
@@ -51,15 +51,9 @@ public class SmartLocksDict<T>
     }
   }
 
-  public void Add(T item)
-  {
-    _dict.TryAdd(item, new Entry());
-  }
+  public void Add(T item) => _dict.TryAdd(item, new Entry());
 
-  public void Remove(T item)
-  {
-    _dict.TryRemove(item, out _);
-  }
+  public void Remove(T item) => _dict.TryRemove(item, out _);
 
   public enum AcquireResults
   {
@@ -83,11 +77,8 @@ public class SmartLocksDict<T>
       }
     }
 
-    Entry entry;
-    if (!_dict.TryGetValue(item, out entry))
-    {
+    if (!_dict.TryGetValue(item, out Entry entry))
       return AcquireResults.NoSuchItem;
-    }
 
     AcquireResults result;
     lock (entry._lock)
@@ -108,15 +99,12 @@ public class SmartLocksDict<T>
 
   public void Release(T item)
   {
-    Entry entry;
-    if (!_dict.TryGetValue(item, out entry))
-    {
+    if (!_dict.TryGetValue(item, out Entry entry))
       return;
-    }
 
-    int currentThreadId = Thread.CurrentThread.ManagedThreadId;
     lock (entry._lock)
     {
+      int currentThreadId = Thread.CurrentThread.ManagedThreadId;
       entry._holdersThreadIDs.Remove(currentThreadId);
     }
   }

@@ -8,6 +8,6 @@
     public string Name { get; set; }
     public bool HasEncodedValue { get; set; }
     public string EncodedValue { get; set; }
-    public string RetrivalError { get; set; }
+    public string RetrievalError { get; set; }
   }
 }
