@@ -64,7 +64,7 @@ public class MTGOClient : BaseClient
   /// <summary>
   /// The MTGO client's toast notification service.
   /// </summary>
-  dynamic ToastController => GetInstance(MTGOTypes.Get("ToastViewManager"));
+  public dynamic ToastController => GetInstance(MTGOTypes.Get("ToastViewManager"));
 
   //
   // Derived properties
@@ -129,10 +129,11 @@ public class MTGOClient : BaseClient
   /// Displays a dialog window on the MTGO client with the given title and text.
   /// </summary>
   /// <returns>A boolean representing the user response</returns>
-  public bool DialogWindow(string title,
-                           string text,
-                           string? okButton="Ok",
-                           string? cancelButton="Cancel")
+  public bool DialogWindow(
+    string title,
+    string text,
+    string? okButton="Ok",
+    string? cancelButton="Cancel")
   {
     dynamic viewModel = CreateInstance(MTGOTypes.Get("GenericDialogViewModel"));
     viewModel.m_title = title;

@@ -13,7 +13,6 @@ namespace MTGOInjector;
 
 public class BaseClient
 {
-  
   /// <summary>
   /// The native process handle to the client.
   /// </summary>
@@ -117,8 +116,9 @@ public class BaseClient
     return GetInstanceMethods(queryPath, methodName).Single();
   }
 
-  public IEnumerable<MethodInfo> GetInstanceMethods(string queryPath,
-                                                    string methodName)
+  public IEnumerable<MethodInfo> GetInstanceMethods(
+    string queryPath,
+    string methodName)
   {
     Type type = GetInstanceType(queryPath);
     var methods = type.GetMethods((BindingFlags)0xffff)
@@ -138,9 +138,10 @@ public class BaseClient
   // Reflection wrapper methods
   //
 
-  public MethodInfo? GetMethod(string queryPath,
-                               string methodName,
-                               Type[]? genericTypes=null)
+  public MethodInfo? GetMethod(
+    string queryPath,
+    string methodName,
+    Type[]? genericTypes=null)
   {
     var remoteType = GetInstanceType(queryPath);
     var remoteMethod = remoteType.GetMethod(methodName);
@@ -155,10 +156,11 @@ public class BaseClient
   /// <summary>
   /// Invokes a static method on the target process.
   /// </summary>
-  public dynamic InvokeMethod(string queryPath,
-                              string methodName,
-                              Type[]? genericTypes=null,
-                              params object[]? args)
+  public dynamic InvokeMethod(
+    string queryPath,
+    string methodName,
+    Type[]? genericTypes=null,
+    params object[]? args)
   {
     var remoteMethod = GetMethod(queryPath, methodName, genericTypes);
 #pragma warning disable CS8603
@@ -170,17 +172,15 @@ public class BaseClient
   // HookingManager wrapper methods
   //
 
-  public void HookInstanceMethod(string queryPath,
-                                 string methodName,
-                                 string hookName,
-                                 HookAction callback)
+  public void HookInstanceMethod(
+    string queryPath,
+    string methodName,
+    string hookName,
+    HookAction callback)
   {
     MethodInfo method = GetInstanceMethod(queryPath, methodName);
     switch (hookName)
     {
-      //
-      // FIXME: prefix/postfix patches break on subsequent client connections.
-      //
       case "prefix":
         Client.Harmony.Patch(method, prefix: callback);
         break;
@@ -198,7 +198,8 @@ public class BaseClient
   // TODO: Add unhooking methods + unhook all methods on exit
   //       (or just unhook all methods on exit)
 
-  // public void UnhookInstanceMethod(string queryPath,
-  //                                  string methodName,
-  //                                  string hookName)
+  // public void UnhookInstanceMethod(
+  //   string queryPath,
+  //   string methodName,
+  //   string hookName)
 }
