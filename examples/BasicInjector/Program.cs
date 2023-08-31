@@ -6,6 +6,7 @@
 using System;
 
 using MTGOInjector;
+using ScubaDiver.API.Hooking;
 
 
 //
@@ -24,7 +25,7 @@ var client = new MTGOClient();
 // these singleton objects and is provided for convenience to avoid having to
 // manually resolve the object from the client's memory.
 //
-// This FlsClientSession object contains basic information about the current 
+// This FlsClientSession object contains basic information about the current
 // user and client session.
 //
 dynamic FlsClientSession = client.ObjectProvider("FlsClientSession");
@@ -46,6 +47,25 @@ Console.WriteLine($"User #{userId} logged in as '{username}'");
 //
 client.Toast("MTGO Injector", $"User #{userId} logged in as '{username}'");
 
-// For this demo, wait until key press to ensure any invoked async methods fire.
+//
+// This is a basic example of how to use the Harmony hooking API provided by
+// ScubaDiver. This example listens for when the MainUI is interacted with.
+//
+client.HookInstanceMethod(MTGOTypes.Get("ShellView"),
+    methodName: "MainViewModel_PropertyChanged",
+    hookName: "prefix", // Can be any of 'prefix', 'postfix' or 'finalizer':
+                        //   - 'prefix' will execute before the method.
+                        //   - 'postfix' will execute after the method.
+                        //   - 'finalizer' wraps the method in a try/finally.
+    callback: new((HookContext context, dynamic instance, dynamic[] args)
+      => {
+        var sender = args[0];
+        var e = args[1];
+        Console.WriteLine("MainViewModel_PropertyChanged");
+        Console.WriteLine($"  Sender: {sender.ToString()}");
+        Console.WriteLine($"  Property: {e.PropertyName}");
+      }));
+
+// For this demo, wait until key press to ensure that hook callbacks can fire.
 Console.WriteLine("Press any key to exit...");
 Console.ReadKey();
