@@ -35,7 +35,7 @@ namespace RemoteNET
 			}
 		}
 
-		private class MethodHooks : Dictionary<HookAction, PositionedLocalHook> { 
+		private class MethodHooks : Dictionary<HookAction, PositionedLocalHook> {
 		}
 
 		internal RemoteHarmony(RemoteApp app)
@@ -63,7 +63,7 @@ namespace RemoteNET
 			}
 			MethodHooks methodHooks = _callbacksToProxies[methodToHook];
 
-			// 
+			//
 			if(!methodHooks.ContainsKey(hookAction))
 			{
 				methodHooks.Add(hookAction, new PositionedLocalHook(hookAction, wrappedHook, pos));

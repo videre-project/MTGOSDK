@@ -39,7 +39,7 @@ namespace RemoteNET.Internal.Reflection
       // Search for locally available types
       // EXCEPT for enums because that breaks RemoteEnum
       IEnumerable<Assembly> assemblies = AppDomain.CurrentDomain.GetAssemblies();
-      // Filter assemblies but avoid filtering for "mscorlib" because it's the devil
+      // Filter assemblies but avoid filtering for "mscorlib"
       if(assemblyName?.Equals("mscorlib") == false)
       {
         assemblies = assemblies.Where(assm => assm.FullName.Contains(assemblyName ?? ""));

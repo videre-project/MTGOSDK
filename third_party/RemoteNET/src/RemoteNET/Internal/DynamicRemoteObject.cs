@@ -25,7 +25,7 @@ namespace RemoteNET.Internal
   /// Usages of this class should be strictly as a `dynamic` variable.
   /// Field/Property reads/writes are redirect to reading/writing to the fields of the remote object
   /// Function calls are redirected to functions calls in the remote process on the remote object
-  /// 
+  ///
   /// </summary>
   [DebuggerDisplay("Dynamic Proxy of {" + nameof(__ro) + "}")]
   public class DynamicRemoteObject : DynamicObject, IEnumerable
@@ -43,10 +43,7 @@ namespace RemoteNET.Internal
         ProxiedMethodGroup methods,
         Type[] genericArguments = null)
       {
-        if (genericArguments == null)
-        {
-          genericArguments = Array.Empty<Type>();
-        }
+        genericArguments ??= Array.Empty<Type>();
 
         _name = name;
         _parent = parent;
@@ -208,8 +205,8 @@ namespace RemoteNET.Internal
               _processedOverloads[member.Name] = new List<MethodBase>();
             List<MethodBase> oldMethods = _processedOverloads[member.Name];
 
-            bool overriden = oldMethods.Any(oldMethod => oldMethod.SignatureEquals(newMethods));
-            if (overriden)
+            bool overridden = oldMethods.Any(oldMethod => oldMethod.SignatureEquals(newMethods));
+            if (overridden)
               continue;
 
             _processedOverloads[member.Name].Add(newMethods);
@@ -229,8 +226,9 @@ namespace RemoteNET.Internal
       {
         return __membersInner;
       }
-      // Defining a new method so we can use "yield return" (Outter function already returned a "real" IEnumerable in the above case
-      // so using "yield return" as well is forbidden.
+      // Defining a new method so we can use "yield return" (Outer function
+      // already returned a "real" IEnumerable in the above case) so using
+      // "yield return" as well is forbidden.
       IEnumerable<MemberInfo> Aggregator()
       {
         __membersInner ??= new List<MemberInfo>();
@@ -256,13 +254,13 @@ namespace RemoteNET.Internal
     public T InvokeMethod<T>(string name, params object[] args)
     {
       var matchingMethods = from member in __members
-                  where member.Name == name
-                  where ((MethodInfo)member).GetParameters().Length == args.Length
-                  select member;
+          where member.Name == name
+          where ((MethodInfo)member).GetParameters().Length == args.Length
+          select member;
       return (T)(matchingMethods.Single() as MethodInfo).Invoke(__ro, args);
     }
 
-    #region Dynamic Object API 
+    #region Dynamic Object API
     public override bool TryGetMember(GetMemberBinder binder, out object result)
     {
       Type lastType = __type;
@@ -313,7 +311,7 @@ namespace RemoteNET.Internal
           }
           catch (Exception ex)
           {
-            Console.WriteLine($"Field \"{name}\"'s getter threw an exception which sucks. Ex: " + ex);
+            Console.WriteLine($"Field \"{name}\"'s getter threw an exception: " + ex);
             throw;
           }
           break;
@@ -328,7 +326,7 @@ namespace RemoteNET.Internal
           }
           catch (Exception ex)
           {
-            Console.WriteLine($"Property \"{name}\"'s getter threw an exception which sucks. Ex: " + ex);
+            Console.WriteLine($"Property \"{name}\"'s getter threw an exception: " + ex);
             throw;
           }
           break;
@@ -342,14 +340,13 @@ namespace RemoteNET.Internal
           result = GetMethodProxy(name);
           break;
         case MemberTypes.Event:
-          // TODO: 
-          throw new NotImplementedException("Disabled since moving to RemoteType based impl");
+          // TODO:
+          throw new NotImplementedException("Cannot hook to remote events yet.");
         default:
           throw new Exception($"No such member \"{name}\"");
       }
       return true;
     }
-
 
     private DynamicRemoteMethod GetMethodProxy(string name)
     {
@@ -378,7 +375,7 @@ namespace RemoteNET.Internal
       }
       catch (Exception ex)
       {
-        Console.WriteLine($"Constructing {nameof(DynamicRemoteMethod)} of \"{name}\" threw an exception. Ex: " + ex);
+        Console.WriteLine($"Constructing {nameof(DynamicRemoteMethod)} of \"{name}\" threw an exception: " + ex);
         throw;
       }
     }
@@ -389,17 +386,20 @@ namespace RemoteNET.Internal
       out object result)
     {
       // If "TryInvokeMember" was called first (instead of "TryGetMember")
-      // it means that the user specified generic args (if any are even requied) within '<' and '>' signs
-      // or there aren't any generic args. We can just do the call here instead of letting the dynamic
-      // runtime resort to calling 'TryGetMember'
+      // it means that the user specified generic args (if any are even requied)
+      // within '<' and '>' signs or there aren't any generic args. We can just
+      // do the call here instead of letting the dynamic runtime resort to
+      // calling 'TryGetMember'
 
       DynamicRemoteMethod drm = GetMethodProxy(binder.Name);
       Type binderType = binder.GetType();
       System.Reflection.PropertyInfo TypeArgumentsPropInfo = binderType.GetProperty("TypeArguments");
       if (TypeArgumentsPropInfo != null)
       {
-        // We got ourself a binder which implemented .NET's internal "ICSharpInvokeOrInvokeMemberBinder" Interface
+        // We got ourself a binder which implemented .NET's internal
+        // "ICSharpInvokeOrInvokeMemberBinder" Interface:
         // https://github.com/microsoft/referencesource/blob/master/Microsoft.CSharp/Microsoft/CSharp/ICSharpInvokeOrInvokeMemberBinder.cs
+        //
         // We can now see if the invoked for the function specified generic types
         // In that case, we can hijack and do the call here
         // Otherwise - Just let TryGetMembre return a proxy
@@ -452,7 +452,7 @@ namespace RemoteNET.Internal
           }
           catch (Exception ex)
           {
-            Console.WriteLine($"Field \"{binder.Name}\"'s getter threw an exception which sucks. Ex: " + ex);
+            Console.WriteLine($"Field \"{binder.Name}\"'s getter threw an exception: " + ex);
             throw;
           }
           break;
@@ -467,7 +467,7 @@ namespace RemoteNET.Internal
           }
           catch (Exception ex)
           {
-            Console.WriteLine($"Property \"{binder.Name}\"'s getter threw an exception which sucks. Ex: " + ex);
+            Console.WriteLine($"Property \"{binder.Name}\"'s getter threw an exception: " + ex);
             throw;
           }
           break;
@@ -475,7 +475,7 @@ namespace RemoteNET.Internal
           throw new Exception("Can't modifying method members.");
         case MemberTypes.Event:
           // TODO:
-          throw new NotImplementedException("Not implemented since moving to RemoteType based impl");
+          throw new NotImplementedException("Cannot hook to remote events yet.");
         default:
           throw new Exception($"No such member \"{binder.Name}\".");
       }

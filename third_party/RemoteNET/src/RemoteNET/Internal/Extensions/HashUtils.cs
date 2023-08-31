@@ -17,12 +17,10 @@ namespace RemoteNET.Internal.Extensions
     }
     public static string BufferSHA256(byte[] buff)
     {
-      using (SHA256 SHA256 = System.Security.Cryptography.SHA256.Create())
-      {
-        return BitConverter.ToString(SHA256.ComputeHash(buff))
-          .Replace("-", "")
-          .ToLowerInvariant();
-      }
+      using SHA256 SHA256 = System.Security.Cryptography.SHA256.Create();
+      return BitConverter.ToString(SHA256.ComputeHash(buff))
+        .Replace("-", "")
+        .ToLowerInvariant();
     }
   }
 }

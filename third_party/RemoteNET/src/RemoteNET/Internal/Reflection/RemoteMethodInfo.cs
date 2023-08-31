@@ -21,7 +21,7 @@ namespace RemoteNET.Internal.Reflection
       throw new NotImplementedException();
     public override MethodAttributes Attributes =>
       throw new NotImplementedException();
-    
+
     public override bool IsGenericMethod =>
       AssignedGenericArgs.Length > 0;
     public override bool IsGenericMethodDefinition =>

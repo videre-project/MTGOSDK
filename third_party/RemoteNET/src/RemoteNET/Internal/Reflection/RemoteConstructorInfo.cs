@@ -27,7 +27,7 @@ namespace RemoteNET.Internal.Reflection
       _paramInfos = paramInfos;
     }
 
-    public RemoteConstructorInfo(RemoteType declaringType, ConstructorInfo ci) : 
+    public RemoteConstructorInfo(RemoteType declaringType, ConstructorInfo ci) :
       this(declaringType,
          ci.GetParameters().Select(pi => new RemoteParameterInfo(pi)).Cast<ParameterInfo>().ToArray())
     {}
@@ -57,7 +57,7 @@ namespace RemoteNET.Internal.Reflection
     {
       return RemoteFunctionsInvokeHelper
         .Invoke(
-            this.App,
+            App,
             DeclaringType,
             Name,
             null,
@@ -72,11 +72,11 @@ namespace RemoteNET.Internal.Reflection
       object[] parameters,
       CultureInfo culture)
     {
-      // Empiricly it seems that invoking a ctor on an existing object should return null.
+      // Empirically, invoking a ctor on an existing object should return null.
       if (obj == null)
       {
-        // Last chace - If this overload was used but no real object given lets
-        // redirect to normal Invoke (this also happens with normal 'ConstructorInfo's)
+        // Last chance - If this overload was used but no real object given lets
+        // redirect to normal Invoke (also happens with normal 'ConstructorInfo's)
         return Invoke(invokeAttr, binder, parameters, culture);
       }
       return null;

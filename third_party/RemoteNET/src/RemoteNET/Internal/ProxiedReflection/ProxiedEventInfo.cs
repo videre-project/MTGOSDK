@@ -15,9 +15,9 @@ namespace RemoteNET.Internal.ProxiedReflection
 
     public ProxiedEventInfo(RemoteObject ro, string name, List<Type> args)
     {
-      this._ro = ro;
-      this.Name = name;
-      this.ArgumentsTypes = args;
+      _ro = ro;
+      Name = name;
+      ArgumentsTypes = args;
     }
 
     public static ProxiedEventInfo operator +(ProxiedEventInfo c1, Delegate x)

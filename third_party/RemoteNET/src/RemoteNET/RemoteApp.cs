@@ -124,7 +124,7 @@ namespace RemoteNET
 
     //
     // Init
-    // 
+    //
 
     /// <summary>
     /// Creates a new provider.

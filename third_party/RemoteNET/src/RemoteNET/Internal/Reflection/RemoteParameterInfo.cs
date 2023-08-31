@@ -13,12 +13,16 @@ namespace RemoteNET.Internal.Reflection
     public override Type ParameterType => _paramType.Value;
 
     // TODO: Type needs to be converted to a remote type ?
-    public RemoteParameterInfo(ParameterInfo pi) : this(pi.Name, new LazyRemoteTypeResolver(pi.ParameterType))
-    {}
-
-    public RemoteParameterInfo(string name, LazyRemoteTypeResolver paramType)
+    public RemoteParameterInfo(ParameterInfo pi)
+        : this(pi.Name, new LazyRemoteTypeResolver(pi.ParameterType))
     {
-      this.NameImpl = name;
+    }
+
+    public RemoteParameterInfo(
+      string name,
+      LazyRemoteTypeResolver paramType)
+    {
+      NameImpl = name;
       _paramType = paramType;
     }
 

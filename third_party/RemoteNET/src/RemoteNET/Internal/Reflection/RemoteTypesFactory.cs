@@ -18,7 +18,10 @@ namespace RemoteNET.Internal.Reflection
 
     private bool _avoidGenericsRecursion;
 
-    public RemoteTypesFactory(TypesResolver resolver, DiverCommunicator communicator, bool avoidGenericsRecursion)
+    public RemoteTypesFactory(
+      TypesResolver resolver,
+      DiverCommunicator communicator,
+      bool avoidGenericsRecursion)
     {
       _resolver = resolver;
 
@@ -50,7 +53,12 @@ namespace RemoteNET.Internal.Reflection
       new Dictionary<Tuple<string, string>, Type>();
 
 
-    public Type ResolveTypeWhileCreating(RemoteApp app, string typeInProgress, string methodName, string assembly, string type)
+    public Type ResolveTypeWhileCreating(
+      RemoteApp app,
+      string typeInProgress,
+      string methodName,
+      string assembly,
+      string type)
     {
       if (type.Length > 200)
       {
@@ -76,14 +84,15 @@ namespace RemoteNET.Internal.Reflection
       {
         // Either found in cache or found locally.
 
-        // If it's a local type we need to wrap it in a "fake" RemoteType (So method invocations will actually 
-        // happend in the remote app, for example)
-        // (But not for primitives...)
+        // If it's a local non-primitive type we need to wrap it in a "fake"
+        // RemoteType (So method invocations will happen on the remote app)
         if (!(paramType is RemoteType) && !paramType.IsPrimitive)
         {
           paramType = new RemoteType(app, paramType);
-          // TODO: Registring here in the cache is a hack but we couldn't register within "TypesResolver.Resolve"
-          // because we don't have the RemoteApp to associate the fake remote type with.
+          // TODO: Registring here in the cache is a hack but we couldn't
+          // register within "TypesResolver.Resolve" because we don't have the
+          // RemoteApp to associate the fake remote type with.
+          //
           // Maybe this should move somewhere else...
           _resolver.RegisterType(paramType);
         }
@@ -91,7 +100,7 @@ namespace RemoteNET.Internal.Reflection
 
       if (paramType == null)
       {
-        // Second: Search types which are on-going creation 
+        // Second: Search types which are on-going creation
         if (!_onGoingCreations.TryGetValue(
           new Tuple<string, string>(assembly, type), out paramType) || paramType == null)
         {
@@ -104,15 +113,11 @@ namespace RemoteNET.Internal.Reflection
               $"{typeInProgress} but the {nameof(DiverCommunicator)}.{nameof(DiverCommunicator.DumpType)} function failed.");
           }
 
-          Type newCreatedType = this.Create(app, dumpedArgType);
-          if (newCreatedType == null)
-          {
-            // remove on-going creation indication
-            throw new Exception(
+          Type newCreatedType = Create(app, dumpedArgType);
+          paramType = newCreatedType
+            ?? throw new Exception(
               $"{nameof(RemoteTypesFactory)} tried to dump type {type} when handling method {methodName} of type" +
               $"{typeInProgress} but the inner {nameof(RemoteTypesFactory)}.{nameof(RemoteTypesFactory.Create)} function failed.");
-          }
-          paramType = newCreatedType;
         }
       }
       return paramType;
@@ -126,13 +131,10 @@ namespace RemoteNET.Internal.Reflection
         return shortOutput;
       }
 
-      TypeDump parentDump = _communicator.DumpType(fullTypeName, assembly);
-      if (parentDump == null)
-      {
-        throw new Exception(
-          $"{nameof(RemoteTypesFactory)} tried to dump type {fullTypeName} " +
-          $"but the {nameof(DiverCommunicator)}.{nameof(DiverCommunicator.DumpType)} function failed.");
-      }
+      TypeDump parentDump = _communicator.DumpType(fullTypeName, assembly)
+        ?? throw new Exception(
+            $"{nameof(RemoteTypesFactory)} tried to dump type {fullTypeName} " +
+            $"but the {nameof(DiverCommunicator)}.{nameof(DiverCommunicator.DumpType)} function failed.");
       return Create(app, parentDump);
     }
 
@@ -157,7 +159,6 @@ namespace RemoteNET.Internal.Reflection
           try
           {
             return Create(app, parentType, typeDump.ParentAssembly);
-            
           }
           catch (Exception ex)
           {
@@ -309,7 +310,7 @@ namespace RemoteNET.Internal.Reflection
             }
             else
             {
-              // Non-generic parameter 
+              // Non-generic parameter
               // Cases that will not arrive here:
               //      void MyMethod<T>(T item)  <-- The 'item' parameter won't get here
               // Cases that will arrive here:

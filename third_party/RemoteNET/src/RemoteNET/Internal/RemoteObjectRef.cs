@@ -19,19 +19,15 @@ namespace RemoteNET.Internal
     public ulong Token => _remoteObjectInfo.PinnedAddress;
     public DiverCommunicator Communicator => _creatingCommunicator;
 
-    
+
     public RemoteObjectRef(
       ObjectDump remoteObjectInfo,
       TypeDump typeInfo,
       DiverCommunicator creatingCommunicator)
     {
-      if (typeInfo == null)
-      {
-        throw new ArgumentNullException(nameof(typeInfo));
-      }
-
       _remoteObjectInfo = remoteObjectInfo;
-      _typeInfo = typeInfo;
+      _typeInfo = typeInfo
+        ?? throw new ArgumentNullException(nameof(typeInfo));
       _creatingCommunicator = creatingCommunicator;
       _isReleased = false;
     }
@@ -160,7 +156,7 @@ namespace RemoteNET.Internal
 
     internal ObjectOrRemoteAddress GetItem(ObjectOrRemoteAddress key)
     {
-      return _creatingCommunicator.GetItem(this.Token, key);
+      return _creatingCommunicator.GetItem(Token, key);
     }
   }
 }

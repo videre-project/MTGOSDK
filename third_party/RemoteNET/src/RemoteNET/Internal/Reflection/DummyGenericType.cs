@@ -27,7 +27,7 @@ namespace RemoteNET.Internal.Reflection
 
     private string _name;
     public override string Name => _name;
-    
+
     public DummyGenericType(string name) => _name = name;
 
     protected override TypeAttributes GetAttributeFlagsImpl()

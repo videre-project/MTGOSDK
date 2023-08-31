@@ -2,7 +2,6 @@
 using System.Linq;
 
 using ScubaDiver.API;
-using ScubaDiver.API.Extensions;
 using ScubaDiver.API.Interactions;
 using ScubaDiver.API.Utils;
 
@@ -91,7 +90,7 @@ namespace RemoteNET.Internal.Reflection
       }
 
       ObjectOrRemoteAddress[] remoteParams = paramsNoEnums
-        .Select(RemoteFunctionsInvokeHelper.CreateRemoteParameter)
+        .Select(CreateRemoteParameter)
         .ToArray();
 
       bool hasResults;
@@ -146,6 +145,6 @@ namespace RemoteNET.Internal.Reflection
         RemoteObject ro = app.GetRemoteObject(oora.RemoteAddress, oora.Type);
         return ro.Dynamify();
       }
-    }    
+    }
   }
 }

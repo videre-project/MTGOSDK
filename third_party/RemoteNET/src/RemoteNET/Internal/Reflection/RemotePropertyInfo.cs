@@ -41,7 +41,8 @@ namespace RemoteNET.Internal.Reflection
       this(declaringType, new Lazy<Type>(()=> propType), name)
     {}
 
-    public RemotePropertyInfo(RemoteType declaringType, PropertyInfo pi) : this(declaringType, new Lazy<Type>(()=> pi.PropertyType), pi.Name)
+    public RemotePropertyInfo(RemoteType declaringType, PropertyInfo pi)
+        : this(declaringType, new Lazy<Type>(()=> pi.PropertyType), pi.Name)
     {}
 
     public override MethodInfo[] GetAccessors(bool nonPublic)

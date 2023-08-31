@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 
 using RemoteNET.Internal;
 
@@ -13,9 +12,12 @@ namespace RemoteNET.Utils
   {
     private DynamicRemoteObject _dro;
 
-    public Dictionary<string, object> Fields => GetMembersValues(_dro.GetType().GetFields());
-    public Dictionary<string, object> Properties => GetMembersValues(_dro.GetType().GetProperties());
-    public Dictionary<string, object> Methods => _dro.GetType().GetMethods().ToDictionary(mi => mi.Name, mi => (object)mi);
+    public Dictionary<string, object> Fields =>
+      GetMembersValues(_dro.GetType().GetFields());
+    public Dictionary<string, object> Properties =>
+      GetMembersValues(_dro.GetType().GetProperties());
+    public Dictionary<string, object> Methods =>
+      _dro.GetType().GetMethods().ToDictionary(mi => mi.Name, mi => (object)mi);
 
     public DebuggableRemoteObject(DynamicRemoteObject dro)
     {
@@ -32,11 +34,11 @@ namespace RemoteNET.Utils
           if (DynamicRemoteObject.TryGetDynamicMember(_dro, member.Name, out object value))
             output[member.Name] = value;
           else
-            output[member.Name] = new Exception("TryGetDynamicMember failed :(");
+            output[member.Name] = new Exception("TryGetDynamicMember failed");
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
-            output[member.Name] = new Exception("TryGetDynamicMember failed EXCEPTION thrown :( ex: " + ex);
+          output[member.Name] = new Exception("TryGetDynamicMember failed threw an exception: " + ex);
         }
       }
       return output;

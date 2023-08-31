@@ -40,7 +40,8 @@ namespace RemoteNET.Internal.Reflection
     private Lazy<Type> _parent;
     public override Type BaseType => _parent?.Value;
 
-    public RemoteType(RemoteApp app, Type localType) : this(app, localType.FullName, localType.Assembly.GetName().Name, localType.IsArray, localType.IsGenericParameter)
+    public RemoteType(RemoteApp app, Type localType)
+        : this(app, localType.FullName, localType.Assembly.GetName().Name, localType.IsArray, localType.IsGenericParameter)
     {
       if (localType is RemoteType)
       {
@@ -68,7 +69,12 @@ namespace RemoteNET.Internal.Reflection
         AddEvent(new RemoteEventInfo(this, ei));
     }
 
-    public RemoteType(RemoteApp app, string fullName, string assemblyName, bool isArray, bool isGenericParameter = false)
+    public RemoteType(
+      RemoteApp app,
+      string fullName,
+      string assemblyName,
+      bool isArray,
+      bool isGenericParameter = false)
     {
       App = app;
       FullName = fullName;
@@ -119,7 +125,8 @@ namespace RemoteNET.Internal.Reflection
       throw new NotImplementedException();
     }
 
-    public override ConstructorInfo[] GetConstructors(BindingFlags bindingAttr) => _ctors.Cast<ConstructorInfo>().ToArray();
+    public override ConstructorInfo[] GetConstructors(BindingFlags bindingAttr) =>
+      _ctors.Cast<ConstructorInfo>().ToArray();
 
     public override Type GetInterface(string name, bool ignoreCase)
     {
@@ -161,7 +168,12 @@ namespace RemoteNET.Internal.Reflection
       throw new NotImplementedException();
     }
 
-    protected override PropertyInfo GetPropertyImpl(string name, BindingFlags bindingAttr, Binder binder, Type returnType, Type[] types,
+    protected override PropertyInfo GetPropertyImpl(
+      string name,
+      BindingFlags bindingAttr,
+      Binder binder,
+      Type returnType,
+      Type[] types,
       ParameterModifier[] modifiers)
     {
       return GetProperties().Single(prop => prop.Name == name);
@@ -172,8 +184,13 @@ namespace RemoteNET.Internal.Reflection
       return _properties.ToArray();
     }
 
-    protected override MethodInfo GetMethodImpl(string name, BindingFlags bindingAttr, Binder binder, CallingConventions callConvention,
-      Type[] types, ParameterModifier[] modifiers)
+    protected override MethodInfo GetMethodImpl(
+      string name,
+      BindingFlags bindingAttr,
+      Binder binder,
+      CallingConventions callConvention,
+      Type[] types,
+      ParameterModifier[] modifiers)
     {
       var methodGroup = GetMethods().Where(method =>
         method.Name == name);
@@ -186,8 +203,9 @@ namespace RemoteNET.Internal.Reflection
       bool overloadsComparer(MethodInfo method)
       {
         var parameters = method.GetParameters();
-        // Compare Full Names mainly because the RemoteMethodInfo contains RemoteParameterInfos and we might be 
-        // comparing with local parameters (like System.String)
+        // Compare Full Names mainly because the RemoteMethodInfo contains
+        // RemoteParameterInfos and we might be comparing with local parameters
+        // (like System.String)
         bool matchingExpectingTypes = parameters
           .Select(arg => arg.ParameterType.FullName)
           .SequenceEqual(types.Select(type => type.FullName));
@@ -197,7 +215,6 @@ namespace RemoteNET.Internal.Reflection
       // Need to filer also by types
       return methodGroup.Single(overloadsComparer);
     }
-
 
     public override MethodInfo[] GetMethods(BindingFlags bindingAttr)
     {
@@ -243,7 +260,8 @@ namespace RemoteNET.Internal.Reflection
       _parent = parent;
     }
 
-    public override MemberInfo[] GetMembers(BindingFlags bindingAttr) => GetMembersInner(bindingAttr).ToArray();
+    public override MemberInfo[] GetMembers(BindingFlags bindingAttr) =>
+      GetMembersInner(bindingAttr).ToArray();
 
     protected override TypeAttributes GetAttributeFlagsImpl()
     {
@@ -275,16 +293,27 @@ namespace RemoteNET.Internal.Reflection
       throw new NotImplementedException();
     }
 
-    public override object InvokeMember(string name, BindingFlags invokeAttr, Binder binder, object target, object[] args,
-      ParameterModifier[] modifiers, CultureInfo culture, string[] namedParameters)
+    public override object InvokeMember(
+      string name,
+      BindingFlags invokeAttr,
+      Binder binder,
+      object target,
+      object[] args,
+      ParameterModifier[] modifiers,
+      CultureInfo culture,
+      string[] namedParameters)
     {
       throw new NotImplementedException();
     }
 
     public override Type UnderlyingSystemType { get; }
 
-    protected override ConstructorInfo GetConstructorImpl(BindingFlags bindingAttr, Binder binder, CallingConventions callConvention,
-      Type[] types, ParameterModifier[] modifiers)
+    protected override ConstructorInfo GetConstructorImpl(
+      BindingFlags bindingAttr,
+      Binder binder,
+      CallingConventions callConvention,
+      Type[] types,
+      ParameterModifier[] modifiers)
     {
       throw new NotImplementedException();
     }

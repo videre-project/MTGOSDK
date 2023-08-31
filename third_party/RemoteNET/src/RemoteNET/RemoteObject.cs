@@ -32,7 +32,7 @@ namespace RemoteNET
     }
 
     /// <summary>
-    /// Gets the type of the proxied remote object, in the remote app. (This does not reutrn `typeof(RemoteObject)`)
+    /// Gets the type of the proxied remote object, in the remote app. (This does not return `typeof(RemoteObject)`)
     /// </summary>
     public new Type GetType() => _type ??= _app.GetRemoteType(_ref.GetTypeDump());
 
@@ -42,11 +42,14 @@ namespace RemoteNET
       return invokeRes.ReturnedObjectOrAddress;
 
     }
-    public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(string methodName,
-      params ObjectOrRemoteAddress[] args)
-      => InvokeMethod(methodName, args);
 
-    public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(string methodName,
+    public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(
+      string methodName,
+      params ObjectOrRemoteAddress[] args)
+    => InvokeMethod(methodName, args);
+
+    public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(
+      string methodName,
       string[] genericArgsFullTypeNames,
       params ObjectOrRemoteAddress[] args)
     {
@@ -60,7 +63,7 @@ namespace RemoteNET
 
     public dynamic Dynamify()
     {
-      // Adding fields 
+      // Adding fields
       TypeDump typeDump = _ref.GetTypeDump();
 
       var factory = new DynamicRemoteObjectFactory();
@@ -89,7 +92,7 @@ namespace RemoteNET
       // TODO: Add a check for amount of parameters and types (need to be dynamics)
       // See implementation inside DynamicEventProxy
 
-      DiverCommunicator.LocalEventCallback callbackProxy = (ObjectOrRemoteAddress[] args) =>
+      (bool voidReturnType, ObjectOrRemoteAddress res) callbackProxy(ObjectOrRemoteAddress[] args)
       {
         DynamicRemoteObject[] droParameters = new DynamicRemoteObject[args.Length];
         for (int i = 0; i < args.Length; i++)
@@ -100,12 +103,12 @@ namespace RemoteNET
           droParameters[i] = dro;
         }
 
-        // Call the callback wutg tge proxied parameters (using DynamicRemoteObjects)
+        // Call the callback with the proxied parameters (using DynamicRemoteObjects)
         callback.DynamicInvoke(droParameters);
 
-        // TODO: Change this so the callback can actually return stuff?
+        // TODO: Return the result of the callback
         return (true, null);
-      };
+      }
 
       _eventCallbacksAndProxies[callback] = callbackProxy;
 

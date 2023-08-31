@@ -2,19 +2,9 @@
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
+		<LangVersion>Latest</LangVersion>
 		<NoWin32Manifest>true</NoWin32Manifest>
-		<Company>theXappy</Company>
-		<Description>Examine, create and interact with remote objects in other .NET processes.</Description>
-		<Copyright>theXappy ©2021</Copyright>
-		<PackageProjectUrl>https://github.com/theXappy/RemoteNET</PackageProjectUrl>
-		<RepositoryUrl>https://github.com/theXappy/RemoteNET</RepositoryUrl>
-		<PackageTags>reverse-engineer;forensics;clrmd;remoting;low-level</PackageTags>
-		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<RunPostBuildEvent>Always</RunPostBuildEvent>
-		<Version>1.0.1.27</Version>
-		<AssemblyVersion>1.0.1.27</AssemblyVersion>
-		<FileVersion>1.0.1.27</FileVersion>
-		<LangVersion>8</LangVersion>
 	</PropertyGroup>
 
 	<ItemGroup>

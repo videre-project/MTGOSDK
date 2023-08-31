@@ -54,15 +54,15 @@ namespace RemoteNET.Internal.Reflection
       {
         // No 'this' object --> Static field
 
-        if (this.App == null)
+        if (App == null)
         {
           throw new InvalidOperationException($"Trying to get a static field (null target object) " +
                             $"on a {nameof(RemoteFieldInfo)} but it's associated " +
-                            $"Declaring Type ({this.DeclaringType}) does not have a RemoteApp associated. " +
+                            $"Declaring Type ({DeclaringType}) does not have a RemoteApp associated. " +
                             $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
         }
 
-        oora = this.App.Communicator.GetField(0, DeclaringType.FullName, this.Name).ReturnedObjectOrAddress;
+        oora = App.Communicator.GetField(0, DeclaringType.FullName, Name).ReturnedObjectOrAddress;
       }
       else
       {
@@ -71,7 +71,7 @@ namespace RemoteNET.Internal.Reflection
         ro ??= (obj as DynamicRemoteObject)?.__ro;
         if (ro != null)
         {
-          oora = ro.GetField(this.Name);
+          oora = ro.GetField(Name);
         }
         else
         {
@@ -89,7 +89,7 @@ namespace RemoteNET.Internal.Reflection
       {
         if (oora.IsRemoteAddress)
         {
-          var remoteObject = this.App.GetRemoteObject(oora.RemoteAddress, oora.Type);
+          var remoteObject = App.GetRemoteObject(oora.RemoteAddress, oora.Type);
           return remoteObject.Dynamify();
         }
         else if (oora.IsNull)
@@ -101,12 +101,17 @@ namespace RemoteNET.Internal.Reflection
       }
     }
 
-    public override void SetValue(object obj, object value, BindingFlags invokeAttr, Binder binder, CultureInfo culture)
+    public override void SetValue(
+      object obj,
+      object value,
+      BindingFlags invokeAttr,
+      Binder binder,
+      CultureInfo culture)
     {
       var val = value;
       if (val.GetType().IsEnum)
       {
-        var enumClass = this.App.GetRemoteEnum(val.GetType().FullName);
+        var enumClass = App.GetRemoteEnum(val.GetType().FullName);
         // TODO: This will break on the first enum value which represents 2 or more flags
         object enumVal = enumClass.GetValue(val.ToString());
         // NOTE: Object stays in place in the remote app as long as we have it's reference
@@ -121,15 +126,15 @@ namespace RemoteNET.Internal.Reflection
       {
         // No 'this' object --> Static field
 
-        if (this.App == null)
+        if (App == null)
         {
           throw new InvalidOperationException($"Trying to get a static field (null target object) " +
                             $"on a {nameof(RemoteFieldInfo)} but it's associated " +
-                            $"Declaring Type ({this.DeclaringType}) does not have a RemoteApp associated. " +
+                            $"Declaring Type ({DeclaringType}) does not have a RemoteApp associated. " +
                             $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
         }
 
-        this.App.Communicator.SetField(0, DeclaringType.FullName, this.Name, remoteNewValue);
+        App.Communicator.SetField(0, DeclaringType.FullName, Name, remoteNewValue);
         return;
       }
 
@@ -138,7 +143,7 @@ namespace RemoteNET.Internal.Reflection
       ro ??= (obj as DynamicRemoteObject)?.__ro;
       if (ro != null)
       {
-        ro.SetField(this.Name, remoteNewValue);
+        ro.SetField(Name, remoteNewValue);
         return;
       }
 

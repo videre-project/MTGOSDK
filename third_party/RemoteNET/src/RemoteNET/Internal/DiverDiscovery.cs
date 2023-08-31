@@ -68,7 +68,7 @@ namespace RemoteNET.Internal
         // Check if the this is a snapshot created by the diver.
         if (target.Threads.Count == 0)
           return DiverState.HollowSnapshot;
-  
+
         return DiverState.Corpse;
       }
 
