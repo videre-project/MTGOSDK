@@ -1,0 +1,20 @@
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
+package(default_applicable_licenses = ["//:license"])
+
+licenses(["notice"])  # MIT
+
+csharp_library(
+    name = "ScubaDiver.dll",
+    srcs = ["**.cs"],
+    private_deps = ["@rules_dotnet_nuget_packages//microsoft.netcore.app.ref"],
+    deps = [
+        # ... "Lib.Harmony",
+        # ... "Microsoft.Bcl.AsyncInterfaces",
+        # ... "Microsoft.Diagnostics.Runtime",
+        # ... "System.Runtime.CompilerServices.Unsafe",
+        # "@RemoteNET//ScubaDiver.API.dll",
+    ],
+    target_frameworks = ["net48"],
+    visibility = ["//visibility:public"],
+)

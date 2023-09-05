@@ -1,0 +1,7 @@
+_build/
+.github/
+.idea/
+.vs/
+bin/
+html/
+obj/

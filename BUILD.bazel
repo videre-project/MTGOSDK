@@ -1,0 +1,20 @@
+# TODO
+
+load("@rules_license//rules:license.bzl", "license")
+
+package(default_applicable_licenses = [":license"])
+
+licenses(["notice"])  # Apache-2.0
+
+license(
+    name = "license",
+    copyright_notice = "",
+    license_kinds = ["@rules_license//licenses/spdx:Apache-2.0"],
+    license_text = "LICENSE",
+    visibility = ["//visibility:public"],
+)
+
+exports_files(
+    ["LICENSE"],
+    visibility = ["//visibility:public"],
+)
