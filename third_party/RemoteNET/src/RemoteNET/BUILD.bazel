@@ -1,0 +1,30 @@
+""
+
+load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
+
+# package(default_applicable_licenses = [":license"]) #TODO: Add license()
+
+# licenses(["notice"])  # MIT
+
+csharp_library(
+    name = "RemoteNET",
+    srcs = glob(["**/*.cs"]),
+    private_deps = [
+        "@paket.remotenet//microsoft.csharp",
+        "@paket.remotenet//system.security.accesscontrol",
+        "@paket.remotenet//system.io.filesystem.accesscontrol",
+        #
+        "@paket.remotenet//netstandard.library",
+    ],
+    target_frameworks = ["netstandard2.0"],
+    langversion = "latest",
+    # TODO: NoWarn = ["1701", "1702", "8600", "8602", "8603", "8618", "8625"]
+    #       Refer to https://github.com/bazelbuild/rules_dotnet/issues/345,
+    #                https://github.com/dotnet/roslyn/issues/19640#issuecomment-1367866504
+    deps = [
+        "@paket.remotenet//microsoft.diagnostics.runtime",
+        "@paket.remotenet//newtonsoft.json",
+        "//third_party/RemoteNET/src/ScubaDiver.API:ScubaDiver.API",
+    ],
+    visibility = ["//visibility:public"],
+)
