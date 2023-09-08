@@ -1,18 +1,22 @@
+"Common interface for RemoteNET and ScubaDiver to communicate with each other."
+
 load("@rules_dotnet//dotnet:defs.bzl", "csharp_library")
 
-package(default_applicable_licenses = ["//:license"])
-
-licenses(["notice"])  # MIT
-
 csharp_library(
-    name = "ScubaDiver.API.dll",
-    srcs = ["**.cs"],
-    private_deps = ["@rules_dotnet_nuget_packages//microsoft.netcore.app.ref"],
-    # private_deps = ["@rules_dotnet_nuget_packages//netstandard.library"]
-    deps = [
-        # "@RemoteNET//Microsoft.Diagnostics.Runtime"
-        # "@RemoteNET//Newtonsoft.Json"
+    name = "ScubaDiver.API",
+    srcs = glob(["**/*.cs"]),
+    private_deps = [
+        "@paket.remotenet//netstandard.library",
     ],
     target_frameworks = ["netstandard2.0"],
+    langversion = "latest",
+    nullable = "enable",
+    # TODO: NoWarn = ["1701", "1702", "8600", "8602", "8603", "8618", "8625"]
+    #       Refer to https://github.com/bazelbuild/rules_dotnet/issues/345,
+    #                https://github.com/dotnet/roslyn/issues/19640#issuecomment-1367866504
+    deps = [
+        "@paket.remotenet//microsoft.diagnostics.runtime",
+        "@paket.remotenet//newtonsoft.json"
+    ],
     visibility = ["//visibility:public"],
 )
