@@ -1,6 +1,6 @@
 # MTGOInjector
 
-> [!WARNING]  
+> [!WARNING]
 > This project is still under construction and is not production ready!
 
 MTGOInjector is a library for interacting with and inspecting the **Magic: The Gathering Online (MTGO)** client. It provides an API for accessing common information related to tracking game state and player information, as well as internal states of the game engine useful for building tools that can assist with gameplay, such as deck trackers, or for analyzing game data for research purposes.
@@ -16,6 +16,10 @@ This project requires the [.NET Framework 4.8 SDK](https://dotnet.microsoft.com/
 Building this project with [MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild?view=vs-2022) (e.g. when using the msbuild or dotnet CLI) requires [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) to be installed. These redistributables are also optionally included with Visual Studio 2015 Update 3 and newer.
 
 <!-- TODO: Add instructions for building the entire solution with MSBuild. -->
+
+<!-- TODO: Add instructions for installing paket locally.
+      Refs:
+      - https://stackoverflow.com/a/68284740 -->
 
 ## License
 

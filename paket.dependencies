@@ -1,0 +1,37 @@
+//
+// Regenerate paket lockfile with:
+//  dotnet tool restore
+//  dotnet paket install
+//
+// Regenerate paket.bzl file with:
+//  bazel run @rules_dotnet//tools/paket2bazel:paket2bazel.exe -- --dependencies-file $(pwd)/paket.dependencies  --output-folder $(pwd)
+//
+
+source https://api.nuget.org/v3/index.json
+storage: none
+framework: net7.0
+
+group remotenet
+  source https://api.nuget.org/v3/index.json
+  storage: none
+  framework: net48, netstandard2.0
+
+  nuget Microsoft.NETCore.App.Ref 7.0.10
+  nuget Microsoft.NETCore.App.Runtime.win-x64 7.0.10
+  nuget NETStandard.Library 2.0.3
+  nuget Microsoft.NETFramework.ReferenceAssemblies.net48 1.0.3
+
+  // third_party/RemoteNET/src/RemoteNET
+  nuget Microsoft.CSharp 4.7.0
+  nuget System.IO.FileSystem.AccessControl 5.0.0
+  nuget System.Security.AccessControl 6.0.0
+
+  // third_party/RemoteNET/src/ScubaDiver
+  nuget Lib.Harmony 2.2.2
+  nuget Microsoft.Diagnostics.Runtime 3.0.442202
+  nuget System.Collections.Immutable 7.0.0
+  nuget System.Reflection.Emit 4.7.0
+  nuget System.Runtime.CompilerServices.Unsafe 6.0.0
+
+  // third_party/RemoteNET/src/ScubaDiver.API
+  nuget Newtonsoft.Json 13.0.3

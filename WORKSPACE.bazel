@@ -1,1 +1,14 @@
+"""
+"""
+
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+################################################################################
+#                                 paket2bazel                                  #
+################################################################################
+
+load("@rules_dotnet//dotnet:paket2bazel_dependencies.bzl", "paket2bazel_dependencies")
+paket2bazel_dependencies()
+
+load("//:paket.bzl", "paket")
+paket()
