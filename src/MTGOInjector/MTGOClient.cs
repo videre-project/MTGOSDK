@@ -20,11 +20,11 @@ public class MTGOClient : BaseClient
       // Disable the Gibraltar logging session
       DisableTelemetry();
 
-      // // Hook into the `Shiny.App.OnExit` method to tear down the diver
-      // HookInstanceMethod(MTGOTypes.Get("App"), "OnExit",
-      //     hookName: "finalizer",
-      //     callback: new((HookContext context, dynamic instance, dynamic[] args)
-      //       => Dispose()));
+      // Hook into the `Shiny.App.OnExit` method to tear down the diver
+      HookInstanceMethod(MTGOTypes.Get("App"), "OnExit",
+          hookName: "finalizer",
+          callback: new((HookContext context, dynamic instance, dynamic[] args)
+            => Dispose()));
     }
   }
 
