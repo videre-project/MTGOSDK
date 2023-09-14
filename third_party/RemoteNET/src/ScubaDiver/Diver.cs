@@ -1071,6 +1071,14 @@ public class Diver : IDisposable
   {
     ReverseCommunicator reverseCommunicator = new(callbacksEndpoint);
 
+    // Check if the client connection is still alive
+    bool alive = reverseCommunicator.CheckIfAlive();
+    if (!alive)
+    {
+      _remoteHooks.TryRemove(token, out _);
+      return null;
+    }
+
     ObjectOrRemoteAddress[] remoteParams = new ObjectOrRemoteAddress[parameters.Length];
     for (int i = 0; i < parameters.Length; i++)
     {
