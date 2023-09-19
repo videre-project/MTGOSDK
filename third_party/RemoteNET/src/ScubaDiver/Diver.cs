@@ -171,6 +171,9 @@ public class Diver : IDisposable
 
   #region Helpers
 
+  [DllImport("kernel32.dll", SetLastError = true)]
+  public static extern bool CloseHandle(IntPtr hObject);
+
   [DllImport("kernel32.dll")]
   private static extern int PssFreeSnapshot(
     IntPtr ProcessHandle,
@@ -216,11 +219,6 @@ public class Diver : IDisposable
           {
             try
             {
-              snapshotProc.Kill();
-              snapshotProc.WaitForExit();
-            }
-            finally
-            {
               // Get the snapshot process handle
               var _snapshotHandle = (IntPtr)dr.GetType()
                 .GetField("_snapshotHandle",
@@ -232,7 +230,19 @@ public class Diver : IDisposable
                 throw new Win32Exception("Failed to free snapshot memory");
               }
             }
+            finally
+            {
+              snapshotProc.Kill();
+              snapshotProc.WaitForExit();
+            }
           }
+
+          // Close the native process handle
+          var nativeHandle = (IntPtr)dr.GetType()
+            .GetField("_process",
+                BindingFlags.NonPublic | BindingFlags.Instance)
+            .GetValue(dr);
+          CloseHandle(nativeHandle);
 
           // Mark DataReader as disposed
           dr.GetType()
