@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,6 +26,7 @@ using ScubaDiver.API.Interactions.Object;
 using ScubaDiver.API.Utils;
 using ScubaDiver.Hooking;
 using ScubaDiver.Utils;
+using System.ComponentModel;
 
 
 namespace ScubaDiver;
@@ -121,13 +123,7 @@ public class Diver : IDisposable
     listener.Stop();
     listener.Close();
     Logger.Debug("[Diver] Closing ClrMD runtime and snapshot");
-    lock (_clrMdLock)
-    {
-      _runtime?.Dispose();
-      _runtime = null;
-      _dt?.Dispose();
-      _dt = null;
-    }
+    DisposeRuntime();
 
     Logger.Debug("[Diver] Unpinning objects");
     _freezer.UnpinAll();
@@ -174,15 +170,109 @@ public class Diver : IDisposable
   }
 
   #region Helpers
-  void RefreshRuntime()
+
+  [DllImport("kernel32.dll")]
+  private static extern int PssFreeSnapshot(
+    IntPtr ProcessHandle,
+    IntPtr SnapshotHandle
+  );
+
+  /// <summary>
+  /// Disposes of the DataTarget instance without calling any Trace methods.
+  /// </summary>
+  private void DisposeDataTarget()
+  {
+    lock (_clrMdLock)
+    {
+      // Check the DataReader's state as a proxy to the snapshot process state.
+      var dr = _dt?.DataReader;
+      if (dr == null) return;
+
+      //
+      // We use reflection to control the disposal of the snapshot process from
+      // the WindowsProcessDataReader class. This is because the 'Dispose()'
+      // method called by the DataTarget class attempts to kill the process
+      // without waiting for process exit and without the correct privileges.
+      //
+      // As this a result, a Win32Exception is thrown which will repeatedly spam
+      // any subscribed Trace listeners (as a Trace.Write is called internally).
+      //
+      // Refer to:
+      // https://github.com/microsoft/clrmd/pull/926
+      // https://github.com/microsoft/clrmd/blob/f1b5dd2aed90e46d3b1d7a44b1d86dba5336dac0/src/Microsoft.Diagnostics.Runtime/DataReaders/Windows/WindowsProcessDataReader.cs#L76-L113
+      //
+      try
+      {
+        if (dr.GetType().Name == "WindowsProcessDataReader")
+        {
+          // Parse snapshot process ID from DataReader display name
+          var id = int.Parse(dr.DisplayName.Substring("pid:".Length),
+              System.Globalization.NumberStyles.HexNumber);
+
+          // Kill the snapshot process
+          var proc = Process.GetCurrentProcess();
+          var snapshotProc = Process.GetProcessById(id);
+          if (snapshotProc.ProcessName == proc.ProcessName)
+          {
+            try
+            {
+              snapshotProc.Kill();
+              snapshotProc.WaitForExit();
+            }
+            finally
+            {
+              // Get the snapshot process handle
+              var _snapshotHandle = (IntPtr)dr.GetType()
+                .GetField("_snapshotHandle",
+                    BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(dr);
+              // Free snapshot memory
+              if (PssFreeSnapshot(proc.Handle, _snapshotHandle) != 0)
+              {
+                throw new Win32Exception("Failed to free snapshot memory");
+              }
+            }
+          }
+
+          // Mark DataReader as disposed
+          dr.GetType()
+            .GetField("_disposed",
+                BindingFlags.NonPublic | BindingFlags.Instance)
+            .SetValue(dr, true);
+        }
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine("Failed to dispose DataReader: " + ex.ToString());
+      }
+      finally
+      {
+        _dt?.Dispose();
+        _dt = null;
+      }
+    }
+  }
+
+  private void DisposeCLRRuntime()
   {
     lock (_clrMdLock)
     {
       _runtime?.Dispose();
       _runtime = null;
-      _dt?.Dispose();
-      _dt = null;
+    }
+  }
 
+  private void DisposeRuntime()
+  {
+    DisposeDataTarget();
+    DisposeCLRRuntime();
+  }
+
+  private void RefreshRuntime()
+  {
+    DisposeRuntime();
+    lock (_clrMdLock)
+    {
       // This works like 'fork()': it creates a secondary process which is a
       // copy of the current one, but without any running threads.
       // Then our process attaches to the other one and reads its memory.
@@ -1803,10 +1893,6 @@ public class Diver : IDisposable
   // IDisposable
   public void Dispose()
   {
-    lock (_clrMdLock)
-    {
-      _runtime?.Dispose();
-      _dt?.Dispose();
-    }
+    DisposeRuntime();
   }
 }
