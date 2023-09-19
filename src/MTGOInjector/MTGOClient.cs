@@ -17,9 +17,6 @@ public class MTGOClient : BaseClient
     // Only run these hooks on the initial injection
     if (Is_Reconnect == false)
     {
-      // Disable the Gibraltar logging session
-      DisableTelemetry();
-
       // Hook into the `Shiny.App.OnExit` method to tear down the diver
       HookInstanceMethod(MTGOTypes.Get("App"), "OnExit",
           hookName: "finalizer",
