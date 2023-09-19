@@ -123,8 +123,6 @@ namespace ScubaDiver.API
           }
           catch (Exception e)
           {
-            Console.WriteLine("[Diver] Task faulted! Exception:");
-            Console.WriteLine(e);
           }
         }
         IAsyncResult asyncOperation = listener.BeginGetContext(ListenerCallback, listener);
@@ -213,8 +211,6 @@ namespace ScubaDiver.API
         }
         else
         {
-          Console.WriteLine($"[WARN] Diver tried to trigger a callback with unknown token value: {res.Token}");
-
           // TODO: I'm not sure the usage of 'DiverError' here is good. It's sent from the Communicator's side
           // to the Diver's side...
           DiverError errResults = new("Unknown Token", String.Empty);
@@ -223,8 +219,7 @@ namespace ScubaDiver.API
       }
       else
       {
-        Console.WriteLine($"[WARN] Diver tried to trigger an unexpected path: {request.Url.AbsolutePath}");
-        // TODO: I'm not sure the usage of 'DiverError' here is good. It's sent from the Communicator's side
+                // TODO: I'm not sure the usage of 'DiverError' here is good. It's sent from the Communicator's side
         // to the Diver's side...
         DiverError errResults = new("Unknown path in URL", String.Empty);
         body = JsonConvert.SerializeObject(errResults);

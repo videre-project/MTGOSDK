@@ -215,13 +215,13 @@ public class HarmonyWrapper
       string uniqueId = __originalMethod.DeclaringType.FullName + ":" + __originalMethod.Name;
       if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
       {
-        Console.WriteLine("[HarmonyWrapper][SinglePrefixHook] Invoking hook for method {0}", uniqueId);
+        Logger.Debug($"[HarmonyWrapper][SinglePrefixHook] Invoking hook for method {uniqueId}");
         // Return value will determine whether the original method is called.
         return funcHook(__instance, args);
       }
       else
       {
-        Console.WriteLine("!ERROR! No such hooked func");
+        Logger.Debug("!ERROR! No such hooked func");
         return true; // Don't skip original
       }
     }

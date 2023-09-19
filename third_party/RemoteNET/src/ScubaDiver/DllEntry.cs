@@ -51,7 +51,7 @@ public class DllEntry
     string assemblyPath = Path.Combine(folderPath, requestedAssemblyName + ".dll");
     if (!File.Exists(assemblyPath))
       return null;
-  
+
     Assembly assembly = Assembly.LoadFrom(assemblyPath);
     return assembly;
   }
@@ -69,9 +69,9 @@ public class DllEntry
     }
     catch (Exception e)
     {
-      Console.WriteLine("[DiverHost] ScubaDiver crashed.");
-      Console.WriteLine(e);
-      Console.WriteLine("[DiverHost] Exiting entry point in 60 secs...");
+      Logger.Debug("[DiverHost] ScubaDiver crashed.");
+      Logger.Debug(e.ToString());
+      Logger.Debug("[DiverHost] Exiting entry point in 60 secs...");
       Thread.Sleep(TimeSpan.FromSeconds(60));
     }
     finally
@@ -115,7 +115,7 @@ public class DllEntry
     dicEventFieldInfos.Add(t, lst);
     return lst;
   }
-  
+
   static EventHandlerList GetStaticEventHandlerList(Type t, object obj)
   {
       MethodInfo mi = t.GetMethod("get_Events", AllBindings);
@@ -175,14 +175,14 @@ public class DllEntry
       }
     }
   }
-  
+
   #endregion
 
   // Bootstrapper needs to call a C# function with exactly this signature.
   // So we use it to just create a diver, and run the Start func (blocking)
   public static int EntryPoint(string pwzArgument)
   {
-    if (Logger.DebugInRelease.Value && !Debugger.IsAttached)
+    if (Logger.IsDebug && !Debugger.IsAttached)
     {
       // If we need to log and a debugger isn't attached to the target process
       // then we need to allocate a console and redirect STDOUT to it.

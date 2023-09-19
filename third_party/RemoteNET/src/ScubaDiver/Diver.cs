@@ -94,8 +94,6 @@ public class Diver : IDisposable
 
   public void Start(ushort listenPort)
   {
-    Logger.Debug("[Diver] Is logging debugs in release? " + Logger.DebugInRelease.Value);
-
     // Start session
     RefreshRuntime();
     HttpListener listener = new();
@@ -117,7 +115,6 @@ public class Diver : IDisposable
     }
     catch
     {
-      // IDC
     }
 
     Logger.Debug("[Diver] Closing listener");
@@ -186,12 +183,12 @@ public class Diver : IDisposable
       _dt?.Dispose();
       _dt = null;
 
-      // This works like 'fork()', it does NOT create a dump file and uses it as the target
-      // Instead it creates a secondary process which is a copy of the current one, but without any running threads.
+      // This works like 'fork()': it creates a secondary process which is a
+      // copy of the current one, but without any running threads.
       // Then our process attaches to the other one and reads its memory.
       //
-      // NOTE: This subprocess inherits handles to DLLs in the current process so it might "lock"
-      // both Bootstrapper.dll and ScubaDiver.dll
+      // NOTE: This subprocess inherits handles to DLLs in the current process
+      // so it might "lock" both the Bootstrapper and ScubaDiver dlls.
       _dt = DataTarget.CreateSnapshotAndAttach(Process.GetCurrentProcess().Id);
       _runtime = _dt.ClrVersions.Single().CreateRuntime();
     }
@@ -304,8 +301,8 @@ public class Diver : IDisposable
           }
           catch (Exception e)
           {
-            Console.WriteLine("[Diver] Task faulted! Exception:");
-            Console.WriteLine(e);
+            Logger.Debug("[Diver] Task faulted! Exception:");
+            Logger.Debug(e.ToString());
           }
         }
         finally
@@ -1812,5 +1809,4 @@ public class Diver : IDisposable
       _dt?.Dispose();
     }
   }
-
 }

@@ -222,7 +222,6 @@ namespace ScubaDiver.API
       }
       catch
       {
-        Console.WriteLine($"[Communicator] Error when deserializing object! res: {resJson}");
         return null;
       }
 

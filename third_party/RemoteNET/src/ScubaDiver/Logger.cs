@@ -6,10 +6,6 @@ namespace ScubaDiver;
 
 internal class Logger
 {
-  public static Lazy<bool> DebugInRelease = new(() =>
-    !string.IsNullOrWhiteSpace(
-        Environment.GetEnvironmentVariable("REMOTE_NET_DIVER_MAGIC_DEBUG")));
-
 #if DEBUG
   public static bool IsDebug = true;
 #else
@@ -21,11 +17,6 @@ internal class Logger
     if (IsDebug || Debugger.IsAttached)
     {
       System.Diagnostics.Debug.WriteLine(s);
-    }
-    // Allow debug logging in release only if the environment variable is set.
-    else if(DebugInRelease.Value)
-    {
-      Console.WriteLine(s);
     }
   }
 }
