@@ -1,11 +1,13 @@
 # MTGOInjector
 
-> [!WARNING]  
+> [!WARNING]
 > This project is still under construction and is not production ready!
 
 MTGOInjector is a library for interacting with and inspecting the **Magic: The Gathering Online (MTGO)** client. It provides an API for accessing common information related to tracking game state and player information, as well as internal states of the game engine useful for building tools that can assist with gameplay, such as deck trackers, or for analyzing game data for research purposes.
 
-This works by injecting a [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) assembly into the MTGO process to inspect memory dumps of the client. ClrMD is a debugging tool that wraps native COM interfaces exposed by the .NET runtime. This is commonly used for crash analysis, performance profiling, automated debugging, and security research of .NET applications.
+## How it Works
+
+MTGOInjector works by injecting a [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) assembly into the MTGO process to inspect memory dumps of the client. ClrMD is a debugging tool that wraps native COM interfaces exposed by the .NET runtime to explore in-memory snapshots of a running process. This is commonly used for crash analysis, performance profiling, automated debugging, and security research of .NET applications.
 
 This project bootstraps ClrMD with a fork of [RemoteNET](https://github.com/theXappy/RemoteNET) to provide an API to walk the managed heap, inspect objects, and invoke methods (such as getters and setters) on an object reference. This reference is created by compiling IL code from an object's memory address to yield an object instance (via [indirection](https://en.wikipedia.org/wiki/Indirection)). This allows for the use of reflection on the resulting object to manipulate heap objects as if they were live objects.
 
@@ -15,7 +17,11 @@ This project requires the [.NET Framework 4.8 SDK](https://dotnet.microsoft.com/
 
 Building this project with [MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild?view=vs-2022) (e.g. when using the msbuild or dotnet CLI) requires [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) to be installed. These redistributables are also optionally included with Visual Studio 2015 Update 3 and newer.
 
-<!-- TODO: Add instructions for building the entire solution with MSBuild. -->
+To build this project using MSBuild, run the following command from the root of the repository:
+
+```powershell
+MSBuild mtgo-injector.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
+```
 
 ## License
 
