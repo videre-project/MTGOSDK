@@ -121,7 +121,7 @@ namespace ScubaDiver.API
           {
             HandleDispatchedRequest(context);
           }
-          catch (Exception e)
+          catch
           {
           }
         }
