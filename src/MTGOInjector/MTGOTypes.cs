@@ -103,6 +103,31 @@ public static class MTGOTypes
         // Manager instance for an active match, used for all event types.
         TypeProps( Class:     "WotC.MtGO.Client.Model.Play.MatchEvent.Match",
                    Base:      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase" )},
+      //
+      // WotC.MtGO.Client.Model.Settings.dll
+      //
+      {"SettingsService",
+        // Global manager for all client settings, including user preferences.
+        TypeProps( Class:     "WotC.MtGO.Client.Model.Settings.SettingsService",
+                   Base:      "WotC.MtGO.Client.Model.Core.ModelService",
+                   Interface: "WotC.MtGO.Client.Model.Settings.ISettings" )},
+      {"GameHistoryManager",
+        //
+        TypeProps( Class:     "WotC.MtGO.Client.Model.Settings.GameHistoryManager",
+                   Interface: "WotC.MtGO.Client.Model.Settings.IGameHistoryManager" )},
+      //
+      // SettingsScene.dll
+      //
+      {"GameHistoryViewModel",
+        //
+        TypeProps( Class:     "Shiny.Settings.ViewModels.GameHistoryViewModel",
+                   Base:      "Shiny.Core.ViewModelBase",
+                   Interface: "Shiny.Settings.Interfaces.IGameHistoryViewModel" )},
+      {"GameHistoryDataViewModel",
+        //
+        TypeProps( Class:     "Shiny.Settings.ViewModels.GameHistoryDataViewModel",
+                   Base:      "Shiny.Core.ViewModelBase",
+                   Interface: "Shiny.Settings.Interfaces.IGameHistoryDataViewModel" )},
     };
 
   /// <summary>
