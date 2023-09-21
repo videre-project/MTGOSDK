@@ -6,7 +6,7 @@
 using System;
 
 using MTGOInjector;
-using GameTracker;
+using GameTracker.GameHistory;
 
 
 var client = new MTGOClient();

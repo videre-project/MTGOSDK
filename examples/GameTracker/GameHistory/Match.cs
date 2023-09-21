@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 
 
-namespace GameTracker;
+namespace GameTracker.GameHistory;
 
 public class Match : Item
 {

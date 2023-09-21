@@ -6,7 +6,7 @@
 using System;
 
 
-namespace GameTracker;
+namespace GameTracker.GameHistory;
 
 public class Item
 {
