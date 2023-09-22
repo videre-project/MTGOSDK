@@ -34,8 +34,12 @@ public static class MTGOTypes
                    Interface: "Shiny.Core.Interfaces.IDialogService" )},
       {"RelayCommand",
         // A queueable implementation of the ICommand interface.
-        TypeProps ( Class:    "Shiny.Core.RelayCommand",
-                    Base:     "System.Windows.Input.ICommand" )},
+        TypeProps( Class:    "Shiny.Core.RelayCommand",
+                   Base:     "System.Windows.Input.ICommand" )},
+      {"GameReplayService",
+        // Global replay service for requesting and dispatching game replays.
+        TypeProps( Class:     "Shiny.Play.GameReplayService",
+                   Interface: "Shiny.Core.Interfaces.IGameReplayService" )},
       {"GenericDialogViewModel",
         // A generic view model for displaying a message box on the client.
         TypeProps( Class:     "Shiny.ViewModels.GenericDialogViewModel",
@@ -103,6 +107,15 @@ public static class MTGOTypes
         // Manager instance for an active match, used for all event types.
         TypeProps( Class:     "WotC.MtGO.Client.Model.Play.MatchEvent.Match",
                    Base:      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase" )},
+      {"PlayerEventManager",
+        // Global manager for all player events, including game joins and replays.
+        TypeProps( Class:     "WotC.MtGO.Client.Model.Play.PlayerEventManager",
+                   Interface: "WotC.MtGO.Client.Model.Play.IPlayerEventManager" )},
+      {"PlayService",
+        // Global manager for all active tournaments, leagues, or game sessions.
+        TypeProps( Class: "WotC.MtGO.Client.Model.Play.PlayService",
+                   Base: "WotC.MtGO.Client.Model.Core.ModelService",
+                   Interface: "WotC.MtGO.Client.Model.Play.IPlay" )},
       //
       // WotC.MtGO.Client.Model.Settings.dll
       //
@@ -128,6 +141,10 @@ public static class MTGOTypes
         TypeProps( Class:     "Shiny.Settings.ViewModels.GameHistoryDataViewModel",
                    Base:      "Shiny.Core.ViewModelBase",
                    Interface: "Shiny.Settings.Interfaces.IGameHistoryDataViewModel" )},
+      {"HistoryGame",
+        // Wrapper class for a single game's ID and position played in a match.
+        TypeProps( Class:     "Shiny.Settings.ViewModels.HistoryGame",
+                   Interface: "Shiny.Settings.Interfaces.IHistoryGame" )},
     };
 
   /// <summary>
