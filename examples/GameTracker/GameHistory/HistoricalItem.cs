@@ -8,17 +8,17 @@ using System;
 
 namespace GameTracker.GameHistory;
 
-public class Item
+public class HistoricalItem
 {
   public DateTime StartTime;
   public string Format;
   public string GameType;
 
-  public Item(dynamic HistoricalItem)
+  public HistoricalItem(dynamic Item)
   {
     // Update queue/event metadata
-    StartTime = HistoricalItem.StartTime;
-    GameType = HistoricalItem.DeckCreationStyle.ToString();
-    Format = HistoricalItem.GameStructure.Name.Trim();
+    StartTime = Item.StartTime;
+    GameType = Item.DeckCreationStyle.ToString();
+    Format = Item.GameStructure.Name.Trim();
   }
 }

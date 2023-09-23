@@ -36,7 +36,7 @@ foreach(dynamic Item in manager.Items)
   {
     case "HistoricalItem":
     case "HistoricalMatch":
-      Match match = new(Item);
+      HistoricalMatch match = new(Item);
       Console.WriteLine($"Match Id:      {match.MatchId}");
       Console.WriteLine($"Format:        {match.Format}");
       Console.WriteLine($"Date and Time: {match.StartTime}");
@@ -64,7 +64,7 @@ foreach(dynamic Item in manager.Items)
 
       break;
     case "HistoricalTournament":
-      // Tournament tournament = new(Item);
+      // HistoricalTournament tournament = new(Item);
 
       // dynamic tournamentHistoryData = GameHistoryVM.PopulateTournamentHistoryData(Item)
       //   ?? throw new Exception("Failed to populate tournament history data.");

@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace GameTracker.GameHistory;
 
-public class Match : Item
+public class HistoricalMatch : HistoricalItem
 {
   public int MatchId;
   public Guid MatchToken;
@@ -21,24 +21,24 @@ public class Match : Item
   public int Ties => GameIds.Count - (Wins + Losses);
   public string Record => $"{Wins}-{Losses}-{Ties}";
 
-  public Match(dynamic HistoricalMatch) : base((object)HistoricalMatch)
+  public HistoricalMatch(dynamic Item) : base((object)Item)
   {
     // Update match metadata
-    MatchId = HistoricalMatch.EventId;
+    MatchId = Item.EventId;
     // MatchToken = HistoricalMatch.EventToken;
 
     // Update game metadata
-    foreach(int id in HistoricalMatch.GameIds)
+    foreach(int id in Item.GameIds)
     {
       GameIds.Add(id);
     }
-    for(int i = 0; i < HistoricalMatch.Opponents.Count; i++)
+    for(int i = 0; i < Item.Opponents.Count; i++)
     {
-      Opponents.Add(HistoricalMatch.Opponents[i]);
+      Opponents.Add(Item.Opponents[i]);
     }
 
     // Update match record
-    Wins = HistoricalMatch.GameWins;
-    Losses = HistoricalMatch.GameLosses;
+    Wins = Item.GameWins;
+    Losses = Item.GameLosses;
   }
 }

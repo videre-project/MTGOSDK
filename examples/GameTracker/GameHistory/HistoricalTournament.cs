@@ -9,29 +9,29 @@ using System.Collections.Generic;
 
 namespace GameTracker.GameHistory;
 
-public class Tournament : Item
+public class HistoricalTournament : HistoricalItem
 {
   public int EventId;
-  public List<Match> Matches = new();
+  public List<HistoricalMatch> Matches = new();
   public int Wins;
   public int Losses;
 
   public int Ties => Matches.Count - (Wins + Losses);
   public string Record => $"{Wins}-{Losses}-{Ties}";
 
-  public Tournament(dynamic HistoricalTournament) : base((object)HistoricalTournament)
+  public HistoricalTournament(dynamic Item) : base((object)Item)
   {
     // Update tournament metadata
-    EventId = HistoricalTournament.EventId;
+    EventId = Item.EventId;
 
     // Add match entries
-    foreach(int HistoricalMatch in HistoricalTournament.GameIds)
+    foreach(int item in Item.Matches)
     {
-      Matches.Add(new Match(HistoricalMatch));
+      Matches.Add(new HistoricalMatch(item));
     }
 
     // Update tournament record
-    Wins = HistoricalTournament.MatchWins;
-    Losses = HistoricalTournament.MatchLosses;
+    Wins = Item.MatchWins;
+    Losses = Item.MatchLosses;
   }
 }
