@@ -1,0 +1,49 @@
+<Project>
+
+  <!--
+    Using `TaskHostFactory` ensures that the task assembly will not be locked
+    at the end of the build. If it's omitted, that can cause build failures
+    in subsequent builds because the task assembly can't be overwritten.
+  -->
+  <UsingTask AssemblyFile="$(_MTGOSDK_MSBuild)"
+             TaskName="GenerateReferenceAssemblies"
+             TaskFactory="TaskHostFactory" />
+
+  <ItemGroup>
+    <!--
+      Add a `ProjectReference` to ensure that the task is built before being
+      called in a consuming project. This is necessary because the task assembly
+      is not referenced to be built by default, which will fail the build.
+    -->
+    <ProjectReference Include="..\MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="GenerateReferenceAssemblies"
+          BeforeTargets="CoreCompile"
+          DependsOnTargets="ResolveProjectReferences">
+    <!--
+      We build reference assemblies from the latest MTGO installation directory
+      to ensure that we're only targeting the latest APIs of the MTGO client.
+
+      This also ensures that we don't bundle any MTGO binaries containing
+      implementation details or private APIs that we don't want to redistribute.
+    -->
+    <GenerateReferenceAssemblies
+        MTGOAppDir="$(MTGOAppDir)"
+        MTGODataDir="$(MTGODataDir)"
+        OutputPath="$(_MTGOSDK_Refs)">
+      <Output TaskParameter="OutputPath" PropertyName="_MTGOSDK_Refs" />
+      <!-- Expand the glob to the (local) MTGO install/user directories -->
+      <Output TaskParameter="MTGOAppDir" PropertyName="MTGOAppDir" />
+      <Output TaskParameter="MTGODataDir" PropertyName="MTGODataDir" />
+      <!-- Output the MTGO version for use in the consuming project -->
+      <Output TaskParameter="Version" PropertyName="MTGOVersion" />
+    </GenerateReferenceAssemblies>
+
+    <!-- TODO: Verify the output reference assemblies w/ ILVerify -->
+    <Message Text="Updated reference assemblies for MTGO version $(MTGOVersion)"
+             Importance="high" />
+  </Target>
+
+</Project>

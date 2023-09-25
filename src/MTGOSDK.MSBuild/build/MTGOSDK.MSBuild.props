@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- These directories get expanded to full paths automatically on build -->
+  <PropertyGroup>
+    <MTGOAppDir>$(LocalDir)Apps\2.0\*.*\**\mtgo..tion_*</MTGOAppDir>
+    <MTGODataDir>$(LocalDir)Apps\2.0\Data\**\mtgo..tion_\Data</MTGODataDir>
+  </PropertyGroup>
+
+  <!-- These directories are automatically built for internal use of the SDK -->
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <_MTGOSDK_MSBuild_Dir>$(MSBuildThisFileDirectory)\..</_MTGOSDK_MSBuild_Dir>
+    <_MTGOSDK_MSBuild>$(_MTGOSDK_MSBuild_Dir)\bin\$(Configuration)\netstandard2.0\MTGOSDK.MSBuild.dll</_MTGOSDK_MSBuild>
+    <_MTGOSDK_Refs>$(SolutionDir)\dist\$(Configuration)\Reference\MTGO</_MTGOSDK_Refs>
+  </PropertyGroup>
+
+</Project>

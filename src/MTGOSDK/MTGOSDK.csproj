@@ -2,9 +2,15 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <LangVersion>Latest</LangVersion>
+    <LangVersion>Preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <!--
+    Include project-built MTGO reference assemblies to compile against the
+    public API surface of the client.
+  -->
+  <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj" />
 
 </Project>
