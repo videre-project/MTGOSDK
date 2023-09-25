@@ -1,0 +1,16 @@
+<Project>
+
+  <Target Name="CleanProject"
+          BeforeTargets="Clean;Rebuild"
+          Condition="Exists($(DistDir))">
+
+    <ItemGroup>
+      <FilesToClean Include="$(DistDir)\**\*.*" />
+      <FoldersToClean Include="$([System.IO.Directory]::GetDirectories(&quot;$(DistDir)&quot;))" />
+    </ItemGroup>
+
+    <Delete Files="@(FilesToClean)"/>
+    <RemoveDir Directories="@(FoldersToClean)" />
+  </Target>
+
+</Project>
