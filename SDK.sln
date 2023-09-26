@@ -2,9 +2,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BasicInjector", "samples\BasicInjector\BasicInjector.csproj", "{65BCE52F-3A67-4B94-96D3-917D4E577D8C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BasicInjector", "examples\BasicInjector\BasicInjector.csproj", "{65BCE52F-3A67-4B94-96D3-917D4E577D8C}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GameTracker", "samples\GameTracker\GameTracker.csproj", "{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GameTracker", "examples\GameTracker\GameTracker.csproj", "{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MTGOInjector", "MTGOInjector\MTGOInjector.csproj", "{A5E25693-8E24-406B-915B-9E196BE19376}"
 EndProject

@@ -5,7 +5,7 @@
 
 This SDK provides common APIs for accessing the **Magic: The Gathering Online (MTGO)** client's game state and player information, as well as internal states of the game engine useful for building tools that can assist with gameplay, such as deck trackers, or for analyzing game data for research purposes.
 
-Refer to the project's [samples](/samples) for sample applications built with the SDK.
+Refer to the project's [examples](/examples) for demo applications built with the SDK.
 
 For more in-depth information on the SDK's APIs, refer to the project [documentation](/docs).
 
