@@ -5,7 +5,7 @@
 
 This SDK provides common APIs for accessing the **Magic: The Gathering Online (MTGO)** client's game state and player information, as well as internal states of the game engine useful for building tools that can assist with gameplay, such as deck trackers, or for analyzing game data for research purposes.
 
-Refer to the project's [examples](/examples) for sample applications built with the SDK.
+Refer to the project's [samples](/samples) for sample applications built with the SDK.
 
 For more in-depth information on the SDK's APIs, refer to the project [documentation](/docs).
 
@@ -13,10 +13,10 @@ For more in-depth information on the SDK's APIs, refer to the project [documenta
 
 This project consists of four main components:
 
-* [**MTGOInjector**](src/MTGOInjector), a library for remotely inspecting and interacting with the MTGO client.
-* [**MTGOSDK**](src/MTGOSDK), a library providing high-level APIs for interacting with the MTGO client.
-* [**MTGOSDK.MSBuild**](src/MTGOSDK.MSBuild), a MSBuild library for design/compile-time code generation of the SDK.
-* [**MTGOSDK.Ref**](src/MTGOSDK.Ref), a library containing internal types used by the MTGO client and SDK.
+* [**MTGOInjector**](MTGOInjector), a library for remotely inspecting and interacting with the MTGO client.
+* [**MTGOSDK**](MTGOSDK), a library providing high-level APIs for interacting with the MTGO client.
+* [**MTGOSDK.MSBuild**](MTGOSDK.MSBuild), a MSBuild library for design/compile-time code generation of the SDK.
+* [**MTGOSDK.Ref**](MTGOSDK.Ref), a library containing internal types used by the MTGO client and SDK.
 
 **MTGOInjector** works by injecting a [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) assembly into the MTGO process. ClrMD is a debugging tool that wraps native COM interfaces exposed by the .NET runtime to explore in-memory snapshots of a running process. This project bootstraps ClrMD to provide an API to inspect objects and invoke methods (such as getters and setters) on an object reference. These object references are compiled from an object's memory address to yield an object instance, allowing for the use of reflection on heap objects as if they were live objects.
 
