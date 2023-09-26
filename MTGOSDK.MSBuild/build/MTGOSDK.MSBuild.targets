@@ -33,7 +33,6 @@
         MTGOAppDir="$(MTGOAppDir)"
         MTGODataDir="$(MTGODataDir)"
         OutputPath="$(_MTGOSDK_Refs)">
-      <Output TaskParameter="OutputPath" PropertyName="_MTGOSDK_Refs" />
       <!-- Expand the glob to the (local) MTGO install/user directories -->
       <Output TaskParameter="MTGOAppDir" PropertyName="MTGOAppDir" />
       <Output TaskParameter="MTGODataDir" PropertyName="MTGODataDir" />
@@ -46,6 +45,14 @@
              Importance="high" />
     <Message Text="Reference assemblies are located at $(_MTGOSDK_Refs)"
              Importance="high" />
+
+    <PropertyGroup>
+      <!--
+        We need to set the `ReferencePath` property to include the path to the
+        MTGO reference assemblies so that consuming projects can resolve them.
+      -->
+      <ReferencePath>$(ReferencePath);$(_MTGOSDK_Refs)</ReferencePath>
+    </PropertyGroup>
   </Target>
 
 </Project>

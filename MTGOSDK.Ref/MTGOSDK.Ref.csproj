@@ -8,7 +8,9 @@
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets" />
 
+  <!-- Import all MTGO reference assemblies generated from MTGOSDK.MSBuild -->
   <ItemGroup>
+    <Reference Include="$(_MTGOSDK_Refs)\*.dll" />
   </ItemGroup>
 
 </Project>

@@ -37,7 +37,6 @@ public class GenerateReferenceAssemblies : Task
   /// </summary>
   ///
   [Required]
-  [Output]
   public string OutputPath { get; set; } = string.Empty;
 
   /// <summary>
@@ -55,8 +54,6 @@ public class GenerateReferenceAssemblies : Task
     // Get assembly version for the MTGO executable
     string MTGOExePath = Path.Combine(MTGOAppDir, "MTGO.exe");
     Version = Assembly.LoadFile(MTGOExePath).GetName().Version.ToString();
-    // Update the output path to include the version
-    OutputPath = Path.Combine(OutputPath, Version);
 
     // Abort if reference assemblies for the current version already exist
     if (File.Exists(OutputPath))
@@ -76,10 +73,9 @@ public class GenerateReferenceAssemblies : Task
       foreach(var filePath in Directory.GetFiles(MTGOAppDir)
         .Where(file => Regex.IsMatch(Path.GetExtension(file), @"\.(dll|exe)$")))
       {
-        var name = Path.GetFileNameWithoutExtension(filePath);
-        var ext = Path.GetExtension(filePath);
+        var fileName = Path.GetFileName(filePath);
         var data = ReferenceAssemblyGenerator.Convert(filePath, new AllowAll());
-        File.WriteAllBytes(Path.Combine(OutputPath, $"{name}.ref{ext}"), data);
+        File.WriteAllBytes(Path.Combine(OutputPath, fileName), data);
       }
     }
     catch (Exception ex)
