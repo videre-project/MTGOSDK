@@ -10,7 +10,7 @@
 
   <!-- Import all MTGO reference assemblies generated from MTGOSDK.MSBuild -->
   <ItemGroup>
-    <Reference Include="$(_MTGOSDK_Refs)\*.dll" />
+    <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.*" />
   </ItemGroup>
 
 </Project>

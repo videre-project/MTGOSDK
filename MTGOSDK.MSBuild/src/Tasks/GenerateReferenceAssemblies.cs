@@ -37,6 +37,7 @@ public class GenerateReferenceAssemblies : Task
   /// </summary>
   ///
   [Required]
+  [Output]
   public string OutputPath { get; set; } = string.Empty;
 
   /// <summary>
@@ -56,16 +57,26 @@ public class GenerateReferenceAssemblies : Task
     Version = Assembly.LoadFile(MTGOExePath).GetName().Version.ToString();
 
     // Abort if reference assemblies for the current version already exist
-    if (File.Exists(OutputPath))
+    string versionPath = Path.Combine(OutputPath, Version);
+    if (File.Exists(versionPath))
     {
       Log.LogMessage(MessageImportance.High,
           $"Reference assemblies for version {Version} already exist.");
       return true;
     }
-    else
+    // Clear out previous versions' reference assemblies
+    else if (File.Exists(OutputPath))
     {
-      Directory.CreateDirectory(OutputPath);
+      DirectoryInfo dir = new DirectoryInfo(OutputPath);
+      foreach(FileInfo file in dir.GetFiles())
+        file.Delete();
+      foreach(DirectoryInfo subDirectory in dir.GetDirectories())
+        subDirectory.Delete(true);
     }
+
+    // Update the output path to include the version
+    OutputPath = versionPath;
+    Directory.CreateDirectory(OutputPath);
 
     // Generate new reference assemblies for the current version using Refasmer
     try
@@ -73,9 +84,10 @@ public class GenerateReferenceAssemblies : Task
       foreach(var filePath in Directory.GetFiles(MTGOAppDir)
         .Where(file => Regex.IsMatch(Path.GetExtension(file), @"\.(dll|exe)$")))
       {
-        var fileName = Path.GetFileName(filePath);
+        var name = Path.GetFileNameWithoutExtension(filePath);
+        var ext = Path.GetExtension(filePath);
         var data = ReferenceAssemblyGenerator.Convert(filePath, new AllowAll());
-        File.WriteAllBytes(Path.Combine(OutputPath, fileName), data);
+        File.WriteAllBytes(Path.Combine(OutputPath, $"{name}.ref{ext}"), data);
       }
     }
     catch (Exception ex)

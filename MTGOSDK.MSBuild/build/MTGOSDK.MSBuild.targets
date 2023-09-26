@@ -21,7 +21,7 @@
 
   <Target Name="GenerateReferenceAssemblies"
           BeforeTargets="CoreCompile"
-          DependsOnTargets="ResolveProjectReferences">
+          DependsOnTargets="ResolveProjectReferences;ResolveAssemblyReferences">
     <!--
       We build reference assemblies from the latest MTGO installation directory
       to ensure that we're only targeting the latest APIs of the MTGO client.
@@ -36,6 +36,13 @@
       <!-- Expand the glob to the (local) MTGO install/user directories -->
       <Output TaskParameter="MTGOAppDir" PropertyName="MTGOAppDir" />
       <Output TaskParameter="MTGODataDir" PropertyName="MTGODataDir" />
+      <!--
+        Updates the internal reference path to reflect the new subpath.
+
+        Note that this is only resolved after project dependencies are resolved,
+        and cannot be used as part of any `Reference` item groups.
+      -->
+      <Output TaskParameter="OutputPath" PropertyName="_MTGOSDK_Refs" />
       <!-- Output the MTGO version for use in the consuming project -->
       <Output TaskParameter="Version" PropertyName="MTGOVersion" />
     </GenerateReferenceAssemblies>
