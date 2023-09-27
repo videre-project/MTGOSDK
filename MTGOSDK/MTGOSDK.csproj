@@ -8,11 +8,21 @@
   </PropertyGroup>
 
   <!--
-    Include project-built MTGO reference assemblies to compile against the
-    public API surface of the client.
+    Include MTGO reference assemblies to compile against the current version.
+    Due to the way MSBuild works, this may require a second build to succeed.
   -->
+  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
+  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets" />
   <ItemGroup>
-    <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj" />
+    <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.*" />
   </ItemGroup>
+
+  <!--
+    This is a workaround for an issue present in NET Framework 4.7.1 and below.
+    Refer to https://github.com/dotnet/runtime/issues/20777#issuecomment-411804312
+  -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+  </PropertyGroup>
 
 </Project>
