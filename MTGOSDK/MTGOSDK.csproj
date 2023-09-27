@@ -8,12 +8,13 @@
   </PropertyGroup>
 
   <!--
-    Include MTGO reference assemblies to compile against the current version.
+    Include reference assemblies to compile against the current MTGO version.
     Due to the way MSBuild works, this may require a second build to succeed.
   -->
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
-  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets" />
   <ItemGroup>
+    <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
+                      ReferenceOutputAssembly="false" />
     <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.*" />
   </ItemGroup>
 

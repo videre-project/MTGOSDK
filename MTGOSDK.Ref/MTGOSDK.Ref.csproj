@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <!-- Override MSBuild compile targets to implicitly skip compilation. -->
+  <Target Name="CoreCompile" />
+  <Target Name="CopyFilesToOutputDirectory" />
+
+  <!-- Run the MTGOSDK.MSBuild targets to build the reference assemblies. -->
+  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
+  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets" />
+
+  <!-- Notify the user that the reference assemblies have been built. -->
+  <Target Name="NotifyRefsBuildComplete"
+          AfterTargets="GenerateReferenceAssemblies" >
+    <Message Text="MTGOSDK.Ref: Finished building MTGOSDK reference assemblies."
+             Importance="high" />
+  </Target>
+
+</Project>
