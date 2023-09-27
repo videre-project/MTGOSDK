@@ -11,6 +11,8 @@
     Include project-built MTGO reference assemblies to compile against the
     public API surface of the client.
   -->
-  <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj" />
+  <ItemGroup>
+    <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj" />
+  </ItemGroup>
 
 </Project>

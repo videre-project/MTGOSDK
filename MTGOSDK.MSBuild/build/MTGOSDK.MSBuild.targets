@@ -48,9 +48,9 @@
     </GenerateReferenceAssemblies>
 
     <!-- TODO: Verify the output reference assemblies w/ ILVerify -->
-    <Message Text="Updated reference assemblies for MTGO version $(MTGOVersion)"
+    <Message Text="MTGOSDK.MSBuild: Updated reference assemblies for MTGO version $(MTGOVersion)"
              Importance="high" />
-    <Message Text="Reference assemblies are located at $(_MTGOSDK_Refs)"
+    <Message Text="MTGOSDK.MSBuild: Reference assemblies are located at $(_MTGOSDK_Refs)"
              Importance="high" />
 
     <PropertyGroup>
