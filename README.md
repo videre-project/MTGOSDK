@@ -24,7 +24,7 @@ This project consists of four main components:
 
 **MTGOSDK.MSBuild** is a MSBuild library that manages the code-generation of the SDK. This is used to generate the SDK's API bindings and reference assemblies for the latest builds of MTGO. These assemblies contain only the public types and members of internal classes from the MTGO client and do not contain any implementation details. As the MTGO client is updated, these assemblies can be regenerated to provide the latest types and members for use in the SDK.
 
-**MTGOSDK.Ref** provides API bindings to internal types from the generated reference assemblies. It is intended to be used by the SDK to provide a common set of types and members for interacting with the MTGO client, and to ensure that breaking-changes in MTGO's internal APIs are caught at compile-time. This library is not intended to be used directly by consumers of the SDK.
+**MTGOSDK.Ref** bootstraps the code-generation process by ensuring that MSBuild targets are available for the SDK project to reference. This project is also an optional build target that can be used independently to generate the reference assemblies for the latest build of MTGO. This library is not intended to be used directly by consumers of the SDK.
 
 ## Building this Project
 
