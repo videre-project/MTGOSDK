@@ -8,14 +8,29 @@
   </PropertyGroup>
 
   <!--
-    Include reference assemblies to compile against the current MTGO version.
-    Due to the way MSBuild works, this may require a second build to succeed.
+    Bootstrap the MTGOSDK.Ref project to generate reference assemblies for
+    the current MTGO version. Due to the way that MSBuild works, this must
+    import the MTGOSDK.MSBuild.props file before referencing the project.
   -->
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
   <ItemGroup>
     <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
                       ReferenceOutputAssembly="false" />
-    <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.*" />
+  </ItemGroup>
+
+  <!--
+    Include reference assemblies to compile against the current MTGO version.
+    Note that the '_MTGOSDK_Refs' path does not reference the updated version
+    subpath, but it is only evaluated after building the MTGOSDK.Ref project.
+  -->
+  <ItemGroup>
+    <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.*">
+      <!--
+        We exclude the reference assemblies at runtime as they cannot be loaded
+        and are only needed for the project at design/compile-time.
+      -->
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </Reference>
   </ItemGroup>
 
   <!--

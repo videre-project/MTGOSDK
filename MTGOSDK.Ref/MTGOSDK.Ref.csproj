@@ -15,7 +15,7 @@
   <!-- Notify the user that the reference assemblies have been built. -->
   <Target Name="NotifyRefsBuildComplete"
           AfterTargets="GenerateReferenceAssemblies" >
-    <Message Text="MTGOSDK.Ref: Finished building MTGOSDK reference assemblies."
+    <Message Text="MTGOSDK.Ref: Finished bootstrapping MTGOSDK reference assemblies."
              Importance="high" />
   </Target>
 
