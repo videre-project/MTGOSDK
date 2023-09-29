@@ -84,10 +84,9 @@ public class GenerateReferenceAssemblies : Task
       foreach(var filePath in Directory.GetFiles(MTGOAppDir)
         .Where(file => Regex.IsMatch(Path.GetExtension(file), @"\.(dll|exe)$")))
       {
-        var name = Path.GetFileNameWithoutExtension(filePath);
-        var ext = Path.GetExtension(filePath);
+        var fileName = Path.GetFileName(filePath);
         var data = ReferenceAssemblyGenerator.Convert(filePath, new AllowAll());
-        File.WriteAllBytes(Path.Combine(OutputPath, $"{name}.ref{ext}"), data);
+        File.WriteAllBytes(Path.Combine(OutputPath, fileName), data);
       }
     }
     catch (Exception ex)

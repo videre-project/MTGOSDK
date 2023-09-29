@@ -42,10 +42,23 @@ public static class ReferenceAssemblyGenerator
     IImportFilter? filter = null)
   {
     MetadataReader metadata = reader.GetMetadataReader();
-    return MetadataImporter.MakeRefasm(metadata, reader, JBLogger, filter);
+    return MetadataImporter.MakeRefasm(
+      metadata,
+      reader,
+      _logger,
+      filter,
+      //
+      // This generates a 'reference assembly' that can be loaded at runtime.
+      //
+      // This isn't an assembly with real implementation code, and will raise
+      // a 'NotImplementedException' when calling any of it's generated methods.
+      //
+      true, /* MakeMock */
+      true  /* OmitReferenceAssemblyAttr */
+    );
   }
 
-  private static readonly LoggerBase JBLogger = new(new DisableLogging());
+  private static readonly LoggerBase _logger = new(new DisableLogging());
 
   private class DisableLogging : ILogger
   {
