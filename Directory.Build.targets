@@ -1,6 +1,9 @@
 <Project>
 
-  <Target Name="CleanProject"
+  <!--
+    FIXME: This breaks incremental builds with the 'Clean' target.
+  -->
+  <!-- <Target Name="CleanProject"
           BeforeTargets="Clean;Rebuild"
           Condition="Exists($(DistDir))">
 
@@ -11,6 +14,6 @@
 
     <Delete Files="@(FilesToClean)"/>
     <RemoveDir Directories="@(FoldersToClean)" />
-  </Target>
+  </Target> -->
 
 </Project>
