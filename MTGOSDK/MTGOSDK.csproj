@@ -18,14 +18,14 @@
   -->
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
   <ItemGroup>
+    <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
+                      ReferenceOutputAssembly="false" />
     <!--
       Include reference assemblies to compile against the current MTGO version.
       Note that the '_MTGOSDK_Refs' path does not reference the updated version
       subpath as it is only evaluated after building the MTGOSDK.Ref project.
     -->
-    <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
-                      ReferenceOutputAssembly="false" />
-    <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.*" />
+    <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.dll" />
   </ItemGroup>
 
 </Project>

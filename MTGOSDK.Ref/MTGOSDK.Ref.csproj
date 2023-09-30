@@ -4,6 +4,10 @@
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ilmerge" Version="3.0.41" />
+  </ItemGroup>
+
   <!-- Override MSBuild compile targets to implicitly skip compilation. -->
   <Target Name="CoreCompile" />
   <Target Name="CopyFilesToOutputDirectory" />
@@ -12,9 +16,20 @@
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets" />
 
+  <!-- Merge any executables into a single DLL to be used as a reference. -->
+  <Target Name="ILMerge"
+          AfterTargets="GenerateReferenceAssemblies">
+    <Exec Command="$(ILMergeConsolePath) ^
+      MTGO.exe /ndebug ^
+      /target=library ^
+      /lib=$(_MTGOSDK_Refs) ^
+      /out=$(_MTGOSDK_Refs)\MTGO.dll"
+    />
+  </Target>
+
   <!-- Notify the user that the reference assemblies have been built. -->
   <Target Name="NotifyRefsBuildComplete"
-          AfterTargets="GenerateReferenceAssemblies" >
+          AfterTargets="ILMerge" >
     <Message Text="MTGOSDK.Ref: Finished bootstrapping MTGOSDK reference assemblies."
              Importance="high" />
   </Target>
