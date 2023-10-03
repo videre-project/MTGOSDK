@@ -35,27 +35,6 @@ public class DllEntry
 
   #endregion
 
-  private static bool _assembliesResolverRegistered = false;
-
-  public static Assembly AssembliesResolverFunc(object sender, ResolveEventArgs args)
-  {
-    string requestedAssemblyName = new AssemblyName(args.Name).Name;
-    foreach (Assembly loadedAssembly in AppDomain.CurrentDomain.GetAssemblies())
-    {
-      if (loadedAssembly.GetName().Name == requestedAssemblyName)
-        return loadedAssembly;
-    }
-
-    // Assembly not loaded in target, try to load from the Diver's dll files
-    string folderPath = Path.GetDirectoryName(typeof(DllEntry).Assembly.Location);
-    string assemblyPath = Path.Combine(folderPath, requestedAssemblyName + ".dll");
-    if (!File.Exists(assemblyPath))
-      return null;
-
-    Assembly assembly = Assembly.LoadFrom(assemblyPath);
-    return assembly;
-  }
-
   public static void DiverHost(object pwzArgument)
   {
     try
@@ -73,11 +52,6 @@ public class DllEntry
       Logger.Debug(e.ToString());
       Logger.Debug("[DiverHost] Exiting entry point in 60 secs...");
       Thread.Sleep(TimeSpan.FromSeconds(60));
-    }
-    finally
-    {
-      AppDomain.CurrentDomain.AssemblyResolve -= AssembliesResolverFunc;
-      Logger.Debug("[DiverHost] unhooked assemblies resolver.");
     }
   }
 
@@ -195,18 +169,6 @@ public class DllEntry
         StreamWriter standardOutput = new(fileStream, encoding) { AutoFlush = true };
         Console.SetOut(standardOutput);
       }
-    }
-
-    // Diver needs assemblies which might not be present in the target process
-    // so register an assembly resolver to the Diver directory on load failure.
-    if (!_assembliesResolverRegistered)
-    {
-      // Suppress the AssemblyLoad event handler to avoid infinite recursion
-      RemoveEventHandler(AppDomain.CurrentDomain, "AssemblyLoad");
-
-      AppDomain.CurrentDomain.AssemblyResolve += AssembliesResolverFunc;
-      Logger.Debug("[EntryPoint] Loaded + hooked assemblies resolver.");
-      _assembliesResolverRegistered = true;
     }
 
     ParameterizedThreadStart func = DiverHost;
