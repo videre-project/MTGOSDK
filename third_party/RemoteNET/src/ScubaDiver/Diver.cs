@@ -94,6 +94,26 @@ public class Diver : IDisposable
     _unifiedAppDomain = new UnifiedAppDomain(this);
   }
 
+  #region Bootstrapper Cleanup
+  [DllImport("kernel32", SetLastError=true)]
+  private static extern bool FreeLibrary(IntPtr hModule);
+
+  private static bool UnloadBootstrapper()
+  {
+    foreach(ProcessModule module in Process.GetCurrentProcess().Modules)
+    {
+      if (new string[] {
+          "Bootstrapper.dll",
+          "Bootstrapper_x64.dll"
+        }.Any(s => module.ModuleName == s))
+      {
+        return FreeLibrary(module.BaseAddress);
+      }
+    }
+    return false;
+  }
+  #endregion
+
   public void Start(ushort listenPort)
   {
     // Start session
@@ -106,6 +126,13 @@ public class Diver : IDisposable
     manager.IdleConnection = TimeSpan.FromSeconds(5);
     listener.Start();
     Logger.Debug($"[Diver] Listening on {listeningUrl}...");
+
+    // Unload the native bootstrapper DLL to free up the file handle.
+    bool hr = UnloadBootstrapper();
+    if (hr != true)
+    {
+      Logger.Debug("[EntryPoint] Failed to unload Bootstrapper.");
+    }
 
     Task endpointsMonitor = Task.Run(CallbacksEndpointsMonitor);
     Dispatcher(listener);
