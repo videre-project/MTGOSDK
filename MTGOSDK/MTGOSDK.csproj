@@ -1,14 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>net7.0</TargetFramework>
     <LangVersion>Preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MTGOInjector\MTGOInjector.csproj" />
+    <ProjectReference Include="..\third_party\RemoteNET\src\RemoteNET\RemoteNET.csproj" />
+    <ProjectReference Include="..\third_party\RemoteNET\src\ScubaDiver.API\ScubaDiver.API.csproj" />
   </ItemGroup>
 
   <!--

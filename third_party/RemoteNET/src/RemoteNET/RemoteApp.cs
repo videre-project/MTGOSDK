@@ -112,6 +112,7 @@ namespace RemoteNET
     public RemoteHarmony Harmony { get; private set; }
 
     public DiverCommunicator Communicator => _communicator;
+    public static bool IsReconnected = false;
 
     private RemoteApp(Process procWithDiver, DiverCommunicator communicator)
     {
@@ -146,9 +147,14 @@ namespace RemoteNET
           // No diver, we need to inject one
           Bootstrapper.Inject(target, diverPort);
           break;
+        case DiverState.Alive:
+          // Skip injection as diver assembly is already bootstrapped
+          IsReconnected = true;
+          break;
         case DiverState.Corpse:
-          // Diver is dead but we can't inject a new one
-          throw new Exception("Diver is not responding to HTTP requests.");
+          throw new Exception("Diver could not finish bootstrapping.");
+        case DiverState.HollowSnapshot:
+          throw new Exception("Target process is empty. Did you attach to the correct process?");
       }
 
       // Now register our program as a "client" of the diver

@@ -6,8 +6,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BasicInjector", "examples\B
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GameTracker", "examples\GameTracker\GameTracker.csproj", "{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MTGOInjector", "MTGOInjector\MTGOInjector.csproj", "{A5E25693-8E24-406B-915B-9E196BE19376}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MTGOSDK", "MTGOSDK\MTGOSDK.csproj", "{ABBC9015-9107-45AE-BBA3-7F73F62674D4}"
 EndProject
   ProjectSection(ProjectDependencies) = postProject
@@ -63,14 +61,6 @@ Global
 		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Release|Any CPU.Build.0 = Release|Any CPU
 		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Release|Mixed.ActiveCfg = Release|Any CPU
 		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Release|Mixed.Build.0 = Release|Any CPU
-		{A5E25693-8E24-406B-915B-9E196BE19376}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A5E25693-8E24-406B-915B-9E196BE19376}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A5E25693-8E24-406B-915B-9E196BE19376}.Debug|Mixed.ActiveCfg = Debug|Any CPU
-		{A5E25693-8E24-406B-915B-9E196BE19376}.Debug|Mixed.Build.0 = Debug|Any CPU
-		{A5E25693-8E24-406B-915B-9E196BE19376}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A5E25693-8E24-406B-915B-9E196BE19376}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A5E25693-8E24-406B-915B-9E196BE19376}.Release|Mixed.ActiveCfg = Release|Any CPU
-		{A5E25693-8E24-406B-915B-9E196BE19376}.Release|Mixed.Build.0 = Release|Any CPU
 		{ABBC9015-9107-45AE-BBA3-7F73F62674D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{ABBC9015-9107-45AE-BBA3-7F73F62674D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ABBC9015-9107-45AE-BBA3-7F73F62674D4}.Debug|Mixed.ActiveCfg = Debug|Any CPU

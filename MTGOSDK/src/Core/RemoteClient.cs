@@ -9,114 +9,118 @@ using System.Reflection;
 using RemoteNET;
 
 
-namespace MTGOInjector;
+namespace MTGOSDK.Core;
 
-public class BaseClient
+/// <summary>
+/// A singleton class that manages the connection to the MTGO client process.
+/// </summary>
+public sealed class RemoteClient
 {
-  /// <summary>
-  /// The native process handle to the client.
-  /// </summary>
-  protected virtual Process ClientProcess { get; private set; } = default!;
+  //
+  // Singleton instance and static accessors
+  //
 
-  /// <summary>
-  /// The RemoteNET handle to interact with the client.
-  /// </summary>
-  public readonly RemoteApp Client;
-
-  /// <summary>
-  /// A list of non-system modules loaded by the client.
-  /// </summary>
-  public IEnumerable<ProcessModule> ClientModules =>
-    ClientProcess.Modules
-      .Cast<ProcessModule>()
-      .Where(m =>
-        new string[] { "\\Windows\\", "\\ProgramData\\" }
-          .All(s => m.FileName.Contains(s) == false));
+  private static readonly Lazy<RemoteClient> s_instance = new(() => new RemoteClient());
+  public static RemoteClient @this => s_instance.Value;
+  public static RemoteApp @client => @this._clientHandle;
+  public static Process @process => @this._clientProcess;
 
   /// <summary>
   /// The directory path to extract runtime injector and diver assemblies to.
   /// </summary>
-  protected virtual string ExtractDir { get; private set; } = "";
+  public static string ExtractDir =
+    Path.Join(/* %appdata%\..\Local\ */ "MTGOSDK", "MTGOInjector", "bin");
 
-  /// <summary>
-  /// Indicates whether the client has reconnected to the diver.
-  /// </summary>
-  public bool Is_Reconnect { get; private set; } = false;
-
-  public BaseClient()
+  private RemoteClient()
   {
     Bootstrapper.ExtractDir = ExtractDir;
-    Client = GetClientHandle();
+    _clientHandle = GetClientHandle();
   }
+
+  //
+  // Process and RemoteNET state management
+  //
+
+  /// <summary>
+  /// The RemoteNET handle to interact with the client.
+  /// </summary>
+  private readonly RemoteApp _clientHandle;
+
+  /// <summary>
+  /// The native process handle to the MTGO client.
+  /// </summary>
+  private readonly Process _clientProcess =
+    Process.GetProcessesByName("MTGO")
+      .OrderBy(x => x.StartTime)
+      .FirstOrDefault()
+        ?? throw new Exception("MTGO process not found.");
 
   /// <summary>
   /// Connects to the target process and returns a RemoteNET client handle.
   /// </summary>
   private RemoteApp GetClientHandle()
   {
-    // Check if the client injector is already loaded
-    Is_Reconnect = ClientModules
-      .Any(m => m.FileName.Contains("Bootstrapper"));
-
     // Connect to the target process
-    var Client = RemoteApp.Connect(ClientProcess);
+    var client = RemoteApp.Connect(_clientProcess);
 
     // Verify that the injected assembly is loaded and reponding
-    if (Client.Communicator.CheckAliveness() is false)
+    if (client.Communicator.CheckAliveness() is false)
       throw new Exception("RemoteNET Diver is not responding to requests.");
 
-    return Client;
+    return client;
   }
 
   /// <summary>
   /// Disconnects from the target process and disposes of the client handle.
   /// </summary>
-  public virtual void Dispose()
+  ~RemoteClient()
   {
-    Client.Dispose();
-    ClientProcess.Kill();
+    @client.Dispose();
+    @process.Kill();
   }
 
   //
-  // ManagedRemoteApp wrapper methods
+  // RemoteApp wrapper methods
   //
 
-  public dynamic GetInstance(string queryPath)
+  public static dynamic GetInstance(string queryPath)
   {
     return GetInstances(queryPath).Single();
   }
 
-  public IEnumerable<dynamic> GetInstances(string queryPath)
+  public static IEnumerable<dynamic> GetInstances(string queryPath)
   {
-    IEnumerable<CandidateObject> queryRefs = Client.QueryInstances(queryPath);
+    IEnumerable<CandidateObject> queryRefs = @client.QueryInstances(queryPath);
     foreach (var candidate in queryRefs)
     {
-      var queryObject = Client.GetRemoteObject(candidate);
+      var queryObject = @client.GetRemoteObject(candidate);
       yield return queryObject.Dynamify();
     }
   }
 
-  public Type GetInstanceType(string queryPath)
+  public static Type GetInstanceType(string queryPath)
   {
     return GetInstanceTypes(queryPath).Single();
   }
 
-  public IEnumerable<Type> GetInstanceTypes(string queryPath)
+  public static IEnumerable<Type> GetInstanceTypes(string queryPath)
   {
-    IEnumerable<CandidateType> queryRefs = Client.QueryTypes(queryPath);
+    IEnumerable<CandidateType> queryRefs = @client.QueryTypes(queryPath);
     foreach (var candidate in queryRefs)
     {
-      var queryObject = Client.GetRemoteType(candidate);
+      var queryObject = @client.GetRemoteType(candidate);
       yield return queryObject;
     }
   }
 
-  public MethodInfo GetInstanceMethod(string queryPath, string methodName)
+  public static MethodInfo GetInstanceMethod(
+    string queryPath,
+    string methodName)
   {
     return GetInstanceMethods(queryPath, methodName).Single();
   }
 
-  public IEnumerable<MethodInfo> GetInstanceMethods(
+  public static IEnumerable<MethodInfo> GetInstanceMethods(
     string queryPath,
     string methodName)
   {
@@ -127,9 +131,11 @@ public class BaseClient
     return methods;
   }
 
-  public dynamic CreateInstance(string queryPath, params object[] parameters)
+  public static dynamic CreateInstance(
+    string queryPath,
+    params object[] parameters)
   {
-    RemoteActivator activator = Client.Activator;
+    RemoteActivator activator = @client.Activator;
     RemoteObject queryObject = activator.CreateInstance(queryPath, parameters);
     return queryObject.Dynamify();
   }
@@ -138,7 +144,7 @@ public class BaseClient
   // Reflection wrapper methods
   //
 
-  public MethodInfo? GetMethod(
+  public static MethodInfo? GetMethod(
     string queryPath,
     string methodName,
     Type[]? genericTypes=null)
@@ -156,23 +162,23 @@ public class BaseClient
   /// <summary>
   /// Invokes a static method on the target process.
   /// </summary>
-  public dynamic InvokeMethod(
+  public static dynamic InvokeMethod(
     string queryPath,
     string methodName,
     Type[]? genericTypes=null,
     params object[]? args)
   {
     var remoteMethod = GetMethod(queryPath, methodName, genericTypes);
-#pragma warning disable CS8603
+#pragma warning disable CS8603 // Possible null reference return.
     return remoteMethod!.Invoke(null, args);
 #pragma warning restore CS8603
   }
 
   //
-  // HookingManager wrapper methods
+  // HarmonyManager wrapper methods
   //
 
-  public void HookInstanceMethod(
+  public static void HookInstanceMethod(
     string queryPath,
     string methodName,
     string hookName,
@@ -182,13 +188,13 @@ public class BaseClient
     switch (hookName)
     {
       case "prefix":
-        Client.Harmony.Patch(method, prefix: callback);
+        @client.Harmony.Patch(method, prefix: callback);
         break;
       case "postfix":
-        Client.Harmony.Patch(method, postfix: callback);
+        @client.Harmony.Patch(method, postfix: callback);
         break;
       case "finalizer":
-        Client.Harmony.Patch(method, finalizer: callback);
+        @client.Harmony.Patch(method, finalizer: callback);
         break;
       default:
         throw new Exception($"Unknown hook type: {hookName}");
@@ -198,7 +204,7 @@ public class BaseClient
   // TODO: Add unhooking methods + unhook all methods on exit
   //       (or just unhook all methods on exit)
 
-  // public void UnhookInstanceMethod(
+  // public static void UnhookInstanceMethod(
   //   string queryPath,
   //   string methodName,
   //   string hookName)

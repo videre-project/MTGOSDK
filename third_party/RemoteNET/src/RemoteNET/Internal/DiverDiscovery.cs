@@ -43,13 +43,17 @@ namespace RemoteNET.Internal
       }
       catch
       {
-        // Had some issues, perhapse it's the diver holding that port.
+        // Had some issues, perhaps it's the diver holding that port.
       }
 
       if (!diverPortIsFree && com.CheckAliveness())
       {
         return DiverState.Alive;
       }
+
+      // // Check if this is a snapshot created by the diver.
+      // if (target.Threads.Count == 0)
+      //   return DiverState.HollowSnapshot;
 
       // Diver isn't alive. It's possible that it was never injected or it was
       // injected and killed
@@ -65,10 +69,6 @@ namespace RemoteNET.Internal
       }
       if (containsToolkitDll)
       {
-        // Check if the this is a snapshot created by the diver.
-        if (target.Threads.Count == 0)
-          return DiverState.HollowSnapshot;
-
         return DiverState.Corpse;
       }
 
