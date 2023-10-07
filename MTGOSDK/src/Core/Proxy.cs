@@ -25,6 +25,12 @@ public class Proxy<T>(Type? @type=null) where T : class {
   public static dynamic As(dynamic? obj=null, params Type[] interfaces) =>
     Impromptu.DynamicActLike(obj, interfaces);
 
+  /// <summary>
+  /// Unbinds the proxied object from any bound interface types.
+  /// </summary>
+  public static dynamic From(dynamic? obj=null) =>
+    Impromptu.UndoActLike(obj);
+
   //
   // Derived class properties
   //

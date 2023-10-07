@@ -20,8 +20,7 @@ public class Client
   /// </para>
   /// </summary>
   private static readonly dynamic s_flsClientSession =
-    // We cannot bind the interface type as struct properties are not supported.
-    ObjectProvider.Get<FlsClientSession>(bindTypes: false);
+    ObjectProvider.Get<FlsClientSession>();
 
   public User CurrentUser { get; private set; }
 
@@ -30,6 +29,8 @@ public class Client
     // TODO: Add constructor parameters to set properties of the RemoteClient
     //       singleton instance prior to connecting to the MTGO process.
 
-    CurrentUser = new User(s_flsClientSession.LoggedInUser.Info);
+    // We cannot bind the interface type as structs are not yet supported.
+    var userInfo = Proxy<dynamic>.From(s_flsClientSession.LoggedInUser).Info;
+    CurrentUser = new User(userInfo);
   }
 }
