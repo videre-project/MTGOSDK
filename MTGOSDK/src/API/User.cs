@@ -22,7 +22,8 @@ public class User(dynamic? userInfo)
   /// This class manages the client's caching and updating of user information.
   /// </para>
   /// </summary>
-  private static readonly dynamic s_userManager = ObjectProvider.Get<UserManager>();
+  private static readonly IUserManager s_userManager =
+    ObjectProvider.Get<UserManager>();
 
   public User(string name, bool ignoreCase = false) : this(userInfo: null) =>
     _userInfo = s_userManager.GetUser(name, ignoreCase);
@@ -32,7 +33,7 @@ public class User(dynamic? userInfo)
 
   public static string GetUserName(int id) => s_userManager.GetUserName(id);
 
-  public static int GetUserId(string name) => s_userManager.GetUserId(name);
+  public static int? GetUserId(string name) => s_userManager.GetUserId(name);
 
   //
   // UserInfo wrapper properties

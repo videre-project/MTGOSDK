@@ -3,13 +3,28 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using ImpromptuInterface;
+
 
 namespace MTGOSDK.Core;
 
-public class Proxy<@class>(
-  dynamic? obj=null,
-  Type? @type=null
-) where @class : class {
+public class Proxy<T>(Type? @type=null) where T : class {
+  //
+  // BuilderProxy methods
+  //
+
+  /// <summary>
+  /// Binds the proxied object to the specified interface type.
+  /// </summary>
+  public static T As(dynamic? obj=null) =>
+    Impromptu.ActLike<T>(obj);
+
+  /// <summary>
+  /// Binds the proxied object to the specified interface types.
+  /// </summary>
+  public static dynamic As(dynamic? obj=null, params Type[] interfaces) =>
+    Impromptu.DynamicActLike(obj, interfaces);
+
   //
   // Derived class properties
   //
@@ -17,7 +32,7 @@ public class Proxy<@class>(
   /// <summary>
   /// Returns the type of the proxied class.
   /// </summary>
-  public readonly Type Class = @type ?? typeof(@class);
+  public readonly Type Class = @type ?? typeof(T);
 
   /// <summary>
   /// Returns the base class of the proxied class.
@@ -54,7 +69,4 @@ public class Proxy<@class>(
 
   public override string ToString() => Class.FullName
     ?? throw new Exception($"Proxied type is not a valid type.");
-
-  public static implicit operator string(Proxy<@class> proxy) =>
-    proxy.ToString();
 }

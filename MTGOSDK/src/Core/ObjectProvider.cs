@@ -19,15 +19,28 @@ public static class ObjectProvider
 
   public static dynamic Get(string queryPath)
   {
+    // Get the RemoteType from the type's query path
     Type genericType = RemoteClient.GetInstanceType(queryPath);
+
+    // Invoke the Get<T>() method on the client's ObjectProvider class
     return RemoteClient.InvokeMethod(FullName,
         methodName: "Get",
         genericTypes: new Type[] { genericType });
   }
 
-  public static dynamic Get<T>(Proxy<dynamic>? proxy=null)
+  public static dynamic Get<T>(bool bindTypes = true)
   {
-    proxy ??= new(null, typeof(T));
-    return Get(proxy.Interface?.FullName ?? proxy.ToString());
+    // Use the proxy type to retrieve the interface type
+    Proxy<dynamic> proxy = new(typeof(T));
+    Type? @interface = proxy.Interface;
+
+    // Retrieve the proxy value
+    dynamic obj = Get(@interface?.FullName ?? proxy.ToString());
+
+    // Late bind the interface type to the proxy value
+    if (bindTypes && @interface != null)
+      obj = Proxy<dynamic>.As(obj, @interface);
+
+    return obj;
   }
 }

@@ -28,5 +28,8 @@
     -->
     <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.dll" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ImpromptuInterface" Version="7.0.1" />
+  </ItemGroup>
 
 </Project>

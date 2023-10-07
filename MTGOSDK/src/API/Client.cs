@@ -6,6 +6,7 @@
 using MTGOSDK.Core;
 
 using FlsClient;
+using FlsClient.Interface;
 
 
 namespace MTGOSDK.API;
@@ -18,7 +19,9 @@ public class Client
   /// This class manages the client's connection and user session information.
   /// </para>
   /// </summary>
-  private static dynamic s_flsClientSession = ObjectProvider.Get<FlsClientSession>();
+  private static readonly dynamic s_flsClientSession =
+    // We cannot bind the interface type as struct properties are not supported.
+    ObjectProvider.Get<FlsClientSession>(bindTypes: false);
 
   public User CurrentUser { get; private set; }
 
