@@ -17,10 +17,7 @@ public class User(dynamic? userInfo)
   //
 
   /// <summary>
-  /// The <c>WotC.MTGO.Client.Model.Core.UserManager</c> object.
-  /// <para>
   /// This class manages the client's caching and updating of user information.
-  /// </para>
   /// </summary>
   private static readonly IUserManager s_userManager =
     ObjectProvider.Get<UserManager>();
@@ -40,10 +37,7 @@ public class User(dynamic? userInfo)
   //
 
   /// <summary>
-  /// The <c>WotC.MTGO.Common.Message.UserInfo_t</c> object.
-  /// <para>
   /// This class contains basic information about the user.
-  /// </para>
   /// </summary>
   private dynamic _userInfo { get; set; } = userInfo
     ?? throw new ArgumentNullException(

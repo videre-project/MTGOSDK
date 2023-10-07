@@ -14,12 +14,9 @@ namespace MTGOSDK.API;
 public class Client
 {
   /// <summary>
-  /// The <c>FlsClient.FlsClientSession</c> object.
-  /// <para>
   /// This class manages the client's connection and user session information.
-  /// </para>
   /// </summary>
-  private static readonly dynamic s_flsClientSession =
+  private static readonly IFlsClientSession s_flsClientSession =
     ObjectProvider.Get<FlsClientSession>();
 
   public User CurrentUser { get; private set; }
@@ -29,7 +26,7 @@ public class Client
     // TODO: Add constructor parameters to set properties of the RemoteClient
     //       singleton instance prior to connecting to the MTGO process.
 
-    // We cannot bind the interface type as structs are not yet supported.
+    // TODO: We cannot bind the interface type as structs are not yet supported.
     var userInfo = Proxy<dynamic>.From(s_flsClientSession.LoggedInUser).Info;
     CurrentUser = new User(userInfo);
   }
