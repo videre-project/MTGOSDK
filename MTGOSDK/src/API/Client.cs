@@ -28,6 +28,6 @@ public class Client
 
     // TODO: We cannot bind an interface type as structs are not yet supported.
     var UserInfo_t = Proxy<dynamic>.From(s_flsClientSession.LoggedInUser);
-    CurrentUser = User.GetUser(UserInfo_t.Id, UserInfo_t.Name);
+    CurrentUser = new User(UserInfo_t.Id, UserInfo_t.Name);
   }
 }

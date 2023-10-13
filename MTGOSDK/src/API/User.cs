@@ -34,19 +34,13 @@ public class User(dynamic /* IUser */ user)
     //
     RemoteClient.GetInstance("WotC.MtGO.Client.Model.Core.UserManager");
 
-  public static string GetUserName(int id) =>
-    s_userManager.GetUserName(id);
-
-  public static int? GetUserId(string name) =>
-    s_userManager.GetUserId(name);
-
-  public static User GetUser(int id, string name) =>
+  private static User GetUser(int id, string name) =>
     new User(
       s_userManager.CreateNewUser(id, name)
         ?? throw new Exception($"Failed to retrieve user '{name}' (#{id}).")
     );
 
-  public static User GetUser(string name) =>
+  private static User GetUser(string name) =>
     new User(
       GetUser(
         GetUserId(name)
@@ -55,7 +49,7 @@ public class User(dynamic /* IUser */ user)
       )
     );
 
-  public static User GetUser(int id) =>
+  private static User GetUser(int id) =>
     new User(
       GetUser(
         id,
@@ -63,6 +57,17 @@ public class User(dynamic /* IUser */ user)
           ?? throw new Exception($"User #{id} does not exist.")
       )
     );
+
+  public static string GetUserName(int id) => s_userManager.GetUserName(id);
+
+  public static int? GetUserId(string name) => s_userManager.GetUserId(name);
+
+  public User(int id) : this(GetUser(id))
+  { }
+  public User(string name) : this(GetUser(name))
+  { }
+  public User(int id, string name) : this(GetUser(id, name))
+  { }
 
   //
   // IUser wrapper properties
