@@ -26,8 +26,8 @@ public class Client
     // TODO: Add constructor parameters to set properties of the RemoteClient
     //       singleton instance prior to connecting to the MTGO process.
 
-    // TODO: We cannot bind the interface type as structs are not yet supported.
-    var userInfo = Proxy<dynamic>.From(s_flsClientSession.LoggedInUser).Info;
-    CurrentUser = new User(userInfo);
+    // TODO: We cannot bind an interface type as structs are not yet supported.
+    var UserInfo_t = Proxy<dynamic>.From(s_flsClientSession.LoggedInUser);
+    CurrentUser = User.GetUser(UserInfo_t.Id, UserInfo_t.Name);
   }
 }

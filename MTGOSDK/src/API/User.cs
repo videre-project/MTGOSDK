@@ -3,14 +3,17 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Reflection;
+
 using MTGOSDK.Core;
 
+using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Core;
 
 
 namespace MTGOSDK.API;
 
-public class User(dynamic? userInfo)
+public class User(dynamic /* IUser */ user)
 {
   //
   // UserManager wrapper methods
@@ -19,36 +22,64 @@ public class User(dynamic? userInfo)
   /// <summary>
   /// This class manages the client's caching and updating of user information.
   /// </summary>
-  private static readonly IUserManager s_userManager =
-    ObjectProvider.Get<UserManager>();
+  private static readonly dynamic s_userManager =
+    //
+    // We must call the internal GetInstance() method to retrieve PropertyInfo
+    // data from the remote type as the local proxy type or ObjectProvider will
+    // restrict access to internal or private members.
+    //
+    // This is a limitation of the current implementation of the Proxy<T> type
+    // since any MemberInfo data is cached by the runtime and will conflict
+    // with RemoteNET's internal type reflection methods.
+    //
+    RemoteClient.GetInstance("WotC.MtGO.Client.Model.Core.UserManager");
 
-  public User(string name, bool ignoreCase = false) : this(userInfo: null) =>
-    _userInfo = s_userManager.GetUser(name, ignoreCase);
+  public static string GetUserName(int id) =>
+    s_userManager.GetUserName(id);
 
-  public User(int id) : this(userInfo: null) =>
-    _userInfo = s_userManager.GetUser(id);
+  public static int? GetUserId(string name) =>
+    s_userManager.GetUserId(name);
 
-  public static string GetUserName(int id) => s_userManager.GetUserName(id);
+  public static User GetUser(int id, string name) =>
+    new User(
+      s_userManager.CreateNewUser(id, name)
+        ?? throw new Exception($"Failed to retrieve user '{name}' (#{id}).")
+    );
 
-  public static int? GetUserId(string name) => s_userManager.GetUserId(name);
+  public static User GetUser(string name) =>
+    new User(
+      GetUser(
+        GetUserId(name)
+          ?? throw new Exception($"User '{name}' does not exist."),
+        name
+      )
+    );
+
+  public static User GetUser(int id) =>
+    new User(
+      GetUser(
+        id,
+        GetUserName(id)
+          ?? throw new Exception($"User #{id} does not exist.")
+      )
+    );
 
   //
-  // UserInfo wrapper properties
+  // IUser wrapper properties
   //
 
   /// <summary>
-  /// This class contains basic information about the user.
+  /// The Login ID of the user.
   /// </summary>
-  private dynamic _userInfo { get; set; } = userInfo
-    ?? throw new ArgumentNullException(
-          $"UserManager did not return a {nameof(userInfo)} value.");
+  public int Id => user.Id;
 
-  public int Id => _userInfo.User.LoginID;
-
-  public string Name => _userInfo.User.ScreenName;
+  /// <summary>
+  /// The display name of the user.
+  /// </summary>
+  public string Name = user.Name;
 
   /// <summary>
   /// The Catalog ID of the user's avatar.
   /// </summary>
-  public int AvatarId => _userInfo.AvatarID;
+  public int AvatarId => user.AvatarID;
 }

@@ -75,4 +75,7 @@ public class Proxy<T>(Type? @type=null) where T : class {
 
   public override string ToString() => Class.FullName
     ?? throw new Exception($"Proxied type is not a valid type.");
+
+  public static implicit operator string(Proxy<T> proxy) =>
+    proxy.ToString();
 }
