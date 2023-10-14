@@ -45,8 +45,7 @@ public class Client
   /// <summary>
   /// The latest version of the MTGO client that this SDK is compatible with.
   /// </summary>
-  public static string Version =>
-    new Proxy<IFlsClientSession>().AssemblyVersion;
+  public static string Version => new Proxy<IClientSession>().AssemblyVersion;
 
   public Client()
   {
@@ -54,7 +53,7 @@ public class Client
     //       singleton instance prior to connecting to the MTGO process.
 
     // Verify that the current user session is valid.
-    if (CurrentUser.Id == -1 && CurrentUser.IsLoggedIn)
-      throw new Exception("User is logged in without a valid user id.");
+    if (s_flsClientSession.IsConnected && CurrentUser.Id == -1)
+      throw new Exception("Current user session has an invalid user id.");
   }
 }
