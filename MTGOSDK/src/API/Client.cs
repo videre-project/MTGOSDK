@@ -19,15 +19,32 @@ public class Client
   private static readonly IFlsClientSession s_flsClientSession =
     ObjectProvider.Get<FlsClientSession>();
 
-  public User CurrentUser { get; private set; }
+  /// <summary>
+  /// Internal reference to the current logged in user.
+  /// </summary>
+  private User m_currentUser;
+
+  /// <summary>
+  /// Returns the current logged in user's public information.
+  /// </summary>
+  public User CurrentUser
+  {
+    get
+    {
+      // TODO: We cannot bind an interface type as structs are not yet supported.
+      var UserInfo_t = Proxy<dynamic>.From(s_flsClientSession.LoggedInUser);
+
+      // Only fetch and update the current user if the user Id has changed.
+      if (UserInfo_t.Id != m_currentUser?.Id)
+        m_currentUser = new User(UserInfo_t.Id, UserInfo_t.Name);
+
+      return m_currentUser;
+    }
+  }
 
   public Client()
   {
     // TODO: Add constructor parameters to set properties of the RemoteClient
     //       singleton instance prior to connecting to the MTGO process.
-
-    // TODO: We cannot bind an interface type as structs are not yet supported.
-    var UserInfo_t = Proxy<dynamic>.From(s_flsClientSession.LoggedInUser);
-    CurrentUser = new User(UserInfo_t.Id, UserInfo_t.Name);
   }
 }
