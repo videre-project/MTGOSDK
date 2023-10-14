@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Reflection;
+
 using ImpromptuInterface;
 
 
@@ -58,6 +60,11 @@ public class Proxy<T>(Type? @type=null) where T : class {
       return interfaces.First();
     }
   }
+
+  /// <summary>
+  /// Returns the assembly version of the proxied class.
+  /// </summary>
+  public string AssemblyVersion => Class.Assembly.GetName().Version.ToString();
 
   /// <summary>
   /// Returns true if the proxied class is static at the IL level.

@@ -42,6 +42,12 @@ public class Client
     }
   }
 
+  /// <summary>
+  /// The latest version of the MTGO client that this SDK is compatible with.
+  /// </summary>
+  public static string Version =>
+    new Proxy<IFlsClientSession>().AssemblyVersion;
+
   public Client()
   {
     // TODO: Add constructor parameters to set properties of the RemoteClient
