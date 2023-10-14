@@ -46,5 +46,9 @@ public class Client
   {
     // TODO: Add constructor parameters to set properties of the RemoteClient
     //       singleton instance prior to connecting to the MTGO process.
+
+    // Verify that the current user session is valid.
+    if (CurrentUser.Id == -1 && CurrentUser.IsLoggedIn)
+      throw new Exception("User is logged in without a valid user id.");
   }
 }

@@ -41,21 +41,17 @@ public class User(dynamic /* IUser */ user)
     );
 
   private static User GetUser(string name) =>
-    new User(
-      GetUser(
-        GetUserId(name)
-          ?? throw new Exception($"User '{name}' does not exist."),
-        name
-      )
+    GetUser(
+      GetUserId(name)
+        ?? throw new Exception($"User '{name}' does not exist."),
+      name
     );
 
   private static User GetUser(int id) =>
-    new User(
-      GetUser(
-        id,
-        GetUserName(id)
-          ?? throw new Exception($"User #{id} does not exist.")
-      )
+    GetUser(
+      id,
+      GetUserName(id)
+        ?? throw new Exception($"User #{id} does not exist.")
     );
 
   public static string GetUserName(int id) => s_userManager.GetUserName(id);
@@ -74,6 +70,12 @@ public class User(dynamic /* IUser */ user)
   //
 
   /// <summary>
+  /// Internal unwrapped reference to any captured IUser objects.
+  /// </summary>
+  private dynamic user = user is User ? user.user : user
+    ?? throw new Exception($"User object is not a valid IUser type.");
+
+  /// <summary>
   /// The Login ID of the user.
   /// </summary>
   public int Id => user.Id;
@@ -81,10 +83,15 @@ public class User(dynamic /* IUser */ user)
   /// <summary>
   /// The display name of the user.
   /// </summary>
-  public string Name = user.Name;
+  public string Name => user.Name;
 
   /// <summary>
   /// The Catalog ID of the user's avatar.
   /// </summary>
   public int AvatarId => user.AvatarID;
+
+  /// <summary>
+  /// Whether the user is logged in and visible to other users.
+  /// </summary>
+  public bool IsLoggedIn => user.IsLoggedInAndVisible;
 }
