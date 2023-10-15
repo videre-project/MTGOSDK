@@ -6,6 +6,7 @@
 using System.Reflection;
 
 using MTGOSDK.Core;
+using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Core;

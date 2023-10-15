@@ -8,7 +8,7 @@ using System.Reflection;
 using ImpromptuInterface;
 
 
-namespace MTGOSDK.Core;
+namespace MTGOSDK.Core.Reflection;
 
 public class Proxy<T>(Type? @type=null) where T : class {
   //
@@ -18,18 +18,29 @@ public class Proxy<T>(Type? @type=null) where T : class {
   /// <summary>
   /// Binds the proxied object to the specified interface type.
   /// </summary>
+  /// <typeparam name="T">The interface type to bind to.</typeparam>
+  /// <param name="obj">The remote object to bind to.</param>
+  /// <returns>The proxied object.</returns>
   public static T As(dynamic? obj=null) =>
     Impromptu.ActLike<T>(obj);
 
   /// <summary>
   /// Binds the proxied object to the specified interface types.
   /// </summary>
+  /// <remarks>
+  /// The first interface type is used as the base interface.
+  /// </remarks>
+  /// <param name="obj">The remote object to bind to.</param>
+  /// <param name="interfaces">The interface types to bind to.</param>
+  /// <returns>The proxied object.</returns>
   public static dynamic As(dynamic? obj=null, params Type[] interfaces) =>
     Impromptu.DynamicActLike(obj, interfaces);
 
   /// <summary>
   /// Unbinds the proxied object from any bound interface types.
   /// </summary>
+  /// <param name="obj">The remote object to unbind.</param>
+  /// <returns>The unbound proxied object.</returns>
   public static dynamic From(dynamic? obj=null) =>
     Impromptu.UndoActLike(obj);
 

@@ -3,9 +3,15 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core;
+using MTGOSDK.Core.Reflection;
 
-namespace MTGOSDK.Core;
 
+namespace MTGOSDK.API;
+
+/// <summary>
+/// Global manager for all singleton objects registered with the client.
+/// </summary>
 public static class ObjectProvider
 {
   /// <summary>

@@ -6,9 +6,14 @@
 using System.Security;
 using System.Runtime.InteropServices;
 
+using MTGOSDK.Core.Reflection;
 
-namespace MTGOSDK.Core;
 
+namespace MTGOSDK.Core.Security;
+
+/// <summary>
+/// Provides extension methods for <c>System.Security</c> classes.
+/// </summary>
 public static class SecurityExtensions
 {
   /// <summary>

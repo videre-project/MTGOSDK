@@ -8,6 +8,8 @@ using System.Security;
 using System.Security.Authentication;
 
 using MTGOSDK.Core;
+using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Security;
 
 using FlsClient.Interface;
 using Shiny.Core.Interfaces;
