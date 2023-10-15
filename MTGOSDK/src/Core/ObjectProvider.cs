@@ -41,12 +41,12 @@ public static class ObjectProvider
       return RemoteClient.GetInstance(proxy);
 
     // Use the proxy type to retrieve the proxy value
-    Type? @interface = proxy.Interface;
+    Type? @interface = !proxy.IsInterface ? proxy.Interface : null;
     dynamic obj = Get(@interface?.FullName ?? proxy);
 
     // Late bind the interface type to the proxy value
-    if (bindTypes && @interface != null)
-      obj = Proxy<dynamic>.As(obj, @interface);
+    if (bindTypes && (@interface != null || proxy.IsInterface))
+      obj = Proxy<dynamic>.As(obj, @interface ?? proxy.Class);
 
     return obj;
   }

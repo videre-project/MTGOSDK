@@ -71,6 +71,11 @@ public class Proxy<T>(Type? @type=null) where T : class {
   /// </summary>
   public bool IsStatic => Class.IsAbstract && Class.IsSealed;
 
+  /// <summary>
+  /// Whether the proxied class is an interface.
+  /// </summary>
+  public bool IsInterface => Class.IsInterface;
+
   //
   // Derived remote object properties
   //
