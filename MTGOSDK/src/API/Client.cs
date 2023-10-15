@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
+
 using MTGOSDK.Core;
 
 using FlsClient;
@@ -47,13 +49,28 @@ public class Client
   /// </summary>
   public static string Version => new Proxy<IClientSession>().AssemblyVersion;
 
+  /// <summary>
+  /// The MTGO client's user session id.
+  /// </summary>
+  public Guid SessionId => new(s_flsClientSession.SessionId);
+
+  /// <summary>
+  /// Whether the client is currently online and connected.
+  /// </summary>
+  public bool IsConnected => s_flsClientSession.IsConnected;
+
+  /// <summary>
+  /// Whether the client is currently logged in.
+  /// </summary>
+  public bool IsLoggedIn => CurrentUser.Id != -1;
+
   public Client()
   {
     // TODO: Add constructor parameters to set properties of the RemoteClient
     //       singleton instance prior to connecting to the MTGO process.
 
     // Verify that the current user session is valid.
-    if (s_flsClientSession.IsConnected && CurrentUser.Id == -1)
+    if (SessionId != Guid.Empty && IsConnected && !IsLoggedIn)
       throw new Exception("Current user session has an invalid user id.");
   }
 }
