@@ -14,6 +14,11 @@ public static class ObjectProvider
   private static readonly Proxy<dynamic> s_proxy =
     new(typeof(WotC.MtGO.Client.Common.ServiceLocation.ObjectProvider));
 
+  /// <summary>
+  /// Returns an instance of the given type from the client's ObjectProvider.
+  /// </summary>
+  /// <param name="queryPath">The query path of the registered type.</param>
+  /// <returns>A remote instance of the given type.</returns>
   public static dynamic Get(string queryPath)
   {
     // Get the RemoteType from the type's query path
@@ -25,6 +30,12 @@ public static class ObjectProvider
         genericTypes: new Type[] { genericType });
   }
 
+  /// <summary>
+  /// Returns an instance of the given type from the client's ObjectProvider.
+  /// </summary>
+  /// <typeparam name="T">The class or interface type to retrieve.</typeparam>
+  /// <param name="bindTypes">Whether to bind the type to the returned instance.</param>
+  /// <returns>A remote instance of the given type.</returns>
   public static dynamic Get<T>(bool bindTypes = true)
   {
     // Create a proxy type for the given generic type

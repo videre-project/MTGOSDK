@@ -14,8 +14,10 @@ public static class SecurityExtensions
   /// <summary>
   /// Securely transfers a SecureString object to the remote client.
   /// </summary>
-  /// <param name="password"></param>
-  /// <returns></returns>
+  /// <param name="password">The SecureString object to transfer.</param>
+  /// <returns>
+  /// A handle to the remote SecureString object (this cannot be read remotely).
+  /// </returns>
   public static dynamic RemoteSecureString(this SecureString password)
   {
     IntPtr passwordPtr = IntPtr.Zero;

@@ -34,12 +34,23 @@ public class User(dynamic /* IUser */ user)
     //
     RemoteClient.GetInstance("WotC.MtGO.Client.Model.Core.UserManager");
 
+  /// <summary>
+  /// Retrieves a user object from the client's UserManager.
+  /// </summary>
+  /// <param name="id">The Login ID of the user.</param>
+  /// <param name="name">The display name of the user.</param>
+  /// <returns>A new User object.</returns>
   private static User GetUser(int id, string name) =>
     new User(
       s_userManager.CreateNewUser(id, name)
         ?? throw new Exception($"Failed to retrieve user '{name}' (#{id}).")
     );
 
+  /// <summary>
+  /// Retrieves a user object from the client's UserManager.
+  /// </summary>
+  /// <param name="name">The display name of the user.</param>
+  /// <returns>A new User object.</returns>
   private static User GetUser(string name) =>
     GetUser(
       GetUserId(name)
@@ -47,6 +58,11 @@ public class User(dynamic /* IUser */ user)
       name
     );
 
+  /// <summary>
+  /// Retrieves a user object from the client's UserManager.
+  /// </summary>
+  /// <param name="id">The Login ID of the user.</param>
+  /// <returns>A new User object.</returns>
   private static User GetUser(int id) =>
     GetUser(
       id,
@@ -54,8 +70,18 @@ public class User(dynamic /* IUser */ user)
         ?? throw new Exception($"User #{id} does not exist.")
     );
 
+  /// <summary>
+  /// Retrieves the username of a user by their Login ID.
+  /// </summary>
+  /// <param name="id">The Login ID of the user.</param>
+  /// <returns>The display name of the user.</returns>
   public static string GetUserName(int id) => s_userManager.GetUserName(id);
 
+  /// <summary>
+  /// Retrieves the Login ID of a user by their username.
+  /// </summary>
+  /// <param name="name">The display name of the user.</param>
+  /// <returns>The Login ID of the user.</returns>
   public static int? GetUserId(string name) => s_userManager.GetUserId(name);
 
   public User(int id) : this(GetUser(id))

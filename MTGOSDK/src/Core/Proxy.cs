@@ -64,6 +64,9 @@ public class Proxy<T>(Type? @type=null) where T : class {
   /// <summary>
   /// Returns the assembly version of the proxied class.
   /// </summary>
+  /// <remarks>
+  /// This is the version of the local assembly that the proxied class wraps.
+  /// </remarks>
   public string AssemblyVersion => Class.Assembly.GetName().Version.ToString();
 
   /// <summary>

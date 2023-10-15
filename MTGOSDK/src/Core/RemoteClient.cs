@@ -58,6 +58,7 @@ public sealed class RemoteClient
   /// <summary>
   /// Connects to the target process and returns a RemoteNET client handle.
   /// </summary>
+  /// <returns>A RemoteNET client handle.</returns>
   private RemoteApp GetClientHandle()
   {
     // Connect to the target process
@@ -83,11 +84,21 @@ public sealed class RemoteClient
   // RemoteApp wrapper methods
   //
 
+  /// <summary>
+  /// Returns a single instance of a remote object from the given query path.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <returns>A dynamic wrapper around the remote object.</returns>
   public static dynamic GetInstance(string queryPath)
   {
     return GetInstances(queryPath).Single();
   }
 
+  /// <summary>
+  /// Returns a collection of remote objects from the given query path.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote objects.</param>
+  /// <returns>A collection of dynamic wrappers around the remote objects.</returns>
   public static IEnumerable<dynamic> GetInstances(string queryPath)
   {
     IEnumerable<CandidateObject> queryRefs = @client.QueryInstances(queryPath);
@@ -98,11 +109,21 @@ public sealed class RemoteClient
     }
   }
 
+  /// <summary>
+  /// Returns a single instance of a remote type from the given query path.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote type.</param>
+  /// <returns>A dynamic wrapper around the remote type.</returns>
   public static Type GetInstanceType(string queryPath)
   {
     return GetInstanceTypes(queryPath).Single();
   }
 
+  /// <summary>
+  /// Returns a collection of remote types from the given query path.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote types.</param>
+  /// <returns>A collection of dynamic wrappers around the remote types.</returns>
   public static IEnumerable<Type> GetInstanceTypes(string queryPath)
   {
     IEnumerable<CandidateType> queryRefs = @client.QueryTypes(queryPath);
@@ -113,6 +134,12 @@ public sealed class RemoteClient
     }
   }
 
+  /// <summary>
+  /// Returns a MethodInfo object for a given remote object's method.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="methodName">The name of the method to get.</param>
+  /// <returns>A MethodInfo object for the given method.</returns>
   public static MethodInfo GetInstanceMethod(
     string queryPath,
     string methodName)
@@ -120,6 +147,12 @@ public sealed class RemoteClient
     return GetInstanceMethods(queryPath, methodName).Single();
   }
 
+  /// <summary>
+  /// Returns a collection of MethodInfo objects for a given remote object's methods.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="methodName">The name of the method to get.</param>
+  /// <returns>A collection of MethodInfo objects for the given methods.</returns>
   public static IEnumerable<MethodInfo> GetInstanceMethods(
     string queryPath,
     string methodName)
@@ -131,6 +164,12 @@ public sealed class RemoteClient
     return methods;
   }
 
+  /// <summary>
+  /// Creates a new instance of a remote object from the given query path.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="parameters">The parameters to pass to the remote object's constructor.</param>
+  /// <returns>A dynamic wrapper around the remote object.</returns>
   public static dynamic CreateInstance(
     string queryPath,
     params object[] parameters)
@@ -144,6 +183,13 @@ public sealed class RemoteClient
   // Reflection wrapper methods
   //
 
+  /// <summary>
+  /// Returns a MethodInfo object for a given remote type's method.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote type.</param>
+  /// <param name="methodName">The name of the method to get.</param>
+  /// <param name="genericTypes">The generic types to fill in.</param>
+  /// <returns>A MethodInfo object for the given method.</returns>
   public static MethodInfo? GetMethod(
     string queryPath,
     string methodName,
@@ -162,6 +208,11 @@ public sealed class RemoteClient
   /// <summary>
   /// Invokes a static method on the target process.
   /// </summary>
+  /// <param name="queryPath">The query path to the remote type.</param>
+  /// <param name="methodName">The name of the method to invoke.</param>
+  /// <param name="genericTypes">The generic types to fill in.</param>
+  /// <param name="args">The arguments to pass to the method.</param>
+  /// <returns>The return value of the method.</returns>
   public static dynamic InvokeMethod(
     string queryPath,
     string methodName,
@@ -178,6 +229,13 @@ public sealed class RemoteClient
   // HarmonyManager wrapper methods
   //
 
+  /// <summary>
+  /// Hooks a remote object's method using a Harmony callback.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="methodName">The name of the method to hook.</param>
+  /// <param name="hookName">The type of Harmony hook to use.</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
   public static void HookInstanceMethod(
     string queryPath,
     string methodName,

@@ -79,6 +79,14 @@ public class Client
   /// </summary>
   public bool IsLoggedIn => s_loginManager.IsLoggedIn;
 
+  /// <summary>
+  /// Creates a new instance of the MTGO client API.
+  /// </summary>
+  /// <remarks>
+  /// This class is used to manage the client's connection and user session,
+  /// and should be instantiated once per application instance and prior to
+  /// invoking with other API classes.
+  /// </remarks>
   public Client()
   {
     // TODO: Add constructor parameters to set properties of the RemoteClient
@@ -92,6 +100,11 @@ public class Client
   /// <summary>
   /// Creates a new user session and connects MTGO to the main server.
   /// </summary>
+  /// <param name="userName">The user's login name.</param>
+  /// <param name="password">The user's login password.</param>
+  /// <exception cref="AuthenticationException">
+  /// Thrown when the user's credentials are invalid.
+  /// </exception>
   public void LogOn(string userName, SecureString password)
   {
     if (IsLoggedIn)
@@ -115,6 +128,9 @@ public class Client
   /// <summary>
   /// Closes the current user session and returns to the login screen.
   /// </summary>
+  /// <exception cref="Exception">
+  /// Thrown when the client is not currently logged in.
+  /// </exception>
   public void LogOff()
   {
     if (!IsLoggedIn)
