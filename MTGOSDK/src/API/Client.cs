@@ -77,7 +77,7 @@ public class Client
   /// <summary>
   /// Whether the client is currently logged in.
   /// </summary>
-  public bool IsLoggedIn => CurrentUser.Id != -1;
+  public bool IsLoggedIn => s_loginManager.IsLoggedIn;
 
   public Client()
   {
@@ -85,7 +85,7 @@ public class Client
     //       singleton instance prior to connecting to the MTGO process.
 
     // Verify that the current user session is valid.
-    if (SessionId != Guid.Empty && IsConnected && !IsLoggedIn)
+    if (SessionId != Guid.Empty && IsConnected && CurrentUser.Id == -1)
       throw new Exception("Current user session has an invalid user id.");
   }
 
@@ -94,7 +94,7 @@ public class Client
   /// </summary>
   public void LogOn(string userName, SecureString password)
   {
-    if (s_loginManager.IsLoggedIn)
+    if (IsLoggedIn)
       throw new Exception("Cannot log in while already logged in.");
 
     // Initializes the login manager if it has not already been initialized.
@@ -115,5 +115,15 @@ public class Client
   /// <summary>
   /// Closes the current user session and returns to the login screen.
   /// </summary>
-  public void LogOff() => s_session.LogOff();
+  public void LogOff()
+  {
+    if (!IsLoggedIn)
+      throw new Exception("Cannot log off while not logged in.");
+
+    // Invokes logoff command and disconnects the MTGO client.
+    s_session.LogOff();
+  }
+
+  public void OnException(Exception exception) =>
+    throw new NotImplementedException("'OnException' hook is not implemented.");
 }
