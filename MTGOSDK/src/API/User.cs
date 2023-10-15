@@ -91,7 +91,32 @@ public class User(dynamic /* IUser */ user)
   public int AvatarId => user.AvatarID;
 
   /// <summary>
+  /// The user's avatar resource.
+  /// </summary>
+  public IAvatar Avatar => Proxy<IAvatar>.As(user.CurrentAvatar);
+
+  /// <summary>
+  /// Whether the account is not a fully activated account.
+  /// </summary>
+  public bool IsGuest => user.IsGuest;
+
+  /// <summary>
+  /// Whether the user is added as a buddy of the current user.
+  /// </summary>
+  public bool IsBuddy => user.IsBuddy;
+
+  /// <summary>
+  /// Whether the user is blocked by the current user.
+  /// </summary>
+  public bool IsBlocked => user.IsBlocked;
+
+  /// <summary>
   /// Whether the user is logged in and visible to other users.
   /// </summary>
   public bool IsLoggedIn => user.IsLoggedInAndVisible;
+
+  /// <summary>
+  /// The user's last login timestamp.
+  /// </summary>
+  public string LastLogin => user.LastLogin;
 }
