@@ -4,11 +4,14 @@
 **/
 
 using System;
+using System.Security;
+using System.Security.Authentication;
 
 using MTGOSDK.Core;
 
-using FlsClient;
 using FlsClient.Interface;
+using Shiny.Core.Interfaces;
+using WotC.MtGO.Client.Model;
 
 
 namespace MTGOSDK.API;
@@ -16,10 +19,22 @@ namespace MTGOSDK.API;
 public class Client
 {
   /// <summary>
-  /// This class manages the client's connection and user session information.
+  /// Manages the client's connection and user session information.
+  /// </summary>
+  private static readonly ISession s_session =
+    ObjectProvider.Get<ISession>();
+
+  /// <summary>
+  /// Provides basic information about the current user and client session.
   /// </summary>
   private static readonly IFlsClientSession s_flsClientSession =
-    ObjectProvider.Get<FlsClientSession>();
+    ObjectProvider.Get<IFlsClientSession>();
+
+  /// <summary>
+  /// View model for the client's login and authentication process.
+  /// </summary>
+  private static readonly ILoginViewModel s_loginManager =
+    ObjectProvider.Get<ILoginViewModel>();
 
   /// <summary>
   /// Internal reference to the current logged in user.
@@ -73,4 +88,32 @@ public class Client
     if (SessionId != Guid.Empty && IsConnected && !IsLoggedIn)
       throw new Exception("Current user session has an invalid user id.");
   }
+
+  /// <summary>
+  /// Creates a new user session and connects MTGO to the main server.
+  /// </summary>
+  public void LogOn(string userName, SecureString password)
+  {
+    if (s_loginManager.IsLoggedIn)
+      throw new Exception("Cannot log in while already logged in.");
+
+    // Initializes the login manager if it has not already been initialized.
+    dynamic LoginVM = Proxy<dynamic>.From(s_loginManager);
+    if (!LoginVM.IsLoginEnabled)
+      LoginVM.Initialize();
+
+    // Passes the user's credentials to the MTGO client for authentication.
+    LoginVM.ScreenName = userName;
+    LoginVM.Password = password.RemoteSecureString();
+    if (!LoginVM.LogOnCanExecute())
+      throw new AuthenticationException("Invalid or missing credentials.");
+
+    // Executes the login command and creates a new task to connect the client.
+    LoginVM.LogOnExecute();
+  }
+
+  /// <summary>
+  /// Closes the current user session and returns to the login screen.
+  /// </summary>
+  public void LogOff() => s_session.LogOff();
 }
