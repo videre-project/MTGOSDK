@@ -89,6 +89,9 @@ public class Client
   /// and should be instantiated once per application instance and prior to
   /// invoking with other API classes.
   /// </remarks>
+  /// <exception cref="VerificationException">
+  /// Thrown when the current user session is invalid.
+  /// </exception>
   public Client()
   {
     // TODO: Add constructor parameters to set properties of the RemoteClient
@@ -96,7 +99,7 @@ public class Client
 
     // Verify that the current user session is valid.
     if (SessionId != Guid.Empty && IsConnected && CurrentUser.Id == -1)
-      throw new Exception("Current user session has an invalid user id.");
+      throw new VerificationException("Current user session is invalid.");
   }
 
   /// <summary>
@@ -104,13 +107,16 @@ public class Client
   /// </summary>
   /// <param name="userName">The user's login name.</param>
   /// <param name="password">The user's login password.</param>
-  /// <exception cref="AuthenticationException">
-  /// Thrown when the user's credentials are invalid.
+  /// <exception cref="InvalidOperationException">
+  /// Thrown when the client is already logged in.
+  /// </exception>
+  /// <exception cref="ArgumentException">
+  /// Thrown when the user's credentials are missing or malformed.
   /// </exception>
   public void LogOn(string userName, SecureString password)
   {
     if (IsLoggedIn)
-      throw new Exception("Cannot log in while already logged in.");
+      throw new InvalidOperationException("Cannot log on while logged in.");
 
     // Initializes the login manager if it has not already been initialized.
     dynamic LoginVM = Proxy<dynamic>.From(s_loginManager);
@@ -121,7 +127,7 @@ public class Client
     LoginVM.ScreenName = userName;
     LoginVM.Password = password.RemoteSecureString();
     if (!LoginVM.LogOnCanExecute())
-      throw new AuthenticationException("Invalid or missing credentials.");
+      throw new ArgumentException("Missing one or more user credentials.");
 
     // Executes the login command and creates a new task to connect the client.
     LoginVM.LogOnExecute();
@@ -130,13 +136,13 @@ public class Client
   /// <summary>
   /// Closes the current user session and returns to the login screen.
   /// </summary>
-  /// <exception cref="Exception">
+  /// <exception cref="InvalidOperationException">
   /// Thrown when the client is not currently logged in.
   /// </exception>
   public void LogOff()
   {
     if (!IsLoggedIn)
-      throw new Exception("Cannot log off while not logged in.");
+      throw new InvalidOperationException("Cannot log off while logged out.");
 
     // Invokes logoff command and disconnects the MTGO client.
     s_session.LogOff();
