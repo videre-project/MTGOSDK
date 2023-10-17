@@ -12,7 +12,7 @@ using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Core;
 
 
-namespace MTGOSDK.API;
+namespace MTGOSDK.API.Users;
 
 public static class UserManager
 {

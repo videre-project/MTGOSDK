@@ -12,19 +12,14 @@ using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Core;
 
 
-namespace MTGOSDK.API;
+namespace MTGOSDK.API.Users;
 
-public class User(dynamic /* IUser */ user)
+public class User(dynamic user) : DLRWrapper<IUser>
 {
   /// <summary>
-  /// Internal unwrapped reference to any captured IUser objects.
+  /// Stores an internal reference to the IUser object.
   /// </summary>
-  /// <remarks>
-  /// This is used to extract the (dynamic) IUser object from any passed in
-  /// User objects, deferring any dynamic dispatching of User constructors.
-  /// </remarks>
-  private dynamic user = user is User ? user.user : user
-    ?? throw new Exception($"User object is not a valid IUser type.");
+  internal override dynamic obj => user;
 
   public User(int id) : this(UserManager.GetUser(id))
   { }
@@ -40,45 +35,45 @@ public class User(dynamic /* IUser */ user)
   /// <summary>
   /// The Login ID of the user.
   /// </summary>
-  public int Id => user.Id;
+  public int Id => @base.Id;
 
   /// <summary>
   /// The display name of the user.
   /// </summary>
-  public string Name => user.Name;
+  public string Name => @base.Name;
 
   /// <summary>
   /// The Catalog ID of the user's avatar.
   /// </summary>
-  public int AvatarId => user.AvatarID;
+  public int AvatarId => @base.AvatarID;
 
   /// <summary>
   /// The user's avatar resource.
   /// </summary>
-  public IAvatar Avatar => Proxy<IAvatar>.As(user.CurrentAvatar);
+  public IAvatar Avatar => Proxy<IAvatar>.As(@base.CurrentAvatar);
 
   /// <summary>
   /// Whether the account is not a fully activated account.
   /// </summary>
-  public bool IsGuest => user.IsGuest;
+  public bool IsGuest => @base.IsGuest;
 
   /// <summary>
   /// Whether the user is added as a buddy of the current user.
   /// </summary>
-  public bool IsBuddy => user.IsBuddy;
+  public bool IsBuddy => @base.IsBuddy;
 
   /// <summary>
   /// Whether the user is blocked by the current user.
   /// </summary>
-  public bool IsBlocked => user.IsBlocked;
+  public bool IsBlocked => @base.IsBlocked;
 
   /// <summary>
   /// Whether the user is logged in and visible to other users.
   /// </summary>
-  public bool IsLoggedIn => user.IsLoggedInAndVisible;
+  public bool IsLoggedIn => @base.IsLoggedInAndVisible;
 
   /// <summary>
   /// The user's last login timestamp.
   /// </summary>
-  public string LastLogin => user.LastLogin;
+  public string LastLogin => @base.LastLogin;
 }

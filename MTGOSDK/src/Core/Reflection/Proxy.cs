@@ -10,7 +10,8 @@ using ImpromptuInterface;
 
 namespace MTGOSDK.Core.Reflection;
 
-public class Proxy<T>(Type? @type=null) where T : class {
+public class Proxy<T>(Type? @type=null) where T : class
+{
   //
   // BuilderProxy methods
   //

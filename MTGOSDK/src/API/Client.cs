@@ -7,6 +7,7 @@ using System;
 using System.Security;
 using System.Security.Authentication;
 
+using MTGOSDK.API.Users;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Security;
@@ -41,7 +42,7 @@ public class Client
   /// <summary>
   /// Internal reference to the current logged in user.
   /// </summary>
-  private User m_currentUser;
+  private User? m_currentUser;
 
   /// <summary>
   /// Returns the current logged in user's public information.
