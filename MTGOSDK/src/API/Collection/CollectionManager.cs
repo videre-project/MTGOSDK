@@ -10,6 +10,7 @@ using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
+using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
 
 
@@ -106,4 +107,77 @@ public static class CollectionManager
 
     return new(AllCardSetsByCode[setCode]);
   }
+
+  //
+  // CollectionGroupingManager wrapper methods
+  //
+
+  /// <summary>
+  /// Manages the client's binders, wish lists, and decks.
+  /// </summary>
+  private static readonly ICollectionGroupingManager s_collectionGroupingManager =
+    ObjectProvider.Get<ICollectionGroupingManager>();
+
+  private static ICardGrouping GetCollectionItem(int id) =>
+    s_collectionGroupingManager.GetCardGroupingById(id);
+
+  // public void ExportCollectionItem(CollectionItem item, string fileName) =>
+  //   s_collectionGroupingManager.ExportCollectionItem(item.obj, fileName);
+
+  //
+  // IBinder wrapper methods
+  //
+
+  /// <summary>
+  /// The last used binder for trading.
+  /// </summary>
+  public static Binder LastUsedBinder =>
+    new(s_collectionGroupingManager.LastUsedBinder);
+
+  /// <summary>
+  /// The user's wish list.
+  /// </summary>
+  public static Binder WishList =>
+    new(s_collectionGroupingManager.WishList);
+
+  /// <summary>
+  /// Returns a binder object by the given binder id.
+  /// </summary>
+  /// <param name="id">The id of the binder to return.</param>
+  /// <returns>A new binder object.</returns>
+  public static Binder GetBinder(int id) => new(GetCollectionItem(id));
+
+  // IBinder ImportTextDeckAsBinder(FileInfo textFileToImport, string name, IVisualResource binderImage);
+  // IBinder CreateNewBinder(string name, IVisualResource binderImage = null, IEnumerable<ICardDefinition> initialCards = null);
+
+  //
+  // IDeck wrapper methods
+  //
+
+  /// <summary>
+  /// Returns all decks in the user's collection.
+  /// </summary>
+  public static IEnumerable<Deck> Decks =>
+    s_collectionGroupingManager.Folders
+      .SelectMany(/* IDeckFolder */ folder =>
+        folder.Contents
+          .Where(/* ICardGrouping */ grouping =>
+            {
+              // This is a simple test to check whether the grouping is a deck.
+              try   { return grouping is ICardGrouping; }
+              // If the grouping has an invalid address or isn't a deck, ignore.
+              catch { return false; }
+            })
+          .Select(deck => new Deck(deck))
+      );
+
+  /// <summary>
+  /// Returns a deck object by the given deck id.
+  /// </summary>
+  /// <param name="id">The id of the deck to return.</param>
+  /// <returns>A new deck object.</returns>
+  public static Deck GetDeck(int id) => new(GetCollectionItem(id));
+
+  // IDeck ImportTextDeck(FileInfo textFileToImport, string name, IPlayFormat format, IVisualResource deckBoxImage, IDeckFolder location);
+  // IDeck CreateNewDeck(string name, IPlayFormat format, IVisualResource deckBoxImage = null, IDeckFolder location = null, IEnumerable<ICardDefinition> initialCards = null);
 }
