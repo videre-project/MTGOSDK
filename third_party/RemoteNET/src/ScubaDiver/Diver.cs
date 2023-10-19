@@ -37,6 +37,8 @@ public class Diver : IDisposable
   private readonly object _clrMdLock = new();
   private DataTarget _dt = null;
   private ClrRuntime _runtime = null;
+  private DateTime _runtimeLastRefreshed = DateTime.MinValue;
+  private bool _runtimeRefreshPending = false;
   // Address to Object converter
   private readonly Converter<object> _converter = new();
 
@@ -307,6 +309,23 @@ public class Diver : IDisposable
 
   private void RefreshRuntime()
   {
+    // If a refresh is already pending, don't do anything
+    if (_runtimeRefreshPending)
+      return;
+
+    // Only refresh if the last refresh was more than 5 seconds ago
+    lock (_clrMdLock)
+    {
+      var requestTime = DateTime.Now;
+      if (_runtime != null && _runtimeLastRefreshed.AddSeconds(5) > requestTime)
+        return;
+
+      // Update the last refresh time
+      _runtimeLastRefreshed = requestTime;
+      _runtimeRefreshPending = true;
+    }
+
+    // Refresh the runtime and update the last refresh time
     DisposeRuntime();
     lock (_clrMdLock)
     {
@@ -318,6 +337,7 @@ public class Diver : IDisposable
       // so it might "lock" both the Bootstrapper and ScubaDiver dlls.
       _dt = DataTarget.CreateSnapshotAndAttach(Process.GetCurrentProcess().Id);
       _runtime = _dt.ClrVersions.Single().CreateRuntime();
+      _runtimeRefreshPending = false;
     }
   }
 
@@ -717,7 +737,6 @@ public class Diver : IDisposable
   }
 
   #endregion
-
 
   #region Ping Handler
 
