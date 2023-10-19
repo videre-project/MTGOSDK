@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Reflection;
-
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 
@@ -14,7 +12,7 @@ using WotC.MtGO.Client.Model.Core;
 
 namespace MTGOSDK.API.Users;
 
-public class User(dynamic user) : DLRWrapper<IUser>
+public sealed class User(dynamic user) : DLRWrapper<IUser>
 {
   /// <summary>
   /// Stores an internal reference to the IUser object.
