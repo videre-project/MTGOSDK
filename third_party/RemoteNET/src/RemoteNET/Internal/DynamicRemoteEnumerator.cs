@@ -16,5 +16,7 @@ namespace RemoteNET.Internal
     public bool MoveNext() => _remoteEnumerator.MoveNext();
 
     public void Reset() => _remoteEnumerator.Reset();
+
+    public void Dispose() => _remoteEnumerator.Dispose();
   }
 }
