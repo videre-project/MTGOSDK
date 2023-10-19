@@ -27,6 +27,18 @@ public static class CollectionManager
   private static readonly ICardDataManager s_cardDataManager =
     ObjectProvider.Get<ICardDataManager>();
 
+  //
+  // ICardDefinition wrapper methods
+  //
+
+  /// <summary>
+  /// Returns a list of catalog ids for the given card name.
+  /// </summary>
+  /// <param name="cardName">The name of the card to query.</param>
+  /// <returns>A list of catalog ids.</returns>
+  public static IList<int> GetCardIds(string cardName) =>
+    s_cardDataManager.GetCatalogIdsForNameInPreferentialOrder(cardName, true);
+
   /// <summary>
   /// Returns a card object by the given catalog id.
   /// </summary>
@@ -52,26 +64,46 @@ public static class CollectionManager
   /// </exception>
   public static Card GetCard(string cardName) =>
     GetCard(
-      GetCardIds(cardName).First()
-        // ?? throw new KeyNotFoundException(
-        //     $"No card found with name \"{cardName}\".")
+      (int?)GetCardIds(cardName).FirstOrDefault()
+        ?? throw new KeyNotFoundException(
+            $"No card found with name \"{cardName}\".")
     );
 
   /// <summary>
-  /// Returns a list of catalog ids for the given card name.
+  /// Returns a list of card objects by the given card name.
   /// </summary>
   /// <param name="cardName">The name of the card to query.</param>
-  /// <returns>A list of catalog ids.</returns>
-  public static IList<int> GetCardIds(string cardName) =>
-    s_cardDataManager.GetCatalogIdsForNameInPreferentialOrder(cardName, true);
+  /// <returns>A list of card objects.</returns>
+  public static IEnumerable<Card> GetCards(string cardName)
+  {
+    foreach (var id in GetCardIds(cardName))
+      yield return GetCard(id);
+  }
 
-  // TODO: Fix type casting of nested types, i.e. Dictionary<string, CardSet>.
-  // public static Set GetSet(string setCode)
-  // {
-  //   var setCodeDict = Proxy<dynamic>.From(s_cardDataManager).AllCardSetsByCode;
-  //   if (!setCodeDict.TryGetValue(setCode, out dynamic set) || set is null)
-  //     throw new KeyNotFoundException($"No set found with code \"{setCode}\".");
   //
-  //   return new(set);
-  // }
+  // ICardSet wrapper methods
+  //
+
+  /// <summary>
+  /// A dictionary of all card sets by their set code.
+  /// </summary>
+  private static dynamic AllCardSetsByCode =>
+    // TODO: Fix type casting of nested types, i.e. Dictionary<string, CardSet>.
+    Proxy<dynamic>.From(s_cardDataManager).AllCardSetsByCode;
+
+  /// <summary>
+  /// Returns a set object by the given set code.
+  /// </summary>
+  /// <param name="setCode">The set code of the set to return.</param>
+  /// <returns>A new set object.</returns>
+  /// <exception cref="KeyNotFoundException">
+  /// Thrown if no set is found with the given set code.
+  /// </exception>
+  public static Set GetSet(string setCode)
+  {
+    if (!AllCardSetsByCode.ContainsKey(setCode))
+      throw new KeyNotFoundException($"No set found with code \"{setCode}\".");
+
+    return new(AllCardSetsByCode[setCode]);
+  }
 }
