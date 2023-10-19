@@ -24,6 +24,15 @@ namespace MTGOSDK.Core.Reflection;
 public class DLRWrapper<T>() where T : class
 {
   /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  /// <remarks>
+  /// This is used to allow derived classes to override the type of the
+  /// wrapped object in a more flexible manner than using generics.
+  /// </remarks>
+  internal virtual Type type => typeof(T);
+
+  /// <summary>
   /// This is the internal reference for any dynamic or derived class objects.
   /// </summary>
   internal virtual dynamic obj =>
@@ -31,7 +40,7 @@ public class DLRWrapper<T>() where T : class
     // Derived classes must override this property to capture dynamic objects.
     //
     throw new Exception(
-        $"{nameof(DLRWrapper<T>)}.obj must capture a {typeof(T).Name} type.");
+        $"{nameof(DLRWrapper<T>)}.obj must capture a {type.Name} type.");
 
   /// <summary>
   /// Internal unwrapped reference to any captured dynamic objects.
@@ -42,5 +51,5 @@ public class DLRWrapper<T>() where T : class
   /// </remarks>
   internal dynamic @base => obj is DLRWrapper<T> ? obj.obj : obj
     ?? throw new Exception(
-        $"{nameof(DLRWrapper<T>)} object has no valid {typeof(T).Name} type.");
+        $"{nameof(DLRWrapper<T>)} object has no valid {type.Name} type.");
 }
