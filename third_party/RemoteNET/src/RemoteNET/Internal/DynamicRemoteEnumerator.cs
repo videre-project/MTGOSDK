@@ -17,6 +17,17 @@ namespace RemoteNET.Internal
 
     public void Reset() => _remoteEnumerator.Reset();
 
-    public void Dispose() => _remoteEnumerator.Dispose();
+    public void Dispose()
+    {
+      try
+      {
+        _remoteEnumerator.Dispose();
+      }
+      catch
+      {
+        // TODO: Handle IDisposable's Dispose method explicitly when expected
+        // by a using statement or a call to Dispose().
+      }
+    }
   }
 }
