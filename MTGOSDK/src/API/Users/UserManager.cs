@@ -77,14 +77,12 @@ public static class UserManager
   /// </summary>
   /// <param name="id">The Login ID of the user.</param>
   /// <returns>The display name of the user.</returns>
-  public static string GetUserName(int id) =>
-    Proxy<IUserManager>.As(s_userManager).GetUserName(id);
+  public static string GetUserName(int id) => s_userManager.GetUserName(id);
 
   /// <summary>
   /// Retrieves the Login ID of a user by their username.
   /// </summary>
   /// <param name="name">The display name of the user.</param>
   /// <returns>The Login ID of the user.</returns>
-  public static int? GetUserId(string name) =>
-    Proxy<IUserManager>.As(s_userManager).GetUserId(name);
+  public static int? GetUserId(string name) => s_userManager.GetUserId(name);
 }
