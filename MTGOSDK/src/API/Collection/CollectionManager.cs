@@ -121,6 +121,22 @@ public static class CollectionManager
   private static ICardGrouping GetCollectionItem(int id) =>
     s_collectionGroupingManager.GetCardGroupingById(id);
 
+  //
+  // ICollectionGrouping wrapper methods
+  //
+
+  /// <summary>
+  /// Fetches the collection instance from the collection grouping manager.
+  /// </summary>
+  /// <returns>The internal collection instance.</returns>
+  internal static ICollectionGrouping GetCollection() =>
+   s_collectionGroupingManager.Collection;
+
+  /// <summary>
+  /// The main collection of all cards and items in the user's collection.
+  /// </summary>
+  public static Collection Collection => new();
+
   // public void ExportCollectionItem(CollectionItem item, string fileName) =>
   //   s_collectionGroupingManager.ExportCollectionItem(item.obj, fileName);
 
