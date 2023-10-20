@@ -17,7 +17,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <summary>
   /// Stores an internal reference to the ICardSet object.
   /// </summary>
-  internal override dynamic obj => set;
+  internal override dynamic obj => Proxy<ICardSet>.As(set);
 
   //
   // ICardSet wrapper properties
@@ -49,7 +49,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <summary>
   /// The set product type.
   /// </summary>
-  public string Type => @base.Type.Description;
+  public string Type => Proxy<dynamic>.From(@base).Type.Description;
 
   // TODO: This is a proxy to enum wrapper class, but we cannot bind to it.
   // public CardSetType Type => CardSetType.GetFromKey(@base.CardSetTypeCd);
@@ -71,18 +71,10 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <remarks>
   /// This collection is ordered by the card's catalog id.
   /// </remarks>
-  public IEnumerable<Card> Cards
-  {
-    get
-    {
-      // TODO: Ensure type binds to IEnumerable<ICardDefinition>
-      // IEnumerable<ICardDefinition> cards = @base.Cards;
-      // return cards.Select(c => new Card(c));
-
-      foreach (var card in @base.Cards)
-        yield return new Card(card);
-    }
-  }
+  public IEnumerable<Card> Cards =>
+    ((IEnumerable<ICardDefinition>)
+      @base.Cards)
+        .Select(card => new Card(card));
 
   //
   // ICardSet wrapper methods
