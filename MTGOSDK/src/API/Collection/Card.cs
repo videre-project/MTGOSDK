@@ -13,22 +13,12 @@ using WotC.MTGO.Common;
 
 namespace MTGOSDK.API.Collection;
 
-public sealed class Card(dynamic card) : DLRWrapper<ICardDefinition>
+public sealed class Card(dynamic card) : CollectionItem<ICardDefinition>
 {
   /// <summary>
   /// Stores an internal reference to the ICardDefinition object.
   /// </summary>
   internal override dynamic obj => card;
-
-  //
-  // DigitalMagicObject properties
-  //
-
-  public int Id => @base.Id;
-
-  public string Name => @base.Name;
-
-  public int SourceId => @base.SourceId;
 
   //
   // ICardDefinition wrapper properties
