@@ -11,7 +11,7 @@ using WotC.MTGO.Common;
 
 namespace MTGOSDK.API.Collection;
 
-public sealed class Deck(dynamic deck) : CollectionItem<IDeck>
+public sealed class Deck(dynamic deck) : CardGrouping<IDeck>
 {
   /// <summary>
   /// Stores an internal reference to the IDeck object.

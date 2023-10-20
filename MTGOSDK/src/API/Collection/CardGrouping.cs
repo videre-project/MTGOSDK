@@ -13,7 +13,7 @@ using WotC.MtGO.Client.Model.Core.Collection;
 
 namespace MTGOSDK.API.Collection;
 
-public abstract class CollectionItem<T> : DLRWrapper<ICardGrouping>
+public abstract class CardGrouping<T> : DLRWrapper<ICardGrouping>
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.

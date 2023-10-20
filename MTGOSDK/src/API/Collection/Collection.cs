@@ -13,7 +13,7 @@ using WotC.MtGO.Client.Model.Collection;
 namespace MTGOSDK.API.Collection;
 
 public sealed class Collection(ICollectionGrouping collection)
-    : CollectionItem<ICollectionGrouping>
+    : CardGrouping<ICollectionGrouping>
 {
   /// <summary>
   /// Stores an internal reference to the ICollectionGrouping object.

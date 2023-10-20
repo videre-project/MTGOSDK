@@ -12,7 +12,7 @@ using WotC.MtGO.Client.Model.Collection;
 
 namespace MTGOSDK.API.Collection;
 
-public sealed class Binder(dynamic binder) : CollectionItem<IBinder>
+public sealed class Binder(dynamic binder) : CardGrouping<IBinder>
 {
   /// <summary>
   /// Stores an internal reference to the IBinder object.
