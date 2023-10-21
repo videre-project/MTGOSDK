@@ -89,5 +89,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <returns>True if the set contains the card, otherwise false.</returns>
   public bool ContainsCard(Card card) => ContainsCatalogId(card.Id);
 
+  public override string ToString() => this.Name;
+
   public static implicit operator string(Set set) => set.Code;
 }
