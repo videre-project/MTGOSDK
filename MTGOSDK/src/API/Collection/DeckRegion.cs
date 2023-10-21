@@ -27,11 +27,11 @@ public sealed class DeckRegion(dynamic deckregion)
   // DeckRegion wrapper properties
   //
 
-  public string Name => @base.DeckRegionCd;
+  public string DeckRegionCd => @base.DeckRegionCd;
 
   public string Description => @base.Description;
 
-  public DeckRegionEnum EnumValue => @base.DeckRegionEnum;
+  public DeckRegionEnum EnumValue => @base.EnumValue;
 
   //
   // DeckRegion wrapper methods
@@ -46,7 +46,7 @@ public sealed class DeckRegion(dynamic deckregion)
       )
     );
 
-  public override string ToString() => this.Name;
+  public override string ToString() => this.Description;
 
   public static implicit operator WotC.MTGO.Common.DeckRegion(DeckRegion region) =>
     region.@base;
