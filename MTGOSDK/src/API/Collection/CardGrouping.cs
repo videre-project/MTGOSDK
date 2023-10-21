@@ -78,4 +78,11 @@ public abstract class CardGrouping<T> : DLRWrapper<ICardGrouping>
   /// The unique identifiers of the items contained in this grouping.
   /// </summary>
   public IEnumerable<int> ItemIds => @base.ItemIds;
+
+  //
+  // ICardGrouping derived methods
+  //
+
+  // public virtual bool AddItems(IEnumerable<ICardQuantityPair> items, ulong? operationId = null)
+  // public virtual IList<ICardQuantityPair> RemoveItems(IEnumerable<ICardQuantityPair> items, ulong? operationId = null)
 }

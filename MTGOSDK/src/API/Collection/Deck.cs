@@ -71,6 +71,6 @@ public sealed class Deck(dynamic deck) : CardGrouping<IDeck>
   // public void ValidateCompanion()
   // {
   //   m_deck.ValidateCompanion();
-  //   return m_deck.CompanionValidatorResults;
+  //   return m_deck.CompanionValidatorResults; // Public but not in IDeck
   // }
 }

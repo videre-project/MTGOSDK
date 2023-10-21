@@ -21,6 +21,13 @@ public sealed class CardQuantityPair(dynamic cardQuantityPair)
   /// </summary>
   internal override dynamic obj => cardQuantityPair;
 
+  // TODO: Enable construction of new CardQuantityPair objects by calling the
+  // remote constructor.
+  //
+  // public CardQuantityPair(Card card, int quantity)
+  //   : base(RemoteClient.CreateInstance(...))
+  // { }
+
   //
   // ICardQuantityPair derived properties
   //
