@@ -49,12 +49,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <summary>
   /// The set product type.
   /// </summary>
-  public string Type => Proxy<dynamic>.From(@base).Type.Description;
-
-  // TODO: This is a proxy to enum wrapper class, but we cannot bind to it.
-  // public CardSetType Type => CardSetType.GetFromKey(@base.CardSetTypeCd);
-  // public CardSetType Type =>
-  //   Proxy<CardSetType>.As(@base._EnumMap[@base.CardSetTypeCd]);
+  public SetType Type => new(Proxy<dynamic>.From(@base).Type);
 
   /// <summary>
   /// The set release number ordered by release date.
