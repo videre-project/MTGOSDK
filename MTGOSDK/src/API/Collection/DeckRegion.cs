@@ -27,16 +27,30 @@ public sealed class DeckRegion(dynamic deckregion)
   // DeckRegion wrapper properties
   //
 
+  /// <summary>
+  /// The unique identifier for the DeckRegion object.
+  /// </summary>
   public string DeckRegionCd => @base.DeckRegionCd;
 
+  /// <summary>
+  /// The description of the DeckRegion object (e.g. "MainDeck", "Sideboard").
+  /// </summary>
   public string Description => @base.Description;
 
+  /// <summary>
+  /// The enum flag value of the DeckRegion object.
+  /// </summary>
   public DeckRegionEnum EnumValue => @base.EnumValue;
 
   //
   // DeckRegion wrapper methods
   //
 
+  /// <summary>
+  /// Returns a DeckRegion object from a given key.
+  /// </summary>
+  /// <param name="key">The DeckRegionCd value of the DeckRegion object.</param>
+  /// <returns>A new DeckRegion object.</returns>
   public static DeckRegion GetFromKey(string key) =>
     new DeckRegion(
       RemoteClient.InvokeMethod(new Proxy<WotC.MTGO.Common.DeckRegion>(),

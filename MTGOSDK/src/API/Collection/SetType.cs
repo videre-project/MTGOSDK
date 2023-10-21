@@ -26,18 +26,32 @@ public sealed class SetType(dynamic cardSetType) : DLRWrapper<CardSetType>
   // CardSetType wrapper properties
   //
 
+  /// <summary>
+  /// The unique identifier for the SetType object.
+  /// </summary>
   public string CardSetTypeCd => @base.CardSetTypeCd;
 
+  /// <summary>
+  /// The description of the SetType object (e.g. "Core Set", "Ancillary").
+  /// </summary>
   public string Description => @base.Description;
 
+  /// <summary>
+  /// The enum flag value of the SetType object.
+  /// </summary>
   public CardSetTypeEnum EnumValue => @base.EnumValue;
 
   //
   // CardSetType wrapper methods
   //
 
-  public static DeckRegion GetFromKey(string key) =>
-    new DeckRegion(
+  /// <summary>
+  /// Returns a CardSetType object from a given key.
+  /// </summary>
+  /// <param name="key">The CardSetTypeCd value of the SetType object.</param>
+  /// <returns>A new SetType object.</returns>
+  public static SetType GetFromKey(string key) =>
+    new SetType(
       RemoteClient.InvokeMethod(new Proxy<CardSetType>(),
         methodName: "GetFromKey",
         genericTypes: null,
