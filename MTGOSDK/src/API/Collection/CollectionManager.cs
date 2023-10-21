@@ -175,16 +175,10 @@ public static class CollectionManager
   /// </summary>
   public static IEnumerable<Deck> Decks =>
     s_collectionGroupingManager.Folders
-      .SelectMany(/* IDeckFolder */ folder =>
+      .SelectMany(folder =>
         folder.Contents
-          .Where(/* ICardGrouping */ grouping =>
-            {
-              // This is a simple test to check whether the grouping is a deck.
-              try   { return grouping is ICardGrouping; }
-              // If the grouping has an invalid address or isn't a deck, ignore.
-              catch { return false; }
-            })
-          .Select(deck => new Deck(deck))
+          .Where(grouping => grouping is ICardGrouping)
+          .Select(grouping => new Deck(Proxy<dynamic>.From(grouping)))
       );
 
   /// <summary>
