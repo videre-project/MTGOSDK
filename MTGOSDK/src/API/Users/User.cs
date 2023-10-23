@@ -74,4 +74,10 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   /// The user's last login timestamp.
   /// </summary>
   public string LastLogin => @base.LastLogin;
+
+  //
+  // IUser wrapper properties
+  //
+
+  public override string ToString() => this.Name;
 }
