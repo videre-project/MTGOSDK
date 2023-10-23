@@ -17,7 +17,7 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   /// <summary>
   /// Stores an internal reference to the IUser object.
   /// </summary>
-  internal override dynamic obj => user;
+  internal override dynamic obj => user; // Input obj is not type-casted.
 
   public User(int id) : this(UserManager.GetUser(id))
   { }
