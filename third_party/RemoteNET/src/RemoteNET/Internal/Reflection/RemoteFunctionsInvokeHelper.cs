@@ -9,7 +9,7 @@ using ScubaDiver.API.Utils;
 namespace RemoteNET.Internal.Reflection
 {
   /// <summary>
-  /// In this context: "function" = Methdods + Constructors.
+  /// In this context: "function" = Methods + Constructors.
   /// </summary>
   internal static class RemoteFunctionsInvokeHelper
   {
@@ -20,7 +20,8 @@ namespace RemoteNET.Internal.Reflection
         return ObjectOrRemoteAddress.Null;
       }
       else if (parameter.GetType().IsPrimitiveEtc()
-          || parameter.GetType().IsPrimitiveEtcArray())
+            || parameter.GetType().IsPrimitiveEtcArray()
+            || parameter.GetType().IsStringCoercible())
       {
         return ObjectOrRemoteAddress.FromObj(parameter);
       }

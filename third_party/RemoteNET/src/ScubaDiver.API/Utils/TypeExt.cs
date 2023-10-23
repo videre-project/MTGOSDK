@@ -157,6 +157,14 @@ namespace ScubaDiver.API.Utils
         realType == typeof(DateTime);
     }
 
+    public static bool IsStringCoercible(this Type realType)
+    {
+      // TODO: Apply more comprehensive check to ensure that these types are
+      //       present in the consumer AppDomain and have `ToString` and `Parse`
+      //       methods.
+      return realType == typeof(Guid);
+    }
+
     public static Type GetType(this AppDomain domain, string typeFullName)
     {
       var assemblies = domain.GetAssemblies();

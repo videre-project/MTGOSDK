@@ -9,7 +9,7 @@ namespace ScubaDiver.API.Utils
   public static class PrimitivesEncoder
   {
     /// <summary>
-    /// Encodes a primitive or array of primitives 
+    /// Encodes a primitive or array of primitives
     /// </summary>
     /// <param name="toEncode">Object or array to encode</param>
     /// <returns>Encoded value as a string</returns>
@@ -24,7 +24,7 @@ namespace ScubaDiver.API.Utils
         return $"\"{toEncode}\"";
       }
 
-      if (t.IsPrimitiveEtc())
+      if (t.IsPrimitiveEtc() || t.IsStringCoercible())
       {
         // These types can just be ".Parse()"-ed back
         return toEncode.ToString();
@@ -110,7 +110,7 @@ namespace ScubaDiver.API.Utils
           throw new Exception("Missing qoutes on encoded string");
       }
 
-      if (resultType.IsPrimitiveEtc())
+      if (resultType.IsPrimitiveEtc() || resultType.IsStringCoercible())
       {
         var parseMethod = resultType.GetMethod("Parse", new Type[1] { typeof(string) });
         return parseMethod.Invoke(null, new object[] { toDecode });
@@ -158,7 +158,6 @@ namespace ScubaDiver.API.Utils
 
         return arr;
       }
-
 
       throw new ArgumentException(
         $"Result type was not a primitive or an array. TypeFullName: {resultType}");
