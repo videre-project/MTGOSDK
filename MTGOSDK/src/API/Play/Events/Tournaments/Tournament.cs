@@ -76,8 +76,12 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// <summary>
   /// Standings for each player in the tournament.
   /// </summary>
-  public IEnumerable<StandingRecord> Standings =>
-    ((IEnumerable<IStandingRecord>)
-      @base.Standings)
-        .Select(s => new StandingRecord(s));
+  public IEnumerable<StandingRecord> Standings
+  {
+    get
+    {
+      foreach (var player in @base.Standings)
+        yield return new StandingRecord(player);
+    }
+  }
 }

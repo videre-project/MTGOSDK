@@ -7,6 +7,7 @@ using System;
 using System.Linq;
 
 using MTGOSDK.API.Collection;
+using MTGOSDK.API.Play.Events.Leagues;
 using MTGOSDK.API.Play.Events.Tournaments;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
@@ -28,31 +29,21 @@ public abstract class Event<T> : DLRWrapper<IPlayerEvent>
 
   public static dynamic FromPlayerEvent(dynamic playerEvent)
   {
-    // TODO: Cast enum type
-    return new Tournament(playerEvent);
-
-    // switch (playerEvent.EventType)
-    // {
-    //   // // Leagues
-    //   // case PlayerEventType.League:
-    //   //   return new League(playerEvent);
-    //   // // Queues
-    //   // case PlayerEventType.TournamentQueue:
-    //   //   return new Queue(playerEvent);
-    //   // Tournaments
-    //   case PlayerEventType.Tournament:
-    //     return new Tournament(playerEvent);
-    //   case PlayerEventType.PremiereEvent:
-    //     return new Tournament(playerEvent);
-    //   // // Matches
-    //   // case PlayerEventType.Match:
-    //   //   return new Match(playerEvent);
-    //   // case PlayerEventType.LeagueMatch:
-    //   //   return new Match(playerEvent);
-    //   // Non-interactive events
-    //   default:
-    //     throw new ArgumentException($"Unknown event type: {playerEvent.EventType}");
-    // }
+    switch (playerEvent.GetType().Name)
+    {
+      case "FilterableLeague" or "League":
+        return new League(playerEvent);
+      case "FilterableMatch" or "Match":
+        return new Match(playerEvent);
+      case "FilterableTournament" or "Tournament":
+        return new Tournament(playerEvent);
+      case "FilterableQueue" or "Queue":
+        return new Queue(playerEvent);
+      // Non-interactive events
+      default:
+        throw new ArgumentException(
+            $"Unknown event type: {playerEvent.GetType().FullName}");
+    }
   }
 
   //
@@ -70,9 +61,9 @@ public abstract class Event<T> : DLRWrapper<IPlayerEvent>
   public Guid Token => new(Proxy<dynamic>.From(@base).EventToken.ToString());
 
   /// <summary>
-  /// The event type (e.g. PremiereEvent, LeagueMatch, Replay).
+  /// The event type (e.g. League, Tournament, Match, etc.).
   /// </summary>
-  public PlayerEventType EventType => @base.EventType;
+  public string EventType => this.GetType().Name;
 
   /// <summary>
   /// A class describing the event format (e.g. Standard, Modern, Legacy, etc.).

@@ -32,7 +32,7 @@ public sealed class StandingRecord(dynamic standingRecord)
   /// <summary>
   /// The user object of the player.
   /// </summary>
-  public User User => new(@base.User);
+  public User Player => new(@base.User);
 
   /// <summary>
   /// The number of points the player has earned.
@@ -57,8 +57,12 @@ public sealed class StandingRecord(dynamic standingRecord)
   /// <summary>
   /// The match history of the player.
   /// </summary>
-  public IEnumerable<MatchStandingRecord> PreviousMatches =>
-    ((IEnumerable<IMatchStandingRecord>)
-      @base.PreviousMatches)
-        .Select(s => new MatchStandingRecord(s));
+  public IEnumerable<MatchStandingRecord> PreviousMatches
+  {
+    get
+    {
+      foreach (var matchRecord in @base.PreviousMatches)
+        yield return new MatchStandingRecord(matchRecord);
+    }
+  }
 }

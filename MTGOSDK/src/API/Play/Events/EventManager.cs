@@ -41,6 +41,24 @@ public static class EventManager
   //
 
   /// <summary>
+  /// A dictionary of all events by their event ID.
+  /// </summary>
+  private static dynamic eventsById =>
+    s_playService.m_matchesAndTournamentsAndQueuesById;
+
+  /// <summary>
+  /// All currently queryable events with GetEvent().
+  /// </summary>
+  public static IEnumerable<dynamic> Events
+  {
+    get
+    {
+      foreach (var playerEvent in eventsById.Values)
+        yield return Event<dynamic>.FromPlayerEvent(playerEvent);
+    }
+  }
+
+  /// <summary>
   /// Retrieves a joinable event by it's event ID.
   /// </summary>
   /// <param name="id">The event ID to query.</param>

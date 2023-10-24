@@ -50,7 +50,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The user objects of both players.
   /// </summary>
-  public IEnumerable<User> Users =>
+  public IEnumerable<User> Players =>
     ((IEnumerable<PlayerInfo>)
       @base.Users)
         .Select(u => new User(u.Id, u.Name));
