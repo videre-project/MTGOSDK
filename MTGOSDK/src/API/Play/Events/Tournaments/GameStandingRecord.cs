@@ -39,10 +39,22 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <summary>
   /// The elapsed time to completion since the game started.
   /// </summary>
-  public TimeSpan CompletedDuration => @base.CompletedDuration;
+  public TimeSpan CompletedDuration =>
+    // Ensure the TimeSpan object is parsed correctly without
+    // worrying about the culture of the current thread.
+    TimeSpan.Parse(@base.CompletedDuration.ToString());
 
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public int[] WinnerIds => @base.WinnerIds;
+  public IList<int> WinnerIds
+  {
+    get
+    {
+      var ids = new List<int>();
+      foreach(var id in @base.WinnerIds)
+        ids.Add(id);
+      return ids;
+    }
+  }
 }

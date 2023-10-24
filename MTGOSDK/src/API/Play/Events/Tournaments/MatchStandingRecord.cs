@@ -50,26 +50,54 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The user objects of both players.
   /// </summary>
-  public IEnumerable<User> Players =>
-    ((IEnumerable<PlayerInfo>)
-      @base.Users)
-        .Select(u => new User(u.Id, u.Name));
+  public User[] Players
+  {
+    get
+    {
+      var players = new List<User>();
+      foreach(var player in @base.Users)
+        players.Add(new User(player.Id, player.Name));
+      return players.ToArray();
+    }
+  }
 
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinningPlayerIds => @base.WinningPlayerIds;
+  public IList<int> WinningPlayerIds
+  {
+    get
+    {
+      var ids = new List<int>();
+      foreach(var id in @base.WinningPlayerIds)
+        ids.Add(id);
+      return ids;
+    }
+  }
 
   /// <summary>
   /// The IDs of the losing player(s).
   /// </summary>
-  public IList<int> LosingPlayerIds => @base.LosingPlayerIds;
+  public IList<int> LosingPlayerIds
+  {
+    get
+    {
+      var ids = new List<int>();
+      foreach(var id in @base.LosingPlayerIds)
+        ids.Add(id);
+      return ids;
+    }
+  }
 
   /// <summary>
   /// The results of each game in the match.
   /// </summary>
-  public IEnumerable<GameStandingRecord> GameStandingRecords =>
-    ((IEnumerable<IGameStandingRecord>)
-      @base.GameStandingRecords)
-        .Select(g => new GameStandingRecord(g));
+  public IEnumerable<GameStandingRecord> GameStandingRecords
+  {
+    get
+    {
+      foreach (var gameRecord in @base.GameStandingRecords)
+        yield return new GameStandingRecord(gameRecord);
+    }
+  }
 }

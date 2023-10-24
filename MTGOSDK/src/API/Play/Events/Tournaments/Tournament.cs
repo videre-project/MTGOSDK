@@ -80,7 +80,7 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   {
     get
     {
-      foreach (var player in @base.Standings)
+      foreach (var player in Proxy<dynamic>.From(@base).Standings)
         yield return new StandingRecord(player);
     }
   }
