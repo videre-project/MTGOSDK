@@ -35,24 +35,16 @@ namespace RemoteNET
         string typeName,
         int? hashCode = null)
       {
-        // Attempt to dump the object and remote type
-        ObjectDump od = null;
-        TypeDump td = null;
-        int retries = 5;
-        while (retries-- > 0)
+        ObjectDump od;
+        TypeDump td;
+        try
         {
-          try
-          {
-            od = _app._communicator.DumpObject(remoteAddress, typeName, true, hashCode);
-            td = _app._communicator.DumpType(od.Type);
-            // Success
-            retries = 0;
-          }
-          catch (Exception e)
-          {
-            if (retries == 0)
-              throw new Exception("Could not dump remote object/type.", e);
-          }
+          od = _app._communicator.DumpObject(remoteAddress, typeName, true, hashCode);
+          td = _app._communicator.DumpType(od.Type);
+        }
+        catch (Exception e)
+        {
+          throw new Exception("Could not dump remote object/type.", e);
         }
 
         var remoteObject = new RemoteObject(

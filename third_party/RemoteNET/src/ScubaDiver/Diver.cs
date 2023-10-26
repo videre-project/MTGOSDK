@@ -1122,7 +1122,7 @@ public class Diver : IDisposable
     if (!_freezer.TryGetPinnedObject(objAddr, out object target))
     {
       // Object not pinned, try get it the hard way
-      return QuickError("Object at given address wasn't pinned");
+      return QuickError("Object at given address wasn't pinned (context: RegisterEventHandler)");
     }
 
     Type resolvedType = target.GetType();
@@ -1260,17 +1260,29 @@ public class Diver : IDisposable
       }
     }
 
-    try
+    // Attempt to dump the object and remote type
+    ObjectDump od = null;
+    int retries = 10;
+    while (--retries > 0)
     {
-      (object instance, ulong pinnedAddress) = GetObject(objAddr, pinningRequested, typeName, hashCodeFallback ? userHashcode : null);
-      ObjectDump od = ObjectDumpFactory.Create(instance, objAddr, pinnedAddress);
-      return JsonConvert.SerializeObject(od);
+      try
+      {
+        (object instance, ulong pinnedAddress) = GetObject(objAddr, pinningRequested, typeName, hashCodeFallback ? userHashcode : null);
+        od = ObjectDumpFactory.Create(instance, objAddr, pinnedAddress);
+        break;
+      }
+      catch (Exception e)
+      {
+        if (retries == 0)
+          return QuickError("Failed to retrieve the remote object. Error: " + e.Message);
+      }
     }
-    catch (Exception e)
-    {
-      return QuickError("Failed Getting the object for the user. Error: " + e.Message);
-    }
+    if (od == null)
+      return QuickError("Could not retrieve the remote object (used all retries).");
+
+    return JsonConvert.SerializeObject(od);
   }
+
   private string MakeCreateObjectResponse(HttpListenerRequest arg)
   {
     Logger.Debug("[Diver] Got /create_object request!");
@@ -1793,7 +1805,7 @@ public class Diver : IDisposable
     if (!_freezer.TryGetPinnedObject(objAddr, out object pinnedObj))
     {
       // Object not pinned, try get it the hard way
-      return QuickError("Object at given address wasn't pinned");
+      return QuickError("Object at given address wasn't pinned (context: ArrayItemAccess)");
     }
 
     object item = null;
@@ -1906,7 +1918,7 @@ public class Diver : IDisposable
     else
     {
       // Object not pinned, try get it the hard way
-      return QuickError("Object at given address wasn't pinned");
+      return QuickError("Object at given address wasn't pinned (context: Unpin)");
     }
   }
   private string MakeDieResponse(HttpListenerRequest req)
