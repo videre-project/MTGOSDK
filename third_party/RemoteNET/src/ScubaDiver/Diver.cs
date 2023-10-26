@@ -1899,6 +1899,7 @@ public class Diver : IDisposable
 
     return JsonConvert.SerializeObject(invokeRes);
   }
+
   private string MakeUnpinResponse(HttpListenerRequest arg)
   {
     string objAddrStr = arg.QueryString.Get("address");
@@ -1908,19 +1909,13 @@ public class Diver : IDisposable
     }
     Logger.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
 
-    // Check if we have this objects in our pinned pool
+    // Remove if we have this object in our pinned pool, otherwise ignore.
     if (_freezer.TryGetPinnedObject(objAddr, out _))
-    {
-      // Found pinned object!
       _freezer.Unpin(objAddr);
-      return "{\"status\":\"OK\"}";
-    }
-    else
-    {
-      // Object not pinned, try get it the hard way
-      return QuickError("Object at given address wasn't pinned (context: Unpin)");
-    }
+
+    return "{\"status\":\"OK\"}";
   }
+
   private string MakeDieResponse(HttpListenerRequest req)
   {
     Logger.Debug("[Diver] Die command received");
