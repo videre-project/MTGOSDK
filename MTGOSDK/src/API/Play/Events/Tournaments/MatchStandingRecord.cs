@@ -50,14 +50,12 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The user objects of both players.
   /// </summary>
-  public User[] Players
+  public IEnumerable<User> Players
   {
     get
     {
-      var players = new List<User>();
       foreach(var player in @base.Users)
-        players.Add(new User(player.Id, player.Name));
-      return players.ToArray();
+        yield return new User(player.Id, player.Name);
     }
   }
 
