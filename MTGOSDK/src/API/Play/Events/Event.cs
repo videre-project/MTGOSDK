@@ -27,25 +27,6 @@ public abstract class Event<T> : DLRWrapper<IPlayerEvent>
   /// </summary>
   internal override Type type => typeof(T); // Input obj is not type-casted.
 
-  public static dynamic FromPlayerEvent(dynamic playerEvent)
-  {
-    switch (playerEvent.GetType().Name)
-    {
-      case "FilterableLeague" or "League":
-        return new League(playerEvent);
-      case "FilterableMatch" or "Match":
-        return new Match(playerEvent);
-      case "FilterableTournament" or "Tournament":
-        return new Tournament(playerEvent);
-      case "FilterableQueue" or "Queue":
-        return new Queue(playerEvent);
-      // Non-interactive events
-      default:
-        throw new ArgumentException(
-            $"Unknown event type: {playerEvent.GetType().FullName}");
-    }
-  }
-
   //
   // IPlayerEvent wrapper properties
   //
@@ -140,6 +121,25 @@ public abstract class Event<T> : DLRWrapper<IPlayerEvent>
   //
   // IPlayerEvent wrapper methods
   //
+
+  public static dynamic FromPlayerEvent(dynamic playerEvent)
+  {
+    switch (playerEvent.GetType().Name)
+    {
+      case "FilterableLeague" or "League":
+        return new League(playerEvent);
+      case "FilterableMatch" or "Match":
+        return new Match(playerEvent);
+      case "FilterableTournament" or "Tournament":
+        return new Tournament(playerEvent);
+      case "FilterableQueue" or "Queue":
+        return new Queue(playerEvent);
+      // Non-interactive events
+      default:
+        throw new ArgumentException(
+            $"Unknown event type: {playerEvent.GetType().FullName}");
+    }
+  }
 
   public override string ToString() => $"{Description} #{Id}";
 }
