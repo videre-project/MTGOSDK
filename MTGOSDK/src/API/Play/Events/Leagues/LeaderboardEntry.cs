@@ -12,7 +12,7 @@ using WotC.MtGO.Client.Model.Play;
 
 namespace MTGOSDK.API.Play.Events.Leagues;
 
-public sealed class LeagueLeaderboardEntry(dynamic leagueLeaderboardEntry)
+public sealed class LeaderboardEntry(dynamic leagueLeaderboardEntry)
     : DLRWrapper<ILeagueLeaderboardEntry>
 {
   /// <summary>
