@@ -52,4 +52,22 @@ public class DLRWrapper<T>() where T : class
   internal dynamic @base => obj is DLRWrapper<T> ? obj.obj : obj
     ?? throw new Exception(
         $"{nameof(DLRWrapper<T>)} object has no valid {type.Name} type.");
+
+  //
+  // Internal methods for type casting and dynamic dispatching.
+  //
+
+  // internal static T Cast(dynamic obj)
+  // {
+  //   // Attempt to directly cast the object to the given type.
+  //   try { return (T)obj; }
+  //   catch { }
+  //   // Attempt to bind the given type to the object.
+  //   try { return Proxy<T>.As(obj); }
+  //   catch { }
+  //   // Fallback to parsing the object type from a string.
+  //   return typeof(T)
+  //     .GetMethod("Parse")
+  //     .Invoke(null, obj.ToString());
+  // }
 }
