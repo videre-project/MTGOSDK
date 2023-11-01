@@ -43,7 +43,7 @@ public sealed class Card(dynamic card) : CollectionItem<ICardDefinition>
 
   public int ArtId => @base.ArtId;
 
-  public Set Set => new(Proxy<dynamic>.From(@base.CardSet));
+  public Set Set => new(Unbind(@base.CardSet));
 
   public string CollectorInfo => @base.CollectorInfo;
 

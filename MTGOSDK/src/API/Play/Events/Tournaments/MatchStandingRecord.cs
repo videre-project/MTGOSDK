@@ -62,40 +62,18 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinningPlayerIds
-  {
-    get
-    {
-      var ids = new List<int>();
-      foreach(var id in @base.WinningPlayerIds)
-        ids.Add(id);
-      return ids;
-    }
-  }
+  public IList<int> WinningPlayerIds =>
+    Map<int>(@base.WinningPlayerIds).ToList();
 
   /// <summary>
   /// The IDs of the losing player(s).
   /// </summary>
-  public IList<int> LosingPlayerIds
-  {
-    get
-    {
-      var ids = new List<int>();
-      foreach(var id in @base.LosingPlayerIds)
-        ids.Add(id);
-      return ids;
-    }
-  }
+  public IList<int> LosingPlayerIds =>
+    Map<int>(@base.LosingPlayerIds).ToList();
 
   /// <summary>
   /// The results of each game in the match.
   /// </summary>
-  public IEnumerable<GameStandingRecord> GameStandingRecords
-  {
-    get
-    {
-      foreach (var gameRecord in @base.GameStandingRecords)
-        yield return new GameStandingRecord(gameRecord);
-    }
-  }
+  public IEnumerable<GameStandingRecord> GameStandingRecords =>
+    Map<GameStandingRecord>(@base.GameStandingRecords);
 }

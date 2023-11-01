@@ -16,20 +16,14 @@ public sealed class Deck(dynamic deck) : CardGrouping<IDeck>
   /// <summary>
   /// Stores an internal reference to the IDeck object.
   /// </summary>
-  internal override dynamic obj => Proxy<IDeck>.As(deck);
+  internal override dynamic obj => Bind<IDeck>(deck);
 
   //
   // IDeck wrapper properties
   //
 
-  public IEnumerable<DeckRegion> Regions
-  {
-    get
-    {
-      foreach (var region in Proxy<dynamic>.From(@base).Regions)
-        yield return new DeckRegion(region);
-    }
-  }
+  public IEnumerable<DeckRegion> Regions =>
+    Map<DeckRegion>(Unbind(@base).Regions);
 
   /// <summary>
   /// The unique identifier for this deck used for matchmaking.
@@ -58,9 +52,7 @@ public sealed class Deck(dynamic deck) : CardGrouping<IDeck>
   /// <param name="region">The deck region to return cards from.</param>
   /// <returns>An iterator of CardQuantityPair objects.</returns>
   public IEnumerable<CardQuantityPair> GetCards(DeckRegion region) =>
-    ((IEnumerable<ICardQuantityPair>)
-      @base.GetCards(region))
-        .Select(item => new CardQuantityPair(item));
+    Map<CardQuantityPair>(@base.GetCards(region));
 
   // public void AddCards(...) => AddCardsToRegion(...)
   // public void RemoveCards(...) => RemoveCardsFromRegion(...)

@@ -19,7 +19,7 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API;
 
-public class Client
+public class Client : DLRWrapper<dynamic>
 {
   /// <summary>
   /// Manages the client's connection and user session information.
@@ -52,7 +52,7 @@ public class Client
     get
     {
       // TODO: We cannot bind an interface type as structs are not yet supported.
-      var UserInfo_t = Proxy<dynamic>.From(s_flsClientSession.LoggedInUser);
+      var UserInfo_t = Unbind(s_flsClientSession.LoggedInUser);
 
       // Only fetch and update the current user if the user Id has changed.
       if (UserInfo_t.Id != m_currentUser?.Id)
@@ -120,7 +120,7 @@ public class Client
       throw new InvalidOperationException("Cannot log on while logged in.");
 
     // Initializes the login manager if it has not already been initialized.
-    dynamic LoginVM = Proxy<dynamic>.From(s_loginManager);
+    dynamic LoginVM = Unbind(s_loginManager);
     if (!LoginVM.IsLoginEnabled)
       LoginVM.Initialize();
 

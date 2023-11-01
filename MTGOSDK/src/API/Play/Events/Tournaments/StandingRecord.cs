@@ -57,12 +57,6 @@ public sealed class StandingRecord(dynamic standingRecord)
   /// <summary>
   /// The match history of the player.
   /// </summary>
-  public IEnumerable<MatchStandingRecord> PreviousMatches
-  {
-    get
-    {
-      foreach (var matchRecord in @base.PreviousMatches)
-        yield return new MatchStandingRecord(matchRecord);
-    }
-  }
+  public IEnumerable<MatchStandingRecord> PreviousMatches =>
+    Map<MatchStandingRecord>(@base.PreviousMatches);
 }

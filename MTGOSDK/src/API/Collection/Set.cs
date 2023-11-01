@@ -17,7 +17,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <summary>
   /// Stores an internal reference to the ICardSet object.
   /// </summary>
-  internal override dynamic obj => Proxy<ICardSet>.As(set);
+  internal override dynamic obj => Bind<ICardSet>(set);
 
   //
   // ICardSet wrapper properties
@@ -49,7 +49,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <summary>
   /// The set product type.
   /// </summary>
-  public SetType Type => new(Proxy<dynamic>.From(@base).Type);
+  public SetType Type => new(Unbind(@base).Type);
 
   /// <summary>
   /// The set release number ordered by release date.
@@ -66,10 +66,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <remarks>
   /// This collection is ordered by the card's catalog id.
   /// </remarks>
-  public IEnumerable<Card> Cards =>
-    ((IEnumerable<ICardDefinition>)
-      @base.Cards)
-        .Select(card => new Card(card));
+  public IEnumerable<Card> Cards => Map<Card>(@base.Cards);
 
   //
   // ICardSet wrapper methods

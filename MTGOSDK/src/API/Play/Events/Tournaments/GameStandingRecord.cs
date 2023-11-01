@@ -4,6 +4,7 @@
 **/
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 using MTGOSDK.Core.Reflection;
@@ -39,22 +40,10 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <summary>
   /// The elapsed time to completion since the game started.
   /// </summary>
-  public TimeSpan CompletedDuration =>
-    // Ensure the TimeSpan object is parsed correctly without
-    // worrying about the culture of the current thread.
-    TimeSpan.Parse(@base.CompletedDuration.ToString());
+  public TimeSpan CompletedDuration => Cast<TimeSpan>(@base.CompletedDuration);
 
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinnerIds
-  {
-    get
-    {
-      var ids = new List<int>();
-      foreach(var id in @base.WinnerIds)
-        ids.Add(id);
-      return ids;
-    }
-  }
+  public IList<int> WinnerIds => Map<int>(@base.WinnerIds).ToList();
 }

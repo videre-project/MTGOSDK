@@ -16,7 +16,7 @@ public sealed class League(dynamic league) : Event<ILeague>
   /// <summary>
   /// Stores an internal reference to the ILeague object.
   /// </summary>
-  internal override dynamic obj => Proxy<ILeague>.As(league);
+  internal override dynamic obj => Bind<ILeague>(league);
 
   /// <summary>
   /// Internal reference to the ILeagueLocalParticipant object.
@@ -60,14 +60,8 @@ public sealed class League(dynamic league) : Event<ILeague>
   /// <summary>
   /// The league's current leaderboard entries.
   /// </summary>
-  public IEnumerable<LeaderboardEntry> Leaderboard
-  {
-    get
-    {
-      foreach (var entry in @base.Leaderboard)
-        yield return new LeaderboardEntry(entry);
-    }
-  }
+  public IEnumerable<LeaderboardEntry> Leaderboard =>
+    Map<LeaderboardEntry>(@base.Leaderboard);
 
   /// <summary>
   /// The total number of matches playable in the league.
@@ -96,14 +90,8 @@ public sealed class League(dynamic league) : Event<ILeague>
   /// <summary>
   /// The game history of the current league.
   /// </summary>
-  public IEnumerable<GameResult> GameHistory
-  {
-    get
-    {
-      foreach (var result in @base.GameHistory)
-        yield return new GameHistory(result);
-    }
-  }
+  public IEnumerable<GameResult> GameHistory =>
+    Map<GameResult>(@base.GameHistory);
 
   /// <summary>
   /// The current match number within the current league.

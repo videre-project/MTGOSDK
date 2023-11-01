@@ -18,7 +18,7 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// <summary>
   /// Stores an internal reference to the ITournament object.
   /// </summary>
-  internal override dynamic obj => Proxy<ITournament>.As(tournament);
+  internal override dynamic obj => Bind<ITournament>(tournament);
 
   //
   // IQueueBasedEvent wrapper properties
@@ -76,12 +76,6 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// <summary>
   /// Standings for each player in the tournament.
   /// </summary>
-  public IEnumerable<StandingRecord> Standings
-  {
-    get
-    {
-      foreach (var player in @base.Standings)
-        yield return new StandingRecord(player);
-    }
-  }
+  public IEnumerable<StandingRecord> Standings =>
+    Map<StandingRecord>(@base.Standings);
 }

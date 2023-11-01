@@ -39,7 +39,7 @@ public abstract class Event<T> : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The event's session token.
   /// </summary>
-  public Guid Token => new(Proxy<dynamic>.From(@base).EventToken.ToString());
+  public Guid Token => Cast<Guid>(Unbind(@base).EventToken);
 
   /// <summary>
   /// The event type (e.g. League, Tournament, Match, etc.).
@@ -64,14 +64,7 @@ public abstract class Event<T> : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The current players registered for the event.
   /// </summary>
-  public IEnumerable<User> Players
-  {
-    get
-    {
-      foreach (var player in @base.JoinedUsers)
-        yield return new User(player);
-    }
-  }
+  public IEnumerable<User> Players => Map<User>(@base.JoinedUsers);
 
   /// <summary>
   /// The user's registered deck for the event.

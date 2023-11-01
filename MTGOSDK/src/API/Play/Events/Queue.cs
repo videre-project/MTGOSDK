@@ -16,7 +16,7 @@ public sealed class Queue(dynamic queue) : Event<IQueue>
   /// <summary>
   /// Stores an internal reference to the IQueue object.
   /// </summary>
-  internal override dynamic obj => Proxy<IQueue>.As(queue);
+  internal override dynamic obj => Bind<IQueue>(queue);
 
   //
   // IQueue wrapper properties

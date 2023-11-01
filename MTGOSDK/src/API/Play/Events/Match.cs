@@ -15,7 +15,7 @@ public sealed class Match(dynamic match) : Event<IMatch>
   /// <summary>
   /// Stores an internal reference to the IMatch object.
   /// </summary>
-  internal override dynamic obj => Proxy<IMatch>.As(match);
+  internal override dynamic obj => Bind<IMatch>(match);
 
   //
   // IMatch wrapper properties
