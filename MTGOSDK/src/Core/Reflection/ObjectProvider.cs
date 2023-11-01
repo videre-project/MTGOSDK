@@ -41,10 +41,10 @@ public static class ObjectProvider
   /// <typeparam name="T">The class or interface type to retrieve.</typeparam>
   /// <param name="bindTypes">Whether to bind the type to the returned instance.</param>
   /// <returns>A remote instance of the given type.</returns>
-  public static dynamic Get<T>(bool bindTypes = true)
+  public static dynamic Get<T>(bool bindTypes = true) where T : class
   {
     // Create a proxy type for the given generic type
-    Proxy<dynamic> proxy = new(typeof(T));
+    Proxy<T> proxy = new();
 
     //
     // If not binding types, return an instance leaving open all binding flags.
