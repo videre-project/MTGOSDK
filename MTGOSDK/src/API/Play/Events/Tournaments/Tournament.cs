@@ -7,6 +7,7 @@ using System;
 
 using MTGOSDK.Core.Reflection;
 
+using WotC.MTGO.Common;
 using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
@@ -46,7 +47,11 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// <summary>
   /// The completion status of the tournament (i.e. "WaitingToStart", "RoundInProgress", etc.)
   /// </summary>
-  public TournamentState State => @base.State;
+  /// <remarks>
+  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
+  /// </remarks>
+  public TournamentStateEnum State =>
+    Cast<TournamentStateEnum>(Unbind(@base).State.EnumValue);
 
   /// <summary>
   /// The time remaining in the current round or tournament phase.

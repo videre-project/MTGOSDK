@@ -107,8 +107,17 @@ public class DLRWrapper<I>() where I : class
     try
     {
       var str = obj.ToString();
-      return typeof(T).GetMethod("Parse")?.Invoke(null, str)
-        ?? throw new Exception();
+      var type = typeof(T);
+      if (type.IsEnum)
+      {
+        return (T)Enum.Parse(type, str)
+          ?? throw new Exception();
+      }
+      else
+      {
+        return type.GetMethod("Parse")?.Invoke(null, str)
+          ?? throw new Exception();
+      }
     }
     catch { }
 

@@ -49,7 +49,7 @@ public abstract class Event<T> : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// A class describing the event format (e.g. Standard, Modern, Legacy, etc.).
   /// </summary>
-  public IPlayFormat PlayFormat => @base.PlayFormat;
+  public PlayFormat Format => new(@base.PlayFormat);
 
   /// <summary>
   /// The name of this event (e.g. "Standard Preliminary").

@@ -40,7 +40,10 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The status of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
-  public MatchStatuses Status => @base.Status;
+  /// <remarks>
+  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
+  /// </remarks>
+  public MatchStatuses Status => Cast<MatchStatuses>(Unbind(@base).Status);
 
   /// <summary>
   /// Whether the player has been assigned a bye.

@@ -29,7 +29,7 @@ public sealed class SetType(dynamic cardSetType) : DLRWrapper<CardSetType>
   /// <summary>
   /// The unique identifier for the SetType object.
   /// </summary>
-  public string CardSetTypeCd => @base.CardSetTypeCd;
+  public string Key => @base.CardSetTypeCd;
 
   /// <summary>
   /// The description of the SetType object (e.g. "Core Set", "Ancillary").
@@ -39,7 +39,11 @@ public sealed class SetType(dynamic cardSetType) : DLRWrapper<CardSetType>
   /// <summary>
   /// The enum flag value of the SetType object.
   /// </summary>
-  public CardSetTypeEnum EnumValue => @base.EnumValue;
+  /// <remarks>
+  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
+  /// </remarks>
+  public CardSetTypeEnum EnumValue =>
+    Cast<CardSetTypeEnum>(Unbind(@base).EnumValue);
 
   //
   // CardSetType wrapper methods

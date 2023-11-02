@@ -30,7 +30,7 @@ public sealed class DeckRegion(dynamic deckregion)
   /// <summary>
   /// The unique identifier for the DeckRegion object.
   /// </summary>
-  public string DeckRegionCd => @base.DeckRegionCd;
+  public string Key => @base.DeckRegionCd;
 
   /// <summary>
   /// The description of the DeckRegion object (e.g. "MainDeck", "Sideboard").
@@ -40,7 +40,11 @@ public sealed class DeckRegion(dynamic deckregion)
   /// <summary>
   /// The enum flag value of the DeckRegion object.
   /// </summary>
-  public DeckRegionEnum EnumValue => @base.EnumValue;
+  /// <remarks>
+  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
+  /// </remarks>
+  public DeckRegionEnum EnumValue =>
+    Cast<DeckRegionEnum>(Unbind(@base).EnumValue);
 
   //
   // DeckRegion wrapper methods

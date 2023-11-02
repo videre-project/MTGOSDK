@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Linq;
 using System.Collections.Generic;
 
 using MTGOSDK.Core.Reflection;
@@ -24,16 +25,37 @@ public sealed class Card(dynamic card) : CollectionItem<ICardDefinition>
   // ICardDefinition wrapper properties
   //
 
+  /// <summary>
+  /// A string representing the card's unique colors (e.g. "WUBRG").
+  /// </summary>
   public string Colors => @base.Colors;
 
+  /// <summary>
+  /// The mana cost of the card.
+  /// </summary>
   public string ManaCost => @base.ManaCost;
 
+  /// <summary>
+  /// The card's converted mana cost (or mana value).
+  /// </summary>
   public int ConvertedManaCost => @base.ConvertedManaCost;
 
+  /// <summary>
+  /// The card's oracle text.
+  /// </summary>
   public string RulesText => @base.RulesText;
 
-  // public CardType Type => Proxy<CardType>.As(@base.CardType); // TODO: cast enum
+  /// <summary>
+  /// A list of the card's types.
+  /// </summary>
+  public IList<string> Types =>
+    ((string)Unbind(@base).Types.ToString())
+      .Split(", ")
+      .ToList();
 
+  /// <summary>
+  /// A list of the card's subtypes.
+  /// </summary>
   public IList<string> Subtypes => @base.Subtypes;
 
   /// <summary>
@@ -41,10 +63,19 @@ public sealed class Card(dynamic card) : CollectionItem<ICardDefinition>
   /// </summary>
   public string Artist => @base.ArtistName;
 
+  /// <summary>
+  /// The unique identifier for the card's art.
+  /// </summary>
   public int ArtId => @base.ArtId;
 
+  /// <summary>
+  /// The card's printed set.
+  /// </summary>
   public Set Set => new(Unbind(@base.CardSet));
 
+  /// <summary>
+  /// A string representing the card's collector info (e.g. "1/254").
+  /// </summary>
   public string CollectorInfo => @base.CollectorInfo;
 
   /// <summary>
@@ -80,6 +111,8 @@ public sealed class Card(dynamic card) : CollectionItem<ICardDefinition>
   //
   // ICardDefinition wrapper methods
   //
+
+  public static implicit operator int(Card card) => card.Id;
 
   public static implicit operator string(Card card) => card.Name;
 }
