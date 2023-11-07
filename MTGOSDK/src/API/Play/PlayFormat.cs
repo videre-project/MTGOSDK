@@ -12,7 +12,7 @@ using WotC.MtGO.Client.Model.Collection;
 
 namespace MTGOSDK.API.Play;
 
-public class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
+public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
 {
   /// <summary>
   /// Stores an internal reference to the IPlayFormat object.
@@ -116,5 +116,5 @@ public class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   public void SetDeckLegality(Deck deck) =>
     @base.SetDeckLegality(/* IDeck */ deck.@base);
 
-  public override string ToString() => @base.ToString();
+  public override string ToString() => this.Name;
 }

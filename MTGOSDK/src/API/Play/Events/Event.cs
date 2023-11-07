@@ -20,12 +20,20 @@ using WotC.MtGO.Client.Model.Play.Enums;
 
 namespace MTGOSDK.API.Play.Events;
 
-public abstract class Event<T> : DLRWrapper<IPlayerEvent>
+public abstract class Event<I> : DLRWrapper<IPlayerEvent>
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
-  internal override Type type => typeof(T); // Input obj is not type-casted.
+  internal override Type type => typeof(I);
+
+  public sealed class Default(dynamic playerEvent) : Event<IPlayerEvent>
+  {
+    /// <summary>
+    /// Stores an internal reference to the IPlayerEvent object.
+    /// </summary>
+    internal override dynamic obj => Bind<IPlayerEvent>(playerEvent);
+  }
 
   //
   // IPlayerEvent wrapper properties
@@ -127,10 +135,8 @@ public abstract class Event<T> : DLRWrapper<IPlayerEvent>
         return new Tournament(playerEvent);
       case "FilterableQueue" or "Queue":
         return new Queue(playerEvent);
-      // Non-interactive events
       default:
-        throw new ArgumentException(
-            $"Unknown event type: {playerEvent.GetType().FullName}");
+        return new Event<IPlayerEvent>.Default(playerEvent);
     }
   }
 
