@@ -4,71 +4,30 @@
 **/
 
 using System;
-using System.Linq;
 
-using MTGOInjector;
-using GameTracker.GameHistory;
+using MTGOSDK.API;
+using MTGOSDK.API.Play.History;
 
 
-var client = new MTGOClient();
+var client = new Client();
 
-dynamic SettingsService = client.ObjectProvider("SettingsService");
-dynamic manager = SettingsService.GameHistoryManager;
-if (!manager.HistoryLoaded)
+if (!HistoryManager.HistoryLoaded)
   throw new Exception("Game history not loaded.");
 
-// dynamic GameHistoryVM = client.ObjectProvider("GameHistoryViewModel");
-dynamic gameReplayService = client.ObjectProvider("GameReplayService");
-
-//
-// Enumerate the client's game history.
-//
-// HistoricalItems can be either a HistoricalMatch or HistoricalTournament type.
-//
-int i = 0;
-bool isReplayActive = false;
-foreach(dynamic Item in manager.Items)
+foreach(var item in HistoryManager.Items)
 {
-  Console.WriteLine($"{i}: {Item.GetType()}");
-  i++;
-
-  switch(Item.GetType().Name)
+  var type = item.GetType().Name;
+  Console.WriteLine(type);
+  switch (type)
   {
     case "HistoricalItem":
     case "HistoricalMatch":
-      HistoricalMatch match = new(Item);
-      Console.WriteLine($"Match Id:      {match.MatchId}");
-      Console.WriteLine($"Format:        {match.Format}");
-      Console.WriteLine($"Date and Time: {match.StartTime}");
-      // PlayStyle
-      Console.WriteLine($"Name:          {match.Opponents.FirstOrDefault()}");
-      Console.WriteLine($"GameType:      {match.GameType}");
-      Console.WriteLine($"Record:        {match.Record}");
-
-      // TODO: Populate match class based on game history data
-      //dynamic gameHistoryData = GameHistoryVM.PopulateMatchHistoryData(Item)
-      //  ?? throw new Exception("Failed to populate game history data.");
-
-      //
-      // Request a replay for the first game in the match.
-      //
-      if (!isReplayActive)
-      {
-        int gameId = match.GameIds.First();
-        isReplayActive = gameReplayService.RequestReplay(gameId);
-        if (!isReplayActive)
-          throw new Exception($"Failed to request replay for Game #{gameId}.");
-
-        Console.WriteLine($"\nRequested replay for Game #{gameId}.");
-      }
-
+      Console.WriteLine($"  Id: {item.Id}");
+      Console.WriteLine($"  Game 1 Id: {item.GameIds[0]}");
       break;
     case "HistoricalTournament":
-      // HistoricalTournament tournament = new(Item);
-
-      // dynamic tournamentHistoryData = GameHistoryVM.PopulateTournamentHistoryData(Item)
-      //   ?? throw new Exception("Failed to populate tournament history data.");
-
+      Console.WriteLine($"  Id: {item.Id}");
+      Console.WriteLine($"  Match 1 Id: {item.Matches.First().Id}");
       break;
   }
 }
