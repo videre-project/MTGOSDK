@@ -121,8 +121,10 @@ public class DLRWrapper<I>() where I : class
       }
       else
       {
-        return type.GetMethod("Parse")?.Invoke(null, str)
-          ?? throw new Exception();
+        return (T)(type
+          .GetMethod("Parse", new [] { typeof(string) })
+          ?.Invoke(null, new object[] { str }))
+            ?? throw new Exception();
       }
     }
     catch { }
