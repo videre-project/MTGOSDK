@@ -83,9 +83,15 @@ public class DLRWrapper<I>() where I : class
   /// </remarks>
   public static dynamic Unbind(dynamic obj)
   {
-    return Proxy<dynamic>.From(obj)
+    var unbound_obj = Proxy<dynamic>.From(obj)
       ?? throw new Exception(
           $"Unable to unbind types from {obj.GetType().Name}.");
+
+    // Recursively unbind any nested interface types.
+    if (unbound_obj.GetType().Name.StartsWith("ActLike_"))
+      return Unbind(unbound_obj);
+
+    return unbound_obj;
   }
 
   /// <summary>
