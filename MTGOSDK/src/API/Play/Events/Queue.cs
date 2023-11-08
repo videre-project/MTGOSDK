@@ -22,5 +22,12 @@ public sealed class Queue(dynamic queue) : Event<IQueue>
   // IQueue wrapper properties
   //
 
-  public QueueState CurrentState => @base.CurrentState;
+  /// <summary>
+  /// The current state of the queue (e.g. JoinRequested, Joined, Closed, etc.).
+  /// </summary>
+  /// <remarks>
+  /// Requires the <c>WotC.MtGO.Client.Model.Play.Enums</c> reference assembly.
+  /// </remarks>
+  public QueueState CurrentState =>
+    Cast<QueueState>(Unbind(@base).CurrentState);
 }

@@ -5,6 +5,7 @@
 
 using System;
 
+using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
@@ -38,7 +39,7 @@ public abstract class CardGrouping<T> : DLRWrapper<ICardGrouping>
   /// <summary>
   /// The format this grouping is associated with. (e.g. Standard, Historic, etc.)
   /// </summary>
-  public IPlayFormat Format => @base.Format;
+  public PlayFormat Format => new(@base.Format);
 
   /// <summary>
   /// The timestamp of the last modification to this grouping.
