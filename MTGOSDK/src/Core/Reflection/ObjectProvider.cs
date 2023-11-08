@@ -53,8 +53,12 @@ public static class ObjectProvider
     // the returned instance will check against the proxy type's cache when
     // determining access modifiers of the instance's members.
     //
-    if(bindTypes == false)
-      return RemoteClient.GetInstance(proxy);
+    try
+    {
+      if(bindTypes == false)
+        return RemoteClient.GetInstance(proxy);
+    }
+    catch { /* Input type was not instantiated/instantiable on the client. */ }
 
     // Use the proxy type to retrieve the proxy value
     Type? @interface = !proxy.IsInterface ? proxy.Interface : null;
