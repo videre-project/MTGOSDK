@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
-
 using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
