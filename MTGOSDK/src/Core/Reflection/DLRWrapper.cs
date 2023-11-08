@@ -10,6 +10,8 @@ using MTGOSDK.Core;
 
 namespace MTGOSDK.Core.Reflection;
 
+#pragma warning disable CS8600, CS8604, CS8625 // Null checks are not enforceable.
+
 /// <summary>
 /// A wrapper for dynamic objects that implement an interface at runtime.
 /// </summary>
@@ -52,6 +54,28 @@ public class DLRWrapper<I>() where I : class
   internal dynamic @base => obj is DLRWrapper<I> ? obj.obj : obj
     ?? throw new Exception(
         $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+
+  //
+  // Wrapper methods for safely retrieving properties or invoking methods.
+  //
+
+  /// <summary>
+  /// Safely executes a lambda function and returns the result or a fallback.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="fallback">The fallback value to return (optional).</param>
+  /// <returns></returns>
+  public static dynamic Try(Func<dynamic> lambda, dynamic fallback = null)
+  {
+    try { return lambda(); } catch { return fallback; }
+  }
+
+  /// <summary>
+  /// Safely executes a lambda function and returns the result or a fallback.
+  /// </summary>
+  /// <typeparam name="T">The result type to use or fallback to.</typeparam>
+  /// <param name="lambda">The function to execute.</param>
+  public static dynamic Try<T>(Func<dynamic> lambda) => Try(lambda, default(T));
 
   //
   // Wrapper methods for type casting and dynamic dispatching.
