@@ -311,8 +311,7 @@ namespace RemoteNET.Internal
           }
           catch (Exception ex)
           {
-            Console.WriteLine($"Field \"{name}\"'s getter threw an exception: " + ex);
-            throw;
+            throw new Exception($"Field \"{name}\"'s getter threw an exception", innerException: ex);
           }
           break;
         case MemberTypes.Property:
@@ -326,8 +325,7 @@ namespace RemoteNET.Internal
           }
           catch (Exception ex)
           {
-            Console.WriteLine($"Property \"{name}\"'s getter threw an exception: " + ex);
-            throw;
+            throw new Exception($"Property \"{name}\"'s getter threw an exception", innerException: ex);
           }
           break;
         case MemberTypes.Method:
@@ -375,8 +373,8 @@ namespace RemoteNET.Internal
       }
       catch (Exception ex)
       {
-        Console.WriteLine($"Constructing {nameof(DynamicRemoteMethod)} of \"{name}\" threw an exception: " + ex);
-        throw;
+
+        throw new Exception($"Constructing {nameof(DynamicRemoteMethod)} of \"{name}\" threw an exception", innerException: ex);
       }
     }
 
@@ -452,8 +450,7 @@ namespace RemoteNET.Internal
           }
           catch (Exception ex)
           {
-            Console.WriteLine($"Field \"{binder.Name}\"'s getter threw an exception: " + ex);
-            throw;
+            throw new Exception($"Field \"{binder.Name}\"'s getter threw an exception", innerException: ex);
           }
           break;
         case MemberTypes.Property:
@@ -467,8 +464,7 @@ namespace RemoteNET.Internal
           }
           catch (Exception ex)
           {
-            Console.WriteLine($"Property \"{binder.Name}\"'s getter threw an exception: " + ex);
-            throw;
+            throw new Exception($"Property \"{binder.Name}\"'s getter threw an exception", innerException: ex);
           }
           break;
         case MemberTypes.Method:
