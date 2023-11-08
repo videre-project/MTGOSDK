@@ -56,7 +56,8 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// <summary>
   /// The time remaining in the current round or tournament phase.
   /// </summary>
-  public TimeSpan TimeRemaining => @base.TimeRemaining;
+  public TimeSpan TimeRemaining =>
+    Cast<TimeSpan>(Unbind(@base).TimeRemaining);
 
   /// <summary>
   ///

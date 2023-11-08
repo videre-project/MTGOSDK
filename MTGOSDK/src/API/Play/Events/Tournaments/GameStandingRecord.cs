@@ -35,12 +35,14 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <summary>
   /// The game's current completion (i.e. "NotStarted", "Started", "Finished")
   /// </summary>
-  public GameState GateState => @base.GameState;
+  public GameState GateState =>
+    Cast<GameState>(Unbind(@base).GameState);
 
   /// <summary>
   /// The elapsed time to completion since the game started.
   /// </summary>
-  public TimeSpan CompletedDuration => Cast<TimeSpan>(@base.CompletedDuration);
+  public TimeSpan CompletedDuration =>
+    Cast<TimeSpan>(Unbind(@base).CompletedDuration);
 
   /// <summary>
   /// The IDs of the winning player(s).
