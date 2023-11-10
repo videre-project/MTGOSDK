@@ -74,7 +74,7 @@ public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
   /// Halts the playback of a replay and closes the DuelScene.
   /// </summary>
   public void CloseReplay() =>
-    Unbind(@base).CloseReplayCommand.Execute(null);
+    Unbind(@base).CloseReplayCommand.Execute();
 
   /// <summary>
   /// Forwards the playback of a replay to the next game action.
@@ -86,11 +86,11 @@ public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
   /// Forwards the playback of a replay to the next game step.
   /// </summary>
   public void ReplayNextStep() =>
-    Unbind(@base).NextStepReplayCommand.Execute(null);
+    Unbind(@base).NextStepReplayCommand.Execute();
 
   /// <summary>
   /// Forwards the playback of a replay to the next turn.
   /// </summary>
   public void ReplayNextTurn() =>
-    Unbind(@base).NextTurnReplayCommand.Execute(null);
+    Unbind(@base).NextTurnReplayCommand.Execute();
 }
