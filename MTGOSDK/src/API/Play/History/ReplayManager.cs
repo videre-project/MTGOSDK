@@ -3,6 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Diagnostics;
+using System.Threading.Tasks;
+
 using MTGOSDK.Core.Reflection;
 
 using Shiny.Core.Interfaces;
@@ -33,18 +36,28 @@ public static class ReplayManager
     s_gameReplayService.AreReplaysAllowed;
 
   /// <summary>
-  /// Sends a request to the PlayerEventManager to start a replay.
-  /// </summary>
-  /// <param name="gameId">The game ID to replay.</param>
-  /// <returns>True if the request was sent successfully.</returns>
-  public static bool RequestReplay(int gameId) =>
-    s_gameReplayService.RequestReplay(gameId);
-
-  /// <summary>
   /// The currently active replay, if any.
   /// </summary>
   public static Replay ActiveReplay =>
     new(DLRWrapper<dynamic>.Unbind(s_gameReplayService).m_replayEvent);
+
+  /// <summary>
+  /// Sends a request to the PlayerEventManager to start a replay.
+  /// </summary>
+  /// <param name="gameId">The game ID to replay.</param>
+  /// <returns>True if the request was sent successfully.</returns>
+  public static async Task<bool> RequestReplay(int gameId)
+  {
+    // Request for the replay to be started.
+    if (!s_gameReplayService.RequestReplay(gameId))
+      return false;
+
+    // Wait for the replay to start
+    return await DLRWrapper<dynamic>.WaitUntil(() =>
+      IsReplayActive(gameId) &&
+      ActiveReplay.Game.Id == gameId
+    );
+  }
 
   //
   // PlayerEventManager wrapper methods
