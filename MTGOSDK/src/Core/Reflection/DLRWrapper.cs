@@ -3,7 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Diagnostics;
 using System.Reflection;
+using System.Threading.Tasks;
 
 using MTGOSDK.Core;
 
@@ -76,6 +78,26 @@ public class DLRWrapper<I>() where I : class
   /// <typeparam name="T">The result type to use or fallback to.</typeparam>
   /// <param name="lambda">The function to execute.</param>
   public static dynamic Try<T>(Func<dynamic> lambda) => Try(lambda, default(T));
+
+  /// <summary>
+  /// Safely executes a lambda function with a given number of retries.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="delay">The delay in ms between retries (optional).</param>
+  /// <param name="retries">The number of times to retry (optional).</param>
+  /// <returns>True if the function executed successfully.</returns>
+  public static async Task<bool> WaitUntil(
+    Func<bool> lambda,
+    int delay = 250,
+    int retries = 20)
+  {
+    for (; retries > 0; retries--)
+    {
+      try { if (lambda()) return true; } catch { }
+      await Task.Delay(delay);
+    }
+    return false;
+  }
 
   //
   // Wrapper methods for type casting and dynamic dispatching.
