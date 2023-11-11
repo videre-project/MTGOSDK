@@ -483,7 +483,11 @@ public class Diver : IDisposable
   #endregion
 
   #region Object Pinning
-  public (object instance, ulong pinnedAddress) GetObject(ulong objAddr, bool pinningRequested, string typeName, int? hashcode = null)
+  public (object instance, ulong pinnedAddress) GetObject(
+    ulong objAddr,
+    bool pinningRequested,
+    string typeName,
+    int? hashcode = null)
   {
     bool hashCodeFallback = hashcode.HasValue;
 
@@ -494,10 +498,12 @@ public class Diver : IDisposable
       return (pinnedObj, objAddr);
     }
 
-    // Object not pinned, try get it the hard way
-    // Make sure we had such an object in the last dumped runtime (this will help us later if the object moves
-    // since we'll know what type we are looking for)
-    // Make sure it's still in place
+    //
+    // The object is not pinned, so falling back to the last dumped runtime can
+    // help ensure we can find the object by it's type information if it moves.
+    //
+    // For now, this only checks that the object is still in place.
+    //
     ClrObject lastKnownClrObj = default;
     lock (_clrMdLock)
     {
@@ -528,8 +534,7 @@ public class Diver : IDisposable
     }
     else
     {
-      // Object moved!
-      // Let's try and save the day with some hashcode filtering (if user allowed us)
+      // Object moved; fallback to hashcode filtering (if enabled)
       if (!hashCodeFallback)
       {
         throw new Exception(
@@ -574,10 +579,9 @@ public class Diver : IDisposable
     }
 
     //
-    // A GC collect might still happen between checking
-    // the CLR MD object and the retrieval of the object
-    // So we check the final object's type name one last time
-    // (It's better to crash here then return bas objects)
+    // A GC collect might still happen between checking the CLR MD object and
+    // the retrieval of the object. So we check the final object's type name one
+    // last time (it's better to crash here then return bad objects).
     //
     string finalTypeName;
     try
@@ -605,10 +609,11 @@ public class Diver : IDisposable
     }
     return (instance, pinnedAddress);
   }
-
   #endregion
 
-  public (bool anyErrors, List<HeapDump.HeapObject> objects) GetHeapObjects(Predicate<string> filter, bool dumpHashcodes)
+  public (bool anyErrors, List<HeapDump.HeapObject> objects) GetHeapObjects(
+    Predicate<string> filter,
+    bool dumpHashcodes)
   {
     List<HeapDump.HeapObject> objects = new();
     bool anyErrors = false;
@@ -643,25 +648,27 @@ public class Diver : IDisposable
               }
               catch (Exception)
               {
-                // Exiting heap enumeration and signaling that this trial has failed.
+                // Exit heap enumeration and signal that the trial has failed.
                 anyErrors = true;
                 break;
               }
 
-              // We got the object in our hands so we haven't spotted a GC collection or anything else scary
-              // now getting the hashcode which is itself a challenge since
-              // objects might (very rudely) throw exceptions on this call.
-              // I'm looking at you, System.Reflection.Emit.SignatureHelper
               //
-              // We don't REALLY care if we don't get a has code. It just means those objects would
-              // be a bit more hard to grab later.
+              // We got the object so we haven't spotted a GC collection.
+              //
+              // Getting the hashcode is a challenge since objects might throw
+              // exceptions on this call (e.g. System.Reflection.Emit.SignatureHelper).
+              //
+              // We don't REALLY care if we don't get a hash code. It just means
+              // those objects would be a bit more hard to grab later.
               try
               {
                 hashCode = instance.GetHashCode();
               }
               catch
               {
-                // TODO: Maybe we need a boolean in HeapObject to indicate we couldn't get the hashcode...
+                // TODO: Maybe we need a boolean in HeapObject to indicate we
+                //       couldn't get the hashcode...
                 hashCode = 0;
               }
             }
