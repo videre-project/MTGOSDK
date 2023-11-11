@@ -68,8 +68,6 @@ public class Diver : IDisposable
       {"/die", MakeDieResponse},
       {"/register_client", MakeRegisterClientResponse},
       {"/unregister_client", MakeUnregisterClientResponse},
-      // DLL Injection
-      {"/inject", MakeInjectResponse},
       // Dumping
       {"/domains", MakeDomainsResponse},
       {"/heap", MakeHeapResponse},
@@ -691,33 +689,6 @@ public class Diver : IDisposable
     }
     return (anyErrors, objects);
   }
-
-  #region DLL Injecion Handler
-
-  private string MakeInjectResponse(HttpListenerRequest req)
-  {
-    string dllPath = req.QueryString.Get("dll_path");
-    try
-    {
-      var asm = Assembly.LoadFile(dllPath);
-      // We must request all Types or otherwise the Type object won't be created
-      // (I think there's some lazy initialization behind the scenes)
-      var allTypes = asm.GetTypes();
-      // This will prevent the compiler from removing the above lines because of "unused code"
-      GC.KeepAlive(allTypes);
-
-      // ClrMD must take a new snapshot to see our new assembly
-      RefreshRuntime();
-
-      return "{\"status\":\"dll loaded\"}";
-    }
-    catch (Exception ex)
-    {
-      return QuickError(ex.Message, ex.StackTrace);
-    }
-  }
-
-  #endregion
 
   #region Ping Handler
 

@@ -269,26 +269,6 @@ namespace RemoteNET
     internal Type GetRemoteType(TypeDump typeDump) =>
       GetRemoteType(typeDump.Type, typeDump.Assembly);
 
-    /// <summary>
-    /// Loads an assembly into the remote process
-    /// </summary>
-    public bool LoadAssembly(Assembly assembly) => LoadAssembly(assembly.Location);
-
-    /// <summary>
-    /// Loads an assembly into the remote process
-    /// </summary>
-    public bool LoadAssembly(string path)
-    {
-      bool res = _communicator.InjectDll(path);
-      if (res)
-      {
-        // Resetting the cached domains because otherwise we won't see our newly
-        // injected module
-        _domains = null;
-      }
-      return res;
-    }
-
     public RemoteEnum GetRemoteEnum(string typeFullName, string assembly = null)
     {
       RemoteType remoteType = GetRemoteType(typeFullName, assembly) as RemoteType
