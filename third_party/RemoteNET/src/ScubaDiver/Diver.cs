@@ -1080,6 +1080,22 @@ public class Diver : IDisposable
     }
     return QuickError("Unknown token for event callback subscription");
   }
+
+  public class EventWrapper<T> where T : EventArgs
+  {
+    private readonly EventHandler m_HandlerToCall;
+
+    public EventWrapper(EventHandler handler_to_call)
+    {
+      m_HandlerToCall = handler_to_call;
+    }
+
+    public void Handle(object sender, T args)
+    {
+      m_HandlerToCall.Invoke(sender, args);
+    }
+  }
+
   private string MakeEventSubscribeResponse(HttpListenerRequest arg)
   {
     string objAddrStr = arg.QueryString.Get("address");
@@ -1089,7 +1105,7 @@ public class Diver : IDisposable
     {
       return QuickError("Missing parameter 'address' (object address)");
     }
-    if (!IPAddress.TryParse(ipAddrStr, out IPAddress ipAddress) || int.TryParse(portStr, out int port))
+    if (!(IPAddress.TryParse(ipAddrStr, out IPAddress ipAddress) && int.TryParse(portStr, out int port)))
     {
       return QuickError("Failed to parse either IP Address ('ip' param) or port ('port' param)");
     }
@@ -1125,41 +1141,40 @@ public class Diver : IDisposable
     {
       return QuickError("Currently only events with 2 parameters (object & EventArgs) can be subscribed to.");
     }
-    // Now I want to make sure the types of the parameters are subclasses of the expected ones.
-    // Every type is a subclass of object so I skip the first param
-    ParameterInfo secondParamInfo = paramInfos[1];
-    Type secondParamType = secondParamInfo.ParameterType;
-    if (!secondParamType.IsAssignableFrom(typeof(EventArgs)))
-    {
-      return QuickError("Second parameter of the event's handler was not a subclass of EventArgs");
-    }
 
-    // TODO: Make sure delegate's return type is void? (Who even uses non-void delegates?)
-
-    // We're all good regarding the signature!
-    // assign subscriber unique id
     int token = AssignCallbackToken();
-
     EventHandler eventHandler = (obj, args) => InvokeControllerCallback(endpoint, token, "UNUSED", new object[2] { obj, args });
-
-    Logger.Debug($"[Diver] Adding event handler to event {eventName}...");
-    eventObj.AddEventHandler(target, eventHandler);
-    Logger.Debug($"[Diver] Added event handler to event {eventName}!");
-
-
-    // Save all the registeration info so it can be removed later upon request
-    _remoteEventHandler[token] = new RegisteredEventHandlerInfo()
+    try
     {
-      EventInfo = eventObj,
-      Target = target,
-      RegisteredProxy = eventHandler,
-      Endpoint = endpoint
-    };
+      Type eventArgsType = paramInfos[1].ParameterType;
+      var wrapperType = typeof(EventWrapper<>).MakeGenericType(eventArgsType);
+      var wrapperInstance = Activator.CreateInstance(wrapperType, eventHandler);
+      Delegate my_delegate = Delegate.CreateDelegate(eventDelegateType, wrapperInstance, "Handle");
+
+      Logger.Debug($"[Diver] Adding event handler to event {eventName}...");
+      eventObj.AddEventHandler(target, my_delegate);
+      Logger.Debug($"[Diver] Added event handler to event {eventName}!");
+
+      // Save all the registeration info so it can be removed later upon request
+      _remoteEventHandler[token] = new RegisteredEventHandlerInfo()
+      {
+        EventInfo = eventObj,
+        Target = target,
+        RegisteredProxy = my_delegate,
+        Endpoint = endpoint
+      };
+    }
+    catch (Exception ex)
+    {
+      return QuickError($"Failed insert the event handler: {ex.ToString()}");
+    }
 
     EventRegistrationResults erResults = new() { Token = token };
     return JsonConvert.SerializeObject(erResults);
   }
-  public int AssignCallbackToken() => Interlocked.Increment(ref _nextAvailableCallbackToken);
+
+  public int AssignCallbackToken() =>
+    Interlocked.Increment(ref _nextAvailableCallbackToken);
 
   /// <summary>
   ///
