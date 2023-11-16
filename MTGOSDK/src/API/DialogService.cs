@@ -37,13 +37,24 @@ public static class DialogService
   {
     // This is a hack that caches the dispatcher's registered windows.
     _ = DLRWrapper<dynamic>.Unbind(s_windowUtilities).AllWindows;
+    _ = s_windowUtilities.AllWindows;
 
-    var collection = RemoteClient
-      .GetInstances(new Proxy<WindowCollection>())
-      .LastOrDefault()
-        ?? throw new Exception("Window collection not initialized.");
+    // Attempt to retrieve the updated window collection from client memory.
+    for (var retries = 5; retries > 0; retries--)
+    {
+      try
+      {
+        var collection = RemoteClient
+          .GetInstances(new Proxy<WindowCollection>())
+          .LastOrDefault()
+            ?? throw new Exception("Window collection not initialized.");
 
-    return DLRWrapper<dynamic>.Bind<ICollection<dynamic>>(collection);
+        return DLRWrapper<dynamic>.Bind<ICollection<dynamic>>(collection);
+      }
+      catch { }
+    }
+
+    throw new Exception("Failed to get window collection.");
   }
 
   /// <summary>
@@ -61,7 +72,11 @@ public static class DialogService
       // Sets the DialogResult property of the IClosableViewModel proxy object,
       // which is bound to the base window's DialogResult property.
       //
-      try { window.m_closable.DialogResult = true; } catch { /* not a dialog */ }
+      if (window.GetType().Name == "BaseDialog" && !window.m_isWindowClosing)
+      {
+        // Setting the DialogResult property value will also close the window.
+        try { window.m_closable.DialogResult = true; } catch { /* Closed */ }
+      }
     }
   }
 }
