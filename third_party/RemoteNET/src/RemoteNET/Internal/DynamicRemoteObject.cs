@@ -301,10 +301,10 @@ namespace RemoteNET.Internal
       switch (type)
       {
         case MemberTypes.Field:
-          if (!singleMatch)
-          {
-            throw new ArgumentException($"Multiple members were found for the name `{name}` and at least one of them was a field");
-          }
+          // if (!singleMatch)
+          // {
+          //   throw new ArgumentException($"Multiple members were found for the name `{name}` and at least one of them was a field");
+          // }
           try
           {
             result = ((FieldInfo)firstMember).GetValue(__ro);
@@ -315,10 +315,10 @@ namespace RemoteNET.Internal
           }
           break;
         case MemberTypes.Property:
-          if (!singleMatch)
-          {
-            throw new ArgumentException($"Multiple members were found for the name `{name}` and at least one of them was a property");
-          }
+          // if (!singleMatch)
+          // {
+          //   throw new ArgumentException($"Multiple members were found for the name `{name}` and at least one of them was a property");
+          // }
           try
           {
             result = ((PropertyInfo)firstMember).GetValue(__ro);
@@ -440,10 +440,10 @@ namespace RemoteNET.Internal
       switch (type)
       {
         case MemberTypes.Field:
-          if (!singleMatch)
-          {
-            throw new ArgumentException($"Multiple members were found for the name `{binder.Name}` and at least one of them was a field");
-          }
+          // if (!singleMatch)
+          // {
+          //   throw new ArgumentException($"Multiple members were found for the name `{binder.Name}` and at least one of them was a field");
+          // }
           try
           {
             ((FieldInfo)firstMember).SetValue(__ro, value);
@@ -454,10 +454,10 @@ namespace RemoteNET.Internal
           }
           break;
         case MemberTypes.Property:
-          if (!singleMatch)
-          {
-            throw new ArgumentException($"Multiple members were found for the name `{binder.Name}` and at least one of them was a property");
-          }
+          // if (!singleMatch)
+          // {
+          //   throw new ArgumentException($"Multiple members were found for the name `{binder.Name}` and at least one of them was a property");
+          // }
           try
           {
             ((PropertyInfo)firstMember).SetValue(__ro, value);
