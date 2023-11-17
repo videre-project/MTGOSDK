@@ -8,6 +8,7 @@ using System.Windows;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 
+using Shiny.Core;
 using Shiny.Core.Interfaces;
 
 
@@ -15,13 +16,6 @@ namespace MTGOSDK.API;
 
 public static class DialogService
 {
-  //
-  // IDialogService wrapper methods
-  //
-
-  // public static IDialogService s_dialogService =>
-  //   ObjectProvider.Get<IDialogService>();
-
   //
   // IWindowUtilities wrapper methods
   //
@@ -78,5 +72,82 @@ public static class DialogService
         try { window.m_closable.DialogResult = true; } catch { /* Closed */ }
       }
     }
+  }
+
+  //
+  // IDialogService wrapper methods
+  //
+
+  /// <summary>
+  /// Global manager for creating and displaying dialog windows on the client.
+  /// </summary>
+  private static IDialogService s_dialogService =
+    ObjectProvider.Get<IDialogService>();
+
+  /// <summary>
+  /// Displays a dialog window on the MTGO client with the given title and text.
+  /// </summary>
+  /// <param name="title">The title of the dialog window.</param>
+  /// <param name="text">The text to display in the dialog window.</param>
+  /// <param name="okButton">The text to display on the OK button (optional).</param>
+  /// <param name="cancelButton">The text to display on the Cancel button (optional).</param>
+  /// <returns>True if the OK button was clicked, otherwise false.</returns>
+  public static bool ShowModal(
+    string title,
+    string text,
+    string? okButton="Ok",
+    string? cancelButton="Cancel")
+  {
+    var genericDialogViewModel = "Shiny.ViewModels.GenericDialogViewModel";
+    var viewModel = RemoteClient.CreateInstance(genericDialogViewModel);
+
+    viewModel.m_title = title;
+    viewModel.m_text = text;
+    if (viewModel.m_showOkButton = okButton != null)
+      viewModel.m_okayButtonLabel = okButton;
+    if (viewModel.m_showCancelButton = cancelButton != null)
+      viewModel.m_cancelButtonLabel = cancelButton;
+
+    bool result = s_dialogService.ShowModal<dynamic>(viewModel, -1);
+    viewModel.Dispose();
+
+    return result;
+  }
+
+  //
+  // IToastViewManager wrapper methods
+  //
+
+  /// <summary>
+  /// Global manager for creating and displaying toast modal on the client.
+  /// </summary>
+  private static dynamic s_toastViewManager =
+    ObjectProvider.Get<IToastViewManager>(bindTypes: false);
+
+  /// <summary>
+  /// The main shell view currently displayed on the primary MTGO window.
+  /// </summary>
+  private static IToastRelatedView MainRelatedView =>
+    ObjectProvider.Get<IShellViewModel>().MainRelatedView;
+
+  /// <summary>
+  /// Displays a toast notification on the MTGO client with the given title and text.
+  /// </summary>
+  /// <param name="title">The title of the toast notification.</param>
+  /// <param name="text">The text to display in the toast notification.</param>
+  /// <param name="uri">The URI to open when the toast notification is clicked (optional).</param>
+  public static void ShowToast(string title, string text, Uri? uri=null)
+  {
+    var relatedView = DLRWrapper<dynamic>.Unbind(MainRelatedView);
+    // if (uri is not null)
+    //   RemoteClient.CreateInstance(/* RelayCommand */, () =>
+    //     s_toastController.WindowsShell.StartProcess(uri.OriginalString));
+
+    var basicToastViewModel = "Shiny.Toast.ViewModels.BasicToastViewModel";
+    dynamic toastViewModel = RemoteClient.CreateInstance(basicToastViewModel,
+      text, relatedView, title, false);
+
+    s_toastViewManager.DisplayToast(toastViewModel);
+    toastViewModel.Dispose();
   }
 }
