@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+#pragma warning disable CS8600, CS8604, CS8625 // Null checks are not enforceable.
+
 using System.Diagnostics;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -10,9 +12,8 @@ using System.Threading.Tasks;
 using MTGOSDK.Core;
 
 
-namespace MTGOSDK.Core.Reflection;
 
-#pragma warning disable CS8600, CS8604, CS8625 // Null checks are not enforceable.
+namespace MTGOSDK.Core.Reflection;
 
 /// <summary>
 /// A wrapper for dynamic objects that implement an interface at runtime.
@@ -56,48 +57,6 @@ public class DLRWrapper<I>() where I : class
   internal dynamic @base => obj is DLRWrapper<I> ? obj.obj : obj
     ?? throw new Exception(
         $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
-
-  //
-  // Wrapper methods for safely retrieving properties or invoking methods.
-  //
-
-  /// <summary>
-  /// Safely executes a lambda function and returns the result or a fallback.
-  /// </summary>
-  /// <param name="lambda">The function to execute.</param>
-  /// <param name="fallback">The fallback value to return (optional).</param>
-  /// <returns></returns>
-  public static dynamic Try(Func<dynamic> lambda, dynamic fallback = null)
-  {
-    try { return lambda(); } catch { return fallback; }
-  }
-
-  /// <summary>
-  /// Safely executes a lambda function and returns the result or a fallback.
-  /// </summary>
-  /// <typeparam name="T">The result type to use or fallback to.</typeparam>
-  /// <param name="lambda">The function to execute.</param>
-  public static dynamic Try<T>(Func<dynamic> lambda) => Try(lambda, default(T));
-
-  /// <summary>
-  /// Safely executes a lambda function with a given number of retries.
-  /// </summary>
-  /// <param name="lambda">The function to execute.</param>
-  /// <param name="delay">The delay in ms between retries (optional).</param>
-  /// <param name="retries">The number of times to retry (optional).</param>
-  /// <returns>True if the function executed successfully.</returns>
-  public static async Task<bool> WaitUntil(
-    Func<bool> lambda,
-    int delay = 250,
-    int retries = 20)
-  {
-    for (; retries > 0; retries--)
-    {
-      try { if (lambda()) return true; } catch { }
-      await Task.Delay(delay);
-    }
-    return false;
-  }
 
   //
   // Wrapper methods for type casting and dynamic dispatching.
@@ -192,5 +151,47 @@ public class DLRWrapper<I>() where I : class
     func ??= new Func<dynamic, T>((item) =>
         Cast<T>(InstanceFactory.CreateInstance(typeof(T), item)));
     foreach (var item in obj) yield return func(item);
+  }
+
+  //
+  // Wrapper methods for safely retrieving properties or invoking methods.
+  //
+
+  /// <summary>
+  /// Safely executes a lambda function and returns the result or a fallback.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="fallback">The fallback value to return (optional).</param>
+  /// <returns></returns>
+  public static dynamic Try(Func<dynamic> lambda, dynamic fallback = null)
+  {
+    try { return lambda(); } catch { return fallback; }
+  }
+
+  /// <summary>
+  /// Safely executes a lambda function and returns the result or a fallback.
+  /// </summary>
+  /// <typeparam name="T">The result type to use or fallback to.</typeparam>
+  /// <param name="lambda">The function to execute.</param>
+  public static dynamic Try<T>(Func<dynamic> lambda) => Try(lambda, default(T));
+
+  /// <summary>
+  /// Safely executes a lambda function with a given number of retries.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="delay">The delay in ms between retries (optional).</param>
+  /// <param name="retries">The number of times to retry (optional).</param>
+  /// <returns>True if the function executed successfully.</returns>
+  public static async Task<bool> WaitUntil(
+    Func<bool> lambda,
+    int delay = 250,
+    int retries = 20)
+  {
+    for (; retries > 0; retries--)
+    {
+      try { if (lambda()) return true; } catch { }
+      await Task.Delay(delay);
+    }
+    return false;
   }
 }
