@@ -14,13 +14,19 @@ using Shiny.Core.Interfaces;
 
 namespace MTGOSDK.API;
 
+/// <summary>
+/// Manages the client's window utilities and dialog services.
+/// </summary>
 public static class DialogService
 {
   //
   // IWindowUtilities wrapper methods
   //
 
-  private static IWindowUtilities s_windowUtilities =>
+  /// <summary>
+  /// Shared utilities class for manipulating WPF Window objects.
+  /// </summary>
+  private static IWindowUtilities s_windowUtilities =
     ObjectProvider.Get<IWindowUtilities>();
 
   /// <summary>
