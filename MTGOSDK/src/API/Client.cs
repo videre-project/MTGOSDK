@@ -85,6 +85,7 @@ public class Client : DLRWrapper<dynamic>
   /// <summary>
   /// Creates a new instance of the MTGO client API.
   /// </summary>
+  /// <param name="options">The client's configuration options.</param>
   /// <remarks>
   /// This class is used to manage the client's connection and user session,
   /// and should be instantiated once per application instance and prior to
@@ -93,12 +94,17 @@ public class Client : DLRWrapper<dynamic>
   /// <exception cref="VerificationException">
   /// Thrown when the current user session is invalid.
   /// </exception>
-  public Client()
+  public Client(ClientOptions options = default)
   {
-    // TODO: Add constructor parameters to set properties of the RemoteClient
-    //       singleton instance prior to connecting to the MTGO process.
+    // Starts a new MTGO client process.
+    if (options.CreateProcess)
+      RemoteClient.StartProcess().Wait();
 
-    // Verify that the current user session is valid.
+    // Closes any blocking dialogs preventing the client from logging in.
+    if (options.AcceptEULAPrompt)
+      DialogService.CloseDialogs();
+
+    // Verify that any existing user sessions are valid.
     if (SessionId != Guid.Empty && IsConnected && CurrentUser.Id == -1)
       throw new VerificationException("Current user session is invalid.");
   }
@@ -118,9 +124,6 @@ public class Client : DLRWrapper<dynamic>
   {
     if (IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
-
-    // Closes any blocking dialog windows preventing the client from logging in.
-    DialogService.CloseDialogs();
 
     // Initializes the login manager if it has not already been initialized.
     dynamic LoginVM = Unbind(s_loginManager);
