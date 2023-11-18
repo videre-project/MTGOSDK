@@ -26,6 +26,7 @@ public static class SecurityExtensions
   public static dynamic RemoteSecureString(this SecureString password)
   {
     IntPtr passwordPtr = IntPtr.Zero;
+    char @char;
     // Create a new SecureString object on the remote client.
     dynamic secure_pwd = RemoteClient.CreateInstance(new Proxy<SecureString>());
     try
@@ -35,12 +36,14 @@ public static class SecurityExtensions
       // Extract each unicode character to build the remote SecureString object.
       for (int i=0; i < password.Length; i++) {
         short unicodeChar = Marshal.ReadInt16(passwordPtr, i * 2);
-        char @char = Convert.ToChar(unicodeChar);
+        @char = Convert.ToChar(unicodeChar);
         secure_pwd.AppendChar(@char);
       }
     }
     finally
     {
+      // Cleanup the last character extracted.
+      @char = default(char);
       // Free the unmanaged memory used by the password string.
       Marshal.ZeroFreeGlobalAllocUnicode(passwordPtr);
     }
