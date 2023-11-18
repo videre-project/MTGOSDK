@@ -6,8 +6,11 @@
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 
 using RemoteNET;
+
+using MTGOSDK.Core.Reflection;
 
 
 namespace MTGOSDK.Core;
@@ -15,7 +18,7 @@ namespace MTGOSDK.Core;
 /// <summary>
 /// A singleton class that manages the connection to the MTGO client process.
 /// </summary>
-public sealed class RemoteClient
+public sealed class RemoteClient : DLRWrapper<dynamic>
 {
   //
   // Singleton instance and static accessors
@@ -27,6 +30,28 @@ public sealed class RemoteClient
   public static Process @process => @this._clientProcess;
 
   /// <summary>
+  /// The Start Menu shortcut path for MTGO.
+  /// </summary>
+  public static string AppRefPath =
+    Path.Combine(
+      Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+      "Daybreak Game Company LLC",
+      "Magic The Gathering Online .appref-ms"
+    );
+
+  /// <summary>
+  /// The MTGO application manifest uri for ClickOnce deployment.
+  /// </summary>
+  public static string ApplicationUri =
+    "http://mtgo.patch.daybreakgames.com/patch/mtg/live/client/MTGO.application";
+    // + "#" + string.Join(", ", new string[] {
+    //   "MTGO.application",
+    //   "Culture=neutral",
+    //   "PublicKeyToken=dbac2845cba5280e",
+    //   "processorArchitecture=msil"
+    // });
+
+  /// <summary>
   /// The directory path to extract runtime injector and diver assemblies to.
   /// </summary>
   public static string ExtractDir =
@@ -36,6 +61,46 @@ public sealed class RemoteClient
   {
     Bootstrapper.ExtractDir = ExtractDir;
     _clientHandle = GetClientHandle();
+  }
+
+  //
+  // Process helper and automation methods
+  //
+
+  /// <summary>
+  /// Fetches the MTGO client process.
+  /// </summary>
+  private static Process MTGOProcess() =>
+    Process.GetProcessesByName("MTGO")
+      .OrderBy(x => x.StartTime)
+      .FirstOrDefault();
+
+  /// <summary>
+  /// Starts the MTGO client process.
+  /// </summary>
+  /// <remarks>
+  /// Note: This method will close any existing MTGO processes when called.
+  /// <para/>
+  /// If no MTGO installation exists or is out of date, this method will
+  /// attempt to install or update the client before starting it.
+  /// </remarks>
+  public static async Task StartProcess()
+  {
+    // Close any existing MTGO processes.
+    try { using var p = MTGOProcess(); p.Kill(); p.WaitForExit(); } catch { }
+
+    // Start MTGO using the ClickOnce application manifest uri.
+    using var process = new Process();
+    process.StartInfo = new ProcessStartInfo()
+    {
+      FileName = "rundll32.exe",
+      Arguments = $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}",
+    };
+    process.Start();
+    process.WaitForInputIdle();
+
+    // Wait for the MTGO process UI to start and open kicker window.
+    await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero);
   }
 
   //
@@ -51,10 +116,8 @@ public sealed class RemoteClient
   /// The native process handle to the MTGO client.
   /// </summary>
   private readonly Process _clientProcess =
-    Process.GetProcessesByName("MTGO")
-      .OrderBy(x => x.StartTime)
-      .FirstOrDefault()
-        ?? throw new Exception("MTGO process not found.");
+    MTGOProcess()
+      ?? throw new Exception("MTGO client process not found.");
 
   /// <summary>
   /// Connects to the target process and returns a RemoteNET client handle.

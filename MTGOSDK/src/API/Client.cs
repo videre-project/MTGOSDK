@@ -114,10 +114,13 @@ public class Client : DLRWrapper<dynamic>
   /// <exception cref="ArgumentException">
   /// Thrown when the user's credentials are missing or malformed.
   /// </exception>
-  public void LogOn(string userName, SecureString password)
+  public void LogOn(string username, SecureString password)
   {
     if (IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
+
+    // Closes any blocking dialog windows preventing the client from logging in.
+    DialogService.CloseDialogs();
 
     // Initializes the login manager if it has not already been initialized.
     dynamic LoginVM = Unbind(s_loginManager);
@@ -125,7 +128,7 @@ public class Client : DLRWrapper<dynamic>
       LoginVM.Initialize();
 
     // Passes the user's credentials to the MTGO client for authentication.
-    LoginVM.ScreenName = userName;
+    LoginVM.ScreenName = username;
     LoginVM.Password = password.RemoteSecureString();
     if (!LoginVM.LogOnCanExecute())
       throw new ArgumentException("Missing one or more user credentials.");
