@@ -101,6 +101,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
 
     // Wait for the MTGO process UI to start and open kicker window.
     await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero);
+    await Task.Delay(3000); // Prevent race condition with window collection.
   }
 
   //
