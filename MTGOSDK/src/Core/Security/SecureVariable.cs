@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-#pragma warning disable CS8600, CS8604, CS8625 // Null checks not enforceable.
+#pragma warning disable CS8600, CS8603, CS8604 // Null checks not enforceable.
 
 using System.Security;
 using System.Runtime.InteropServices;
@@ -37,7 +37,7 @@ public struct SecureVariable(SecureString value)
     IntPtr valuePtr = IntPtr.Zero;
     try
     {
-      valuePtr = Marshal.SecureStringToGlobalAllocUnicode(value);
+      valuePtr = Marshal.SecureStringToGlobalAllocUnicode(this.Value);
       return Marshal.PtrToStringUni(valuePtr);
     }
     finally

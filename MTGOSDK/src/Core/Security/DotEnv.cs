@@ -54,10 +54,11 @@ public static class DotEnv
       StringBuilder key = new();
       SecureString value = new();
 
+      char c;
       bool inKey = true;
       while(reader.Peek() >= 0)
       {
-        var c = (char)reader.Read();
+        c = (char)reader.Read();
 
         // Skip leading whitespace.
         if (inKey && (c == ' ' && key.Length == 0))
@@ -72,6 +73,7 @@ public static class DotEnv
           key.Clear();
           value = new();
 
+          c = default;
           inKey = true;
           continue;
         }
