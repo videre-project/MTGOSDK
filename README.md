@@ -19,17 +19,20 @@ For more in-depth information on the SDK's APIs, refer to the project [documenta
 
 ## Overview
 
-This project consists of three main components:
+This project consists of four main components:
 
 * [**MTGOSDK**](MTGOSDK), a library providing high-level APIs for interacting with the MTGO client.
 * [**MTGOSDK.MSBuild**](MTGOSDK.MSBuild), a MSBuild library for design/compile-time code generation of the SDK.
 * [**MTGOSDK.Ref**](MTGOSDK.Ref), a library containing internal types used by the MTGO client and SDK.
+* [**MTGOSDK.Win32**](MTGOSDK.Win32), a library containing Win32 API definitions used by the SDK.
 
 **MTGOSDK** works by injecting the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) assembly into the MTGO process, bootstrapping it to provide an API to inspect object references and invoke methods from process memory. These object references are compiled from IL code using an object's memory address to enable reflection on heap objects as if they were live objects. These are used for higher-level abstractions of MTGO functions that perform atomic RPC calls to the client for efficient caching and revalidation. This SDK is optimized for performance and ease of use and is fully typed to provide compile-time safety and intellisense.
 
 **MTGOSDK.MSBuild** is a MSBuild library that manages the code-generation of the SDK. This is used to generate the SDK's API bindings and reference assemblies for the latest builds of MTGO. These assemblies contain only the public types and members of internal classes from the MTGO client and do not contain any implementation details or private code. As the MTGO client is updated, these assemblies can be regenerated to provide the latest types and members for use in the SDK.
 
 **MTGOSDK.Ref** bootstraps the code-generation process by ensuring that MSBuild targets are available for the SDK project to reference. Various metadata like the client version is extracted at build-time, which can be used to bootstrap version-specific targets. This project is also an optional build target that can be used independently to generate the reference assemblies for the latest build of MTGO. This library is not intended to be used directly by consumers of the SDK.
+
+**MTGOSDK.Win32** is a library containing Win32 API definitions and helper functions used by the SDK. These are used to provide a more idiomatic C# API for Win32 functions and to ensure consistent API behavior across different versions of Windows. Additinonally, this library serves as a reference for using Win32 APIs that are not yet implemented as part of the .NET Framework. This library is not intended to be used directly by consumers of the SDK.
 
 ## Building this Project
 
