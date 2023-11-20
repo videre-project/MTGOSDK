@@ -2,6 +2,8 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BasicBot", "examples\BasicBot\BasicBot.csproj", "{55881B74-5ADF-4633-B46D-01F0C60FE877}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BasicInjector", "examples\BasicInjector\BasicInjector.csproj", "{65BCE52F-3A67-4B94-96D3-917D4E577D8C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GameTracker", "examples\GameTracker\GameTracker.csproj", "{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}"
@@ -47,6 +49,14 @@ Global
 		Release|Mixed = Release|Mixed
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Debug|Mixed.ActiveCfg = Debug|Any CPU
+		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Debug|Mixed.Build.0 = Debug|Any CPU
+		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Release|Any CPU.Build.0 = Release|Any CPU
+		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Release|Mixed.ActiveCfg = Release|Any CPU
+		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Release|Mixed.Build.0 = Release|Any CPU
 		{65BCE52F-3A67-4B94-96D3-917D4E577D8C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{65BCE52F-3A67-4B94-96D3-917D4E577D8C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{65BCE52F-3A67-4B94-96D3-917D4E577D8C}.Debug|Mixed.ActiveCfg = Debug|Any CPU
