@@ -14,6 +14,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
 		<ProjectReference Include="..\ScubaDiver.API\ScubaDiver.API.csproj" />
 	</ItemGroup>
 

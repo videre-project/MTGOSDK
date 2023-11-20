@@ -75,10 +75,8 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\ScubaDiver.API\ScubaDiver.API.csproj">
-      <Project>{0fe20420-27e2-467f-ab2d-78b6a795b255}</Project>
-      <Name>ScubaDiver.API</Name>
-    </ProjectReference>
+		<ProjectReference Include="..\..\..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
+    <ProjectReference Include="..\ScubaDiver.API\ScubaDiver.API.csproj" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
@@ -98,6 +96,7 @@
         Microsoft.Extensions.Logging.dll ^
         Microsoft.Extensions.Options.dll ^
         Microsoft.Extensions.Primitives.dll ^
+        MTGOSDK.Win32.dll ^
         Newtonsoft.Json.dll ^
         ScubaDiver.API.dll ^
         System.Buffers.dll ^

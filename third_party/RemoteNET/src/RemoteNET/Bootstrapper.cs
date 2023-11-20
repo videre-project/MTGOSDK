@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 
+using MTGOSDK.Win32.Extensions;
+
 using RemoteNET.Internal.Extensions;
 using RemoteNET.Properties;
 
@@ -13,7 +15,9 @@ namespace RemoteNET
     public static string AppDataDir =>
       Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        ExtractDir);
+        ExtractDir
+      );
+
     public static string ExtractDir = typeof(RemoteApp).Assembly.GetName().Name;
 
     public static void Inject(Process target, ushort diverPort)

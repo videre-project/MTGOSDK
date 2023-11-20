@@ -1,40 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
-using Microsoft.Win32.SafeHandles;
 
 
 namespace ScubaDiver;
 
 public class DllEntry
 {
-  #region P/Invoke Console Spawning
-
-  [DllImport("kernel32.dll",
-    EntryPoint = "GetStdHandle",
-    SetLastError = true,
-    CharSet = CharSet.Auto,
-    CallingConvention = CallingConvention.StdCall)]
-  private static extern IntPtr GetStdHandle(int nStdHandle);
-
-  [DllImport("kernel32.dll",
-    EntryPoint = "AllocConsole",
-    SetLastError = true,
-    CharSet = CharSet.Auto,
-    CallingConvention = CallingConvention.StdCall)]
-  [return: MarshalAs(UnmanagedType.Bool)]
-  private static extern bool AllocConsole();
-
-  private const int STD_OUTPUT_HANDLE = -11;
-
-  #endregion
-
   public static void DiverHost(object pwzArgument)
   {
     try
@@ -152,25 +128,12 @@ public class DllEntry
 
   #endregion
 
-  // Bootstrapper needs to call a C# function with exactly this signature.
-  // So we use it to just create a diver, and run the Start func (blocking)
   public static int EntryPoint(string pwzArgument)
   {
-    if (Logger.IsDebug && !Debugger.IsAttached)
-    {
-      // If we need to log and a debugger isn't attached to the target process
-      // then we need to allocate a console and redirect STDOUT to it.
-      if (AllocConsole())
-      {
-        IntPtr stdHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-        SafeFileHandle safeFileHandle = new(stdHandle, true);
-        FileStream fileStream = new(safeFileHandle, FileAccess.Write);
-        Encoding encoding = Encoding.ASCII;
-        StreamWriter standardOutput = new(fileStream, encoding) { AutoFlush = true };
-        Console.SetOut(standardOutput);
-      }
-    }
-
+    //
+    // Bootstrapper needs to call a C# function with exactly this signature.
+    // So we use it to just create a diver, and run the Start func (blocking)
+    //
     ParameterizedThreadStart func = DiverHost;
     Thread diverHostThread = new(func);
     diverHostThread.Start(pwzArgument);

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,8 @@ using Microsoft.Diagnostics.Runtime;
 
 using Exception = System.Exception;
 
+using MTGOSDK.Win32.API;
+
 using ScubaDiver.API;
 using ScubaDiver.API.Extensions;
 using ScubaDiver.API.Hooking;
@@ -26,7 +29,6 @@ using ScubaDiver.API.Interactions.Object;
 using ScubaDiver.API.Utils;
 using ScubaDiver.Hooking;
 using ScubaDiver.Utils;
-using System.ComponentModel;
 
 
 namespace ScubaDiver;
@@ -93,8 +95,6 @@ public class Diver : IDisposable
   }
 
   #region Bootstrapper Cleanup
-  [DllImport("kernel32", SetLastError=true)]
-  private static extern bool FreeLibrary(IntPtr hModule);
 
   private static bool UnloadBootstrapper()
   {
@@ -105,11 +105,12 @@ public class Diver : IDisposable
           "Bootstrapper_x64.dll"
         }.Any(s => module.ModuleName == s))
       {
-        return FreeLibrary(module.BaseAddress);
+        return Kernel32.FreeLibrary(module.BaseAddress);
       }
     }
     return false;
   }
+
   #endregion
 
   public void Start(ushort listenPort)
@@ -196,9 +197,6 @@ public class Diver : IDisposable
 
   #region Helpers
 
-  [DllImport("kernel32.dll", SetLastError = true)]
-  public static extern bool CloseHandle(IntPtr hObject);
-
   [DllImport("kernel32.dll")]
   private static extern int PssFreeSnapshot(
     IntPtr ProcessHandle,
@@ -267,7 +265,7 @@ public class Diver : IDisposable
             .GetField("_process",
                 BindingFlags.NonPublic | BindingFlags.Instance)
             .GetValue(dr);
-          CloseHandle(nativeHandle);
+          Kernel32.CloseHandle(nativeHandle);
 
           // Mark DataReader as disposed
           dr.GetType()
