@@ -1,9 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO;
-using System.Reflection;
-using System.Text;
 using System.Threading;
 
 
@@ -31,108 +26,11 @@ public class DllEntry
     }
   }
 
-  #region Event Handler reflection
-
-  static Dictionary<Type, List<FieldInfo>> dicEventFieldInfos = new();
-
-  static BindingFlags AllBindings
-  {
-    get => BindingFlags.IgnoreCase
-          | BindingFlags.Public
-          | BindingFlags.NonPublic
-          | BindingFlags.Instance
-          | BindingFlags.Static;
-  }
-
-  static void BuildEventFields(Type t, List<FieldInfo> lst)
-  {
-    foreach (EventInfo ei in t.GetEvents(AllBindings))
-    {
-      Type dt = ei.DeclaringType;
-      FieldInfo fi = dt.GetField(ei.Name, AllBindings);
-      if (fi != null)
-        lst.Add(fi);
-    }
-  }
-
-  static List<FieldInfo> GetTypeEventFields(Type t)
-  {
-    if (dicEventFieldInfos.ContainsKey(t))
-      return dicEventFieldInfos[t];
-
-    List<FieldInfo> lst = new();
-    BuildEventFields(t, lst);
-    dicEventFieldInfos.Add(t, lst);
-    return lst;
-  }
-
-  static EventHandlerList GetStaticEventHandlerList(Type t, object obj)
-  {
-      MethodInfo mi = t.GetMethod("get_Events", AllBindings);
-      return (EventHandlerList)mi.Invoke(obj, new object[] { });
-  }
-
-  public static void RemoveEventHandler(object obj, string EventName = "")
-  {
-    if (obj == null)
-      return;
-
-    Type t = obj.GetType();
-    List<FieldInfo> event_fields = GetTypeEventFields(t);
-    EventHandlerList static_event_handlers = null;
-
-    foreach (FieldInfo fi in event_fields)
-    {
-      if (EventName != "" && string.Compare(EventName, fi.Name, true) != 0)
-        continue;
-
-      var eventName = fi.Name;
-
-      if (fi.IsStatic)
-      {
-        // STATIC EVENT
-        static_event_handlers ??= GetStaticEventHandlerList(t, obj);
-
-        object idx = fi.GetValue(obj);
-        Delegate eh = static_event_handlers[idx];
-        if (eh == null)
-          continue;
-
-        Delegate[] dels = eh.GetInvocationList();
-        if (dels == null)
-          continue;
-
-        EventInfo ei = t.GetEvent(eventName, AllBindings);
-        foreach (Delegate del in dels)
-          ei.RemoveEventHandler(obj, del);
-      }
-      else
-      {
-        // INSTANCE EVENT
-        EventInfo ei = t.GetEvent(eventName, AllBindings);
-        if (ei != null)
-        {
-          object val = fi.GetValue(obj);
-          Delegate mdel = (val as Delegate);
-          if (mdel != null)
-          {
-            foreach (Delegate del in mdel.GetInvocationList())
-            {
-              ei.RemoveEventHandler(obj, del);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  #endregion
-
   public static int EntryPoint(string pwzArgument)
   {
     //
-    // Bootstrapper needs to call a C# function with exactly this signature.
-    // So we use it to just create a diver, and run the Start func (blocking)
+    // The Bootstrapper needs to call a C# function with exactly this signature,
+    // so we use it to just create a diver, and run the Start func (blocking)
     //
     ParameterizedThreadStart func = DiverHost;
     Thread diverHostThread = new(func);
