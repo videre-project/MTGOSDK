@@ -7,6 +7,7 @@ using System.Collections.Generic;
 
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.API.Play.Event<dynamic>;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -54,7 +55,7 @@ public static class EventManager
     get
     {
       foreach (var playerEvent in eventsById.Values)
-        yield return Event<dynamic>.FromPlayerEvent(playerEvent);
+        yield return FromPlayerEvent(playerEvent);
     }
   }
 
@@ -67,7 +68,7 @@ public static class EventManager
   /// Thrown if the event could not be found.
   /// </exception>
   public static dynamic GetJoinableEvent(int id) =>
-    Event<dynamic>.FromPlayerEvent((
+    FromPlayerEvent((
       s_playService.GetFilterablePlayerEventById(id)
         ?? throw new KeyNotFoundException($"Event #{id} could not be found.")
     ).PlayerEvent);
@@ -81,7 +82,7 @@ public static class EventManager
   /// Thrown if the event could not be found.
   /// </exception>
   public static dynamic GetJoinableEvent(Guid guid) =>
-    Event<dynamic>.FromPlayerEvent((
+    FromPlayerEvent((
       s_playService.GetFilterablePlayerEventByGuid(guid)
         ?? throw new KeyNotFoundException($"Event could not be found.")
     ).PlayerEvent);
@@ -95,7 +96,7 @@ public static class EventManager
   /// Thrown if the event could not be found.
   /// </exception>
 	public static dynamic GetEvent(int id) =>
-    Event<dynamic>.FromPlayerEvent((
+    FromPlayerEvent((
       s_playService.GetMatchOrTournamentOrQueueById(id)
         ?? throw new KeyNotFoundException($"Event #{id} could not be found.")
     ).PlayerEvent);
@@ -109,7 +110,7 @@ public static class EventManager
   /// Thrown if the event could not be found.
   /// </exception>
   public static dynamic GetEvent(Guid guid) =>
-    Event<dynamic>.FromPlayerEvent(
+    FromPlayerEvent(
       s_playerEventManager.GetEvent(guid)
         ?? throw new KeyNotFoundException($"Event could not be found.")
     );

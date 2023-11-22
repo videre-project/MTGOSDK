@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model.Play;
@@ -39,7 +40,7 @@ public static class ReplayManager
   /// The currently active replay, if any.
   /// </summary>
   public static Replay ActiveReplay =>
-    new(DLRWrapper<dynamic>.Unbind(s_gameReplayService).m_replayEvent);
+    new(Unbind(s_gameReplayService).m_replayEvent);
 
   /// <summary>
   /// Sends a request to the PlayerEventManager to start a replay.
@@ -53,7 +54,7 @@ public static class ReplayManager
       return false;
 
     // Wait for the replay to start
-    return await DLRWrapper<dynamic>.WaitUntil(() =>
+    return await WaitUntil(() =>
       IsReplayActive(gameId) &&
       ActiveReplay.Game.Id == gameId
     );

@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.Core.Reflection;
+// using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using Shiny.Chat;
 using Shiny.Core.Interfaces;
@@ -42,7 +43,7 @@ public static class ChannelManager
 
   // TODO: Expose this as a client-managed collection.
   // public static dynamic Channels =>
-  //   DLRWrapper<dynamic>.Unbind(s_channelManager).m_channelsByName.Keys;
+  //   Unbind(s_channelManager).m_channelsByName.Keys;
 
   //
   // IChatManager wrapper methods

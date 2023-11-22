@@ -8,6 +8,7 @@ using System.Reflection;
 
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
@@ -90,7 +91,7 @@ public static class CollectionManager
   /// </summary>
   private static dynamic AllCardSetsByCode =>
     // TODO: Fix type casting of nested types, i.e. Dictionary<string, CardSet>.
-    Proxy<dynamic>.From(s_cardDataManager).AllCardSetsByCode;
+    Unbind(s_cardDataManager).AllCardSetsByCode;
 
   /// <summary>
   /// Returns a set object by the given set code.
@@ -178,7 +179,7 @@ public static class CollectionManager
       .SelectMany(folder =>
         folder.Contents
           .Where(grouping => grouping is ICardGrouping)
-          .Select(grouping => new Deck(Proxy<dynamic>.From(grouping)))
+          .Select(grouping => new Deck(Unbind(grouping)))
       );
 
   /// <summary>

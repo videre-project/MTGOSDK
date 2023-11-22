@@ -8,6 +8,7 @@ using System.Windows;
 using MTGOSDK.API.ViewModels;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using Shiny.Core;
 using Shiny.Core.Interfaces;
@@ -37,7 +38,7 @@ public static class DialogService
   public static ICollection<dynamic> GetWindows()
   {
     // This is a hack that caches the dispatcher's registered windows.
-    _ = DLRWrapper<dynamic>.Unbind(s_windowUtilities).AllWindows;
+    _ = Unbind(s_windowUtilities).AllWindows;
     _ = s_windowUtilities.AllWindows;
 
     // Attempt to retrieve the updated window collection from client memory.
@@ -50,7 +51,7 @@ public static class DialogService
           .LastOrDefault()
             ?? throw new Exception("Window collection not initialized.");
 
-        return DLRWrapper<dynamic>.Bind<ICollection<dynamic>>(collection);
+        return Bind<ICollection<dynamic>>(collection);
       }
       catch { }
     }
