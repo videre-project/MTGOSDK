@@ -12,7 +12,6 @@ using System.Threading.Tasks;
 using MTGOSDK.Core;
 
 
-
 namespace MTGOSDK.Core.Reflection;
 
 /// <summary>
@@ -142,6 +141,9 @@ public class DLRWrapper<I>() where I : class
     catch { }
 
     // Fallback to creating a new instance assuming a DLRWrapper type.
+    try { return (T)(InstanceFactory.CreateInstance(typeof(T), obj)); }
+    catch { }
+
     // Throw an exception if the object cannot be cast to the given type.
     throw new Exception(
         $"Unable to cast {obj.GetType().Name} to {typeof(T).Name}.");
