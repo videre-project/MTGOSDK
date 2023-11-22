@@ -132,13 +132,14 @@ public class Client : DLRWrapper<dynamic>
   /// </summary>
   /// <param name="userName">The user's login name.</param>
   /// <param name="password">The user's login password.</param>
+  /// <returns>The user's session id.</returns>
   /// <exception cref="InvalidOperationException">
   /// Thrown when the client is already logged in.
   /// </exception>
   /// <exception cref="ArgumentException">
   /// Thrown when the user's credentials are missing or malformed.
   /// </exception>
-  public void LogOn(string username, SecureString password)
+  public async Task<Guid> LogOn(string username, SecureString password)
   {
     if (IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
@@ -156,6 +157,10 @@ public class Client : DLRWrapper<dynamic>
 
     // Executes the login command and creates a new task to connect the client.
     LoginVM.LogOnExecute();
+    if (!(await WaitForClientReady()))
+      throw new Exception("Failed to connect and initialize the client.");
+
+    return this.SessionId;
   }
 
   /// <summary>
@@ -164,13 +169,15 @@ public class Client : DLRWrapper<dynamic>
   /// <exception cref="InvalidOperationException">
   /// Thrown when the client is not currently logged in.
   /// </exception>
-  public void LogOff()
+  public async Task LogOff()
   {
     if (!IsLoggedIn)
       throw new InvalidOperationException("Cannot log off while logged out.");
 
     // Invokes logoff command and disconnects the MTGO client.
     s_session.LogOff();
+    if (!(await WaitUntil(() => !IsConnected)))
+      throw new Exception("Failed to log off and disconnect the client.");
   }
 
   public void OnException(Exception exception) =>

@@ -15,8 +15,7 @@ var client = new Client(
 );
 
 DotEnv.LoadFile();
-client.LogOn(
+await client.LogOn(
   username: DotEnv.Get("USERNAME"),
   password: DotEnv.Get("PASSWORD")
 );
-await client.WaitForClientReady();
