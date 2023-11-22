@@ -4,7 +4,7 @@
 **/
 
 using MTGOSDK.API.Chat;
-using MTGOSDK.API.Scenes;
+using MTGOSDK.API.ViewModels.Scenes;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 using static MTGOSDK.API.Events;

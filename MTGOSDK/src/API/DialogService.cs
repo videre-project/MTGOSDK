@@ -5,6 +5,7 @@
 
 using System.Windows;
 
+using MTGOSDK.API.ViewModels;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 
@@ -104,20 +105,13 @@ public static class DialogService
     string? okButton="Ok",
     string? cancelButton="Cancel")
   {
-    var genericDialogViewModel = "Shiny.ViewModels.GenericDialogViewModel";
-    var viewModel = RemoteClient.CreateInstance(genericDialogViewModel);
-
-    viewModel.m_title = title;
-    viewModel.m_text = text;
-    if (viewModel.m_showOkButton = okButton != null)
-      viewModel.m_okayButtonLabel = okButton;
-    if (viewModel.m_showCancelButton = cancelButton != null)
-      viewModel.m_cancelButtonLabel = cancelButton;
-
-    bool result = s_dialogService.ShowModal<dynamic>(viewModel, -1);
-    viewModel.Dispose();
-
-    return result;
+    using var viewModel = new GenericDialogViewModel(
+      title,
+      text,
+      okButton,
+      cancelButton
+    );
+    return (bool)s_dialogService.ShowModal<dynamic>(viewModel.@base, -1);
   }
 
   //
@@ -144,16 +138,12 @@ public static class DialogService
   /// <param name="uri">The URI to open when the toast notification is clicked (optional).</param>
   public static void ShowToast(string title, string text, Uri? uri=null)
   {
-    var relatedView = DLRWrapper<dynamic>.Unbind(MainRelatedView);
+    var relatedView = MainRelatedView;
     // if (uri is not null)
-    //   RemoteClient.CreateInstance(/* RelayCommand */, () =>
+    //   RemoteClient.CreateInstance(/* IRelayCommand */, () =>
     //     s_toastController.WindowsShell.StartProcess(uri.OriginalString));
 
-    var basicToastViewModel = "Shiny.Toast.ViewModels.BasicToastViewModel";
-    dynamic toastViewModel = RemoteClient.CreateInstance(basicToastViewModel,
-      text, relatedView, title, false);
-
-    s_toastViewManager.DisplayToast(toastViewModel);
-    toastViewModel.Dispose();
+    using var viewModel = new BasicToastViewModel(title, text, relatedView);
+    s_toastViewManager.DisplayToast(viewModel.@base);
   }
 }

@@ -106,6 +106,23 @@ public class DLRWrapper<I>() where I : class
   }
 
   /// <summary>
+  /// Unbinds the given object instances from the proxied wrapper type.
+  /// </summary>
+  /// <param name="objs">The objects to unbind.</param>
+  /// <returns>The unbound objects.</returns>
+  /// <remarks>
+  /// This method is a wrapper for the <see cref="Proxy{T}.From"/> method.
+  /// </remarks>
+  public static dynamic Unbind(dynamic [] objs)
+  {
+    var unbound_objs = new dynamic[objs.Length];
+    for (var i = 0; i < objs.Length; i++)
+      unbound_objs[i] = Unbind(objs[i]);
+
+    return unbound_objs;
+  }
+
+  /// <summary>
   /// Attempts to cast the given object to the given type with various fallbacks.
   /// </summary>
   /// <typeparam name="T">The type to cast to.</typeparam>
