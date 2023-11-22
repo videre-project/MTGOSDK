@@ -121,9 +121,10 @@ public class Client : DLRWrapper<dynamic>
     var shellViewModel = ObjectProvider.Get<IShellViewModel>(bindTypes: false);
     return await WaitUntil(() =>
       shellViewModel.IsSessionConnected == true &&
-      shellViewModel.m_showSplashScreen == false,
-      delay: 200, // in ms
-      retries: 50 // or 10 seconds
+      shellViewModel.ShowSplashScreen == false &&
+      shellViewModel.m_blockingProgressInstances.Count == 0,
+      delay: 250, // in ms
+      retries: 60 // or 15 seconds
     );
   }
 
