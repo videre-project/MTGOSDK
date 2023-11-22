@@ -9,7 +9,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Web;
 using ScubaDiver.API.Exceptions;
-using ScubaDiver.API.Hooking;
 using ScubaDiver.API.Interactions;
 using ScubaDiver.API.Interactions.Callbacks;
 using ScubaDiver.API.Interactions.Dumps;
@@ -399,57 +398,7 @@ namespace ScubaDiver.API
       if (!body.Contains("{\"status\":\"OK\"}"))
         throw new Exception("Failed to unsubscribe from an event");
 
-      if (!_listener.HasActiveHooks)
-        _listener.Close();
-    }
-
-    public bool HookMethod(
-      string type,
-      string methodName,
-      HarmonyPatchPosition pos,
-      LocalHookCallback callback,
-      List<string> parametersTypeFullNames = null)
-    {
-      if (!_listener.IsOpen)
-      {
-        _listener.Open();
-      }
-
-      FunctionHookRequest req = new()
-      {
-        IP = _listener.IP.ToString(),
-        Port = _listener.Port,
-        TypeFullName = type,
-        MethodName = methodName,
-        HookPosition = pos.ToString(),
-        ParametersTypeFullNames = parametersTypeFullNames
-      };
-
-      var requestJsonBody = JsonConvert.SerializeObject(req);
-
-      var resJson = SendRequest("hook_method", null, requestJsonBody);
-      if (resJson.Contains("\"error\":"))
-        throw new Exception("Hook Method failed. Error from Diver: " + resJson);
-
-      EventRegistrationResults regRes = JsonConvert.DeserializeObject<EventRegistrationResults>(resJson);
-
-      _listener.HookSubscribe(callback, regRes.Token);
-      // Getting back the token tells us the hook was registered successfully.
-      return true;
-    }
-    public void UnhookMethod(LocalHookCallback callback)
-    {
-      int token = _listener.HookUnsubscribe(callback);
-
-      Dictionary<string, string> queryParams;
-      string body;
-      queryParams = new() { };
-      queryParams["token"] = token.ToString();
-      body = SendRequest("unhook_method", queryParams);
-      if (!body.Contains("{\"status\":\"OK\"}"))
-        throw new Exception("Tried to unhook a method but the Diver's response was not 'OK'");
-
-      if (!_listener.HasActiveHooks)
+      if (!_listener.HasActiveCallbacks)
         _listener.Close();
     }
 

@@ -20,14 +20,12 @@ using MTGOSDK.Win32.API;
 
 using ScubaDiver.API;
 using ScubaDiver.API.Extensions;
-using ScubaDiver.API.Hooking;
 using ScubaDiver.API.Interactions;
 using ScubaDiver.API.Interactions.Callbacks;
 using ScubaDiver.API.Interactions.Client;
 using ScubaDiver.API.Interactions.Dumps;
 using ScubaDiver.API.Interactions.Object;
 using ScubaDiver.API.Utils;
-using ScubaDiver.Hooking;
 using ScubaDiver.Utils;
 
 
@@ -54,7 +52,6 @@ public class Diver : IDisposable
   private int _nextAvailableCallbackToken;
   private readonly UnifiedAppDomain _unifiedAppDomain;
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
-  private readonly ConcurrentDictionary<int, RegisteredMethodHookInfo> _remoteHooks;
 
   // Object freezing (pinning)
   private readonly FrozenObjectsCollection _freezer = new();
@@ -85,12 +82,8 @@ public class Diver : IDisposable
       {"/event_subscribe", MakeEventSubscribeResponse},
       {"/event_unsubscribe", MakeEventUnsubscribeResponse},
       {"/get_item", MakeArrayItemResponse},
-      // Harmony
-      {"/hook_method", MakeHookMethodResponse},
-      {"/unhook_method", MakeUnhookMethodResponse},
     };
     _remoteEventHandler = new ConcurrentDictionary<int, RegisteredEventHandlerInfo>();
-    _remoteHooks = new ConcurrentDictionary<int, RegisteredMethodHookInfo>();
     _unifiedAppDomain = new UnifiedAppDomain(this);
   }
 
@@ -158,20 +151,6 @@ public class Diver : IDisposable
     {
       Thread.Sleep(TimeSpan.FromSeconds(1));
       IPEndPoint endpoint;
-      foreach (var registeredMethodHookInfo in _remoteHooks)
-      {
-        endpoint = registeredMethodHookInfo.Value.Endpoint;
-        ReverseCommunicator reverseCommunicator = new(endpoint);
-        Logger.Debug($"[Diver] Checking if callback client at {endpoint} is alive. Token = {registeredMethodHookInfo.Key}. Type = Method Hook");
-        bool alive = reverseCommunicator.CheckIfAlive();
-        Logger.Debug($"[Diver] Callback client at {endpoint} (Token = {registeredMethodHookInfo.Key}) is alive = {alive}");
-        if (!alive)
-        {
-          Logger.Debug(
-            $"[Diver] Dead Callback client at {endpoint} (Token = {registeredMethodHookInfo.Key}) DROPPED!");
-          _remoteHooks.TryRemove(registeredMethodHookInfo.Key, out _);
-        }
-      }
       foreach (var registeredEventHandlerInfo in _remoteEventHandler)
       {
         endpoint = registeredEventHandlerInfo.Value.Endpoint;
@@ -388,44 +367,35 @@ public class Diver : IDisposable
     {
       void ListenerCallback(IAsyncResult result)
       {
+        HttpListener listener = (HttpListener)result.AsyncState;
+        HttpListenerContext context;
         try
         {
-          HarmonyWrapper.Instance.RegisterFrameworkThread(Thread.CurrentThread.ManagedThreadId);
-
-          HttpListener listener = (HttpListener)result.AsyncState;
-          HttpListenerContext context;
-          try
+          context = listener.EndGetContext(result);
+        }
+        catch (ObjectDisposedException)
+        {
+          Logger.Debug("[Diver][ListenerCallback] Listener was disposed. Exiting.");
+          return;
+        }
+        catch (HttpListenerException e)
+        {
+          if (e.Message.StartsWith("The I/O operation has been aborted"))
           {
-            context = listener.EndGetContext(result);
-          }
-          catch (ObjectDisposedException)
-          {
-            Logger.Debug("[Diver][ListenerCallback] Listener was disposed. Exiting.");
+            Logger.Debug($"[Diver][ListenerCallback] Listener was aborted. Exiting.");
             return;
           }
-          catch (HttpListenerException e)
-          {
-            if (e.Message.StartsWith("The I/O operation has been aborted"))
-            {
-              Logger.Debug($"[Diver][ListenerCallback] Listener was aborted. Exiting.");
-              return;
-            }
-            throw;
-          }
-
-          try
-          {
-            HandleDispatchedRequest(context);
-          }
-          catch (Exception e)
-          {
-            Logger.Debug("[Diver] Task faulted! Exception:");
-            Logger.Debug(e.ToString());
-          }
+          throw;
         }
-        finally
+
+        try
         {
-          HarmonyWrapper.Instance.UnregisterFrameworkThread(Thread.CurrentThread.ManagedThreadId);
+          HandleDispatchedRequest(context);
+        }
+        catch (Exception e)
+        {
+          Logger.Debug("[Diver] Task faulted! Exception:");
+          Logger.Debug(e.ToString());
         }
       }
       IAsyncResult asyncOperation = listener.BeginGetContext(ListenerCallback, listener);
@@ -459,18 +429,13 @@ public class Diver : IDisposable
 
     Logger.Debug("[Diver] HTTP Loop ended. Cleaning up");
 
-    Logger.Debug("[Diver] Removing all event subscriptions & hooks");
+    Logger.Debug("[Diver] Removing all event subscriptions");
     foreach (RegisteredEventHandlerInfo rehi in _remoteEventHandler.Values)
     {
       rehi.EventInfo.RemoveEventHandler(rehi.Target, rehi.RegisteredProxy);
     }
-    foreach (RegisteredMethodHookInfo rmhi in _remoteHooks.Values)
-    {
-      HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
-    }
     _remoteEventHandler.Clear();
-    _remoteHooks.Clear();
-    Logger.Debug("[Diver] Removed all event subscriptions & hooks");
+    Logger.Debug("[Diver] Removed all event subscriptions");
   }
   #endregion
 
@@ -937,125 +902,8 @@ public class Diver : IDisposable
     return resJson;
   }
 
-  #region Hooks & Events Handlers
+  #region Events Handlers
 
-  private string MakeUnhookMethodResponse(HttpListenerRequest arg)
-  {
-    string tokenStr = arg.QueryString.Get("token");
-    if (tokenStr == null || !int.TryParse(tokenStr, out int token))
-    {
-      return QuickError("Missing parameter 'address'");
-    }
-    Logger.Debug($"[Diver][MakeUnhookMethodResponse] Called! Token: {token}");
-
-    if (_remoteHooks.TryRemove(token, out RegisteredMethodHookInfo rmhi))
-    {
-      HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
-      return "{\"status\":\"OK\"}";
-    }
-
-    Logger.Debug($"[Diver][MakeUnhookMethodResponse] Unknown token for event callback subscription. Token: {token}");
-    return QuickError("Unknown token for event callback subscription");
-  }
-
-  private string MakeHookMethodResponse(HttpListenerRequest arg)
-  {
-    Logger.Debug("[Diver] Got Hook Method request!");
-    string body;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
-
-    if (string.IsNullOrEmpty(body))
-      return QuickError("Missing body");
-
-    var request = JsonConvert.DeserializeObject<FunctionHookRequest>(body);
-    if (request == null)
-      return QuickError("Failed to deserialize body");
-
-    if (!IPAddress.TryParse(request.IP, out IPAddress ipAddress))
-    {
-      return QuickError("Failed to parse IP address. Input: " + request.IP);
-    }
-    int port = request.Port;
-    IPEndPoint endpoint = new IPEndPoint(ipAddress, port);
-    string typeFullName = request.TypeFullName;
-    string methodName = request.MethodName;
-    string hookPosition = request.HookPosition;
-    HarmonyPatchPosition pos = (HarmonyPatchPosition)Enum.Parse(typeof(HarmonyPatchPosition), hookPosition);
-    if (!Enum.IsDefined(typeof(HarmonyPatchPosition), pos))
-      return QuickError("hook_position has an invalid or unsupported value");
-
-    Type resolvedType;
-    lock (_clrMdLock)
-    {
-      resolvedType = _unifiedAppDomain.ResolveType(typeFullName);
-    }
-    if (resolvedType == null)
-      return QuickError("Failed to resolve type");
-
-    Type[] paramTypes;
-    lock (_clrMdLock)
-    {
-      paramTypes = request.ParametersTypeFullNames.Select(typeFullName => _unifiedAppDomain.ResolveType(typeFullName)).ToArray();
-    }
-
-    // We might be searching for a constructor. Switch based on method name.
-    MethodBase methodInfo = methodName == ".ctor"
-      ? resolvedType.GetConstructor(paramTypes)
-      : resolvedType.GetMethodRecursive(methodName, paramTypes);
-
-    if (methodInfo == null)
-      return QuickError($"Failed to find method {methodName} in type {resolvedType.Name}");
-    Logger.Debug("[Diver] Hook Method - Resolved Method");
-
-    // We're all good regarding the signature!
-    // assign subscriber unique id
-    int token = AssignCallbackToken();
-    Logger.Debug($"[Diver] Hook Method - Assigned Token: {token}");
-
-    // Preparing a proxy method that Harmony will invoke
-    HarmonyWrapper.HookCallback patchCallback = (obj, args) =>
-    {
-      var res = InvokeControllerCallback(endpoint, token, new StackTrace().ToString(), obj, args);
-      bool skipOriginal = false;
-      if (res != null && !res.IsRemoteAddress)
-      {
-        object decodedRes = PrimitivesEncoder.Decode(res);
-        if(decodedRes is bool boolRes)
-          skipOriginal = boolRes;
-      }
-      return skipOriginal;
-    };
-
-    Logger.Debug($"[Diver] Hooking function {methodName}...");
-    try
-    {
-      HarmonyWrapper.Instance.AddHook(methodInfo, pos, patchCallback);
-    }
-    catch (Exception ex)
-    {
-      // Hooking filed so we cleanup the Hook Info we inserted beforehand
-      _remoteHooks.TryRemove(token, out _);
-
-      Logger.Debug($"[Diver] Failed to hook func {methodName}. Exception: {ex}");
-      return QuickError("Failed insert the hook for the function. HarmonyWrapper.AddHook failed.");
-    }
-    Logger.Debug($"[Diver] Hooked func {methodName}!");
-
-    // Keeping all hooking information aside so we can unhook later.
-    _remoteHooks[token] = new RegisteredMethodHookInfo()
-    {
-      Endpoint = endpoint,
-      OriginalHookedMethod = methodInfo,
-      RegisteredProxy = patchCallback
-    };
-
-
-    EventRegistrationResults erResults = new() { Token = token };
-    return JsonConvert.SerializeObject(erResults);
-  }
   private string MakeEventUnsubscribeResponse(HttpListenerRequest arg)
   {
     string tokenStr = arg.QueryString.Get("token");
@@ -1188,7 +1036,7 @@ public class Diver : IDisposable
     bool alive = reverseCommunicator.CheckIfAlive();
     if (!alive)
     {
-      _remoteHooks.TryRemove(token, out _);
+      _remoteEventHandler.TryRemove(token, out _);
       return null;
     }
 
@@ -1218,9 +1066,9 @@ public class Diver : IDisposable
     }
 
     // Call callback at controller
-    InvocationResults hookCallbackResults = reverseCommunicator.InvokeCallback(token, stackTrace, remoteParams);
+    InvocationResults callbackResults = reverseCommunicator.InvokeCallback(token, stackTrace, remoteParams);
 
-    return hookCallbackResults.ReturnedObjectOrAddress;
+    return callbackResults.ReturnedObjectOrAddress;
 
   }
 
@@ -1319,17 +1167,12 @@ public class Diver : IDisposable
     try
     {
       object[] paramsArray = paramsList.ToArray();
-      HarmonyWrapper.Instance.AllowFrameworkThreadToTrigger(Thread.CurrentThread.ManagedThreadId);
       createdObject = Activator.CreateInstance(t, paramsArray);
     }
     catch
     {
       Debugger.Launch();
       return QuickError("Activator.CreateInstance threw an exception");
-    }
-    finally
-    {
-      HarmonyWrapper.Instance.DisallowFrameworkThreadToTrigger(Thread.CurrentThread.ManagedThreadId);
     }
 
     if (createdObject == null)
@@ -1494,16 +1337,11 @@ public class Diver : IDisposable
       if (string.IsNullOrEmpty(argsSummary))
         argsSummary = "No Arguments";
       Logger.Debug($"[Diver] Invoking {method.Name} with those args (Count: {paramsList.Count}): `{argsSummary}`");
-      HarmonyWrapper.Instance.AllowFrameworkThreadToTrigger(Thread.CurrentThread.ManagedThreadId);
       results = method.Invoke(instance, paramsList.ToArray());
     }
     catch (Exception e)
     {
       return QuickError($"Invocation caused exception: {e}");
-    }
-    finally
-    {
-      HarmonyWrapper.Instance.DisallowFrameworkThreadToTrigger(Thread.CurrentThread.ManagedThreadId);
     }
 
     InvocationResults invocResults;

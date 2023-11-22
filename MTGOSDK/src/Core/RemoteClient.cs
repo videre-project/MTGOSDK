@@ -289,46 +289,4 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     return remoteMethod!.Invoke(null, args);
 #pragma warning restore CS8603
   }
-
-  //
-  // HarmonyManager wrapper methods
-  //
-
-  /// <summary>
-  /// Hooks a remote object's method using a Harmony callback.
-  /// </summary>
-  /// <param name="queryPath">The query path to the remote object.</param>
-  /// <param name="methodName">The name of the method to hook.</param>
-  /// <param name="hookName">The type of Harmony hook to use.</param>
-  /// <param name="callback">The local Harmony callback to use.</param>
-  public static void HookInstanceMethod(
-    string queryPath,
-    string methodName,
-    string hookName,
-    HookAction callback)
-  {
-    MethodInfo method = GetInstanceMethod(queryPath, methodName);
-    switch (hookName)
-    {
-      case "prefix":
-        @client.Harmony.Patch(method, prefix: callback);
-        break;
-      case "postfix":
-        @client.Harmony.Patch(method, postfix: callback);
-        break;
-      case "finalizer":
-        @client.Harmony.Patch(method, finalizer: callback);
-        break;
-      default:
-        throw new Exception($"Unknown hook type: {hookName}");
-    }
-  }
-
-  // TODO: Add unhooking methods + unhook all methods on exit
-  //       (or just unhook all methods on exit)
-
-  // public static void UnhookInstanceMethod(
-  //   string queryPath,
-  //   string methodName,
-  //   string hookName)
 }

@@ -109,7 +109,6 @@ namespace RemoteNET
 
     public Process Process => _procWithDiver;
     public RemoteActivator Activator { get; private set; }
-    public RemoteHarmony Harmony { get; private set; }
 
     public DiverCommunicator Communicator => _communicator;
     public static bool IsReconnected = false;
@@ -119,7 +118,6 @@ namespace RemoteNET
       _procWithDiver = procWithDiver;
       _communicator = communicator;
       Activator = new RemoteActivator(communicator, this);
-      Harmony = new RemoteHarmony(this);
       _remoteObjects = new RemoteObjectsCollection(this);
     }
 

@@ -6,7 +6,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using ScubaDiver.API.Hooking;
 using ScubaDiver.API.Interactions;
 using ScubaDiver.API.Interactions.Callbacks;
 using ScubaDiver.API.Utils;
@@ -16,7 +15,7 @@ using static ScubaDiver.API.DiverCommunicator;
 namespace ScubaDiver.API
 {
   /// <summary>
-  /// Listens for 'callbacks' invocations from the Diver - Callbacks for remote events and remote hooked functions
+  /// Listens for remote event callback invocations from the Diver
   /// </summary>
   public class CallbacksListener
   {
@@ -29,9 +28,6 @@ namespace ScubaDiver.API
     readonly object _withErrors = NewtonsoftProxy.JsonSerializerSettingsWithErrors;
     private readonly Dictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
     private readonly Dictionary<LocalEventCallback, int> _eventHandlersToToken = new();
-
-    private readonly Dictionary<int, LocalHookCallback> _tokensToHookCallbacks = new();
-    private readonly Dictionary<LocalHookCallback, int> _hookCallbacksToTokens = new();
 
     DiverCommunicator _communicator;
 
@@ -53,7 +49,7 @@ namespace ScubaDiver.API
     }
 
     public bool IsOpen { get; private set; }
-    public bool HasActiveHooks => _tokensToEventHandlers.Count > 0 || _tokensToHookCallbacks.Count > 0;
+    public bool HasActiveCallbacks => _tokensToEventHandlers.Count > 0;
 
     public void Open()
     {
@@ -195,22 +191,6 @@ namespace ScubaDiver.API
 
           body = JsonConvert.SerializeObject(ir);
         }
-        else if (_tokensToHookCallbacks.TryGetValue(res.Token, out LocalHookCallback hook))
-        {
-          HookContext hookContext = new(res.StackTrace);
-
-          // Run hook. No results expected directly (it might alter variables inside the hook)
-          hook(hookContext, res.Parameters.FirstOrDefault(), res.Parameters.Skip(1).ToArray());
-
-          // Report back whether to call the original function or not (Harmony wants this as the return value)
-          InvocationResults ir = new()
-          {
-            VoidReturnType = false,
-            ReturnedObjectOrAddress = ObjectOrRemoteAddress.FromObj(hookContext.CallOriginal)
-          };
-
-          body = JsonConvert.SerializeObject(ir);
-        }
         else
         {
           // TODO: I'm not sure the usage of 'DiverError' here is good.
@@ -254,26 +234,6 @@ namespace ScubaDiver.API
       else
       {
         throw new Exception($"[CallbackListener] EventUnsubscribe TryGetValue failed");
-      }
-    }
-
-    public void HookSubscribe(LocalHookCallback callback, int token)
-    {
-      _tokensToHookCallbacks[token] = callback;
-      _hookCallbacksToTokens[callback] = token;
-    }
-
-    public int HookUnsubscribe(LocalHookCallback callback)
-    {
-      if (_hookCallbacksToTokens.TryGetValue(callback, out int token))
-      {
-        _tokensToHookCallbacks.Remove(token);
-        _hookCallbacksToTokens.Remove(callback);
-        return token;
-      }
-      else
-      {
-        throw new Exception($"[CallbackListener] HookUnsubscribe TryGetValue failed");
       }
     }
   }
