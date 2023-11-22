@@ -6,8 +6,6 @@
 using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
-using WotC.MtGO.Client.Model.Play;
-
 
 namespace MTGOSDK.API;
 using GamePlayer = MTGOSDK.API.Play.Games.GamePlayer;
@@ -29,7 +27,7 @@ public sealed partial class Events
   /// <summary>
   /// Delegate type for subscribing to GamePlayer events.
   /// </summary>
-  public delegate void GamePlayerEventCallback(GamePlayerEventArg args);
+  public delegate void GamePlayerEventCallback(GamePlayerEventArgs args);
 
   //
   // EventHandler argument types
@@ -38,7 +36,7 @@ public sealed partial class Events
   /// <summary>
   /// Event args triggered on GameCard events.
   /// </summary>
-  public class GamePlayerEventArg(dynamic args)
+  public class GamePlayerEventArgs(dynamic args)
       : DLRWrapper<WotC.MtGO.Client.Model.Play.GamePlayerEventArgs>
   {
     internal override dynamic obj => args;

@@ -11,6 +11,7 @@ using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.Games;
+using GameCardEventArgs = MTGOSDK.API.Events.GameCardEventArgs;
 
 public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 {
@@ -182,30 +183,30 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   // IGameCard wrapper events
   //
 
-  public EventProxy<GameCard, GameCardEventArg> IsAttackingChanged =
+  public EventProxy<GameCard, GameCardEventArgs> IsAttackingChanged =
     new(/* IGameCard */ gameCard, name: "IsAttackingChanged");
 
-  public EventProxy<GameCard, GameCardEventArg> IsBlockingChanged =
+  public EventProxy<GameCard, GameCardEventArgs> IsBlockingChanged =
     new(/* IGameCard */ gameCard, name: "IsBlockingChanged");
 
-  public EventProxy<GameCard, GameCardEventArg> IsTappedChanged =
+  public EventProxy<GameCard, GameCardEventArgs> IsTappedChanged =
     new(/* IGameCard */ gameCard, name: "IsTappedChanged");
 
-  public EventProxy<GameCard, GameCardEventArg> DamageChanged =
+  public EventProxy<GameCard, GameCardEventArgs> DamageChanged =
     new(/* IGameCard */ gameCard, name: "DamageChanged");
 
-  public EventProxy<GameCard, GameCardEventArg> PowerChanged =
+  public EventProxy<GameCard, GameCardEventArgs> PowerChanged =
     new(/* IGameCard */ gameCard, name: "PowerChanged");
 
-  public EventProxy<GameCard, GameCardEventArg> ToughnessChanged =
+  public EventProxy<GameCard, GameCardEventArgs> ToughnessChanged =
     new(/* IGameCard */ gameCard, name: "ToughnessChanged");
 
-  public EventProxy<GameCard, GameCardEventArg> ZoneChanged =
+  public EventProxy<GameCard, GameCardEventArgs> ZoneChanged =
     new(/* IGameCard */ gameCard, name: "ZoneChanged");
 
-  public EventProxy<GameCard, GameCardEventArg> AbilitiesChanged =
+  public EventProxy<GameCard, GameCardEventArgs> AbilitiesChanged =
     new(/* IGameCard */ gameCard, name: "AbilitiesChanged");
 
-  public EventProxy<GameCard, GameCardEventArg> TypesChanged =
+  public EventProxy<GameCard, GameCardEventArgs> TypesChanged =
     new(/* IGameCard */ gameCard, name: "TypesChanged");
 }

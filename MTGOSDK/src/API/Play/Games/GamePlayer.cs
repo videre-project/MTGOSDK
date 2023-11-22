@@ -12,6 +12,7 @@ using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.Games;
+using GamePlayerEventArgs = MTGOSDK.API.Events.GamePlayerEventArgs;
 
 /// <summary>
 /// Represents a player in a game.
@@ -115,24 +116,24 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   // IGamePlayer wrapper events
   //
 
-  public EventProxy<GamePlayer, GamePlayerEventArg> IsActivePlayerChanged =
+  public EventProxy<GamePlayer, GamePlayerEventArgs> IsActivePlayerChanged =
     new(/* IGamePlayer */ gamePlayer, name: "IsActivePlayerChanged");
 
-  public EventProxy<GamePlayer, GamePlayerEventArg> GraveyardCountChanged =
+  public EventProxy<GamePlayer, GamePlayerEventArgs> GraveyardCountChanged =
     new(/* IGamePlayer */ gamePlayer, name: "GraveyardCountChanged");
 
-  public EventProxy<GamePlayer, GamePlayerEventArg> HandCountChanged =
+  public EventProxy<GamePlayer, GamePlayerEventArgs> HandCountChanged =
     new(/* IGamePlayer */ gamePlayer, name: "HandCountChanged");
 
-  public EventProxy<GamePlayer, GamePlayerEventArg> LibraryCountChanged =
+  public EventProxy<GamePlayer, GamePlayerEventArgs> LibraryCountChanged =
     new(/* IGamePlayer */ gamePlayer, name: "LibraryCountChanged");
 
-  public EventProxy<GamePlayer, GamePlayerEventArg> HasPriorityChanged =
+  public EventProxy<GamePlayer, GamePlayerEventArgs> HasPriorityChanged =
     new(/* IGamePlayer */ gamePlayer, name: "HasPriorityChanged");
 
-  public EventProxy<GamePlayer, GamePlayerEventArg> LifeChanged =
+  public EventProxy<GamePlayer, GamePlayerEventArgs> LifeChanged =
     new(/* IGamePlayer */ gamePlayer, name: "LifeChanged");
 
-  public EventProxy<GamePlayer, GamePlayerEventArg> StatusChanged =
+  public EventProxy<GamePlayer, GamePlayerEventArgs> StatusChanged =
     new(/* IGamePlayer */ gamePlayer, name: "StatusChanged");
 }

@@ -29,7 +29,7 @@ public sealed partial class Events
   /// <summary>
   /// Delegate type for subscribing to Game events.
   /// </summary>
-  public delegate void GameEventCallback(GameEventArg args);
+  public delegate void GameEventCallback(GameEventArgs args);
 
   //
   // EventHandler argument types
@@ -38,7 +38,7 @@ public sealed partial class Events
   /// <summary>
   /// Event args triggered on Game events.
   /// </summary>
-  public class GameEventArg(dynamic args)
+  public class GameEventArgs(dynamic args)
       : DLRWrapper<WotC.MtGO.Client.Model.Play.Events.GameEventArgs>
   {
     internal override dynamic obj => args;

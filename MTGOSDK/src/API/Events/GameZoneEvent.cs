@@ -32,7 +32,7 @@ public sealed partial class Events
   /// <summary>
   /// Delegate type for subscribing to GameZone events.
   /// </summary>
-  public delegate void GameZoneEventCallback(GameZone zone, GameZoneEventArg args);
+  public delegate void GameZoneEventCallback(GameZone zone, GameZoneEventArgs args);
 
   //
   // EventHandler argument types
@@ -45,7 +45,7 @@ public sealed partial class Events
   /// This event is triggered by the type's NotifyCollectionChangedEventHandler:
   /// https://learn.microsoft.com/en-us/dotnet/api/system.collections.specialized.notifycollectionchangedeventhandler
   /// </remarks>
-  public class GameZoneEventArg(dynamic args)
+  public class GameZoneEventArgs(dynamic args)
       : DLRWrapper<NotifyCollectionChangedEventArgs>
   {
     internal override dynamic obj => args;

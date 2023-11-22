@@ -52,6 +52,6 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// <summary>
   /// Event triggered when a card is added, removed, or cleared from the zone.
   /// </summary>
-  public EventProxy<GameZone, GameZoneEventArg> CollectionChanged =
+  public EventProxy<GameZone, GameZoneEventArgs> CollectionChanged =
     new(/* ICardZone */ cardZone, name: "CollectionChanged");
 }

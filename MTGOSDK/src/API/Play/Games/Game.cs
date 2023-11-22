@@ -199,24 +199,24 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   // IGame wrapper events
   //
 
-  public EventProxy<Game, GameEventArg> PromptChanged =
+  public EventProxy<Game, GameEventArgs> PromptChanged =
     new(/* IGame */ game, name: "PromptChanged");
 
-  public EventProxy<Game, GameEventArg> GameChanged =
+  public EventProxy<Game, GameEventArgs> GameChanged =
     new(/* IGame */ game, name: "GameChanged");
 
-  public EventProxy<Game, GameStateEventArg> GameStateChanged =
+  public EventProxy<Game, GameStateEventArgs> GameStateChanged =
     new(/* IGame */ game, name: "GameStateChanged");
 
-  public EventProxy<Game, GameEventArg> ActivePlayerChanged =
+  public EventProxy<Game, GameEventArgs> ActivePlayerChanged =
     new(/* IGame */ game, name: "ActivePlayerChanged");
 
-  public EventProxy<Game, GameEventArg> PriorityPlayerChanged =
+  public EventProxy<Game, GameEventArgs> PriorityPlayerChanged =
     new(/* IGame */ game, name: "PriorityPlayerChanged");
 
-  public EventProxy<Game, GameEventArg> CurrentPhaseChanged =
+  public EventProxy<Game, GameEventArgs> CurrentPhaseChanged =
     new(/* IGame */ game, name: "CurrentPhaseChanged");
 
-  public EventProxy<Game, GameEventArg> CurrentTurnChanged =
+  public EventProxy<Game, GameEventArgs> CurrentTurnChanged =
     new(/* IGame */ game, name: "CurrentTurnChanged");
 }
