@@ -9,7 +9,7 @@ using MTGOSDK.Core.Reflection;
 using WotC.MtGO.Client.Model.Play;
 
 
-namespace MTGOSDK;
+namespace MTGOSDK.API;
 using Game = MTGOSDK.API.Play.Game;
 
 /// <summary>
