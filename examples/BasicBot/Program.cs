@@ -19,3 +19,4 @@ client.LogOn(
   username: DotEnv.Get("USERNAME"),
   password: DotEnv.Get("PASSWORD")
 );
+await client.WaitForClientReady();

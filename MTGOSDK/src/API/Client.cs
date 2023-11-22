@@ -110,6 +110,24 @@ public class Client : DLRWrapper<dynamic>
   }
 
   /// <summary>
+  /// Waits until the client has connected and is ready to be interacted with.
+  /// </summary>
+  /// <returns>Whether the client is ready.</returns>
+  /// <remarks>
+  /// The client may take a few seconds to close the overlay when done loading.
+  /// </remarks>
+  public async Task<bool> WaitForClientReady()
+  {
+    var shellViewModel = ObjectProvider.Get<IShellViewModel>(bindTypes: false);
+    return await WaitUntil(() =>
+      shellViewModel.IsSessionConnected == true &&
+      shellViewModel.m_showSplashScreen == false,
+      delay: 200, // in ms
+      retries: 50 // or 10 seconds
+    );
+  }
+
+  /// <summary>
   /// Creates a new user session and connects MTGO to the main server.
   /// </summary>
   /// <param name="userName">The user's login name.</param>
