@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.API.Events;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -43,4 +44,14 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// The player this zone belongs to.
   /// </summary>
   public GamePlayer Player => new(@base.Player);
+
+  //
+  // ICardZone wrapper events
+  //
+
+  /// <summary>
+  /// Event triggered when a card is added, removed, or cleared from the zone.
+  /// </summary>
+  public EventProxy<GameZone, GameZoneEventArg> CollectionChanged =
+    new(/* ICardZone */ cardZone, name: "CollectionChanged");
 }

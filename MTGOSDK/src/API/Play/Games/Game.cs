@@ -7,6 +7,7 @@ using MTGOSDK.API.Chat;
 using MTGOSDK.API.Scenes;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.API.Events;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -193,4 +194,29 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <param name="isFocused">Whether to highlight the card.</param>
   public void SetCardMouseOver(int cardId, bool isMouseOver = true) =>
     @base.SetCardMouseOver(cardId, isMouseOver);
+
+  //
+  // IGame wrapper events
+  //
+
+  public EventProxy<Game, GameEventArg> PromptChanged =
+    new(/* IGame */ game, name: "PromptChanged");
+
+  public EventProxy<Game, GameEventArg> GameChanged =
+    new(/* IGame */ game, name: "GameChanged");
+
+  public EventProxy<Game, GameStateEventArg> GameStateChanged =
+    new(/* IGame */ game, name: "GameStateChanged");
+
+  public EventProxy<Game, GameEventArg> ActivePlayerChanged =
+    new(/* IGame */ game, name: "ActivePlayerChanged");
+
+  public EventProxy<Game, GameEventArg> PriorityPlayerChanged =
+    new(/* IGame */ game, name: "PriorityPlayerChanged");
+
+  public EventProxy<Game, GameEventArg> CurrentPhaseChanged =
+    new(/* IGame */ game, name: "CurrentPhaseChanged");
+
+  public EventProxy<Game, GameEventArg> CurrentTurnChanged =
+    new(/* IGame */ game, name: "CurrentTurnChanged");
 }

@@ -5,6 +5,7 @@
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.API.Events;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -70,6 +71,11 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   //
 
   /// <summary>
+  /// The unique identifier for this card instance.
+  /// </summary>
+  public int Id => Unbind(@base).Id;
+
+  /// <summary>
   /// The source ID or 'thing' number of the card.
   /// </summary>
   /// <remarks>
@@ -77,14 +83,14 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// </remarks>
   public int SourceId => @base.SourceId;
 
+  public string Name => @base.Name;
+
   /// <summary>
   /// The associated card definition.
   /// </summary>
   public Card Definition => new(Unbind(@base).Definition);
 
   public int Timestamp => @base.Timestamp;
-
-  public string Name => @base.Name;
 
   public GameZone Zone => new(@base.Zone);
 
@@ -171,4 +177,35 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   public bool IsYieldAbility => @base.IsYieldAbility;
 
   public bool HasAutoTargets => @base.HasAutoTargets;
+
+  //
+  // IGameCard wrapper events
+  //
+
+  public EventProxy<GameCard, GameCardEventArg> IsAttackingChanged =
+    new(/* IGameCard */ gameCard, name: "IsAttackingChanged");
+
+  public EventProxy<GameCard, GameCardEventArg> IsBlockingChanged =
+    new(/* IGameCard */ gameCard, name: "IsBlockingChanged");
+
+  public EventProxy<GameCard, GameCardEventArg> IsTappedChanged =
+    new(/* IGameCard */ gameCard, name: "IsTappedChanged");
+
+  public EventProxy<GameCard, GameCardEventArg> DamageChanged =
+    new(/* IGameCard */ gameCard, name: "DamageChanged");
+
+  public EventProxy<GameCard, GameCardEventArg> PowerChanged =
+    new(/* IGameCard */ gameCard, name: "PowerChanged");
+
+  public EventProxy<GameCard, GameCardEventArg> ToughnessChanged =
+    new(/* IGameCard */ gameCard, name: "ToughnessChanged");
+
+  public EventProxy<GameCard, GameCardEventArg> ZoneChanged =
+    new(/* IGameCard */ gameCard, name: "ZoneChanged");
+
+  public EventProxy<GameCard, GameCardEventArg> AbilitiesChanged =
+    new(/* IGameCard */ gameCard, name: "AbilitiesChanged");
+
+  public EventProxy<GameCard, GameCardEventArg> TypesChanged =
+    new(/* IGameCard */ gameCard, name: "TypesChanged");
 }

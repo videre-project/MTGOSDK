@@ -5,6 +5,7 @@
 
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.API.Events;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Play;
@@ -109,4 +110,29 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   /// The player's mana pool.
   /// </summary>
   public IEnumerable<Mana> ManaPool => Map<Mana>(@base.ManaPool);
+
+  //
+  // IGamePlayer wrapper events
+  //
+
+  public EventProxy<GamePlayer, GamePlayerEventArg> IsActivePlayerChanged =
+    new(/* IGamePlayer */ gamePlayer, name: "IsActivePlayerChanged");
+
+  public EventProxy<GamePlayer, GamePlayerEventArg> GraveyardCountChanged =
+    new(/* IGamePlayer */ gamePlayer, name: "GraveyardCountChanged");
+
+  public EventProxy<GamePlayer, GamePlayerEventArg> HandCountChanged =
+    new(/* IGamePlayer */ gamePlayer, name: "HandCountChanged");
+
+  public EventProxy<GamePlayer, GamePlayerEventArg> LibraryCountChanged =
+    new(/* IGamePlayer */ gamePlayer, name: "LibraryCountChanged");
+
+  public EventProxy<GamePlayer, GamePlayerEventArg> HasPriorityChanged =
+    new(/* IGamePlayer */ gamePlayer, name: "HasPriorityChanged");
+
+  public EventProxy<GamePlayer, GamePlayerEventArg> LifeChanged =
+    new(/* IGamePlayer */ gamePlayer, name: "LifeChanged");
+
+  public EventProxy<GamePlayer, GamePlayerEventArg> StatusChanged =
+    new(/* IGamePlayer */ gamePlayer, name: "StatusChanged");
 }
