@@ -161,6 +161,7 @@ namespace ScubaDiver.API
 
       var response = context.Response;
       string body = null;
+
       if (request.Url.AbsolutePath == "/ping")
       {
         string pongRes = "{\"status\":\"pong\"}";
@@ -174,13 +175,14 @@ namespace ScubaDiver.API
         outputStream.Close();
         return;
       }
+
       if (request.Url.AbsolutePath == "/invoke_callback")
       {
         using (StreamReader sr = new(request.InputStream))
         {
           body = sr.ReadToEnd();
         }
-        CallbackInvocationRequest res = JsonConvert.DeserializeObject<CallbackInvocationRequest>(body, _withErrors);
+        var res = JsonConvert.DeserializeObject<CallbackInvocationRequest>(body, _withErrors);
         if (_tokensToEventHandlers.TryGetValue(res.Token, out LocalEventCallback callbackFunction))
         {
           (bool voidReturnType, ObjectOrRemoteAddress callbackRes) = callbackFunction(res.Parameters.ToArray());
@@ -211,16 +213,16 @@ namespace ScubaDiver.API
         }
         else
         {
-          // TODO: I'm not sure the usage of 'DiverError' here is good. It's sent from the Communicator's side
-          // to the Diver's side...
+          // TODO: I'm not sure the usage of 'DiverError' here is good.
+          //       It's sent from the Communicator's side to the Diver's side...
           DiverError errResults = new("Unknown Token", String.Empty);
           body = JsonConvert.SerializeObject(errResults);
         }
       }
       else
       {
-                // TODO: I'm not sure the usage of 'DiverError' here is good. It's sent from the Communicator's side
-        // to the Diver's side...
+        // TODO: I'm not sure the usage of 'DiverError' here is good.
+        //       It's sent from the Communicator's side to the Diver's side...
         DiverError errResults = new("Unknown path in URL", String.Empty);
         body = JsonConvert.SerializeObject(errResults);
       }

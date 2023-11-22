@@ -9,7 +9,8 @@ using ScubaDiver.API.Utils;
 namespace ScubaDiver.API
 {
   /// <summary>
-  /// The reverse communicator is used by the Diver to communicate back with its controller regarding callbacks invocations
+  /// The reverse communicator is used by the Diver to communicate back with its
+  /// controller regarding callbacks invocations
   /// </summary>
   public class ReverseCommunicator
   {
@@ -27,7 +28,8 @@ namespace ScubaDiver.API
     public ReverseCommunicator(IPEndPoint ipe) : this(ipe.Address, ipe.Port) {}
 
     private string SendRequest(
-      string path, Dictionary<string, string> queryParams = null,
+      string path,
+      Dictionary<string, string> queryParams = null,
       string jsonBody = null)
     {
       queryParams ??= new();

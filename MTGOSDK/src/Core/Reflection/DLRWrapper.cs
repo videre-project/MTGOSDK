@@ -58,6 +58,13 @@ public class DLRWrapper<I>() where I : class
     ?? throw new Exception(
         $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
 
+  internal dynamic @ro => GetRemoteObject(@base);
+
+  private static dynamic GetRemoteObject(dynamic obj) =>
+    Unbind(obj).__ro
+      ?? throw new Exception(
+          $"{obj.GetType().Name} does not implement RemoteObject.");
+
   //
   // Wrapper methods for type casting and dynamic dispatching.
   //
@@ -134,6 +141,7 @@ public class DLRWrapper<I>() where I : class
     }
     catch { }
 
+    // Fallback to creating a new instance assuming a DLRWrapper type.
     // Throw an exception if the object cannot be cast to the given type.
     throw new Exception(
         $"Unable to cast {obj.GetType().Name} to {typeof(T).Name}.");

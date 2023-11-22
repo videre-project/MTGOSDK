@@ -137,13 +137,7 @@ public class Diver : IDisposable
     Dispatcher(listener);
     Logger.Debug("[Diver] Stopping Callback Endpoints Monitor");
     _monitorEndpoints = false;
-    try
-    {
-      endpointsMonitor.Wait();
-    }
-    catch
-    {
-    }
+    try { endpointsMonitor.Wait(); } catch { }
 
     Logger.Debug("[Diver] Closing listener");
     listener.Stop();
@@ -1182,7 +1176,11 @@ public class Diver : IDisposable
   /// <param name="stackTrace"></param>
   /// <param name="parameters"></param>
   /// <returns>Any results returned from the</returns>
-  public ObjectOrRemoteAddress InvokeControllerCallback(IPEndPoint callbacksEndpoint, int token, string stackTrace, params object[] parameters)
+  public ObjectOrRemoteAddress InvokeControllerCallback(
+    IPEndPoint callbacksEndpoint,
+    int token,
+    string stackTrace,
+    params object[] parameters)
   {
     ReverseCommunicator reverseCommunicator = new(callbacksEndpoint);
 
@@ -1194,7 +1192,7 @@ public class Diver : IDisposable
       return null;
     }
 
-    ObjectOrRemoteAddress[] remoteParams = new ObjectOrRemoteAddress[parameters.Length];
+    var remoteParams = new ObjectOrRemoteAddress[parameters.Length];
     for (int i = 0; i < parameters.Length; i++)
     {
       object parameter = parameters[i];
