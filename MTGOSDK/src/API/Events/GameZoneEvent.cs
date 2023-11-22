@@ -12,8 +12,8 @@ using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API;
-using GameCard = MTGOSDK.API.Play.GameCard;
-using GameZone = MTGOSDK.API.Play.GameZone;
+using GameCard = MTGOSDK.API.Play.Games.GameCard;
+using GameZone = MTGOSDK.API.Play.Games.GameZone;
 
 /// <summary>
 /// EventHandler wrapper types used by the API.

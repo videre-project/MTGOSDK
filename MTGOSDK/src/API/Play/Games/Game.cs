@@ -12,7 +12,7 @@ using static MTGOSDK.API.Events;
 using WotC.MtGO.Client.Model.Play;
 
 
-namespace MTGOSDK.API.Play;
+namespace MTGOSDK.API.Play.Games;
 
 public sealed class Game(dynamic game) : DLRWrapper<IGame>
 {

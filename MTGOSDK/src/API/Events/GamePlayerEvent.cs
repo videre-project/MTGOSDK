@@ -10,7 +10,7 @@ using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API;
-using GamePlayer = MTGOSDK.API.Play.GamePlayer;
+using GamePlayer = MTGOSDK.API.Play.Games.GamePlayer;
 
 /// <summary>
 /// EventHandler wrapper types used by the API.

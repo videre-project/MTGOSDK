@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.API.Play;
+using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Reflection;
 
 using Shiny.Core.Enums;

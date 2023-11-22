@@ -8,7 +8,7 @@ using MTGOSDK.Core.Reflection;
 using WotC.MtGO.Client.Model.Play;
 
 
-namespace MTGOSDK.API.Play;
+namespace MTGOSDK.API.Play.Games;
 
 public sealed class GameAction(dynamic gameAction) : DLRWrapper<IGameAction>
 {

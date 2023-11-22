@@ -11,7 +11,7 @@ using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Play;
 
 
-namespace MTGOSDK.API.Play;
+namespace MTGOSDK.API.Play.Games;
 
 /// <summary>
 /// Represents a player in a game.
