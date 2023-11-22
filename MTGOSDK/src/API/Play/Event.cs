@@ -6,8 +6,8 @@
 using System.Linq;
 
 using MTGOSDK.API.Collection;
-using MTGOSDK.API.Play.Events.Leagues;
-using MTGOSDK.API.Play.Events.Tournaments;
+using MTGOSDK.API.Play.Leagues;
+using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
@@ -17,7 +17,7 @@ using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Enums;
 
 
-namespace MTGOSDK.API.Play.Events;
+namespace MTGOSDK.API.Play;
 
 public abstract class Event<I> : DLRWrapper<IPlayerEvent>
 {

@@ -13,7 +13,7 @@ using WotC.MtGO.Client.Model.Play.Enums;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
-namespace MTGOSDK.API.Play.Events.Tournaments;
+namespace MTGOSDK.API.Play.Tournaments;
 
 public sealed class MatchStandingRecord(dynamic matchStandingRecord)
     : DLRWrapper<IMatchStandingRecord>

@@ -10,7 +10,7 @@ using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Enums;
 
 
-namespace MTGOSDK.API.Play.Events;
+namespace MTGOSDK.API.Play;
 
 public sealed class Match(dynamic match) : Event<IMatch>
 {

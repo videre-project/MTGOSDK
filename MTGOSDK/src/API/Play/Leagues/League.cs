@@ -9,7 +9,7 @@ using MTGOSDK.Core.Reflection;
 using WotC.MtGO.Client.Model.Play;
 
 
-namespace MTGOSDK.API.Play.Events.Leagues;
+namespace MTGOSDK.API.Play.Leagues;
 
 public sealed class League(dynamic league) : Event<ILeague>
 {

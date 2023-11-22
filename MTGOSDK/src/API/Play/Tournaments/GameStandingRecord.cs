@@ -12,7 +12,7 @@ using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
-namespace MTGOSDK.API.Play.Events.Tournaments;
+namespace MTGOSDK.API.Play.Tournaments;
 
 public sealed class GameStandingRecord(dynamic gameStandingRecord)
     : DLRWrapper<IGameStandingRecord>

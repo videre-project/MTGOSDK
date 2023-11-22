@@ -11,7 +11,7 @@ using MTGOSDK.Core.Reflection;
 using WotC.MtGO.Client.Model.Play;
 
 
-namespace MTGOSDK.API.Play.Events;
+namespace MTGOSDK.API.Play;
 
 public static class EventManager
 {

@@ -8,7 +8,7 @@ using MTGOSDK.Core.Reflection;
 using WotC.MtGO.Client.Model.Play;
 
 
-namespace MTGOSDK.API.Play.Events.Leagues;
+namespace MTGOSDK.API.Play.Leagues;
 
 public sealed class LeaderboardEntry(dynamic leagueLeaderboardEntry)
     : DLRWrapper<ILeagueLeaderboardEntry>

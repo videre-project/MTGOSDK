@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.API.Play.Events;
+using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
