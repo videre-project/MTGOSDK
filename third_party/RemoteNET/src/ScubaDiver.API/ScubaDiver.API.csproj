@@ -19,8 +19,4 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="echo +++++ Forcing re-build of ScubaDiver.API and hence RemoteNet +++++&#xD;&#xA;dotnet clean $(ProjectDir)\ScubaDiver.API.csproj" />
-  </Target>
-
 </Project>
