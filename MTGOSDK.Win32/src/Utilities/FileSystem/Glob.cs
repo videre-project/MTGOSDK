@@ -3,10 +3,13 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
+using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 
-namespace FileSystem;
+namespace MTGOSDK.Win32.Utilities.FileSystem;
 
 public class Glob
 {

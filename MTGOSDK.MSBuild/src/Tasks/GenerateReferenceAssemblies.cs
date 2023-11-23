@@ -11,8 +11,9 @@ using Microsoft.Build.Utilities;
 using Task = Microsoft.Build.Utilities.Task;
 using JetBrains.Refasmer.Filters;
 
-using FileSystem;
-using ReferenceAssembly;
+using MTGOSDK.Win32.Utilities.FileSystem;
+
+using MTGOSDK.MSBuild.ReferenceAssembly;
 
 
 namespace MTGOSDK.MSBuild.Tasks;
@@ -58,14 +59,16 @@ public class GenerateReferenceAssemblies : Task
 
     // Abort if reference assemblies for the current version already exist
     string versionPath = Path.Combine(OutputPath, Version);
-    if (File.Exists(versionPath))
+    if (Directory.Exists(versionPath))
     {
       Log.LogMessage(MessageImportance.High,
           $"Reference assemblies for version {Version} already exist.");
+
+      OutputPath = versionPath;
       return true;
     }
     // Clear out previous versions' reference assemblies
-    else if (File.Exists(OutputPath))
+    else if (Directory.Exists(OutputPath))
     {
       DirectoryInfo dir = new DirectoryInfo(OutputPath);
       foreach(FileInfo file in dir.GetFiles())
