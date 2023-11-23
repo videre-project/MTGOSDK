@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-#pragma warning disable CS8600, CS8603, CS8604 // Null checks not enforceable.
-
 using System.Security;
 using System.Runtime.InteropServices;
 

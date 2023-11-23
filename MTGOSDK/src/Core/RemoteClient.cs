@@ -285,8 +285,6 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     params object[]? args)
   {
     var remoteMethod = GetMethod(queryPath, methodName, genericTypes);
-#pragma warning disable CS8603 // Possible null reference return.
     return remoteMethod!.Invoke(null, args);
-#pragma warning restore CS8603
   }
 }

@@ -79,9 +79,7 @@ public class Proxy<T>(Type? @type=null) where T : class
   /// <remarks>
   /// This is the version of the local assembly that the proxied class wraps.
   /// </remarks>
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
   public string AssemblyVersion => Class.Assembly.GetName().Version.ToString();
-#pragma warning restore CS8602
 
   /// <summary>
   /// Returns true if the proxied class is static at the IL level.
