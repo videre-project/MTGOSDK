@@ -13,8 +13,6 @@ using JetBrains.Refasmer.Filters;
 
 using MTGOSDK.Win32.Utilities.FileSystem;
 
-using MTGOSDK.MSBuild.ReferenceAssembly;
-
 
 namespace MTGOSDK.MSBuild.Tasks;
 
@@ -82,20 +80,21 @@ public class GenerateReferenceAssemblies : Task
     Directory.CreateDirectory(OutputPath);
 
     // Generate new reference assemblies for the current version using Refasmer
-    try
+    foreach(var filePath in Directory.GetFiles(MTGOAppDir)
+      .Where(file => Regex.IsMatch(Path.GetExtension(file), @"\.(dll|exe)$")))
     {
-      foreach(var filePath in Directory.GetFiles(MTGOAppDir)
-        .Where(file => Regex.IsMatch(Path.GetExtension(file), @"\.(dll|exe)$")))
+      var fileName = Path.GetFileName(filePath);
+      try
       {
-        var fileName = Path.GetFileName(filePath);
-        var data = ReferenceAssemblyGenerator.Convert(filePath, new AllowAll());
-        File.WriteAllBytes(Path.Combine(OutputPath, fileName), data);
+        var asm = ReferenceAssemblyGenerator.Convert(filePath, new AllowAll());
+        File.WriteAllBytes(Path.Combine(OutputPath, fileName), asm);
       }
-    }
-    catch (Exception ex)
-    {
-      Log.LogErrorFromException(ex);
-      return false;
+      catch (InvalidOperationException e)
+      {
+        Log.LogMessage(MessageImportance.High,
+            $"Encountered an error while parsing {fileName}: {e.Message}");
+        return false;
+      }
     }
 
     return true;

@@ -10,7 +10,7 @@ using JetBrains.Refasmer;
 using JetBrains.Refasmer.Filters;
 
 
-namespace MTGOSDK.MSBuild.ReferenceAssembly;
+namespace MTGOSDK.MSBuild;
 
 public static class ReferenceAssemblyGenerator
 {
