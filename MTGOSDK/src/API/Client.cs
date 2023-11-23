@@ -104,7 +104,7 @@ public class Client
 
     // Closes any blocking dialogs preventing the client from logging in.
     if (options.AcceptEULAPrompt)
-      DialogService.CloseDialogs();
+      WindowUtilities.CloseDialogs();
 
     // Verify that any existing user sessions are valid.
     if (SessionId != Guid.Empty && IsConnected && CurrentUser.Id == -1)
