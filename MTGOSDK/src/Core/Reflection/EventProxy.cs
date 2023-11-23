@@ -18,11 +18,11 @@ namespace MTGOSDK.Core.Reflection;
 /// unsubscribing to events. This allows for a more natural syntax for event
 /// subscription and unsubscription.
 /// </remarks>
-public sealed class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
+public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
     where I : class
     where T : class
 {
-  internal override dynamic obj => @ref;
+  internal override dynamic obj => Unbind(@ref);
 
   internal void EventSubscribe(string eventName, Delegate callback) =>
     @ro.EventSubscribe(eventName, callback);
@@ -67,4 +67,43 @@ public sealed class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
     e.EventUnsubscribe(e.Name, e.ProxyTypedDelegate(c));
     return e;
   }
+
+  //
+  // EventProxy type conversion operators.
+  //
+
+  public static implicit operator EventProxy<T>(EventProxy<I,T> e) =>
+    new(e.obj, e.Name);
+
+  public static implicit operator EventProxy(EventProxy<I,T> e) =>
+    new(e.obj, e.Name);
+}
+
+/// <summary>
+/// A wrapper for dynamic objects that implement events at runtime.
+/// </summary>
+/// <typeparam name="T">The type of the event arguments to wrap.</typeparam>
+/// <remarks>
+/// This class exposes a "+" and "-" operator overload for subscribing and
+/// unsubscribing to events. This allows for a more natural syntax for event
+/// subscription and unsubscription.
+/// </remarks>
+public class EventProxy<T>(dynamic @ref, string name)
+    : EventProxy<dynamic, T>(null, name) where T : class
+{
+  internal override dynamic obj => Unbind(@ref);
+}
+
+/// <summary>
+/// A wrapper for dynamic objects that implement events at runtime.
+/// </summary>
+/// <remarks>
+/// This class exposes a "+" and "-" operator overload for subscribing and
+/// unsubscribing to events. This allows for a more natural syntax for event
+/// subscription and unsubscription.
+/// </remarks>
+public class EventProxy(dynamic @ref, string name)
+    : EventProxy<dynamic>(null, name)
+{
+  internal override dynamic obj => Unbind(@ref);
 }
