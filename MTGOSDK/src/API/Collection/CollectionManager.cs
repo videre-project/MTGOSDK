@@ -8,7 +8,6 @@ using System.Reflection;
 
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
@@ -16,6 +15,7 @@ using WotC.MtGO.Client.Model.Core;
 
 
 namespace MTGOSDK.API.Collection;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public static class CollectionManager
 {

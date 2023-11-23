@@ -5,14 +5,13 @@
 
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
-using static MTGOSDK.API.Events;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.Games;
-using GamePlayerEventArgs = MTGOSDK.API.Events.GamePlayerEventArgs;
+using static MTGOSDK.API.Events;
 
 /// <summary>
 /// Represents a player in a game.

@@ -11,7 +11,6 @@ using MTGOSDK.API.Users;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Security;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using FlsClient.Interface;
 using Shiny.Core.Interfaces;
@@ -19,6 +18,7 @@ using WotC.MtGO.Client.Model;
 
 
 namespace MTGOSDK.API;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public class Client
 {

@@ -7,12 +7,12 @@ using MTGOSDK.API.Chat;
 using MTGOSDK.API.ViewModels.Scenes;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
-using static MTGOSDK.API.Events;
 
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.Games;
+using static MTGOSDK.API.Events;
 
 public sealed class Game(dynamic game) : DLRWrapper<IGame>
 {

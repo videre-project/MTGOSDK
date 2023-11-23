@@ -4,7 +4,6 @@
 **/
 
 using MTGOSDK.Core.Reflection;
-// using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using Shiny.Chat;
 using Shiny.Core.Interfaces;
@@ -12,6 +11,7 @@ using WotC.MtGO.Client.Model.Chat;
 
 
 namespace MTGOSDK.API.Chat;
+// using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public static class ChannelManager
 {

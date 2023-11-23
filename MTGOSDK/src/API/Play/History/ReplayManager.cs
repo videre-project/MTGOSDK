@@ -7,13 +7,13 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 
 using MTGOSDK.Core.Reflection;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.History;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 /// <summary>
 /// Manager for the player's game replays.

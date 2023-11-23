@@ -8,13 +8,13 @@ using System.Windows;
 using MTGOSDK.API.ViewModels;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using Shiny.Core;
 using Shiny.Core.Interfaces;
 
 
 namespace MTGOSDK.API;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 /// <summary>
 /// Manages the client's window utilities and dialog services.

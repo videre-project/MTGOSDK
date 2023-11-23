@@ -7,12 +7,12 @@ using System.Collections.Generic;
 
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
-using static MTGOSDK.API.Play.Event<dynamic>;
 
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play;
+using static MTGOSDK.API.Play.Event<dynamic>;
 
 public static class EventManager
 {

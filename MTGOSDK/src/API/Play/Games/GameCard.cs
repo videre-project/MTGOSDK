@@ -5,13 +5,12 @@
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Reflection;
-using static MTGOSDK.API.Events;
 
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.Games;
-using GameCardEventArgs = MTGOSDK.API.Events.GameCardEventArgs;
+using static MTGOSDK.API.Events;
 
 public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 {
