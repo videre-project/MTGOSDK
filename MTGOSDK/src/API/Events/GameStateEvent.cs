@@ -3,14 +3,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.API.Play;
-using MTGOSDK.Core.Reflection;
-
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API;
-using Game = MTGOSDK.API.Play.Games.Game;
 
 /// <summary>
 /// EventHandler wrapper types used by the API.
@@ -38,15 +34,9 @@ public sealed partial class Events
   /// <summary>
   /// Event args triggered on Game events updating the game state.
   /// </summary>
-  public class GameStateEventArgs(dynamic args)
-      : DLRWrapper<WotC.MtGO.Client.Model.Play.Events.GameStateEventArgs>
+  public class GameStateEventArgs(dynamic args) : GameEventArgs(null)
   {
     internal override dynamic obj => args;
-
-    /// <summary>
-    /// The game instance that triggered the event.
-    /// </summary>
-    public Game Game => new(@base.Game);
 
     /// <summary>
     /// The previous game state.

@@ -115,24 +115,24 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   // IGamePlayer wrapper events
   //
 
-  public EventProxy<GamePlayer, GamePlayerEventArgs> IsActivePlayerChanged =
-    new(/* IGamePlayer */ gamePlayer, name: "IsActivePlayerChanged");
+  public EventProxy<GamePlayerEventArgs> IsActivePlayerChanged =
+    new(/* IGamePlayer */ gamePlayer, nameof(IsActivePlayerChanged));
 
-  public EventProxy<GamePlayer, GamePlayerEventArgs> GraveyardCountChanged =
-    new(/* IGamePlayer */ gamePlayer, name: "GraveyardCountChanged");
+  public EventProxy<GamePlayerEventArgs> GraveyardCountChanged =
+    new(/* IGamePlayer */ gamePlayer, nameof(GraveyardCountChanged));
 
-  public EventProxy<GamePlayer, GamePlayerEventArgs> HandCountChanged =
-    new(/* IGamePlayer */ gamePlayer, name: "HandCountChanged");
+  public EventProxy<GamePlayerEventArgs> HandCountChanged =
+    new(/* IGamePlayer */ gamePlayer, nameof(HandCountChanged));
 
-  public EventProxy<GamePlayer, GamePlayerEventArgs> LibraryCountChanged =
-    new(/* IGamePlayer */ gamePlayer, name: "LibraryCountChanged");
+  public EventProxy<GamePlayerEventArgs> LibraryCountChanged =
+    new(/* IGamePlayer */ gamePlayer, nameof(LibraryCountChanged));
 
-  public EventProxy<GamePlayer, GamePlayerEventArgs> HasPriorityChanged =
-    new(/* IGamePlayer */ gamePlayer, name: "HasPriorityChanged");
+  public EventProxy<GamePlayerEventArgs> HasPriorityChanged =
+    new(/* IGamePlayer */ gamePlayer, nameof(HasPriorityChanged));
 
-  public EventProxy<GamePlayer, GamePlayerEventArgs> LifeChanged =
-    new(/* IGamePlayer */ gamePlayer, name: "LifeChanged");
+  public EventProxy<GamePlayerEventArgs> LifeChanged =
+    new(/* IGamePlayer */ gamePlayer, nameof(LifeChanged));
 
-  public EventProxy<GamePlayer, GamePlayerEventArgs> StatusChanged =
-    new(/* IGamePlayer */ gamePlayer, name: "StatusChanged");
+  public EventProxy<GamePlayerEventArgs> StatusChanged =
+    new(/* IGamePlayer */ gamePlayer, nameof(StatusChanged));
 }

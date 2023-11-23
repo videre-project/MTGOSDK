@@ -199,24 +199,24 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   // IGame wrapper events
   //
 
-  public EventProxy<Game, GameEventArgs> PromptChanged =
-    new(/* IGame */ game, name: "PromptChanged");
+  public EventProxy<GameEventArgs> PromptChanged =
+    new(/* IGame */ game, nameof(PromptChanged));
 
-  public EventProxy<Game, GameEventArgs> GameChanged =
-    new(/* IGame */ game, name: "GameChanged");
+  public EventProxy<GameEventArgs> GameChanged =
+    new(/* IGame */ game, nameof(GameChanged));
 
-  public EventProxy<Game, GameStateEventArgs> GameStateChanged =
-    new(/* IGame */ game, name: "GameStateChanged");
+  public EventProxy<GameStateEventArgs> GameStateChanged =
+    new(/* IGame */ game, nameof(GameStateChanged));
 
-  public EventProxy<Game, GameEventArgs> ActivePlayerChanged =
-    new(/* IGame */ game, name: "ActivePlayerChanged");
+  public EventProxy<GameEventArgs> ActivePlayerChanged =
+    new(/* IGame */ game, nameof(ActivePlayerChanged));
 
-  public EventProxy<Game, GameEventArgs> PriorityPlayerChanged =
-    new(/* IGame */ game, name: "PriorityPlayerChanged");
+  public EventProxy<GameEventArgs> PriorityPlayerChanged =
+    new(/* IGame */ game, nameof(PriorityPlayerChanged));
 
-  public EventProxy<Game, GameEventArgs> CurrentPhaseChanged =
-    new(/* IGame */ game, name: "CurrentPhaseChanged");
+  public EventProxy<GameEventArgs> CurrentPhaseChanged =
+    new(/* IGame */ game, nameof(CurrentPhaseChanged));
 
-  public EventProxy<Game, GameEventArgs> CurrentTurnChanged =
-    new(/* IGame */ game, name: "CurrentTurnChanged");
+  public EventProxy<GameEventArgs> CurrentTurnChanged =
+    new(/* IGame */ game, nameof(CurrentTurnChanged));
 }
