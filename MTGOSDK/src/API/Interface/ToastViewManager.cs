@@ -11,6 +11,7 @@ using Shiny.Core.Interfaces;
 
 
 namespace MTGOSDK.API.Interface;
+using static MTGOSDK.API.Events;
 
 /// <summary>
 /// Manages the client's toast notification services.
@@ -24,7 +25,7 @@ public static class ToastViewManager
   /// <summary>
   /// Global manager for creating and displaying toast modal on the client.
   /// </summary>
-  private static dynamic s_toastViewManager =
+  private static readonly dynamic s_toastViewManager =
     ObjectProvider.Get<IToastViewManager>(bindTypes: false);
 
   /// <summary>
@@ -49,4 +50,11 @@ public static class ToastViewManager
     using var viewModel = new BasicToastViewModel(title, text, relatedView);
     s_toastViewManager.DisplayToast(viewModel.@base);
   }
+
+  //
+  // IToastViewManager wrapper events
+  //
+
+  public static EventProxy<ToastEventArgs> ToastRequested =
+    new(/* ISession */ Client.s_session, nameof(ToastRequested));
 }
