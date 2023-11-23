@@ -184,9 +184,6 @@ public class Client
       throw new Exception("Failed to log off and disconnect the client.");
   }
 
-  public void OnException(Exception exception) =>
-    throw new NotImplementedException("'OnException' hook is not implemented.");
-
   //
   // ISession wrapper events
   //
