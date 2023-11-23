@@ -19,6 +19,7 @@ using WotC.MtGO.Client.Model;
 
 
 namespace MTGOSDK.API;
+using static MTGOSDK.API.Events;
 using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public class Client
@@ -26,7 +27,7 @@ public class Client
   /// <summary>
   /// Manages the client's connection and user session information.
   /// </summary>
-  private static readonly ISession s_session =
+  internal static readonly ISession s_session =
     ObjectProvider.Get<ISession>();
 
   /// <summary>
@@ -133,7 +134,7 @@ public class Client
   /// <summary>
   /// Creates a new user session and connects MTGO to the main server.
   /// </summary>
-  /// <param name="userName">The user's login name.</param>
+  /// <param name="username">The user's login name.</param>
   /// <param name="password">The user's login password.</param>
   /// <returns>The user's session id.</returns>
   /// <exception cref="InvalidOperationException">
@@ -185,4 +186,20 @@ public class Client
 
   public void OnException(Exception exception) =>
     throw new NotImplementedException("'OnException' hook is not implemented.");
+
+  //
+  // ISession wrapper events
+  //
+
+  public EventProxy<SystemAlertEventArgs> SystemAlertReceived =
+    new(/* ISession */ s_session, nameof(SystemAlertReceived));
+
+  public EventProxy<ErrorEventArgs> LogOnFailed =
+    new(/* ISession */ s_session, nameof(LogOnFailed));
+
+  public EventProxy<ErrorEventArgs> ErrorReceived =
+    new(/* ISession */ s_session, nameof(ErrorReceived));
+
+  public EventProxy IsConnectedChanged =
+    new(/* ISession */ s_session, nameof(IsConnectedChanged));
 }

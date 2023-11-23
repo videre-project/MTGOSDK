@@ -3,10 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.API.Play.History;
 using MTGOSDK.Core.Reflection;
-
-using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API;
@@ -26,24 +23,25 @@ public sealed partial class Events
   //
 
   /// <summary>
-  /// Delegate type for subscribing to Replay error events.
+  /// Delegate type for subscribing to MagicException error events.
   /// </summary>
-  public delegate void ReplayErrorEventCallback(ReplayErrorEventArgs args);
+  public delegate void ErrorEventCallback(ErrorEventArgs args);
 
   //
   // EventHandler argument types
   //
 
   /// <summary>
-  /// Event args triggered on Replay error events.
+  /// Event args triggered on MagicException error events.
   /// </summary>
-  public class ReplayErrorEventArgs(dynamic args) : ErrorEventArgs(null)
+  public class ErrorEventArgs(dynamic args)
+      : DLRWrapper<WotC.MtGO.Client.Model.ErrorEventArgs>
   {
     internal override dynamic obj => args;
 
     /// <summary>
-    /// The Replay instance that triggered the event.
+    /// The MagicException that was thrown.
     /// </summary>
-    public Replay Replay => new(@base.ReplayGame);
+    public Exception Exception => Cast<Exception>(@base.Exception);
   }
 }

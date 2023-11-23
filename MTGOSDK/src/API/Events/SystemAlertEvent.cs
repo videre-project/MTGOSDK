@@ -3,10 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.API.Play.History;
 using MTGOSDK.Core.Reflection;
-
-using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API;
@@ -26,24 +23,35 @@ public sealed partial class Events
   //
 
   /// <summary>
-  /// Delegate type for subscribing to Replay error events.
+  /// Delegate type for subscribing to system alert events.
   /// </summary>
-  public delegate void ReplayErrorEventCallback(ReplayErrorEventArgs args);
+  public delegate void SystemAlertEventCallback(SystemAlertEventArgs args);
 
   //
   // EventHandler argument types
   //
 
   /// <summary>
-  /// Event args triggered on Replay error events.
+  /// Event args triggered on system alert events.
   /// </summary>
-  public class ReplayErrorEventArgs(dynamic args) : ErrorEventArgs(null)
+  public class SystemAlertEventArgs(dynamic args)
+      : DLRWrapper<WotC.MtGO.Client.Model.SystemAlertEventArgs>
   {
     internal override dynamic obj => args;
 
     /// <summary>
-    /// The Replay instance that triggered the event.
+    /// The system alert message.
     /// </summary>
-    public Replay Replay => new(@base.ReplayGame);
+    public string Message => @base.Message;
+
+    /// <summary>
+    /// When the alert was triggered.
+    /// </summary>
+    public DateTime Timestamp => @base.Timestamp;
+
+    /// <summary>
+    /// Whether the alert is a league alert.
+    /// </summary>
+    public bool IsLeagueAlert => @base.IsLeagueAlert;
   }
 }
