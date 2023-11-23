@@ -80,4 +80,17 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   //
 
   public override string ToString() => this.Name;
+
+  //
+  // IUser wrapper events
+  //
+
+  public EventProxy IsLoggedInAndVisibleChanged =
+    new(/* IUser */ user, nameof(IsLoggedInAndVisibleChanged));
+
+  public EventProxy CurrentAvatarChanged =
+    new(/* IUser */ user, nameof(CurrentAvatarChanged));
+
+  public EventProxy UserActivated =
+    new(/* IUser */ user, nameof(UserActivated));
 }
