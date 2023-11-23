@@ -11,7 +11,7 @@ using Shiny.Core;
 using Shiny.Core.Interfaces;
 
 
-namespace MTGOSDK.API.ViewModels;
+namespace MTGOSDK.API.Interface.ViewModels;
 
 public sealed class BasicToastViewModel(dynamic basicToastViewModel)
     : DLRWrapper<IBasicDialogViewModelBase>, IDisposable

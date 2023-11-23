@@ -4,7 +4,7 @@
 **/
 
 using MTGOSDK.API.Users;
-using MTGOSDK.API.ViewModels;
+using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Reflection;
 
 using Shiny.Chat;

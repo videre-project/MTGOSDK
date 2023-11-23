@@ -10,7 +10,7 @@ using MTGOSDK.Core.Reflection;
 using Shiny.Core.Interfaces;
 
 
-namespace MTGOSDK.API.ViewModels;
+namespace MTGOSDK.API.Interface.ViewModels;
 
 public sealed class GenericDialogViewModel(dynamic genericDialogViewModel)
     : DLRWrapper<IBasicDialogViewModelBase>, IDisposable

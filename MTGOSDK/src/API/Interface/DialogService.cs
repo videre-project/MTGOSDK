@@ -5,7 +5,7 @@
 
 using System.Windows;
 
-using MTGOSDK.API.ViewModels;
+using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 
@@ -13,7 +13,7 @@ using Shiny.Core;
 using Shiny.Core.Interfaces;
 
 
-namespace MTGOSDK.API;
+namespace MTGOSDK.API.Interface;
 using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 /// <summary>

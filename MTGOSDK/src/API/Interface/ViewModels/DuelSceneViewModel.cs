@@ -10,7 +10,7 @@ using Shiny.Core.Enums;
 using Shiny.Core.Interfaces;
 
 
-namespace MTGOSDK.API.ViewModels.Scenes;
+namespace MTGOSDK.API.Interface.ViewModels;
 
 public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
     : DLRWrapper<IDuelSceneViewModel>

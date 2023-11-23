@@ -8,6 +8,7 @@ using System.Security;
 using System.Security.Authentication;
 
 using MTGOSDK.API.Users;
+using MTGOSDK.API.Interface;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Security;

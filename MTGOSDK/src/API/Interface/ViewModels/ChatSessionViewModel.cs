@@ -9,7 +9,7 @@ using MTGOSDK.Core.Reflection;
 using Shiny.Chat;
 
 
-namespace MTGOSDK.API.ViewModels;
+namespace MTGOSDK.API.Interface.ViewModels;
 
 public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
     : DLRWrapper<IChatSessionViewModel>
