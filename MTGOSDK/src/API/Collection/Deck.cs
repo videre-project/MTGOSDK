@@ -10,6 +10,7 @@ using WotC.MTGO.Common;
 
 
 namespace MTGOSDK.API.Collection;
+using static MTGOSDK.API.Events;
 
 public sealed class Deck(dynamic deck) : CardGrouping<IDeck>
 {
@@ -65,4 +66,11 @@ public sealed class Deck(dynamic deck) : CardGrouping<IDeck>
   //   m_deck.ValidateCompanion();
   //   return m_deck.CompanionValidatorResults; // Public but not in IDeck
   // }
+
+  //
+  // ICardGrouping wrapper events
+  //
+
+  public EventProxy<CardGroupingItemsChangedEventArgs> ItemsAddedOrRemoved =
+    new(/* ICardGrouping */ deck, nameof(ItemsAddedOrRemoved));
 }

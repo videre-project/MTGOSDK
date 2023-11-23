@@ -9,6 +9,7 @@ using WotC.MtGO.Client.Model.Collection;
 
 
 namespace MTGOSDK.API.Collection;
+using static MTGOSDK.API.Events;
 
 public sealed class Binder(dynamic binder) : CardGrouping<IBinder>
 {
@@ -26,4 +27,11 @@ public sealed class Binder(dynamic binder) : CardGrouping<IBinder>
   public bool IsWishList => @base.IsWishList;
 
   public bool IsMegaBinder => @base.IsMegaBinder;
+
+  //
+  // ICardGrouping wrapper events
+  //
+
+  public EventProxy<CardGroupingItemsChangedEventArgs> ItemsAddedOrRemoved =
+    new(/* ICardGrouping */ binder, nameof(ItemsAddedOrRemoved));
 }

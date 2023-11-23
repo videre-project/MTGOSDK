@@ -9,6 +9,7 @@ using WotC.MtGO.Client.Model.Collection;
 
 
 namespace MTGOSDK.API.Collection;
+using static MTGOSDK.API.Events;
 
 public sealed class Collection(ICollectionGrouping collection)
     : CardGrouping<ICollectionGrouping>
@@ -21,6 +22,9 @@ public sealed class Collection(ICollectionGrouping collection)
   public Collection() : this(CollectionManager.GetCollection()) { }
 
   //
-  // ICollectionGrouping wrapper properties
+  // ICardGrouping wrapper events
   //
+
+  public EventProxy<CardGroupingItemsChangedEventArgs> ItemsAddedOrRemoved =
+    new(/* ICardGrouping */ collection, nameof(ItemsAddedOrRemoved));
 }

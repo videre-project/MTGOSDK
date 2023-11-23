@@ -191,4 +191,20 @@ public static class CollectionManager
 
   // IDeck ImportTextDeck(FileInfo textFileToImport, string name, IPlayFormat format, IVisualResource deckBoxImage, IDeckFolder location);
   // IDeck CreateNewDeck(string name, IPlayFormat format, IVisualResource deckBoxImage = null, IDeckFolder location = null, IEnumerable<ICardDefinition> initialCards = null);
+
+  //
+  // ICollectionGroupingManager wrapper events
+  //
+
+  public static EventProxy LastUsedBinderChanged =
+    new(s_collectionGroupingManager, nameof(LastUsedBinderChanged));
+
+  public static EventProxy DeckCreatedOrImported =
+    new(s_collectionGroupingManager, nameof(DeckCreatedOrImported));
+
+  public static EventProxy DeckFolderDeleted =
+    new(s_collectionGroupingManager, nameof(DeckFolderDeleted));
+
+  public static EventProxy DeckDeleted =
+    new(s_collectionGroupingManager, nameof(DeckDeleted));
 }
