@@ -38,7 +38,7 @@
     <PackageReference Include="JetBrains.Refasmer"
                       Version="1.0.33" />
     <PackageReference Include="Microsoft.ILVerification"
-                      Version="8.0.0-preview.7.23375.6" />
+                      Version="8.0.0" />
     <!--
       Import the MTGOSDK.Win32 project for the Win32 extensions and utilities.
     -->
