@@ -10,6 +10,7 @@ using WotC.MtGO.Client.Model.Play.Enums;
 
 
 namespace MTGOSDK.API.Play;
+using static MTGOSDK.API.Events;
 
 public sealed class Queue(dynamic queue) : Event<IQueue>
 {
@@ -30,4 +31,14 @@ public sealed class Queue(dynamic queue) : Event<IQueue>
   /// </remarks>
   public QueueState CurrentState =>
     Cast<QueueState>(Unbind(@base).CurrentState);
+
+  //
+  // IQueue wrapper events
+  //
+
+  public EventProxy<QueueStateEventArgs> QueueStateChanged =
+    new(/* IQueue */ queue, nameof(QueueStateChanged));
+
+  public EventProxy<QueueErrorEventArgs> QueueError =
+    new(/* IQueue */ queue, nameof(QueueError));
 }

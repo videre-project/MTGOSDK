@@ -12,6 +12,7 @@ using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play;
+using static MTGOSDK.API.Events;
 using static MTGOSDK.API.Play.Event<dynamic>;
 
 public static class EventManager
@@ -38,7 +39,7 @@ public static class EventManager
     RemoteClient.GetInstance("WotC.MtGO.Client.Model.Play.PlayService");
 
   //
-  // PlayerEvent wrapper methods
+  // IPlayerEvent wrapper methods
   //
 
   /// <summary>
@@ -114,4 +115,20 @@ public static class EventManager
       s_playerEventManager.GetEvent(guid)
         ?? throw new KeyNotFoundException($"Event could not be found.")
     );
+
+  //
+  // IPlayerEvent wrapper events
+  //
+
+  public static EventProxy<PlayerEventsCreatedEventArgs> PlayerEventsCreated =
+    new(s_playerEventManager, nameof(PlayerEventsCreated));
+
+  public static EventProxy<PlayerEventsRemovedEventArgs> PlayerEventsRemoved =
+    new(s_playerEventManager, nameof(PlayerEventsRemoved));
+
+  public static EventProxy<ReplayCreatedEventArgs> ReplayEventCreated =
+    new(s_playerEventManager, nameof(ReplayEventCreated));
+
+  public static EventProxy<ReplayErrorEventArgs> ReplayError =
+    new(s_playerEventManager, nameof(ReplayError));
 }

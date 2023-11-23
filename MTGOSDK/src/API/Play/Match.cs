@@ -12,6 +12,7 @@ using WotC.MtGO.Client.Model.Play.Enums;
 
 
 namespace MTGOSDK.API.Play;
+using static MTGOSDK.API.Events;
 
 public sealed class Match(dynamic match) : Event<IMatch>
 {
@@ -93,4 +94,32 @@ public sealed class Match(dynamic match) : Event<IMatch>
   /// The player(s) who lost the match.
   /// </summary>
   public IEnumerable<User> LosingPlayers => Map<User>(@base.LosingPlayers);
+
+  //
+  // IMatch wrapper events
+  //
+
+  public EventProxy<GameEventArgs> GameEnded =
+    new(/* IMatch */ match, nameof(GameEnded));
+
+  public EventProxy<GameEventArgs> CurrentGameChanged =
+    new(/* IMatch */ match, nameof(CurrentGameChanged));
+
+  public EventProxy ChallengeDeclined =
+    new(/* IMatch */ match, nameof(ChallengeDeclined));
+
+  public EventProxy<CountdownEventArgs> Countdown =
+    new(/* IMatch */ match, nameof(Countdown));
+
+  public EventProxy CountdownCancelled =
+    new(/* IMatch */ match, nameof(CountdownCancelled));
+
+  public EventProxy DeckForSideboardingChanged =
+    new(/* IMatch */ match, nameof(DeckForSideboardingChanged));
+
+  public EventProxy<MatchStatusEventArgs> MatchStatusChanged =
+    new(/* IMatch */ match, nameof(MatchStatusChanged));
+
+  public EventProxy<MatchErrorEventArgs> MatchError =
+    new(/* IMatch */ match, nameof(MatchError));
 }

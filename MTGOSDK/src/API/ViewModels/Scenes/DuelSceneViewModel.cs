@@ -20,12 +20,6 @@ public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
   /// </summary>
   internal override dynamic obj => Bind<IDuelSceneViewModel>(duelSceneViewModel);
 
-  // TODO: Handle periodic updates on the 'Game_GameActionPerformed' callback.
-  //       - Can use the 'OnGameChanged' Game callback to handle all updates.
-  //       - Ensure that updates are only called when 'WaitingForServer' is set.
-  //       - Ensure that client-side timers are not de-synced from server-side
-  //         or obstruct the responsiveness of the DuelScene.
-
   //
   // IDuelSceneViewModel wrapper properties
   //

@@ -11,6 +11,7 @@ using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
 namespace MTGOSDK.API.Play.Tournaments;
+using static MTGOSDK.API.Events;
 
 public sealed class Tournament(dynamic tournament) : Event<ITournament>
 {
@@ -82,4 +83,20 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// </summary>
   public IEnumerable<StandingRecord> Standings =>
     Map<StandingRecord>(@base.Standings);
+
+  //
+  // ITournament wrapper events
+  //
+
+  public EventProxy<TournamentRoundChangedEventArgs> CurrentRoundChanged =
+    new(/* ITournament */ tournament, nameof(CurrentRoundChanged));
+
+  public EventProxy<TournamentStateChangedEventArgs> TournamentStateChanged =
+    new(/* ITournament */ tournament, nameof(TournamentStateChanged));
+
+  public EventProxy<TournamentErrorEventArgs> TournamentError =
+    new(/* ITournament */ tournament, nameof(TournamentError));
+
+  public EventProxy StandingsChanged =
+    new(/* ITournament */ tournament, nameof(StandingsChanged));
 }

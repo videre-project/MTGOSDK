@@ -18,6 +18,7 @@ using WotC.MtGO.Client.Model.Play.Enums;
 
 
 namespace MTGOSDK.API.Play;
+using static MTGOSDK.API.Events;
 
 public abstract class Event<I> : DLRWrapper<IPlayerEvent>
 {
@@ -32,6 +33,16 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
     /// Stores an internal reference to the IPlayerEvent object.
     /// </summary>
     internal override dynamic obj => Bind<IPlayerEvent>(playerEvent);
+
+    //
+    // IPlayerEvent wrapper events
+    //
+
+    public EventProxy IsLocalUserJoinedChanged =
+      new(/* IPlayerEvent */ playerEvent, nameof(IsLocalUserJoinedChanged));
+
+    public EventProxy IsAcceptingNewPlayersChanged =
+      new(/* IPlayerEvent */ playerEvent, nameof(IsAcceptingNewPlayersChanged));
   }
 
   //

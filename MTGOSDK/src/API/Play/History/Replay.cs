@@ -10,6 +10,7 @@ using WotC.MtGO.Client.Model.Play.ReplayGameEvent;
 
 
 namespace MTGOSDK.API.Play.History;
+using static MTGOSDK.API.Events;
 
 /// <summary>
 /// Represents a replay game event, describing the state of a replay.
@@ -46,4 +47,11 @@ public class Replay(dynamic replayEvent) : DLRWrapper<IReplayGameEvent>
 
   // public void ExecuteAction(GameAction action) =>
   //   Unbind(@base).ExecuteAction(action.@base);
+
+  //
+  // IReplayGameEvent wrapper events
+  //
+
+  public EventProxy<ReplayErrorEventArgs> ReplayError =
+    new(/* IReplayGameEvent */ replayEvent, nameof(ReplayError));
 }
