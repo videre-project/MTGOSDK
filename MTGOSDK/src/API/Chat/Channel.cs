@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.API.Users;
+using MTGOSDK.API.ViewModels;
 using MTGOSDK.Core.Reflection;
 
 using Shiny.Chat;
@@ -11,6 +12,7 @@ using WotC.MtGO.Client.Model.Chat;
 
 
 namespace MTGOSDK.API.Chat;
+using static MTGOSDK.API.Events;
 
 /// <summary>
 /// A wrapper for the MTGO client's <see cref="IChatChannel"/> interface.
@@ -24,10 +26,14 @@ public sealed class Channel(dynamic chatChannel)
   internal override dynamic obj => Bind<IChatChannel>(chatChannel);
 
   /// <summary>
-  /// The internal reference to the channel's view model.
+  /// The ChatSessionViewModel of the channel.
   /// </summary>
-  private IChatSessionViewModel m_chatSessionViewModel =>
-    ChannelManager.GetChatForChannel(@base);
+  /// <remarks>
+  /// This is an instance of the chat's session view model, which is used by the
+  /// client to control the client-side management of chat state and UI elements.
+  /// </remarks>
+  public ChatSessionViewModel ChatSession =>
+    new(ChannelManager.GetChatForChannel(this));
 
   //
   // IChannel wrapper properties
@@ -105,26 +111,12 @@ public sealed class Channel(dynamic chatChannel)
     Map<Message>(Unbind(@base).Messages);
 
   //
-  // IChatSessionViewModel wrapper methods
+  // IChatChannel wrapper events
   //
 
-  /// <summary>
-  /// Activates the channel's view model.
-  /// </summary>
-  public void Activate() =>
-    m_chatSessionViewModel.Activate();
+  public EventProxy<ChannelEventArgs> JoinedStateChanged =
+    new(/* IChatChannel */ chatChannel, nameof(JoinedStateChanged));
 
-  /// <summary>
-  /// Closes the channel's view model.
-  /// </summary>
-  /// <param name="leaveChannel">Whether to leave the channel.</param>
-  public void Close(bool leaveChannel) =>
-    m_chatSessionViewModel.Close(leaveChannel);
-
-  /// <summary>
-  /// Sends a message to the channel.
-  /// </summary>
-  /// <param name="message">The message to send.</param>
-  public void Send(string message) =>
-    m_chatSessionViewModel.SendCommand.Execute(message);
+  public EventProxy<ChannelStateEventArgs> ChannelStateChanged =
+    new(/* IChannel */ chatChannel, nameof(ChannelStateChanged));
 }

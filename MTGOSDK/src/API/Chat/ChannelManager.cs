@@ -3,14 +3,15 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.ViewModels;
 using MTGOSDK.Core.Reflection;
 
-using Shiny.Chat;
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model.Chat;
 
 
 namespace MTGOSDK.API.Chat;
+using static MTGOSDK.API.Events;
 // using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public static class ChannelManager
@@ -55,12 +56,28 @@ public static class ChannelManager
   private static IChatManager s_chatManager =>
     ObjectProvider.Get<IShellViewModel>().ChatManager;
 
-  internal static IChatSessionViewModel GetChatForChannel(IChannel channel) =>
-    s_chatManager.GetChatForChannel(channel);
+  internal static ChatSessionViewModel GetChatForChannel(Channel channel) =>
+    new(s_chatManager.GetChatForChannel(channel.@base));
 
-  internal static void ActivateSession(IChatSessionViewModel session) =>
-    s_chatManager.ActivateSession(session);
+  //
+  // IChatManager wrapper events
+  //
 
-  internal static void RemoveSession(IChatSessionViewModel session) =>
-    s_chatManager.RemoveSession(session);
+  /// <summary>
+  /// Triggered when the user activates the chat window.
+  /// </summary>
+  public static EventProxy<ChatSessionEventArgs> SessionAdded =
+    new(/* IChatManager */ s_chatManager, nameof(SessionAdded));
+
+  /// <summary>
+  /// Triggered when the user closes the chat window.
+  /// </summary>
+  public static EventProxy<ChatSessionEventArgs> SessionClosing =
+    new(/* IChatManager */ s_chatManager, nameof(SessionClosing));
+
+  public static EventProxy PassiveChatMessageReceived =
+    new(/* IChatManager */ s_chatManager, nameof(PassiveChatMessageReceived));
+
+  public static EventProxy PassiveNotificationCancelled =
+    new(/* IChatManager */ s_chatManager, nameof(PassiveNotificationCancelled));
 }
