@@ -1,0 +1,11 @@
+{
+  "files.exclude": {
+    // Visual Studio Code specific files
+    ".vs": true,
+    // Excludes all C# and C++ build output folders
+    "**/bin": true,
+    "**/obj": true,
+    // "**/Win32": true,
+    // "**/x64": true,
+  }
+}

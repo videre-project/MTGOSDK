@@ -1,0 +1,21 @@
+{
+  "solution": {
+    "path": "SDK.sln",
+    "projects": [
+      "MTGOSDK.MSBuild\\MTGOSDK.MSBuild.csproj",
+      "MTGOSDK.Ref\\MTGOSDK.Ref.csproj",
+      "MTGOSDK.Win32\\MTGOSDK.Win32.csproj",
+      "MTGOSDK\\MTGOSDK.csproj",
+      "examples\\BasicBot\\BasicBot.csproj",
+      "examples\\BasicInjector\\BasicInjector.csproj",
+      "examples\\GameTracker\\GameTracker.csproj",
+      "third_party\\RemoteNET\\src\\RemoteNET\\RemoteNET.csproj",
+      "third_party\\RemoteNET\\src\\ScubaDiver.API\\ScubaDiver.API.csproj",
+      "third_party\\RemoteNET\\src\\ScubaDiver\\ScubaDiver.csproj",
+      "third_party\\SharpNeedle\\src\\Bootstrapper\\Bootstrapper.vcxproj",
+      "third_party\\SharpNeedle\\src\\Bootstrapper\\Bootstrapper_x64.vcxproj",
+      "third_party\\SharpNeedle\\src\\Launcher\\Launcher.vcxproj",
+      "third_party\\SharpNeedle\\src\\Launcher\\Launcher_x64.vcxproj"
+    ]
+  }
+}
