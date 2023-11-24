@@ -22,7 +22,7 @@ public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
     where I : class
     where T : class
 {
-  internal override dynamic obj => Unbind(@ref);
+  internal override dynamic obj => @ref;
 
   internal void EventSubscribe(string eventName, Delegate callback) =>
     @ro.EventSubscribe(eventName, callback);
@@ -91,7 +91,7 @@ public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
 public class EventProxy<T>(dynamic @ref, string name)
     : EventProxy<dynamic, T>(null, name) where T : class
 {
-  internal override dynamic obj => Unbind(@ref);
+  internal override dynamic obj => @ref;
 }
 
 /// <summary>
@@ -105,5 +105,5 @@ public class EventProxy<T>(dynamic @ref, string name)
 public class EventProxy(dynamic @ref, string name)
     : EventProxy<dynamic>(null, name)
 {
-  internal override dynamic obj => Unbind(@ref);
+  internal override dynamic obj => @ref;
 }

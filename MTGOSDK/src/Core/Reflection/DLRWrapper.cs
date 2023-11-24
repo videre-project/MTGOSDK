@@ -41,7 +41,7 @@ public class DLRWrapper<I>() where I : class
     //
     // Derived classes must override this property to capture dynamic objects.
     //
-    throw new Exception(
+    throw new ArgumentException(
         $"{nameof(DLRWrapper<I>)}.obj must capture a {type.Name} type.");
 
   /// <summary>
@@ -51,16 +51,17 @@ public class DLRWrapper<I>() where I : class
   /// This is used to extract dynamic objects passed from any derived
   /// classes, deferring any dynamic dispatching of class constructors.
   /// </remarks>
-  internal dynamic @base => obj is DLRWrapper<I> ? obj.obj : obj
-    ?? throw new Exception(
+  internal virtual dynamic @base => obj is DLRWrapper<I> ? obj.obj : obj
+    ?? throw new ArgumentException(
         $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
 
-  internal dynamic @ro => GetRemoteObject(@base);
+  /// <summary>
+  /// Internal reference to the remote object handle.
+  /// </summary>
+  internal dynamic @ro => Try(() => Unbind(@base).__ro, () => @base.__ro)
+    ?? throw new InvalidOperationException(
+        $"{type.Name} type does not implement RemoteObject.");
 
-  private static dynamic GetRemoteObject(dynamic obj) =>
-    Unbind(obj).__ro
-      ?? throw new Exception(
-          $"{obj.GetType().Name} does not implement RemoteObject.");
 
   //
   // Wrapper methods for type casting and dynamic dispatching.
@@ -187,7 +188,7 @@ public class DLRWrapper<I>() where I : class
   /// </summary>
   /// <param name="lambda">The function to execute.</param>
   /// <param name="fallback">The fallback value to return (optional).</param>
-  /// <returns></returns>
+  /// <returns>The result of the function or the fallback value.</returns>
   public static dynamic Try(Func<dynamic> lambda, dynamic fallback = null)
   {
     try { return lambda(); } catch { return fallback; }
@@ -196,8 +197,20 @@ public class DLRWrapper<I>() where I : class
   /// <summary>
   /// Safely executes a lambda function and returns the result or a fallback.
   /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="fallback">The fallback function to execute.</param>
+  /// <returns>The result of the function or the fallback value.</returns>
+  public static dynamic Try(Func<dynamic> lambda, Func<dynamic> fallback)
+  {
+    try { return lambda(); } catch { return Try(fallback); }
+  }
+
+  /// <summary>
+  /// Safely executes a lambda function and returns the result or a fallback.
+  /// </summary>
   /// <typeparam name="T">The result type to use or fallback to.</typeparam>
   /// <param name="lambda">The function to execute.</param>
+  /// <returns>The result of the function or the fallback value.</returns>
   public static dynamic Try<T>(Func<dynamic> lambda) => Try(lambda, default(T));
 
   /// <summary>
