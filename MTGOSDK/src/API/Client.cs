@@ -27,20 +27,17 @@ public class Client
   /// <summary>
   /// Manages the client's connection and user session information.
   /// </summary>
-  internal static readonly ISession s_session =
-    ObjectProvider.Get<ISession>();
+  internal static ISession s_session { get; private set; } = null!;
 
   /// <summary>
   /// Provides basic information about the current user and client session.
   /// </summary>
-  private static readonly IFlsClientSession s_flsClientSession =
-    ObjectProvider.Get<IFlsClientSession>();
+  private static IFlsClientSession s_flsClientSession = null!;
 
   /// <summary>
   /// View model for the client's login and authentication process.
   /// </summary>
-  private static readonly ILoginViewModel s_loginManager =
-    ObjectProvider.Get<ILoginViewModel>();
+  private static ILoginViewModel s_loginManager = null!;
 
   /// <summary>
   /// Internal reference to the current logged in user.
@@ -108,8 +105,13 @@ public class Client
       WindowUtilities.CloseDialogs();
 
     // Verify that any existing user sessions are valid.
+    s_flsClientSession = ObjectProvider.Get<IFlsClientSession>();
     if (SessionId != Guid.Empty && IsConnected && CurrentUser.Id == -1)
       throw new VerificationException("Current user session is invalid.");
+
+    // Initialize the client's session and login manager.
+    s_session = ObjectProvider.Get<ISession>();
+    s_loginManager = ObjectProvider.Get<ILoginViewModel>();
   }
 
   /// <summary>
