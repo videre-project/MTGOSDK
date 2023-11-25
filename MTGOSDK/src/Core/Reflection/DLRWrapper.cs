@@ -43,6 +43,22 @@ public class DLRWrapper<I>() where I : class
   }
 
   /// <summary>
+  /// Initializes a new instance of the <see cref="DLRWrapper{I}"/> class,
+  /// executing any given factory function before any derived class constructors.
+  /// </summary>
+  /// <param name="factory">The factory function to execute (optional).</param>
+  /// <remarks>
+  /// This constructor is used to allow derived classes to override the type or
+  /// instance of the wrapped object in a more flexible manner than possible
+  /// through generics or constructor parameters.
+  /// </remarks>
+  public DLRWrapper(Func<Task>? factory = null) : this()
+  {
+    // Initializes a given factory function, if provided.
+    if (factory != null) factory.Invoke().Wait();
+  }
+
+  /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
   /// <remarks>

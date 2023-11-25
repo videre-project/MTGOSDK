@@ -96,12 +96,12 @@ public sealed class Client : DLRWrapper<dynamic>
   /// <exception cref="VerificationException">
   /// Thrown when the current user session is invalid.
   /// </exception>
-  public Client(ClientOptions options = default) : base(factory:
-    delegate
+  public Client(ClientOptions options = default) : base(
+    factory: async delegate
     {
       // Starts a new MTGO client process.
       if (options.CreateProcess)
-        RemoteClient.StartProcess().Wait();
+        await RemoteClient.StartProcess();
 
       // Ensures all deferred static fields in the queue are initialized.
       Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
