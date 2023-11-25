@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -25,6 +26,22 @@ namespace MTGOSDK.Core.Reflection;
 /// <typeparam name="I">The interface type to wrap.</typeparam>
 public class DLRWrapper<I>() where I : class
 {
+  /// <summary>
+  /// Initializes a new instance of the <see cref="DLRWrapper{I}"/> class,
+  /// executing any given factory function before any derived class constructors.
+  /// </summary>
+  /// <param name="factory">The factory function to execute (optional).</param>
+  /// <remarks>
+  /// This constructor is used to allow derived classes to override the type or
+  /// instance of the wrapped object in a more flexible manner than possible
+  /// through generics or constructor parameters.
+  /// </remarks>
+  public DLRWrapper(Action? factory = null) : this()
+  {
+    // Initializes a given factory function, if provided.
+    if (factory != null) factory.Invoke();
+  }
+
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
@@ -62,6 +79,59 @@ public class DLRWrapper<I>() where I : class
     ?? throw new InvalidOperationException(
         $"{type.Name} type does not implement RemoteObject.");
 
+  //
+  // Deferred remote object initialization.
+  //
+
+  /// <summary>
+  /// Internal queue for deferring remote object initialization.
+  /// </summary>
+  internal static ConcurrentQueue<dynamic> DeferedQueue = new();
+
+  /// <summary>
+  /// Initializes and constructs any deferred remote objects in the queue.
+  /// </summary>
+  /// <param name="_ref">
+  /// An optional reference to a deferred object from a derived or base class.
+  /// This is used to ensure that the queue is not empty when calling the class
+  /// constructor, triggering the lazy initialization of any deferred static
+  /// fields for immediate use.
+  /// </param>
+  /// <exception cref="InvalidOperationException">
+  /// Thrown when the queue is empty and no deferred objects are available.
+  /// </exception>
+  public static void Construct(dynamic? _ref = null)
+  {
+    // Use any dereferenced object to lazy initialize and check the queue.
+    if (_ref is not null && DeferedQueue.IsEmpty)
+      throw new InvalidOperationException(
+          $"{nameof(DLRWrapper<I>)}.Construct() called with no deferred objects.");
+
+    // Initializes any deferred remote objects in the queue.
+    while (DeferedQueue.TryDequeue(out var proxy))
+    {
+      proxy.Construct();
+    }
+  }
+
+  /// <summary>
+  /// Defers the execution of a function or method group until access is needed.
+  /// </summary>
+  /// <typeparam name="T">The type or interface to return.</typeparam>
+  /// <param name="c">The function or method group to defer execution.</param>
+  /// <returns>A proxied remote object that can be lazily initialized.</returns>
+  public static T Defer<T>(Func<T> c) where T : class
+  {
+    // Enqueue the proxy object to be initialized later.
+    var refProxy = new RemoteProxy<T>(c);
+    DeferedQueue.Enqueue(refProxy);
+
+    // Defer a proxy object bound to the remote object handle.
+    T proxy = null!;
+    refProxy.Defer(ref proxy);
+
+    return proxy;
+  }
 
   //
   // Wrapper methods for type casting and dynamic dispatching.

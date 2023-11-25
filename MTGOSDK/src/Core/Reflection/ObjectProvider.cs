@@ -39,6 +39,13 @@ public static class ObjectProvider
   /// Returns an instance of the given type from the client's ObjectProvider.
   /// </summary>
   /// <typeparam name="T">The class or interface type to retrieve.</typeparam>
+  /// <returns>A remote instance of the given type.</returns>
+  public static T Get<T>() where T : class => Get<T>(bindTypes: true);
+
+  /// <summary>
+  /// Returns an instance of the given type from the client's ObjectProvider.
+  /// </summary>
+  /// <typeparam name="T">The class or interface type to retrieve.</typeparam>
   /// <param name="bindTypes">Whether to bind the type to the returned instance.</param>
   /// <returns>A remote instance of the given type.</returns>
   public static dynamic Get<T>(bool bindTypes = true) where T : class

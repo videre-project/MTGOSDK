@@ -20,24 +20,26 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API;
 using static MTGOSDK.API.Events;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
-public class Client
+public sealed class Client : DLRWrapper<dynamic>
 {
   /// <summary>
   /// Manages the client's connection and user session information.
   /// </summary>
-  internal static ISession s_session { get; private set; } = null!;
+  internal static readonly ISession s_session =
+    Defer(ObjectProvider.Get<ISession>);
 
   /// <summary>
   /// Provides basic information about the current user and client session.
   /// </summary>
-  private static IFlsClientSession s_flsClientSession = null!;
+  private static readonly IFlsClientSession s_flsClientSession =
+    Defer(ObjectProvider.Get<IFlsClientSession>);
 
   /// <summary>
   /// View model for the client's login and authentication process.
   /// </summary>
-  private static ILoginViewModel s_loginManager = null!;
+  private static readonly ILoginViewModel s_loginManager =
+    Defer(ObjectProvider.Get<ILoginViewModel>);
 
   /// <summary>
   /// Internal reference to the current logged in user.
@@ -94,24 +96,24 @@ public class Client
   /// <exception cref="VerificationException">
   /// Thrown when the current user session is invalid.
   /// </exception>
-  public Client(ClientOptions options = default)
-  {
-    // Starts a new MTGO client process.
-    if (options.CreateProcess)
-      RemoteClient.StartProcess().Wait();
+  public Client(ClientOptions options = default) : base(factory:
+    delegate
+    {
+      // Starts a new MTGO client process.
+      if (options.CreateProcess)
+        RemoteClient.StartProcess().Wait();
 
+      // Ensures all deferred static fields in the queue are initialized.
+      Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
+    })
+  {
     // Closes any blocking dialogs preventing the client from logging in.
     if (options.AcceptEULAPrompt)
       WindowUtilities.CloseDialogs();
 
     // Verify that any existing user sessions are valid.
-    s_flsClientSession = ObjectProvider.Get<IFlsClientSession>();
     if (SessionId != Guid.Empty && IsConnected && CurrentUser.Id == -1)
       throw new VerificationException("Current user session is invalid.");
-
-    // Initialize the client's session and login manager.
-    s_session = ObjectProvider.Get<ISession>();
-    s_loginManager = ObjectProvider.Get<ILoginViewModel>();
   }
 
   /// <summary>

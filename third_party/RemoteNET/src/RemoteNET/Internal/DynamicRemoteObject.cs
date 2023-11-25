@@ -182,6 +182,13 @@ namespace RemoteNET.Internal
       }
     }
 
+    public DynamicRemoteObject() // For avoiding overriding reference type
+    {
+      __ra = null;
+      __ro = null;
+      __type = null;
+    }
+
     /// <summary>
     /// Gets the type of the proxied remote object, in the remote app. (This does not reutrn `typeof(DynamicRemoteMethod)`)
     /// </summary>
