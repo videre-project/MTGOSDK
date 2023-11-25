@@ -52,7 +52,8 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The unique game server token.
   /// </summary>
-  public Guid ServerGuid => Cast<Guid>(@base.ServerGuid);
+  public Guid ServerGuid =>
+    Cast<Guid>(Unbind(@base).ServerGuid);
 
   /// <summary>
   /// The chat channel between all players.
