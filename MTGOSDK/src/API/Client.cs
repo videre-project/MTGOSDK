@@ -21,7 +21,7 @@ using WotC.MtGO.Client.Model;
 namespace MTGOSDK.API;
 using static MTGOSDK.API.Events;
 
-public sealed class Client : DLRWrapper<dynamic>
+public sealed class Client : DLRWrapper<dynamic>, IDisposable
 {
   /// <summary>
   /// Manages the client's connection and user session information.
@@ -103,10 +103,18 @@ public sealed class Client : DLRWrapper<dynamic>
       if (options.CreateProcess)
         await RemoteClient.StartProcess();
 
-      // Ensures all deferred static fields in the queue are initialized.
-      Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
+      // Sets the client's disposal policy.
+      if(options.DestroyOnExit)
+        RemoteClient.DestroyOnExit = true;
+
+      // Configure the remote client connection.
+      if(options.Port != null)
+        RemoteClient.Port = Cast<ushort>(options.Port);
     })
   {
+    // Ensures all deferred static fields in the queue are initialized.
+    Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
+
     // Closes any blocking dialogs preventing the client from logging in.
     if (options.AcceptEULAPrompt)
       WindowUtilities.CloseDialogs();
@@ -187,6 +195,11 @@ public sealed class Client : DLRWrapper<dynamic>
     if (!(await WaitUntil(() => !IsConnected)))
       throw new Exception("Failed to log off and disconnect the client.");
   }
+
+  /// <summary>
+  /// Disposes of the remote client handle.
+  /// </summary>
+  public void Dispose() => RemoteClient.Dispose();
 
   //
   // ISession wrapper events

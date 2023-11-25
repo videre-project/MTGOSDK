@@ -57,6 +57,13 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   public static string ExtractDir =
     Path.Join(/* %appdata%\..\Local\ */ "MTGOSDK", "MTGOInjector", "bin");
 
+  /// <summary>
+  /// Whether to destroy the MTGO process when disposing of the Remote Client.
+  /// </summary>
+  public static bool DestroyOnExit = false;
+
+  public static ushort? Port = null;
+
   private RemoteClient()
   {
     Bootstrapper.ExtractDir = ExtractDir;
@@ -127,7 +134,8 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   private RemoteApp GetClientHandle()
   {
     // Connect to the target process
-    var client = RemoteApp.Connect(_clientProcess);
+    var port = RemoteClient.Port ??= (ushort)_clientProcess.Id;
+    var client = RemoteApp.Connect(_clientProcess, port);
 
     // Verify that the injected assembly is loaded and reponding
     if (client.Communicator.CheckAliveness() is false)
@@ -139,11 +147,14 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <summary>
   /// Disconnects from the target process and disposes of the client handle.
   /// </summary>
-  ~RemoteClient()
+  internal static void Dispose()
   {
     @client.Dispose();
-    @process.Kill();
+    if (RemoteClient.DestroyOnExit)
+      @process.Kill();
   }
+
+  ~RemoteClient() => Dispose();
 
   //
   // RemoteApp wrapper methods
