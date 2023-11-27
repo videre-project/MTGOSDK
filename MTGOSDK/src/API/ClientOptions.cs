@@ -9,7 +9,7 @@ namespace MTGOSDK.API;
 /// <summary>
 /// Configurable options for the client's startup and connection process.
 /// </summary>
-public struct ClientOptions
+public struct ClientOptions()
 {
   /// <summary>
   /// Whether to start a new MTGO process, or attach to an existing one.
@@ -34,12 +34,4 @@ public struct ClientOptions
   /// the terms of the EULA are still legally binding when using the client.
   /// </remarks>
   public bool AcceptEULAPrompt { get; init; } = false;
-
-  public ClientOptions(
-    bool createProcess = default,
-    bool acceptEULAPrompt = default)
-  {
-    CreateProcess |= createProcess;
-    AcceptEULAPrompt |= acceptEULAPrompt;
-  }
 }
