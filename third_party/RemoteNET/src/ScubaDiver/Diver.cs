@@ -737,56 +737,17 @@ public class Diver : IDisposable
   private string MakeTypesResponse(HttpListenerRequest req)
   {
     string assembly = req.QueryString.Get("assembly");
-
-    // Try exact match assembly
-    var allAssembliesInApp = _unifiedAppDomain.GetAssemblies();
-    List<Assembly> matchingAssemblies = allAssembliesInApp
-      .Where(assm => assm.GetName().Name == assembly)
-      .ToList();
-    if (matchingAssemblies.Count == 0)
-    {
-      // No exact matches, widen search to any assembly *containing* the query
-      matchingAssemblies = allAssembliesInApp.Where(module =>
-      {
-        try
-        {
-          return module?.GetName()?.Name?.Contains(assembly) == true;
-        }
-        catch {}
-
-        return false;
-      }).ToList();
-    }
-
-    if (!matchingAssemblies.Any())
-    {
-      // No matching assemblies found
+    Assembly matchingAssembly = _unifiedAppDomain.GetAssembly(assembly);
+    if (matchingAssembly == null)
       return QuickError($"No assemblies found matching the query '{assembly}'");
-    }
-    else if (matchingAssemblies.Count > 1)
-    {
-      return $"{{\"error\":\"Too many assemblies found matching the query '{assembly}'. Expected: 1, Got: {matchingAssemblies.Count}\"}}";
-    }
-
-    // Got here - we have a single matching assembly.
-    Assembly matchingAssembly = matchingAssemblies.Single();
-
 
     List<TypesDump.TypeIdentifiers> types = new List<TypesDump.TypeIdentifiers>();
     foreach (Type type in matchingAssembly.GetTypes())
     {
-      types.Add(new TypesDump.TypeIdentifiers()
-      {
-        TypeName = type.FullName
-      });
+      types.Add(new TypesDump.TypeIdentifiers() { TypeName = type.FullName });
     }
 
-    TypesDump dump = new()
-    {
-      AssemblyName = assembly,
-      Types = types
-    };
-
+    TypesDump dump = new() { AssemblyName = assembly, Types = types };
     return JsonConvert.SerializeObject(dump);
   }
 

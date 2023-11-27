@@ -21,7 +21,7 @@ public class UnifiedAppDomain
     _parentDiver = parentDiver;
   }
 
-  private AppDomain[] _domains;
+  private AppDomain[] _domains = new[] { AppDomain.CurrentDomain };
 
   public AppDomain[] GetDomains()
   {
@@ -59,9 +59,16 @@ public class UnifiedAppDomain
     return _domains;
   }
 
+  public Assembly GetAssembly(string name)
+  {
+    return _domains.SelectMany(domain => domain.GetAssemblies())
+      .Where(asm => asm.GetName().Name == name)
+      .SingleOrDefault();
+  }
+
   public Assembly[] GetAssemblies()
   {
-    return GetDomains().SelectMany(domain => domain.GetAssemblies()).ToArray();
+    return _domains.SelectMany(domain => domain.GetAssemblies()).ToArray();
   }
 
   public Type ResolveType(string typeFullName, string assembly = null)
