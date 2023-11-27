@@ -42,6 +42,12 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
     Defer(ObjectProvider.Get<ILoginViewModel>);
 
   /// <summary>
+  /// View model for the client's main window and scenes.
+  /// </summary>
+  private static dynamic s_shellViewModel =>
+    ObjectProvider.Get<IShellViewModel>(bindTypes: false);
+
+  /// <summary>
   /// Internal reference to the current logged in user.
   /// </summary>
   private User? m_currentUser;
@@ -67,7 +73,14 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
   /// <summary>
   /// The latest version of the MTGO client that this SDK is compatible with.
   /// </summary>
-  public static string Version => new Proxy<IClientSession>().AssemblyVersion;
+  public static Version Version =
+    new(new Proxy<IClientSession>().AssemblyVersion);
+
+  /// <summary>
+  /// The current build version of the running MTGO client.
+  /// </summary>
+  public static Version ClientVersion =>
+    new(s_shellViewModel.StatusBarVersionText);
 
   /// <summary>
   /// The MTGO client's user session id.
@@ -97,6 +110,10 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
   /// Thrown when the current user session is invalid.
   /// </exception>
   public Client(ClientOptions options = default) : base(
+    //
+    // This factory delegate will setup the RemoteClient instance before it
+    // can be started and connect to the MTGO client in the main constructor.
+    //
     factory: async delegate
     {
       // Starts a new MTGO client process.
@@ -112,16 +129,22 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
         RemoteClient.Port = Cast<ushort>(options.Port);
     })
   {
-    // Ensures all deferred static fields in the queue are initialized.
+    //
+    // Ensure all deferred static fields in the queue are initialized.
+    //
+    // This will initialize the connection to the MTGO client and load all
+    // static fields in this class that depend on the initialization of any
+    // remote objects.
+    //
     Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
+
+    // Verify that any existing user sessions are valid.
+    if (this.SessionId != Guid.Empty && this.IsConnected)
+      throw new VerificationException("Current user session is invalid.");
 
     // Closes any blocking dialogs preventing the client from logging in.
     if (options.AcceptEULAPrompt)
       WindowUtilities.CloseDialogs();
-
-    // Verify that any existing user sessions are valid.
-    if (SessionId != Guid.Empty && IsConnected && CurrentUser.Id == -1)
-      throw new VerificationException("Current user session is invalid.");
   }
 
   /// <summary>
@@ -131,17 +154,14 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
   /// <remarks>
   /// The client may take a few seconds to close the overlay when done loading.
   /// </remarks>
-  public async Task<bool> WaitForClientReady()
-  {
-    var shellViewModel = ObjectProvider.Get<IShellViewModel>(bindTypes: false);
-    return await WaitUntil(() =>
-      shellViewModel.IsSessionConnected == true &&
-      shellViewModel.ShowSplashScreen == false &&
-      shellViewModel.m_blockingProgressInstances.Count == 0,
+  public async Task<bool> WaitForClientReady() =>
+    await WaitUntil(() =>
+      s_shellViewModel.IsSessionConnected == true &&
+      s_shellViewModel.ShowSplashScreen == false &&
+      s_shellViewModel.m_blockingProgressInstances.Count == 0,
       delay: 250, // in ms
       retries: 60 // or 15 seconds
     );
-  }
 
   /// <summary>
   /// Creates a new user session and connects MTGO to the main server.
