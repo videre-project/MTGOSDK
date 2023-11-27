@@ -61,7 +61,8 @@ public sealed class RemoteProxy<I>(Func<I> c) : DLRWrapper<I>() where I : class
   {
     lock(refLock)
     {
-      value = Bind<I>(refObj); // Pass a reference to the remote object handle.
+      // Pass a reference to the remote object handle.
+      try { value = Bind<I>(refObj); } catch { value = refObj; /* No type */ }
     }
   }
 
