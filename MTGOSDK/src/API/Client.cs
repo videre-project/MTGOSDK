@@ -226,14 +226,14 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
   //
 
   public EventProxy<SystemAlertEventArgs> SystemAlertReceived =
-    new(/* ISession */ s_session, nameof(SystemAlertReceived));
+    new(/* ISession */ s_session);
 
   public EventProxy<ErrorEventArgs> LogOnFailed =
-    new(/* ISession */ s_session, nameof(LogOnFailed));
+    new(/* ISession */ s_session);
 
   public EventProxy<ErrorEventArgs> ErrorReceived =
-    new(/* ISession */ s_session, nameof(ErrorReceived));
+    new(/* ISession */ s_session);
 
   public EventProxy IsConnectedChanged =
-    new(/* ISession */ s_session, nameof(IsConnectedChanged));
+    new(/* ISession */ s_session);
 }

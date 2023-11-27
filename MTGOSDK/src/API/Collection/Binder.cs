@@ -33,5 +33,5 @@ public sealed class Binder(dynamic binder) : CardGrouping<IBinder>
   //
 
   public EventProxy<CardGroupingItemsChangedEventArgs> ItemsAddedOrRemoved =
-    new(/* ICardGrouping */ binder, nameof(ItemsAddedOrRemoved));
+    new(/* ICardGrouping */ binder);
 }

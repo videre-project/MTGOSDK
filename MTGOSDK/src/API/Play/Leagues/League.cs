@@ -134,32 +134,32 @@ public sealed class League(dynamic league) : Event<ILeague>
   //
 
   public EventProxy ActiveDateChanged =
-    new(/* ILeague */ league, nameof(ActiveDateChanged));
+    new(/* ILeague */ league);
 
   public EventProxy ClosedDateChanged =
-    new(/* ILeague */ league, nameof(ClosedDateChanged));
+    new(/* ILeague */ league);
 
   public EventProxy CompletedDateChanged =
-    new(/* ILeague */ league, nameof(CompletedDateChanged));
+    new(/* ILeague */ league);
 
   public EventProxy DescriptionChanged =
-    new(/* ILeague */ league, nameof(DescriptionChanged));
+    new(/* ILeague */ league);
 
   public EventProxy EventLinkChanged =
-    new(/* ILeague */ league, nameof(EventLinkChanged));
+    new(/* ILeague */ league);
 
   public EventProxy<LeagueOperationEventArgs> JoinCompleted =
-    new(/* ILeague */ league, nameof(JoinCompleted));
+    new(/* ILeague */ league);
 
   public EventProxy<LeagueOperationEventArgs> LeaveCompleted =
-    new(/* ILeague */ league, nameof(LeaveCompleted));
+    new(/* ILeague */ league);
 
   public EventProxy<LeagueOperationEventArgs> LeaderboardReceived =
-    new(/* ILeague */ league, nameof(LeaderboardReceived));
+    new(/* ILeague */ league);
 
   public EventProxy LeagueEntryOptionsChanged =
-    new(/* ILeague */ league, nameof(LeagueEntryOptionsChanged));
+    new(/* ILeague */ league);
 
   public EventProxy<LeagueStateEventArgs> StateChanged =
-    new(/* ILeague */ league, nameof(StateChanged));
+    new(/* ILeague */ league);
 }

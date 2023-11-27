@@ -115,8 +115,8 @@ public sealed class Channel(dynamic chatChannel)
   //
 
   public EventProxy<ChannelEventArgs> JoinedStateChanged =
-    new(/* IChatChannel */ chatChannel, nameof(JoinedStateChanged));
+    new(/* IChatChannel */ chatChannel);
 
   public EventProxy<ChannelStateEventArgs> ChannelStateChanged =
-    new(/* IChannel */ chatChannel, nameof(ChannelStateChanged));
+    new(/* IChannel */ chatChannel);
 }

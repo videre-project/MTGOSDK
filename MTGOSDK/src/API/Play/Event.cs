@@ -39,10 +39,10 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
     //
 
     public EventProxy IsLocalUserJoinedChanged =
-      new(/* IPlayerEvent */ playerEvent, nameof(IsLocalUserJoinedChanged));
+      new(/* IPlayerEvent */ playerEvent);
 
     public EventProxy IsAcceptingNewPlayersChanged =
-      new(/* IPlayerEvent */ playerEvent, nameof(IsAcceptingNewPlayersChanged));
+      new(/* IPlayerEvent */ playerEvent);
   }
 
   //

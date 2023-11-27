@@ -197,14 +197,14 @@ public static class CollectionManager
   //
 
   public static EventProxy LastUsedBinderChanged =
-    new(s_collectionGroupingManager, nameof(LastUsedBinderChanged));
+    new(s_collectionGroupingManager);
 
   public static EventProxy DeckCreatedOrImported =
-    new(s_collectionGroupingManager, nameof(DeckCreatedOrImported));
+    new(s_collectionGroupingManager);
 
   public static EventProxy DeckFolderDeleted =
-    new(s_collectionGroupingManager, nameof(DeckFolderDeleted));
+    new(s_collectionGroupingManager);
 
   public static EventProxy DeckDeleted =
-    new(s_collectionGroupingManager, nameof(DeckDeleted));
+    new(s_collectionGroupingManager);
 }

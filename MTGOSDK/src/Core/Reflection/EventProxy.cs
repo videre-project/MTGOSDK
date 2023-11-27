@@ -4,6 +4,7 @@
 **/
 
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 
 namespace MTGOSDK.Core.Reflection;
@@ -18,9 +19,8 @@ namespace MTGOSDK.Core.Reflection;
 /// unsubscribing to events. This allows for a more natural syntax for event
 /// subscription and unsubscription.
 /// </remarks>
-public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
-    where I : class
-    where T : class
+public class EventProxy<I, T>(dynamic @ref, [CallerMemberName] string name = "")
+    : DLRWrapper<I> where I : class where T : class
 {
   internal override dynamic obj => @ref;
 
@@ -88,7 +88,7 @@ public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
 /// unsubscribing to events. This allows for a more natural syntax for event
 /// subscription and unsubscription.
 /// </remarks>
-public class EventProxy<T>(dynamic @ref, string name)
+public class EventProxy<T>(dynamic @ref, [CallerMemberName] string name = "")
     : EventProxy<dynamic, T>(null, name) where T : class
 {
   internal override dynamic obj => @ref;
@@ -102,7 +102,7 @@ public class EventProxy<T>(dynamic @ref, string name)
 /// unsubscribing to events. This allows for a more natural syntax for event
 /// subscription and unsubscription.
 /// </remarks>
-public class EventProxy(dynamic @ref, string name)
+public class EventProxy(dynamic @ref, [CallerMemberName] string name = "")
     : EventProxy<dynamic>(null, name)
 {
   internal override dynamic obj => @ref;

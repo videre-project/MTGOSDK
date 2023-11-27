@@ -86,11 +86,11 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   //
 
   public EventProxy IsLoggedInAndVisibleChanged =
-    new(/* IUser */ user, nameof(IsLoggedInAndVisibleChanged));
+    new(/* IUser */ user);
 
   public EventProxy CurrentAvatarChanged =
-    new(/* IUser */ user, nameof(CurrentAvatarChanged));
+    new(/* IUser */ user);
 
   public EventProxy UserActivated =
-    new(/* IUser */ user, nameof(UserActivated));
+    new(/* IUser */ user);
 }

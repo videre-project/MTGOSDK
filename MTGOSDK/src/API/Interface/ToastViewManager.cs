@@ -56,5 +56,5 @@ public static class ToastViewManager
   //
 
   public static EventProxy<ToastEventArgs> ToastRequested =
-    new(/* ISession */ Client.s_session, nameof(ToastRequested));
+    new(/* ISession */ Client.s_session);
 }

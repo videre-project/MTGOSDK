@@ -53,5 +53,5 @@ public class Replay(dynamic replayEvent) : DLRWrapper<IReplayGameEvent>
   //
 
   public EventProxy<ReplayErrorEventArgs> ReplayError =
-    new(/* IReplayGameEvent */ replayEvent, nameof(ReplayError));
+    new(/* IReplayGameEvent */ replayEvent);
 }

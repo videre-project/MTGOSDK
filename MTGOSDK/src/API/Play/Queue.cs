@@ -37,8 +37,8 @@ public sealed class Queue(dynamic queue) : Event<IQueue>
   //
 
   public EventProxy<QueueStateEventArgs> QueueStateChanged =
-    new(/* IQueue */ queue, nameof(QueueStateChanged));
+    new(/* IQueue */ queue);
 
   public EventProxy<QueueErrorEventArgs> QueueError =
-    new(/* IQueue */ queue, nameof(QueueError));
+    new(/* IQueue */ queue);
 }

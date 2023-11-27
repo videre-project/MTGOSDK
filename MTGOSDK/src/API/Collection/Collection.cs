@@ -26,5 +26,5 @@ public sealed class Collection(ICollectionGrouping collection)
   //
 
   public EventProxy<CardGroupingItemsChangedEventArgs> ItemsAddedOrRemoved =
-    new(/* ICardGrouping */ collection, nameof(ItemsAddedOrRemoved));
+    new(/* ICardGrouping */ collection);
 }
