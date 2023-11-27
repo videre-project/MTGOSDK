@@ -21,8 +21,15 @@ using WotC.MtGO.Client.Model;
 namespace MTGOSDK.API;
 using static MTGOSDK.API.Events;
 
-public sealed class Client : DLRWrapper<dynamic>, IDisposable
+/// <summary>
+/// Creates a new instance of the MTGO client API.
+/// </summary>
+public sealed class Client : DLRWrapper<ISession>, IDisposable
 {
+  //
+  // Static fields and properties
+  //
+
   /// <summary>
   /// Manages the client's connection and user session information.
   /// </summary>
@@ -36,16 +43,36 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
     Defer(ObjectProvider.Get<IFlsClientSession>);
 
   /// <summary>
-  /// View model for the client's login and authentication process.
-  /// </summary>
-  private static readonly ILoginViewModel s_loginManager =
-    Defer(ObjectProvider.Get<ILoginViewModel>);
-
-  /// <summary>
   /// View model for the client's main window and scenes.
   /// </summary>
   private static dynamic s_shellViewModel =>
     ObjectProvider.Get<IShellViewModel>(bindTypes: false);
+
+  /// <summary>
+  /// View model for the client's login and authentication process.
+  /// </summary>
+  private static ILoginViewModel s_loginManager =>
+    ObjectProvider.Get<ILoginViewModel>();
+
+  /// <summary>
+  /// The latest version of the MTGO client that this SDK is compatible with.
+  /// </summary>
+  /// <remarks>
+  /// This version is used to verify that the SDK is compatible with the MTGO
+  /// client, using the reference assembly version built into the SDK.
+  /// </remarks>
+  public static Version Version =
+    new(new Proxy<ISession>().AssemblyVersion);
+
+  /// <summary>
+  /// The current build version of the running MTGO client.
+  /// </summary>
+  public static Version ClientVersion =>
+    new(s_shellViewModel.StatusBarVersionText);
+
+  //
+  // Instance fields and properties
+  //
 
   /// <summary>
   /// Internal reference to the current logged in user.
@@ -71,18 +98,6 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
   }
 
   /// <summary>
-  /// The latest version of the MTGO client that this SDK is compatible with.
-  /// </summary>
-  public static Version Version =
-    new(new Proxy<IClientSession>().AssemblyVersion);
-
-  /// <summary>
-  /// The current build version of the running MTGO client.
-  /// </summary>
-  public static Version ClientVersion =>
-    new(s_shellViewModel.StatusBarVersionText);
-
-  /// <summary>
   /// The MTGO client's user session id.
   /// </summary>
   public Guid SessionId => new(s_flsClientSession.SessionId);
@@ -96,6 +111,10 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
   /// Whether the client is currently logged in.
   /// </summary>
   public bool IsLoggedIn => s_loginManager.IsLoggedIn;
+
+  //
+  // Constructors and destructors
+  //
 
   /// <summary>
   /// Creates a new instance of the MTGO client API.
@@ -139,13 +158,22 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
     Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
 
     // Verify that any existing user sessions are valid.
-    if (this.SessionId != Guid.Empty && this.IsConnected)
+    if (IsConnected && (SessionId == Guid.Empty))
       throw new VerificationException("Current user session is invalid.");
 
     // Closes any blocking dialogs preventing the client from logging in.
     if (options.AcceptEULAPrompt)
       WindowUtilities.CloseDialogs();
   }
+
+  /// <summary>
+  /// Disposes of the remote client handle.
+  /// </summary>
+  public void Dispose() => RemoteClient.Dispose();
+
+  //
+  // ISession wrapper methods
+  //
 
   /// <summary>
   /// Waits until the client has connected and is ready to be interacted with.
@@ -177,13 +205,13 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
   /// </exception>
   public async Task<Guid> LogOn(string username, SecureString password)
   {
-    if (IsLoggedIn)
-      throw new InvalidOperationException("Cannot log on while logged in.");
-
     // Initializes the login manager if it has not already been initialized.
     dynamic LoginVM = Unbind(s_loginManager);
     if (!LoginVM.IsLoginEnabled)
       LoginVM.Initialize();
+
+    if (IsLoggedIn)
+      throw new InvalidOperationException("Cannot log on while logged in.");
 
     // Passes the user's credentials to the MTGO client for authentication.
     LoginVM.ScreenName = username;
@@ -196,7 +224,7 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
     if (!(await WaitForClientReady()))
       throw new Exception("Failed to connect and initialize the client.");
 
-    return this.SessionId;
+    return SessionId;
   }
 
   /// <summary>
@@ -216,24 +244,41 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
       throw new Exception("Failed to log off and disconnect the client.");
   }
 
-  /// <summary>
-  /// Disposes of the remote client handle.
-  /// </summary>
-  public void Dispose() => RemoteClient.Dispose();
-
   //
   // ISession wrapper events
   //
 
+  /// <summary>
+  /// Occurs when a new system alert or warning is displayed on the MTGO client.
+  /// </summary>
+  /// <remarks>
+  /// This event is raised when the client displays a 'Warning' modal window.
+  /// </remarks>
   public EventProxy<SystemAlertEventArgs> SystemAlertReceived =
     new(/* ISession */ s_session);
 
+  /// <summary>
+  /// Occurs when a login attempt failed due to connection or authentication.
+  /// </summary>
+  /// <remarks>
+  /// This may also occur when a login attempt requires 2-factor authentication,
+  /// requesting a challenge code to finish logging in.
+  /// </remarks>
   public EventProxy<ErrorEventArgs> LogOnFailed =
     new(/* ISession */ s_session);
 
+  /// <summary>
+  /// Occurs when a connection exception is thrown by the MTGO client.
+  /// </summary>
+  /// <remarks>
+  /// This can occur when login fails or when disconnected from the server.
+  /// </remarks>
   public EventProxy<ErrorEventArgs> ErrorReceived =
     new(/* ISession */ s_session);
 
+  /// <summary>
+  /// Occurs when the client's connection status changes.
+  /// </summary>
   public EventProxy IsConnectedChanged =
     new(/* ISession */ s_session);
 }
