@@ -92,15 +92,18 @@ namespace ScubaDiver.API
       };
 
       var requestJsonBody = JsonConvert.SerializeObject(invocReq);
-      var resJson = SendRequest("invoke_callback", null, requestJsonBody);
-      if(resJson.Contains("\"error\":"))
+      try
+      {
+        string resJson = SendRequest("invoke_callback", null, requestJsonBody);
+        if(resJson.Contains("\"error\":"))
+          return null;
+
+        return JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
+      }
+      catch
       {
         return null;
       }
-
-      InvocationResults res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
-
-      return res;
     }
   }
 }

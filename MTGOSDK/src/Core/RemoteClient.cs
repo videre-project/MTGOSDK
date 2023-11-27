@@ -91,7 +91,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// If no MTGO installation exists or is out of date, this method will
   /// attempt to install or update the client before starting it.
   /// </remarks>
-  public static async Task StartProcess()
+  public static async Task<bool> StartProcess()
   {
     // Close any existing MTGO processes.
     try { using var p = MTGOProcess(); p.Kill(); p.WaitForExit(); } catch { }
@@ -107,8 +107,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     process.WaitForInputIdle();
 
     // Wait for the MTGO process UI to start and open kicker window.
-    await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero);
-    await Task.Delay(3000); // Prevent race condition with window collection.
+    return await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero);
   }
 
   //

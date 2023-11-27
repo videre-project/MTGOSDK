@@ -100,8 +100,8 @@ public sealed class Client : DLRWrapper<dynamic>, IDisposable
     factory: async delegate
     {
       // Starts a new MTGO client process.
-      if (options.CreateProcess)
-        await RemoteClient.StartProcess();
+      if (options.CreateProcess && !(await RemoteClient.StartProcess()))
+        throw new Exception("Failed to start the MTGO client process.");
 
       // Sets the client's disposal policy.
       if(options.DestroyOnExit)
