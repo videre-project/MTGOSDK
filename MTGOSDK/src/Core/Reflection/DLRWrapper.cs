@@ -12,6 +12,7 @@ using MTGOSDK.Core;
 
 
 namespace MTGOSDK.Core.Reflection;
+using static Attributes;
 
 /// <summary>
 /// A wrapper for dynamic objects that implement an interface at runtime.
@@ -84,9 +85,21 @@ public class DLRWrapper<I>() where I : class
   /// This is used to extract dynamic objects passed from any derived
   /// classes, deferring any dynamic dispatching of class constructors.
   /// </remarks>
-  internal virtual dynamic @base => obj is DLRWrapper<I> ? obj.obj : obj
-    ?? throw new ArgumentException(
-        $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+  internal virtual dynamic @base
+  {
+    get
+    {
+      var baseObj = obj is DLRWrapper<I> ? obj.obj : obj
+        ?? throw new ArgumentException(
+            $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+
+      // Return a ProxyObject wrapper with a fallback value, if present.
+      if (TryGetDefaultAttribute(out var defaultAttribute))
+        return new ProxyObject(baseObj, fallback: defaultAttribute.Value);
+
+      return baseObj;
+    }
+  }
 
   /// <summary>
   /// Internal reference to the remote object handle.
@@ -317,5 +330,46 @@ public class DLRWrapper<I>() where I : class
       await Task.Delay(delay);
     }
     return false;
+  }
+
+  //
+  // Wrapper Attributes
+  //
+
+  /// <summary>
+  /// A wrapper attribute that allows for a default value to fallback to.
+  /// </summary>
+  /// <param name="value">The default value.</param>
+  public class DefaultAttribute(object value) : Attribute
+  {
+    public object Value { get; set; } = value;
+  }
+
+  //
+  // Attribute wrapper helpers.
+  //
+
+  /// <summary>
+  /// Gets the stack frame depth of the (outer) DLRWrapper caller.
+  /// </summary>
+  /// <param name="depth">The starting stack frame depth.</param>
+  /// <returns>The caller's stack frame depth.</returns>
+  private int GetCallerDepth(int depth = 3)
+  {
+    Type wrapperType = GetCallerType(depth);
+    while(GetCallerType(depth).Name == wrapperType.Name) depth++;
+
+    return depth;
+  }
+
+  /// <summary>
+  /// Attempts to get the default attribute from the (outer) DLRWrapper caller.
+  /// </summary>
+  /// <param name="attribute">The default attribute (if present).</param>
+  /// <returns>True if the default attribute was found.</returns>
+  private bool TryGetDefaultAttribute(out DefaultAttribute? attribute)
+  {
+    attribute = GetCallerAttribute<DefaultAttribute>(depth: GetCallerDepth());
+    return attribute != null;
   }
 }
