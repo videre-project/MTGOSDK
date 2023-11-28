@@ -89,14 +89,14 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   //
 
   public EventProxy<TournamentRoundChangedEventArgs> CurrentRoundChanged =
-    new(/* ITournament */ tournament);
+    new(/* ITournament */ tournament, nameof(CurrentRoundChanged));
 
   public EventProxy<TournamentStateChangedEventArgs> TournamentStateChanged =
-    new(/* ITournament */ tournament);
+    new(/* ITournament */ tournament, nameof(TournamentStateChanged));
 
   public EventProxy<TournamentErrorEventArgs> TournamentError =
-    new(/* ITournament */ tournament);
+    new(/* ITournament */ tournament, nameof(TournamentError));
 
   public EventProxy StandingsChanged =
-    new(/* ITournament */ tournament);
+    new(/* ITournament */ tournament, nameof(StandingsChanged));
 }

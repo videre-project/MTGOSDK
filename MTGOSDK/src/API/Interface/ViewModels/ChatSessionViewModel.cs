@@ -60,11 +60,11 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   //
 
   public EventProxy Activated =
-    new(/* IChatSessionViewModel */ chatSessionViewModel);
+    new(/* IChatSessionViewModel */ chatSessionViewModel, nameof(Activated));
 
   public EventProxy ClearSendPane =
-    new(/* IChatSessionViewModel */ chatSessionViewModel);
+    new(/* IChatSessionViewModel */ chatSessionViewModel, nameof(ClearSendPane));
 
   public EventProxy StreamChanged =
-    new(/* IChatSessionViewModel */ chatSessionViewModel);
+    new(/* IChatSessionViewModel */ chatSessionViewModel, nameof(StreamChanged));
 }

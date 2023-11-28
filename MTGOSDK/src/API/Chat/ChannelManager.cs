@@ -67,17 +67,17 @@ public static class ChannelManager
   /// Triggered when the user activates the chat window.
   /// </summary>
   public static EventProxy<ChatSessionEventArgs> SessionAdded =
-    new(/* IChatManager */ s_chatManager);
+    new(/* IChatManager */ s_chatManager, nameof(SessionAdded));
 
   /// <summary>
   /// Triggered when the user closes the chat window.
   /// </summary>
   public static EventProxy<ChatSessionEventArgs> SessionClosing =
-    new(/* IChatManager */ s_chatManager);
+    new(/* IChatManager */ s_chatManager, nameof(SessionClosing));
 
   public static EventProxy PassiveChatMessageReceived =
-    new(/* IChatManager */ s_chatManager);
+    new(/* IChatManager */ s_chatManager, nameof(PassiveChatMessageReceived));
 
   public static EventProxy PassiveNotificationCancelled =
-    new(/* IChatManager */ s_chatManager);
+    new(/* IChatManager */ s_chatManager, nameof(PassiveNotificationCancelled));
 }

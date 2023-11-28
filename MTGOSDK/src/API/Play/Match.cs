@@ -100,26 +100,26 @@ public sealed class Match(dynamic match) : Event<IMatch>
   //
 
   public EventProxy<GameEventArgs> GameEnded =
-    new(/* IMatch */ match);
+    new(/* IMatch */ match, nameof(GameEnded));
 
   public EventProxy<GameEventArgs> CurrentGameChanged =
-    new(/* IMatch */ match);
+    new(/* IMatch */ match, nameof(CurrentGameChanged));
 
   public EventProxy ChallengeDeclined =
-    new(/* IMatch */ match);
+    new(/* IMatch */ match, nameof(ChallengeDeclined));
 
   public EventProxy<CountdownEventArgs> Countdown =
-    new(/* IMatch */ match);
+    new(/* IMatch */ match, nameof(Countdown));
 
   public EventProxy CountdownCancelled =
-    new(/* IMatch */ match);
+    new(/* IMatch */ match, nameof(CountdownCancelled));
 
   public EventProxy DeckForSideboardingChanged =
-    new(/* IMatch */ match);
+    new(/* IMatch */ match, nameof(DeckForSideboardingChanged));
 
   public EventProxy<MatchStatusEventArgs> MatchStatusChanged =
-    new(/* IMatch */ match);
+    new(/* IMatch */ match, nameof(MatchStatusChanged));
 
   public EventProxy<MatchErrorEventArgs> MatchError =
-    new(/* IMatch */ match);
+    new(/* IMatch */ match, nameof(MatchError));
 }

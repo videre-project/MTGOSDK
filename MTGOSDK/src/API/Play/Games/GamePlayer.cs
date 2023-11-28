@@ -116,23 +116,23 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   //
 
   public EventProxy<GamePlayerEventArgs> IsActivePlayerChanged =
-    new(/* IGamePlayer */ gamePlayer);
+    new(/* IGamePlayer */ gamePlayer, nameof(IsActivePlayerChanged));
 
   public EventProxy<GamePlayerEventArgs> GraveyardCountChanged =
-    new(/* IGamePlayer */ gamePlayer);
+    new(/* IGamePlayer */ gamePlayer, nameof(GraveyardCountChanged));
 
   public EventProxy<GamePlayerEventArgs> HandCountChanged =
-    new(/* IGamePlayer */ gamePlayer);
+    new(/* IGamePlayer */ gamePlayer, nameof(HandCountChanged));
 
   public EventProxy<GamePlayerEventArgs> LibraryCountChanged =
-    new(/* IGamePlayer */ gamePlayer);
+    new(/* IGamePlayer */ gamePlayer, nameof(LibraryCountChanged));
 
   public EventProxy<GamePlayerEventArgs> HasPriorityChanged =
-    new(/* IGamePlayer */ gamePlayer);
+    new(/* IGamePlayer */ gamePlayer, nameof(HasPriorityChanged));
 
   public EventProxy<GamePlayerEventArgs> LifeChanged =
-    new(/* IGamePlayer */ gamePlayer);
+    new(/* IGamePlayer */ gamePlayer, nameof(LifeChanged));
 
   public EventProxy<GamePlayerEventArgs> StatusChanged =
-    new(/* IGamePlayer */ gamePlayer);
+    new(/* IGamePlayer */ gamePlayer, nameof(StatusChanged));
 }

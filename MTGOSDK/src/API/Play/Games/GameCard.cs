@@ -183,29 +183,29 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   //
 
   public EventProxy<GameCardEventArgs> IsAttackingChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(IsAttackingChanged));
 
   public EventProxy<GameCardEventArgs> IsBlockingChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(IsBlockingChanged));
 
   public EventProxy<GameCardEventArgs> IsTappedChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(IsTappedChanged));
 
   public EventProxy<GameCardEventArgs> DamageChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(DamageChanged));
 
   public EventProxy<GameCardEventArgs> PowerChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(PowerChanged));
 
   public EventProxy<GameCardEventArgs> ToughnessChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(ToughnessChanged));
 
   public EventProxy<GameCardEventArgs> ZoneChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(ZoneChanged));
 
   public EventProxy<GameCardEventArgs> AbilitiesChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(AbilitiesChanged));
 
   public EventProxy<GameCardEventArgs> TypesChanged =
-    new(/* IGameCard */ gameCard);
+    new(/* IGameCard */ gameCard, nameof(TypesChanged));
 }

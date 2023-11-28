@@ -72,5 +72,5 @@ public sealed class Deck(dynamic deck) : CardGrouping<IDeck>
   //
 
   public EventProxy<CardGroupingItemsChangedEventArgs> ItemsAddedOrRemoved =
-    new(/* ICardGrouping */ deck);
+    new(/* ICardGrouping */ deck, nameof(ItemsAddedOrRemoved));
 }

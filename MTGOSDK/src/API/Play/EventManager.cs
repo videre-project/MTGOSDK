@@ -121,14 +121,14 @@ public static class EventManager
   //
 
   public static EventProxy<PlayerEventsCreatedEventArgs> PlayerEventsCreated =
-    new(s_playerEventManager);
+    new(s_playerEventManager, nameof(PlayerEventsCreated));
 
   public static EventProxy<PlayerEventsRemovedEventArgs> PlayerEventsRemoved =
-    new(s_playerEventManager);
+    new(s_playerEventManager, nameof(PlayerEventsRemoved));
 
   public static EventProxy<ReplayCreatedEventArgs> ReplayEventCreated =
-    new(s_playerEventManager);
+    new(s_playerEventManager, nameof(ReplayEventCreated));
 
   public static EventProxy<ReplayErrorEventArgs> ReplayError =
-    new(s_playerEventManager);
+    new(s_playerEventManager, nameof(ReplayError));
 }

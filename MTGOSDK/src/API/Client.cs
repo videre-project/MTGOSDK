@@ -255,7 +255,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// This event is raised when the client displays a 'Warning' modal window.
   /// </remarks>
   public EventProxy<SystemAlertEventArgs> SystemAlertReceived =
-    new(/* ISession */ s_session);
+    new(/* ISession */ s_session, nameof(SystemAlertReceived));
 
   /// <summary>
   /// Occurs when a login attempt failed due to connection or authentication.
@@ -265,7 +265,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// requesting a challenge code to finish logging in.
   /// </remarks>
   public EventProxy<ErrorEventArgs> LogOnFailed =
-    new(/* ISession */ s_session);
+    new(/* ISession */ s_session, nameof(LogOnFailed));
 
   /// <summary>
   /// Occurs when a connection exception is thrown by the MTGO client.
@@ -274,11 +274,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// This can occur when login fails or when disconnected from the server.
   /// </remarks>
   public EventProxy<ErrorEventArgs> ErrorReceived =
-    new(/* ISession */ s_session);
+    new(/* ISession */ s_session, nameof(ErrorReceived));
 
   /// <summary>
   /// Occurs when the client's connection status changes.
   /// </summary>
   public EventProxy IsConnectedChanged =
-    new(/* ISession */ s_session);
+    new(/* ISession */ s_session, nameof(IsConnectedChanged));
 }
