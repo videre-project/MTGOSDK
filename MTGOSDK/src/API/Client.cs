@@ -158,11 +158,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
 
     // Verify that any existing user sessions are valid.
-    if (IsConnected && (SessionId == Guid.Empty))
+    if ((SessionId == Guid.Empty) && IsConnected)
       throw new VerificationException("Current user session is invalid.");
 
     // Closes any blocking dialogs preventing the client from logging in.
-    if (options.AcceptEULAPrompt)
+    if (options.AcceptEULAPrompt && !IsConnected)
       WindowUtilities.CloseDialogs();
   }
 
