@@ -10,6 +10,7 @@ using WotC.MtGO.Client.Model.Settings;
 
 
 namespace MTGOSDK.API.Play.History;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 /// <summary>
 /// Manager for the player's game history.
@@ -35,7 +36,7 @@ public static class HistoryManager
   /// The historical items (games, matches, tournaments, etc.) for the player.
   /// </summary>
   public static IEnumerable<dynamic> Items =>
-    DLRWrapper<IExtendedObservableCollection<dynamic>>.Map<dynamic>(
+    Map<dynamic>(
       s_gameHistoryManager.Items,
       new Func<dynamic, dynamic>(item =>
       {
