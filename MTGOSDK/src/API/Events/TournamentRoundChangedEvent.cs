@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
@@ -44,13 +45,13 @@ public sealed partial class Events
     /// <summary>
     /// The previous round of results in the tournament.
     /// </summary>
-    public TournamentRoundChangedEventArgs PreviousRound =>
+    public TournamentRound PreviousRound =>
       new(@base.PreviousRound);
 
     /// <summary>
     /// The current round of results in the tournament.
     /// </summary>
-    public TournamentRoundChangedEventArgs CurrentRound =>
+    public TournamentRound CurrentRound =>
       new(@base.CurrentRound);
   }
 }
