@@ -39,8 +39,11 @@ public static class ReplayManager
   /// <summary>
   /// The currently active replay, if any.
   /// </summary>
-  public static Replay ActiveReplay =>
-    new(Unbind(s_gameReplayService).m_replayEvent);
+  public static Replay? ActiveReplay =>
+    Try(() =>
+      new Replay(Unbind(s_gameReplayService).m_replayEvent
+        ?? throw new InvalidOperationException("No active replay."))
+    );
 
   /// <summary>
   /// Sends a request to the PlayerEventManager to start a replay.

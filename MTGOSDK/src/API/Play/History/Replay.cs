@@ -34,6 +34,7 @@ public class Replay(dynamic replayEvent) : DLRWrapper<IReplayGameEvent>
   /// <summary>
   /// The current state of the replay (e.g. "RequestSent", "Connecting", etc.).
   /// </summary>
+  [Default(ReplayState.Unset)]
   public ReplayState State => Cast<ReplayState>(Unbind(@base).ReplayState);
 
   /// <summary>

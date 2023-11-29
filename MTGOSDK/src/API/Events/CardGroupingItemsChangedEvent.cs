@@ -43,6 +43,7 @@ public sealed partial class Events
     /// <summary>
     /// The unique identifier for this operation.
     /// </summary>
+    [Default(null)]
     public ulong? OperationId => @base.OperationId;
 
     /// <summary>

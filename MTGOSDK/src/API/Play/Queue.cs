@@ -29,6 +29,7 @@ public sealed class Queue(dynamic queue) : Event<IQueue>
   /// <remarks>
   /// Requires the <c>WotC.MtGO.Client.Model.Play.Enums</c> reference assembly.
   /// </remarks>
+  [Default(QueueState.NotSet)]
   public QueueState CurrentState =>
     Cast<QueueState>(Unbind(@base).CurrentState);
 

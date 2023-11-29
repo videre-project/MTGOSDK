@@ -47,6 +47,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The unique ID for this game.
   /// </summary>
+  [Default(-1)]
   public int Id => @base.Id;
 
   /// <summary>
@@ -76,6 +77,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <remarks>
   /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
   /// </remarks>
+  [Default(GamePhase.Invalid)]
   public GamePhase CurrentPhase =>
     Cast<GamePhase>(Unbind(@base).CurrentPhase);
 
@@ -114,12 +116,14 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The end time of the game.
   /// </summary>
-  public DateTime EndTime => @base.EndTime;
+  [Default(null)]
+  public DateTime? EndTime => @base.EndTime;
 
   /// <summary>
   /// The total duration of the game.
   /// </summary>
-  public TimeSpan CompletedDuration =>
+  [Default(null)]
+  public TimeSpan? CompletedDuration =>
     Cast<TimeSpan>(Unbind(@base).CompletedDuration);
 
   //
