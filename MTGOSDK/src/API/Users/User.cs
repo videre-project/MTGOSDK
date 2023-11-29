@@ -49,7 +49,7 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   /// <summary>
   /// The user's avatar resource.
   /// </summary>
-  public IAvatar Avatar => Proxy<IAvatar>.As(@base.CurrentAvatar);
+  public Avatar Avatar => new(@base.CurrentAvatar);
 
   /// <summary>
   /// Whether the account is not a fully activated account.
