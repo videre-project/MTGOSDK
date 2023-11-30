@@ -75,12 +75,39 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   //
 
   /// <summary>
+  /// The ClickOnce deployment process.
+  /// </summary>
+  private static Process ClickOnceProcess() =>
+    Process.GetProcessesByName("dfsvc")
+      .OrderBy(x => x.StartTime)
+      .LastOrDefault();
+
+  /// <summary>
   /// Fetches the MTGO client process.
   /// </summary>
   private static Process MTGOProcess() =>
     Process.GetProcessesByName("MTGO")
       .OrderBy(x => x.StartTime)
       .FirstOrDefault();
+
+  /// <summary>
+  /// Whether the MTGO (ClickOnce) deployment has started.
+  /// </summary>
+  private static bool IsStarting =>
+    Try<bool>(() =>
+      ClickOnceProcess().MainWindowTitle.Contains("Launching Process"));
+
+  /// <summary>
+  /// Whether ClickOnce is currently updating the MTGO client.
+  /// </summary>
+  private static bool IsUpdating =>
+    Try<bool>(() =>
+      ClickOnceProcess().MainWindowTitle.Contains("Magic The Gathering Online"));
+
+  /// <summary>
+  /// Whether the MTGO client process has started.
+  /// </summary>
+  private static bool HasStarted => MTGOProcess() is not null;
 
   /// <summary>
   /// Starts the MTGO client process.
@@ -104,7 +131,28 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
       Arguments = $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}",
     };
     process.Start();
-    process.WaitForInputIdle();
+    process.WaitForExit();
+
+    //
+    // Check for ClickOnce installation or updates and wait for it to finish.
+    //
+    // Note: This is a crude method of gauging the progress of the ClickOnce
+    //       deployment without adding significant delay to normal startup.
+    //
+    if ((await WaitUntil(() => IsStarting, retries: 4    /* ~ 1 sec */ )) &&
+        (await WaitUntil(() => IsUpdating, retries: 12   /* ~ 3 sec */ )) &&
+       !(await WaitUntil(() => HasStarted, retries: 480  /* ~ 2 min */ )))
+    {
+      throw new Exception("The MTGO installation has failed.");
+    }
+    else if (!(await WaitUntil(() => HasStarted)) && (IsStarting || IsUpdating))
+    {
+      throw new Exception("The MTGO installation stalled and did not finish.");
+    }
+    else if (!HasStarted)
+    {
+      throw new Exception("The MTGO process failed to start.");
+    }
 
     // Wait for the MTGO process UI to start and open kicker window.
     return await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero);
