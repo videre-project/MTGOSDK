@@ -33,6 +33,9 @@ public static class WindowUtilities
   /// Gets a collection of the client's open windows.
   /// </summary>
   /// <returns>A collection of Window objects</returns>
+  /// <exception cref="InvalidOperationException">
+  /// Thrown if the window collection can not be retrieved.
+  /// </exception>
   public static ICollection<dynamic> GetWindows()
   {
     // This is a hack that caches the dispatcher's registered windows.
@@ -46,15 +49,14 @@ public static class WindowUtilities
       {
         var collection = RemoteClient
           .GetInstances(new Proxy<WindowCollection>())
-          .LastOrDefault()
-            ?? throw new Exception("Window collection not initialized.");
+          .LastOrDefault() ?? throw null;
 
         return Bind<ICollection<dynamic>>(collection);
       }
       catch { }
     }
 
-    throw new Exception("Failed to get window collection.");
+    throw new InvalidOperationException("Failed to get window collection.");
   }
 
   /// <summary>

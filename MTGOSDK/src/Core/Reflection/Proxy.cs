@@ -101,7 +101,8 @@ public class Proxy<T>(Type? @type=null) where T : class
   // public bool IsCached => obj != null;
 
   public override string ToString() => Class.FullName
-    ?? throw new Exception($"Proxied type is not a valid type.");
+    ?? throw new TypeInitializationException(
+        $"The Proxied type is not a valid type.", innerException: null);
 
   public static implicit operator string(Proxy<T> proxy) =>
     proxy.ToString();

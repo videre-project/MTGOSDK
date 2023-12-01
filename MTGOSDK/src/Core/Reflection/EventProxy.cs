@@ -45,7 +45,7 @@ public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
           c.DynamicInvoke(new dynamic[] { });
           break;
         default:
-          throw new Exception(
+          throw new ArgumentException(
             $"Invalid number of parameters for {c.GetType().Name}.");
       }
     });

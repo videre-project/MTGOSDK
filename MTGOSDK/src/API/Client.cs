@@ -10,6 +10,7 @@ using System.Security.Authentication;
 using MTGOSDK.API.Users;
 using MTGOSDK.API.Interface;
 using MTGOSDK.Core;
+using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Security;
 
@@ -125,6 +126,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// and should be instantiated once per application instance and prior to
   /// invoking with other API classes.
   /// </remarks>
+  /// <exception cref="SetupFailedException">
+  /// Thrown when the client process fails to finish installation or start.
+  /// </exception>
+  /// <exception cref="ExternalErrorException">
+  /// Thrown when an external error obstructs the client's connection.
+  /// </exception>
   /// <exception cref="VerificationException">
   /// Thrown when the current user session is invalid.
   /// </exception>
@@ -137,7 +144,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     {
       // Starts a new MTGO client process.
       if (options.CreateProcess && !(await RemoteClient.StartProcess()))
-        throw new Exception("Failed to start the MTGO client process.");
+        throw new SetupFailedException(
+            "Failed to start the MTGO client process.");
 
       // Sets the client's disposal policy.
       if(options.DestroyOnExit)
@@ -203,6 +211,9 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <exception cref="ArgumentException">
   /// Thrown when the user's credentials are missing or malformed.
   /// </exception>
+  /// <exception cref="TimeoutException">
+  /// Thrown when the client times out trying to connect and initialize.
+  /// </exception>
   public async Task<Guid> LogOn(string username, SecureString password)
   {
     // Initializes the login manager if it has not already been initialized.
@@ -222,7 +233,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Executes the login command and creates a new task to connect the client.
     LoginVM.LogOnExecute();
     if (!(await WaitForClientReady()))
-      throw new Exception("Failed to connect and initialize the client.");
+      throw new TimeoutException(
+          "Failed to connect and initialize the client.");
 
     return SessionId;
   }
@@ -233,6 +245,9 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <exception cref="InvalidOperationException">
   /// Thrown when the client is not currently logged in.
   /// </exception>
+  /// <exception cref="TimeoutException">
+  /// Thrown when the client times out trying to disconnect.
+  /// </exception>
   public async Task LogOff()
   {
     if (!IsLoggedIn)
@@ -241,7 +256,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Invokes logoff command and disconnects the MTGO client.
     s_session.LogOff();
     if (!(await WaitUntil(() => !IsConnected)))
-      throw new Exception("Failed to log off and disconnect the client.");
+      throw new TimeoutException(
+          "Failed to log off and disconnect the client.");
   }
 
   //

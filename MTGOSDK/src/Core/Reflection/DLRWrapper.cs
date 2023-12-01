@@ -178,7 +178,7 @@ public class DLRWrapper<I>() where I : class
   public static T Bind<T>(dynamic obj) where T : class
   {
     return Proxy<T>.As(obj)
-      ?? throw new Exception(
+      ?? throw new InvalidOperationException(
           $"Unable to bind {obj.GetType().Name} to {typeof(T).Name}.");
   }
 
@@ -193,7 +193,7 @@ public class DLRWrapper<I>() where I : class
   public static dynamic Unbind(dynamic obj)
   {
     var unbound_obj = Proxy<dynamic>.From(obj)
-      ?? throw new Exception(
+      ?? throw new InvalidOperationException(
           $"Unable to unbind types from {obj.GetType().Name}.");
 
     // Recursively unbind any nested interface types.
@@ -226,13 +226,13 @@ public class DLRWrapper<I>() where I : class
   /// <typeparam name="T">The type to cast to.</typeparam>
   /// <param name="obj">The object to cast.</param>
   /// <returns>The casted object.</returns>
-  /// <exception cref="Exception">
+  /// <exception cref="InvalidOperationException">
   /// Thrown when the given object cannot be cast to the given type.
   /// </exception>
   public static T Cast<T>(dynamic obj)
   {
     // Attempt to directly cast the object to the given type.
-    try { return (T)obj ?? throw new Exception(); }
+    try { return (T)obj ?? throw null; }
     catch { }
 
     // Fallback to parsing the object type from a string.
@@ -242,15 +242,13 @@ public class DLRWrapper<I>() where I : class
       var type = typeof(T);
       if (type.IsEnum)
       {
-        return (T)Enum.Parse(type, str)
-          ?? throw new Exception();
+        return (T)Enum.Parse(type, str) ?? throw null;
       }
       else
       {
         return (T)(type
           .GetMethod("Parse", new [] { typeof(string) })
-          ?.Invoke(null, new object[] { str }))
-            ?? throw new Exception();
+          ?.Invoke(null, new object[] { str })) ?? throw null;
       }
     }
     catch { }
@@ -260,7 +258,7 @@ public class DLRWrapper<I>() where I : class
     catch { }
 
     // Throw an exception if the object cannot be cast to the given type.
-    throw new Exception(
+    throw new InvalidOperationException(
         $"Unable to cast {obj.GetType().Name} to {typeof(T).Name}.");
   }
 

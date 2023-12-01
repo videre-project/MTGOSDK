@@ -44,11 +44,14 @@ public static class UserManager
   /// <param name="id">The Login ID of the user.</param>
   /// <param name="name">The display name of the user.</param>
   /// <returns>A new User object.</returns>
+  /// <exception cref="ArgumentException">
+  /// Thrown if the user does not exist.
+  /// </exception>
   public static User GetUser(int id, string name) =>
     new User(
       // This is a private method that is not exposed by the IUserManager type.
       s_userManager.CreateNewUser(id, name)
-        ?? throw new Exception($"Failed to retrieve user '{name}' (#{id}).")
+        ?? throw new ArgumentException($"User '{name}' (#{id}) does not exist.")
     );
 
   /// <summary>
@@ -56,10 +59,13 @@ public static class UserManager
   /// </summary>
   /// <param name="name">The display name of the user.</param>
   /// <returns>A new User object.</returns>
+  /// <exception cref="ArgumentException">
+  /// Thrown if the user does not exist.
+  /// </exception>
   public static User GetUser(string name) =>
     GetUser(
       GetUserId(name)
-        ?? throw new Exception($"User '{name}' does not exist."),
+        ?? throw new ArgumentException($"User '{name}' does not exist."),
       name
     );
 
@@ -68,11 +74,14 @@ public static class UserManager
   /// </summary>
   /// <param name="id">The Login ID of the user.</param>
   /// <returns>A new User object.</returns>
+  /// <exception cref="ArgumentException">
+  /// Thrown if the user does not exist.
+  /// </exception>
   public static User GetUser(int id) =>
     GetUser(
       id,
       GetUserName(id)
-        ?? throw new Exception($"User #{id} does not exist.")
+        ?? throw new ArgumentException($"User #{id} does not exist.")
     );
 
   /// <summary>

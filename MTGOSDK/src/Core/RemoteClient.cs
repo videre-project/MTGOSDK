@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using RemoteNET;
 
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Exceptions;
 
 
 namespace MTGOSDK.Core;
@@ -118,6 +119,13 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// If no MTGO installation exists or is out of date, this method will
   /// attempt to install or update the client before starting it.
   /// </remarks>
+  /// <returns>True if the MTGO client process was started.</returns>
+  /// <exception cref="SetupFailedException">
+  /// Thrown when the MTGO installation has failed.
+  /// </exception>
+  /// <exception cref="ExternalErrorException">
+  /// Thrown when the MTGO process failed to start.
+  /// </exception>
   public static async Task<bool> StartProcess()
   {
     // Close any existing MTGO processes.
@@ -143,15 +151,16 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
         (await WaitUntil(() => IsUpdating, retries: 12   /* ~ 3 sec */ )) &&
        !(await WaitUntil(() => HasStarted, retries: 480  /* ~ 2 min */ )))
     {
-      throw new Exception("The MTGO installation has failed.");
+      throw new SetupFailedException("The MTGO installation has failed.");
     }
     else if (!(await WaitUntil(() => HasStarted)) && (IsStarting || IsUpdating))
     {
-      throw new Exception("The MTGO installation stalled and did not finish.");
+      throw new SetupFailedException(
+          "The MTGO installation stalled and did not finish.");
     }
     else if (!HasStarted)
     {
-      throw new Exception("The MTGO process failed to start.");
+      throw new ExternalErrorException("The MTGO process failed to start.");
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
@@ -172,7 +181,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// </summary>
   private readonly Process _clientProcess =
     MTGOProcess()
-      ?? throw new Exception("MTGO client process not found.");
+      ?? throw new NullReferenceException("MTGO client process not found.");
 
   /// <summary>
   /// Connects to the target process and returns a RemoteNET client handle.
@@ -186,7 +195,8 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
 
     // Verify that the injected assembly is loaded and reponding
     if (client.Communicator.CheckAliveness() is false)
-      throw new Exception("RemoteNET Diver is not responding to requests.");
+      throw new TimeoutException(
+          "RemoteNET Diver is not responding to requests.");
 
     return client;
   }
