@@ -6,11 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <NoWarn>
+      CS8597; <!-- Thrown value may be null. -->
       CS8600; <!-- Converting null literal or possible null value to non-nullable type. -->
       CS8602; <!-- Possible dereference of a null reference. -->
       CS8603; <!-- Possible null reference return. -->
       CS8604; <!-- Possible null reference argument for parameter -->
       CS8625; <!-- Cannot convert null literal to non-nullable reference type. -->
+      IDE0065; <!-- Using directives within a namespace declaration. -->
     </NoWarn>
     <UseWPF>true</UseWPF>
   </PropertyGroup>
