@@ -22,22 +22,38 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// </summary>
   internal override dynamic obj => avatar; // Input obj is not type-casted.
 
+  /// <summary>
+  /// The associated visual resource for the Avatar.
+  /// </summary>
   private IVisualResource Image = Bind<IVisualResource>(avatar.Image);
 
   //
   // IAvatar wrapper properties
   //
 
+  /// <summary>
+  /// The name of the Avatar.
+  /// </summary>
   public string Name => @base.Name;
 
+  /// <summary>
+  /// The associated card definition.
+  /// </summary>
   public Card Card => new(@base.CardDefinition);
 
   //
   // IVisualResource wrapper properties
   //
 
+  /// <summary>
+  /// The unique identifier of the Avatar resource.
+  /// </summary>
+  [Default(-1)]
   public int Id => Image.Id;
 
+  /// <summary>
+  /// The Uri of the Avatar resource.
+  /// </summary>
   public Uri View => Cast<Uri>(Image.View);
 
   //

@@ -44,6 +44,7 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   /// <summary>
   /// The Catalog ID of the user's avatar.
   /// </summary>
+  [Default(-1)]
   public int AvatarId => @base.AvatarID;
 
   /// <summary>
