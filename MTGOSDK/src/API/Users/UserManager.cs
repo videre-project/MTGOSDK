@@ -9,10 +9,13 @@ using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
+using WotC.MtGO.Client.Model.Chat;
 using WotC.MtGO.Client.Model.Core;
 
 
 namespace MTGOSDK.API.Users;
+using static MTGOSDK.API.Events;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public static class UserManager
 {
@@ -85,4 +88,30 @@ public static class UserManager
   /// <param name="name">The display name of the user.</param>
   /// <returns>The Login ID of the user.</returns>
   public static int? GetUserId(string name) => s_userManager.GetUserId(name);
+
+  //
+  // IBuddyUsersList wrapper methods
+  //
+
+  /// <summary>
+  /// Internal reference to the client's BuddyUsersList.
+  /// </summary>
+  private static readonly IBuddyUsersList s_buddyUsersList =
+    ObjectProvider.Get<IBuddyUsersList>();
+
+  /// <summary>
+  /// Retrieves a list of the current user's buddy users.
+  /// </summary>
+  public static IEnumerable<User> GetBuddyUsers() =>
+    Map<User>(/* IEnumerable<IUser */ s_buddyUsersList);
+
+  //
+  // IBuddyUsersList wrapper events
+  //
+
+  /// <summary>
+  /// Occurs when a buddy user logs in.
+  /// </summary>
+  public static EventProxy<UserEventArgs> BuddyLoggedIn =
+    new(/* IBuddyUsersList */ s_buddyUsersList, nameof(BuddyLoggedIn));
 }
