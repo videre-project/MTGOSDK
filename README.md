@@ -40,9 +40,10 @@ This project requires the [.NET Framework 4.8 SDK](https://dotnet.microsoft.com/
 
 Building this project with [MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild?view=vs-2022) (e.g. when using the msbuild or dotnet CLI) requires [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) to be installed. These redistributables are also optionally included with Visual Studio 2015 Update 3 and newer.
 
-To build this project using MSBuild, run the following command from the root of the repository:
+To build this project using MSBuild, run the following commands from the root of the repository:
 
 ```powershell
+msbuild Ref.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
 msbuild SDK.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
 ```
 
