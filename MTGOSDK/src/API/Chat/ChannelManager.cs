@@ -53,7 +53,7 @@ public static class ChannelManager
   /// <summary>
   /// The internal reference to the base chat manager.
   /// </summary>
-  private static IChatManager s_chatManager =>
+  private static readonly IChatManager s_chatManager =
     ObjectProvider.Get<IShellViewModel>().ChatManager;
 
   internal static ChatSessionViewModel GetChatForChannel(Channel channel) =>
