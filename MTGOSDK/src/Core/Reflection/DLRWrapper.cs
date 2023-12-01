@@ -93,9 +93,9 @@ public class DLRWrapper<I>() where I : class
         ?? throw new ArgumentException(
             $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
 
-      // Return a ProxyObject wrapper with a fallback value, if present.
+      // Return a ProxyObject wrapper with a default value, if present.
       if (TryGetDefaultAttribute(out var defaultAttribute))
-        return new ProxyObject(baseObj, fallback: defaultAttribute.Value);
+        return new ProxyObject(baseObj, @default: defaultAttribute.Value);
 
       return baseObj;
     }
