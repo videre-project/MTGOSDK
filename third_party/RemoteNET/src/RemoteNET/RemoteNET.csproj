@@ -3,25 +3,13 @@
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
 		<LangVersion>Latest</LangVersion>
-		<NoWin32Manifest>true</NoWin32Manifest>
 		<RunPostBuildEvent>Always</RunPostBuildEvent>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-		<PackageReference Include="System.IO.FileSystem.AccessControl" Version="5.0.0" />
-		<PackageReference Include="System.Security.AccessControl" Version="6.0.0" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<ProjectReference Include="..\..\..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
 		<ProjectReference Include="..\ScubaDiver.API\ScubaDiver.API.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<Reference Include="Microsoft.CSharp">
-			<HintPath>..\..\..\..\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8\Microsoft.CSharp.dll</HintPath>
-		</Reference>
 	</ItemGroup>
 
 	<ItemGroup>
@@ -30,9 +18,6 @@
 			<AutoGen>True</AutoGen>
 			<DependentUpon>Resources.resx</DependentUpon>
 		</Compile>
-	</ItemGroup>
-
-	<ItemGroup>
 		<EmbeddedResource Update="Properties\Resources.resx">
 			<Generator>ResXFileCodeGenerator</Generator>
 			<LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -63,12 +48,16 @@
     </ProjectReference>
   </ItemGroup>
 
-	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-		<Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\Win32\*.exe&quot; &quot;$(ProjectDir)\Resources&quot;&#xD;&#xA;xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\Win32\*.dll&quot; &quot;$(ProjectDir)\Resources&quot;&#xD;&#xA;xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\x64\*.exe&quot; &quot;$(ProjectDir)\Resources&quot;&#xD;&#xA;xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\x64\*.dll&quot; &quot;$(ProjectDir)\Resources&quot;&#xD;&#xA;xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\*.dll&quot; &quot;$(ProjectDir)\Resources&quot;" />
+  <Target Name="PreBuild" BeforeTargets="CoreBuild;CoreCompile">
+    <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\Win32\*.exe&quot; &quot;$(ProjectDir)\Resources&quot;" />
+    <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\Win32\*.dll&quot; &quot;$(ProjectDir)\Resources&quot;" />
+    <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\x64\*.exe&quot; &quot;$(ProjectDir)\Resources&quot;" />
+    <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\x64\*.dll&quot; &quot;$(ProjectDir)\Resources&quot;" />
+    <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\*.dll&quot; &quot;$(ProjectDir)\Resources&quot;" />
 	</Target>
 
-	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="powershell &quot;Get-ChildItem -Path '$(ProjectDir)\Resources' -Exclude '*READ_ME*' | Set-Content -Value 'dummy'&quot;" />
+	<Target Name="PostBuild" DependsOnTargets="PreBuild" AfterTargets="PostBuildEvent">
+		<Exec Command="powershell &quot;Get-ChildItem -Path '$(ProjectDir)\Resources' | Set-Content -Value 'dummy'&quot;" />
 	</Target>
 
 </Project>
