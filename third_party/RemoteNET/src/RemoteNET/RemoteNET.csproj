@@ -56,7 +56,7 @@
     <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\*.dll&quot; &quot;$(ProjectDir)\Resources&quot;" />
 	</Target>
 
-	<Target Name="PostBuild" DependsOnTargets="PreBuild" AfterTargets="PostBuildEvent">
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
 		<Exec Command="powershell &quot;Get-ChildItem -Path '$(ProjectDir)\Resources' | Set-Content -Value 'dummy'&quot;" />
 	</Target>
 
