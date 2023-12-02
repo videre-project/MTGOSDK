@@ -18,6 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <ProjectReference Include="..\third_party\RemoteNET\src\RemoteNET\RemoteNET.csproj" />
     <ProjectReference Include="..\third_party\RemoteNET\src\ScubaDiver.API\ScubaDiver.API.csproj" />
   </ItemGroup>
