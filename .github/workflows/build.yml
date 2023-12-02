@@ -7,11 +7,7 @@ on:
     # paths:
   workflow_dispatch:
 env:
-  MSBUILD_DEFAULTS: |
-    /maxcpucount:2 ^
-    /v:m /clp:ShowCommandLine ^
-    /p:Configuration=Release ^
-    /p:Platform="Any CPU"
+  MSBUILD_DEFAULTS: /m:2 /v:m /clp:ShowCommandLine /p:Configuration=Release /p:Platform="Any CPU"
 jobs:
   # Runs test suite
   build:
