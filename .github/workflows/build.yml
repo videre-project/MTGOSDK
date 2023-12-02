@@ -1,0 +1,32 @@
+name: Build
+on:
+  workflow_dispatch:
+jobs:
+  # Runs test suite
+  build:
+    runs-on: windows-latest
+    name: "MSBuild Runner"
+    steps:
+      # Fetches remote repository without --progress option.
+      #
+      # The default behavior of @actions/checkout outputs many noisy lines of
+      # status output in the workflow log, which is problematic for log size.
+      - name: Checkout latest repository commit
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+      # Setup the .NET Environment
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v3
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v1.3.1
+      #
+      - name: Build Reference Assemblies
+        run: |
+          msbuild Ref.sln /t:Restore /p:Configuration=Release /p:Platform="Any CPU"
+          msbuild Ref.sln /t:Build   /p:Configuration=Release /p:Platform="Any CPU"
+      #
+      - name: Build SDK Solution
+        run: |
+          msbuild SDK.sln /t:Restore /p:Configuration=Release /p:Platform="Any CPU"
+          msbuild SDK.sln /t:Build   /p:Configuration=Release /p:Platform="Any CPU"
