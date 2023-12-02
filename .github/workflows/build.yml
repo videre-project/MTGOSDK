@@ -28,7 +28,7 @@ jobs:
       - name: Setup MSBuild.exe
         uses: microsoft/setup-msbuild@v1.3.1
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v1.0.5
+        uses: NuGet/setup-nuget@v1.2.0
       # Restore previous build artifacts
       - name: Restore NuGet packages
         run: nuget restore SDK.sln
@@ -40,9 +40,9 @@ jobs:
             **/obj
             **/Win32
             **/x64
-          key: ${{ runner.os }}-build-${{ github.sha }}
+          key: ${{ runner.os }}-msbuild-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-build-
+            ${{ runner.os }}-msbuild-
       # Setup MTGO installation and reference assemblies
       - name: Build Reference Assemblies
         run: |
