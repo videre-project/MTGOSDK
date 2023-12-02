@@ -7,7 +7,7 @@ on:
     # paths:
   workflow_dispatch:
 env:
-  MSBUILD_DEFAULTS: /m:2 /v:m /clp:ShowCommandLine /p:Configuration=Release /p:Platform="Any CPU"
+  MSBUILD_DEFAULTS: /m:2 /v:m /clp:Summary /p:Configuration=Release /p:Platform="Any CPU"
   NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -ConfigFile NuGet.Config -UseLockFile
 jobs:
   # Runs test suite
@@ -46,13 +46,9 @@ jobs:
         uses: NuGet/setup-nuget@v1.2.0
       - name: Restore NuGet packages
         run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
-      # Setup MTGO installation and reference assemblies
+      # Build MTGO reference assemblies
       - name: Build Reference Assemblies
-        run: |
-          # msbuild Ref.sln /t:Restore ${{ env.MSBUILD_DEFAULTS }}
-          msbuild Ref.sln /t:Build   ${{ env.MSBUILD_DEFAULTS }}
+        run: msbuild Ref.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}
       # Build the SDK
       - name: Build SDK Solution
-        run: |
-          # msbuild SDK.sln /t:Restore ${{ env.MSBUILD_DEFAULTS }}
-          msbuild SDK.sln /t:Build   ${{ env.MSBUILD_DEFAULTS }}
+        run: msbuild SDK.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}
