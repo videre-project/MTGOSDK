@@ -6,6 +6,8 @@ on:
     types: [ opened, synchronize, closed, reopened ]
     # paths:
   workflow_dispatch:
+env:
+  MSBUILD_DEFAULTS: /m:2 /v:m /clp:ShowCommandLine /p:Configuration=Release /p:Platform="Any CPU"
 jobs:
   # Runs test suite
   build:
@@ -28,10 +30,10 @@ jobs:
       # Setup MTGO installation and reference assemblies
       - name: Build Reference Assemblies
         run: |
-          msbuild Ref.sln /t:Restore /p:Configuration=Release /p:Platform="Any CPU"
-          msbuild Ref.sln /t:Build   /p:Configuration=Release /p:Platform="Any CPU"
+          msbuild Ref.sln /t:Restore ${{ env.MSBUILD_DEFAULTS }}
+          msbuild Ref.sln /t:Build   ${{ env.MSBUILD_DEFAULTS }}
       # Build the SDK
       - name: Build SDK Solution
         run: |
-          msbuild SDK.sln /t:Restore /p:Configuration=Release /p:Platform="Any CPU"
-          msbuild SDK.sln /t:Build   /p:Configuration=Release /p:Platform="Any CPU"
+          msbuild SDK.sln /t:Restore ${{ env.MSBUILD_DEFAULTS }}
+          msbuild SDK.sln /t:Build   ${{ env.MSBUILD_DEFAULTS }}
