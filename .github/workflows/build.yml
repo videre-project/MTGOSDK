@@ -4,7 +4,15 @@ on:
     branches: [main]
   pull_request:
     types: [ opened, synchronize, closed, reopened ]
-    # paths:
+    paths:
+      - '**/*.cs'
+      - '**/*.sln'
+      - '**/*.proj'
+      - '**/*.csproj'
+      - '**/*.vcxproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '**/packages.lock.json'
   workflow_dispatch:
 env:
   MSBUILD_DEFAULTS: /m:2 /v:m /clp:Summary /p:Configuration=Release /p:Platform="Any CPU"
