@@ -37,8 +37,9 @@ jobs:
             **/obj
             **/Win32
             **/x64
-          key: ${{ runner.os }}-msbuild-${{ github.sha }}
+          key: ${{ runner.os }}-msbuild-${{ github.ref_name }}-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-msbuild-${{ github.ref_name }}
             ${{ runner.os }}-msbuild-
       # Setup NuGet environment
       - name: Setup NuGet
