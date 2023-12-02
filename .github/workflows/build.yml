@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 env:
   MSBUILD_DEFAULTS: |
+    /maxcpucount:2 ^
     /verbosity:minimal ^
-    /maxcpucount 2 ^
     /p:Configuration=Release ^
     /p:Platform="Any CPU"
 jobs:
