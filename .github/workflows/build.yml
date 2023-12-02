@@ -25,12 +25,12 @@ jobs:
         uses: actions/setup-dotnet@v3
       - name: Setup MSBuild.exe
         uses: microsoft/setup-msbuild@v1.3.1
-      #
+      # Setup MTGO installation and reference assemblies
       - name: Build Reference Assemblies
         run: |
           msbuild Ref.sln /t:Restore /p:Configuration=Release /p:Platform="Any CPU"
           msbuild Ref.sln /t:Build   /p:Configuration=Release /p:Platform="Any CPU"
-      #
+      # Build the SDK
       - name: Build SDK Solution
         run: |
           msbuild SDK.sln /t:Restore /p:Configuration=Release /p:Platform="Any CPU"

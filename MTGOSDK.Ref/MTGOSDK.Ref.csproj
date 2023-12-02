@@ -18,7 +18,8 @@
 
   <!-- Merge any executables into a single DLL to be used as a reference. -->
   <Target Name="ILMerge"
-          AfterTargets="GenerateReferenceAssemblies">
+          AfterTargets="GenerateReferenceAssemblies"
+          Condition="Exists('$(_MTGOSDK_Refs)')">
     <Exec Command="$(ILMergeConsolePath) ^
       MTGO.exe /ndebug ^
       /target=library ^
@@ -29,8 +30,16 @@
 
   <!-- Notify the user that the reference assemblies have been built. -->
   <Target Name="NotifyRefsBuildComplete"
-          AfterTargets="ILMerge" >
+          AfterTargets="ILMerge"
+          Condition="Exists('$(_MTGOSDK_Refs)\MTGO.dll')">
     <Message Text="MTGOSDK.Ref: Finished bootstrapping MTGOSDK reference assemblies."
+             Importance="high" />
+  </Target>
+
+  <Target Name="NotifyRefsBuildFailed"
+          AfterTargets="ILMerge"
+          Condition="!Exists('$(_MTGOSDK_Refs)\MTGO.dll')">
+    <Message Text="MTGOSDK.Ref: Failed to bootstrap MTGOSDK reference assemblies."
              Importance="high" />
   </Target>
 

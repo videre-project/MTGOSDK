@@ -15,6 +15,7 @@ using MTGOSDK.Core.Exceptions;
 
 
 namespace MTGOSDK.Core;
+using static MTGOSDK.Win32.Constants;
 
 /// <summary>
 /// A singleton class that manages the connection to the MTGO client process.
@@ -29,28 +30,6 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   public static RemoteClient @this => s_instance.Value;
   public static RemoteApp @client => @this._clientHandle;
   public static Process @process => @this._clientProcess;
-
-  /// <summary>
-  /// The Start Menu shortcut path for MTGO.
-  /// </summary>
-  public static string AppRefPath =
-    Path.Combine(
-      Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-      "Daybreak Game Company LLC",
-      "Magic The Gathering Online .appref-ms"
-    );
-
-  /// <summary>
-  /// The MTGO application manifest uri for ClickOnce deployment.
-  /// </summary>
-  public static string ApplicationUri =
-    "http://mtgo.patch.daybreakgames.com/patch/mtg/live/client/MTGO.application";
-    // + "#" + string.Join(", ", new string[] {
-    //   "MTGO.application",
-    //   "Culture=neutral",
-    //   "PublicKeyToken=dbac2845cba5280e",
-    //   "processorArchitecture=msil"
-    // });
 
   /// <summary>
   /// The directory path to extract runtime injector and diver assemblies to.

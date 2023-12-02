@@ -6,6 +6,9 @@
     in subsequent builds because the task assembly can't be overwritten.
   -->
   <UsingTask AssemblyFile="$(_MTGOSDK_MSBuild)"
+             TaskName="ExtractMTGOInstallation"
+             TaskFactory="TaskHostFactory" />
+  <UsingTask AssemblyFile="$(_MTGOSDK_MSBuild)"
              TaskName="GenerateReferenceAssemblies"
              TaskFactory="TaskHostFactory" />
 
@@ -23,6 +26,23 @@
           BeforeTargets="CoreCompile"
           DependsOnTargets="ResolveProjectReferences;ResolveAssemblyReferences">
     <!--
+      Extract the MTGO installation directory paths, or create a temporary
+      extraction directory if no existing MTGO installation could be found.
+    -->
+    <ExtractMTGOInstallation
+        MTGOAppDir="$(MTGOAppDir)"
+        MTGODataDir="$(MTGODataDir)">
+      <!-- Expand the glob to the (local) MTGO install/user directories -->
+      <Output TaskParameter="MTGOAppDir" PropertyName="MTGOAppDir" />
+      <Output TaskParameter="MTGODataDir" PropertyName="MTGODataDir" />
+      <!-- Output the MTGO version for use in the consuming project -->
+      <Output TaskParameter="Version" PropertyName="MTGOVersion" />
+    </ExtractMTGOInstallation>
+
+    <Message Text="MTGOSDK.MSBuild: Extracted MTGO version $(MTGOVersion)"
+             Importance="high" />
+
+    <!--
       We build reference assemblies from the latest MTGO installation directory
       to ensure that we're only targeting the latest APIs of the MTGO client.
 
@@ -31,11 +51,8 @@
     -->
     <GenerateReferenceAssemblies
         MTGOAppDir="$(MTGOAppDir)"
-        MTGODataDir="$(MTGODataDir)"
+        Version="$(MTGOVersion)"
         OutputPath="$(_MTGOSDK_Refs)">
-      <!-- Expand the glob to the (local) MTGO install/user directories -->
-      <Output TaskParameter="MTGOAppDir" PropertyName="MTGOAppDir" />
-      <Output TaskParameter="MTGODataDir" PropertyName="MTGODataDir" />
       <!--
         Updates the internal reference path to reflect the new subpath.
 
@@ -43,8 +60,6 @@
         and cannot be used as part of any `Reference` item groups.
       -->
       <Output TaskParameter="OutputPath" PropertyName="_MTGOSDK_Refs" />
-      <!-- Output the MTGO version for use in the consuming project -->
-      <Output TaskParameter="Version" PropertyName="MTGOVersion" />
     </GenerateReferenceAssemblies>
 
     <!-- TODO: Verify the output reference assemblies w/ ILVerify -->
