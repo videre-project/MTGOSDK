@@ -9,7 +9,7 @@ on:
 env:
   MSBUILD_DEFAULTS: |
     /maxcpucount:2 ^
-    /verbosity:minimal ^
+    /nologo /v:m /clp:ShowCommandLine ^
     /p:Configuration=Release ^
     /p:Platform="Any CPU"
 jobs:
