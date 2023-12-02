@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
 env:
   MSBUILD_DEFAULTS: |
-    /verbosity:minimal
-    /maxcpucount 2
-    /p:Configuration=Release
+    /verbosity:minimal ^
+    /maxcpucount 2 ^
+    /p:Configuration=Release ^
     /p:Platform="Any CPU"
 jobs:
   # Runs test suite
