@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [ opened, synchronize, closed, reopened ]
+    types: [opened, synchronize, closed, reopened]
     paths:
       - '**/*.cs'
       - '**/*.sln'
@@ -15,7 +15,14 @@ on:
       - '**/packages.lock.json'
   workflow_dispatch:
 env:
+  MSBUILD_CACHES: |
+    **/bin
+    **/obj
+    **/Win32
+    **/x64
   MSBUILD_DEFAULTS: /m:2 /v:m /clp:Summary /p:Configuration=Release /p:Platform="Any CPU"
+  NUGET_CACHES: |
+    ~/.nuget/packages
   NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -ConfigFile NuGet.Config -UseLockFile
 jobs:
   # Runs test suite
@@ -31,6 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           show-progress: false
+
       # Setup the .NET environment
       - name: Install .NET Core
         uses: actions/setup-dotnet@v3
@@ -38,28 +46,30 @@ jobs:
       - name: Setup MSBuild.exe
         uses: microsoft/setup-msbuild@v1.3.1
       - name: Restore Build Cache
+        id: msbuild-cache
         uses: actions/cache@v3
         with:
-          path: |
-            **/bin
-            **/obj
-            **/Win32
-            **/x64
-          key: ${{ runner.os }}-msbuild-${{ github.ref_name }}
+          path: ${{ env.MSBUILD_CACHES }}
+          key: ${{ runner.os }}-msbuild-${{ github.ref_name }}-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-msbuild-${{ github.ref_name }}
             ${{ runner.os }}-msbuild-
+
       # Setup NuGet environment
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v1.2.0
       - name: Restore NuGet Cache
+        id: nuget-cache
         uses: actions/cache@v3
         with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ github.ref_name }}
+          path: ${{ env.NUGET_CACHES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
       - name: Restore NuGet packages
+        if: steps.nuget-cache.outputs.cache-hit != 'true'
         run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
+
       # Build MTGO reference assemblies
       - name: Build Reference Assemblies
         run: msbuild Ref.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}
