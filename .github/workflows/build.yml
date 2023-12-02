@@ -44,6 +44,13 @@ jobs:
       # Setup NuGet environment
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v1.2.0
+      - name: Restore NuGet Cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
       - name: Restore NuGet packages
         run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
       # Build MTGO reference assemblies
