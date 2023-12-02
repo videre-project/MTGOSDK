@@ -37,9 +37,8 @@ jobs:
             **/obj
             **/Win32
             **/x64
-          key: ${{ runner.os }}-msbuild-${{ github.ref_name }}-${{ github.sha }}
+          key: ${{ runner.os }}-msbuild-${{ github.ref_name }}
           restore-keys: |
-            ${{ runner.os }}-msbuild-${{ github.ref_name }}
             ${{ runner.os }}-msbuild-
       # Setup NuGet environment
       - name: Setup NuGet
@@ -48,7 +47,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          key: ${{ runner.os }}-nuget-${{ github.ref_name }}
           restore-keys: |
             ${{ runner.os }}-nuget-
       - name: Restore NuGet packages
