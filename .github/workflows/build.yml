@@ -90,11 +90,11 @@ jobs:
         with:
           script: |
             // Extract environmental variables into their JS equivalents
-            const MSBUILD_HIT = process.env.MSBUILD_HIT == 'true'
-            const NUGET_HIT   = process.env.NUGET_HIT   == 'true'
+            const MSBUILD = process.env.MSBUILD_HIT !== 'true'
+            const NUGET   = process.env.NUGET_HIT   !== 'true'
 
-            // Exit early if no cache hit
-            if (!(MSBUILD_HIT || NUGET_HIT))
+            // Exit early if no cache hits
+            if (!MSBUILD && !NUGET)
               return // No cache hit
 
             // Fetch the repository's Actions cache list
@@ -107,12 +107,12 @@ jobs:
             for (const { id, ref, key } of caches.data.actions_caches) {
               if (ref != context.ref)
                 continue // Cache is not accessible in this context
-              if ((MSBUILD_HIT && key.startsWith("${{ runner.os }}-msbuild-")) ||
-                  (NUGET_HIT   && key.startsWith("${{ runner.os }}-nuget-"))) {
-                await github.rest.actions.deleteArtifact({
+              if ((MSBUILD && key.startsWith("${{ runner.os }}-msbuild-")) ||
+                  (NUGET   && key.startsWith("${{ runner.os }}-nuget-"))) {
+                await github.rest.actions.deleteActionsCacheById({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  artifact_id: id,
+                  cache_id: id,
                 })
               }
             }
