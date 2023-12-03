@@ -3,8 +3,9 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, closed, reopened]
+    types: [opened, synchronize]
     paths:
+      - '.github/workflows/build.yml'
       - '**/*.cs'
       - '**/*.sln'
       - '**/*.proj'
@@ -14,16 +15,19 @@ on:
       - '**/*.targets'
       - '**/packages.lock.json'
   workflow_dispatch:
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 env:
   MSBUILD_CACHES: |
     **/bin
     **/obj
     **/Win32
     **/x64
-  MSBUILD_DEFAULTS: /m:2 /v:m /clp:Summary /p:Configuration=Release /p:Platform="Any CPU"
+  MSBUILD_DEFAULTS: /m:2 /v:m /p:Configuration=Release /p:Platform="Any CPU"
   NUGET_CACHES: |
     ~/.nuget/packages
-  NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -ConfigFile NuGet.Config -UseLockFile
+  NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -UseLockFile
 jobs:
   # Runs test suite
   build:
@@ -76,3 +80,39 @@ jobs:
       # Build the SDK
       - name: Build SDK Solution
         run: msbuild SDK.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}
+
+      # Evict expired cache entries
+      - name: Purge expired cache entries
+        uses: actions/github-script@v6
+        env:
+          MSBUILD_HIT: ${{ steps.msbuild-cache.outputs.cache-hit }}
+          NUGET_HIT:   ${{ steps.nuget-cache.outputs.cache-hit }}
+        with:
+          script: |
+            // Extract environmental variables into their JS equivalents
+            const MSBUILD = process.env.MSBUILD_HIT !== 'true'
+            const NUGET   = process.env.NUGET_HIT   !== 'true'
+
+            // Exit early if no cache hits
+            if (!MSBUILD && !NUGET)
+              return // No cache hit
+
+            // Fetch the repository's Actions cache list
+            const caches = await github.rest.actions.getActionsCacheList({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            })
+
+            // Purge expired MSBuild and NuGet caches from the current ref
+            for (const { id, ref, key } of caches.data.actions_caches) {
+              if (ref != context.ref)
+                continue // Cache is not accessible in this context
+              if ((MSBUILD && key.startsWith("${{ runner.os }}-msbuild-")) ||
+                  (NUGET   && key.startsWith("${{ runner.os }}-nuget-"))) {
+                await github.rest.actions.deleteActionsCacheById({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  cache_id: id,
+                })
+              }
+            }
