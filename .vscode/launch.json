@@ -1,0 +1,38 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "BasicBot Demo",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceRoot}/examples/BasicBot/bin/Release/net8.0-windows/BasicBot.dll",
+      "args": [],
+      "cwd": "${workspaceRoot}/examples/BasicBot",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "BasicInjector Demo",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceRoot}/examples/BasicInjector/bin/Release/net8.0-windows/BasicInjector.dll",
+      "args": [],
+      "cwd": "${workspaceRoot}/examples/BasicInjector",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "GameTracker Demo",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceRoot}/examples/GameTracker/bin/Release/net8.0-windows/GameTracker.dll",
+      "args": [],
+      "cwd": "${workspaceRoot}/examples/GameTracker",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+    },
+  ]
+}

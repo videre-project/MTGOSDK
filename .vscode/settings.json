@@ -1,11 +1,19 @@
 {
   "files.exclude": {
     // Visual Studio Code specific files
-    ".vs": true,
+    "**/.vs": true,
+    "**/.user": true,
+    // Exclude staging and production directories
+    "**/dist": true,
     // Excludes all C# and C++ build output folders
     "**/bin": true,
     "**/obj": true,
-    // "**/Win32": true,
-    // "**/x64": true,
-  }
+    "**/Win32": true,
+    "**/x64": true,
+  },
+  "var": {
+    "configuration" : "Release",
+    "buildProperties" : "/m /v:m /clp:NoSummary /p:GenerateFullPaths=True"
+  },
+  "dotnet.defaultSolution": "SDK.sln"
 }
