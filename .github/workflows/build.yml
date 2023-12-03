@@ -20,7 +20,7 @@ env:
     **/obj
     **/Win32
     **/x64
-  MSBUILD_DEFAULTS: /m:2 /v:m /clp:Summary /p:Configuration=Release /p:Platform="Any CPU"
+  MSBUILD_DEFAULTS: /m:2 /v:m /clp:PerformanceSummary;NoSummary /p:Configuration=Release /p:Platform="Any CPU"
   NUGET_CACHES: |
     ~/.nuget/packages
   NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -ConfigFile NuGet.Config -UseLockFile
