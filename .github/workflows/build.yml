@@ -14,16 +14,19 @@ on:
       - '**/*.targets'
       - '**/packages.lock.json'
   workflow_dispatch:
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
 env:
   MSBUILD_CACHES: |
     **/bin
     **/obj
     **/Win32
     **/x64
-  MSBUILD_DEFAULTS: /m:2 /v:m /clp:PerformanceSummary;NoSummary /p:Configuration=Release /p:Platform="Any CPU"
+  MSBUILD_DEFAULTS: /m:2 /v:m /p:Configuration=Release /p:Platform="Any CPU"
   NUGET_CACHES: |
     ~/.nuget/packages
-  NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -ConfigFile NuGet.Config -UseLockFile
+  NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -UseLockFile
 jobs:
   # Runs test suite
   build:
