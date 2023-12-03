@@ -25,6 +25,9 @@
 	</ItemGroup>
 
   <!-- Configures build-time dependencies for MSBuild -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);NU1702</NoWarn>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ScubaDiver\ScubaDiver.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
