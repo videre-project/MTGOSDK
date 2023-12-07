@@ -126,9 +126,9 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     // Note: This is a crude method of gauging the progress of the ClickOnce
     //       deployment without adding significant delay to normal startup.
     //
-    if ((await WaitUntil(() => IsStarting, retries: 4    /* ~ 1 sec */ )) &&
-        (await WaitUntil(() => IsUpdating, retries: 12   /* ~ 3 sec */ )) &&
-       !(await WaitUntil(() => HasStarted, retries: 480  /* ~ 2 min */ )))
+    if ((await WaitUntil(() => IsStarting, retries: 4    /* ~ 1 sec */ )) ||
+        (await WaitUntil(() => IsUpdating, retries: 8    /* ~ 2 sec */ )) &&
+       !(await WaitUntil(() => HasStarted, retries: 1200 /* ~ 5 min */ )))
     {
       throw new SetupFailedException("The MTGO installation has failed.");
     }
