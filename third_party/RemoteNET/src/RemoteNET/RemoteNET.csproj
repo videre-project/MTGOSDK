@@ -51,7 +51,9 @@
     </ProjectReference>
   </ItemGroup>
 
-  <Target Name="PreBuild" BeforeTargets="BeforeBuild">
+  <Target Name="PreBuild"
+          BeforeTargets="CoreCompile"
+          AfterTargets="ResolveProjectReferences">
     <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\Win32\*.exe&quot; &quot;$(ProjectDir)\Resources&quot;" />
     <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\Win32\*.dll&quot; &quot;$(ProjectDir)\Resources&quot;" />
     <Exec Command="xcopy /Y &quot;$(SolutionDir)\dist\$(Configuration)\x64\*.exe&quot; &quot;$(ProjectDir)\Resources&quot;" />
