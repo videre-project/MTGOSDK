@@ -43,7 +43,7 @@ public class GenerateReferenceAssemblies : Task
     if (Directory.Exists(versionPath))
     {
       Log.LogMessage(MessageImportance.High,
-          $"Reference assemblies for version {Version} already exist.");
+          $"MTGOSDK.MSBuild: Reference assemblies for version {Version} already exist.");
 
       OutputPath = versionPath;
       return true;
