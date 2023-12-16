@@ -49,7 +49,7 @@
     <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Reference.dll" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ImpromptuInterface" Version="7.0.1" />
+    <PackageReference Include="ImpromptuInterface" Version="8.0.4" />
   </ItemGroup>
 
 </Project>
