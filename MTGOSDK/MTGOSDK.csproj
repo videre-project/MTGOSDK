@@ -5,16 +5,16 @@
     <LangVersion>Preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <NoWarn>
-      CS8597; <!-- Thrown value may be null. -->
-      CS8600; <!-- Converting null literal or possible null value to non-nullable type. -->
-      CS8602; <!-- Possible dereference of a null reference. -->
-      CS8603; <!-- Possible null reference return. -->
-      CS8604; <!-- Possible null reference argument for parameter -->
-      CS8625; <!-- Cannot convert null literal to non-nullable reference type. -->
-      IDE0065; <!-- Using directives within a namespace declaration. -->
-    </NoWarn>
+    <!-- Disables unenforcable nullable warnings - breaks static analysis -->
+    <NoWarn>$(NoWarn);CS8597;CS8600;CS8602;CS8603;CS8604;CS8625;IDE0065;</NoWarn>
+    <!-- Used for referencing WPF assemblies at runtime (w/ reflection) -->
     <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <!-- Publishing Configuration -->
+  <PropertyGroup>
+    <PublishDir>..\publish\</PublishDir>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +29,9 @@
     import the MTGOSDK.MSBuild.props file before referencing the project.
   -->
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
+  <PropertyGroup>
+    <MTGOSDK_Refs>$(_MTGOSDK_Refs)\3.4.*.*</MTGOSDK_Refs>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
                       ReferenceOutputAssembly="false" />
@@ -37,7 +40,13 @@
       Note that the '_MTGOSDK_Refs' path does not reference the updated version
       subpath as it is only evaluated after building the MTGOSDK.Ref project.
     -->
-    <Reference Include="$(_MTGOSDK_Refs)\3.4.*.*\*.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\Core.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\FlsClient.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\MTGOEnumStruct.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Common.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Chat.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Core.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Reference.dll" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="ImpromptuInterface" Version="7.0.1" />

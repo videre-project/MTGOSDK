@@ -67,14 +67,6 @@
              Importance="high" />
     <Message Text="MTGOSDK.MSBuild: Reference assemblies are located at $(_MTGOSDK_Refs)"
              Importance="high" />
-
-    <PropertyGroup>
-      <!--
-        We need to set the `ReferencePath` property to include the path to the
-        MTGO reference assemblies so that consuming projects can resolve them.
-      -->
-      <ReferencePath>$(ReferencePath);$(_MTGOSDK_Refs)</ReferencePath>
-    </PropertyGroup>
   </Target>
 
 </Project>
