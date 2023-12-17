@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <LangVersion>Preview</LangVersion>
+    <LangVersion>Latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- Disables unenforcable nullable warnings - breaks static analysis -->
@@ -11,10 +11,19 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <!-- Package Properties -->
+  <PropertyGroup>
+    <PackageId>MTGOSDK</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Cory Bennett</Authors>
+    <Company>Videre Project</Company>
+  </PropertyGroup>
+
   <!-- Publishing Configuration -->
   <PropertyGroup>
     <PublishDir>..\publish\</PublishDir>
     <DebugType>embedded</DebugType>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>

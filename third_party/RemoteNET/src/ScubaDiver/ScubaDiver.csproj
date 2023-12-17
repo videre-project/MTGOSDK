@@ -6,6 +6,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>ScubaDiver</RootNamespace>
     <AppDesignerFolder>Properties</AppDesignerFolder>
+    <IsPackable>false</IsPackable>
 	</PropertyGroup>
 
   <!-- Compiler Options -->
