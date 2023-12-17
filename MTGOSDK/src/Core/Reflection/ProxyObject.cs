@@ -34,9 +34,11 @@ public class ProxyObject(
       // If the base object does not support dynamic binding, use reflection.
       catch(Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
       {
-        var value = @base.GetType().GetProperty(binder.Name).GetValue(@base);
+        dynamic value = null;
         try
         {
+          value = @base.GetType().GetProperty(binder.Name).GetValue(@base);
+
           // Get the default value for the return type.
           Type returnType = binder.ReturnType;
           dynamic typeRef = RuntimeHelpers.GetUninitializedObject(returnType);
@@ -44,12 +46,14 @@ public class ProxyObject(
             .GetType()
             .GetConstructor(Type.EmptyTypes)
             .Invoke(typeRef, null);
+
 #pragma warning disable CS8601
           result = (value != null || value != typeDefault)
             ? value
             : @default ?? value;
 #pragma warning restore CS8601
-        } catch
+        }
+        catch
         {
           result = value ?? @default;
         }

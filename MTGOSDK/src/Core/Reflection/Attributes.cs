@@ -88,11 +88,16 @@ public static class Attributes
   public static T? GetCallerAttribute<T>(int depth = 2) where T : Attribute
   {
     string name = GetCallerName(depth);
-    foreach (var memberAttributePair in GetMemberAttributes<T>(depth+1))
+    try
     {
-      if (memberAttributePair.Member.Name == name)
-        return memberAttributePair.Attribute;
+      foreach (var memberAttributePair in GetMemberAttributes<T>(depth+1))
+      {
+        if (memberAttributePair.Member.Name == name)
+          return memberAttributePair.Attribute;
+      }
     }
+    // Invalid member access (or otherwise doesn't have any attributes)
+    catch (NullReferenceException) { }
 
     return null;
   }
