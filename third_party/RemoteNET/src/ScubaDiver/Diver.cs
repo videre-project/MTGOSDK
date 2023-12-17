@@ -977,14 +977,6 @@ public class Diver : IDisposable
   public int AssignCallbackToken() =>
     Interlocked.Increment(ref _nextAvailableCallbackToken);
 
-  /// <summary>
-  ///
-  /// </summary>
-  /// <param name="callbacksEndpoint"></param>
-  /// <param name="token"></param>
-  /// <param name="stackTrace"></param>
-  /// <param name="parameters"></param>
-  /// <returns>Any results returned from the</returns>
   public ObjectOrRemoteAddress InvokeControllerCallback(
     IPEndPoint callbacksEndpoint,
     int token,
@@ -1027,10 +1019,19 @@ public class Diver : IDisposable
     }
 
     // Call callback at controller
-    InvocationResults callbackResults = reverseCommunicator.InvokeCallback(token, stackTrace, remoteParams);
+    try
+    {
+      InvocationResults callbackResults = reverseCommunicator.InvokeCallback(
+        token,
+        stackTrace,
+        remoteParams
+      );
 
-    return callbackResults.ReturnedObjectOrAddress;
+      return callbackResults.ReturnedObjectOrAddress;
+    }
+    catch (NullReferenceException) { }
 
+    return null;
   }
 
   #endregion
