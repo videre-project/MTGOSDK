@@ -30,6 +30,8 @@ namespace ScubaDiver.API
 
     private int? _process_id = null;
     private CallbacksListener _listener;
+    private static readonly object _listenerLock = new();
+    private readonly HttpClient httpClient = new();
 
     public DiverCommunicator(string hostname, int diverPort)
     {
@@ -47,7 +49,6 @@ namespace ScubaDiver.API
     {
       queryParams ??= new();
 
-      HttpClient httpClient = new();
       NameValueCollection queryString = HttpUtility.ParseQueryString(string.Empty);
       foreach (KeyValuePair<string, string> kvp in queryParams)
       {
@@ -66,10 +67,13 @@ namespace ScubaDiver.API
         msg.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
       }
 
-      HttpResponseMessage res = httpClient.SendAsync(msg).Result;
-      string body = res.Content.ReadAsStringAsync().Result;
-      httpClient.Dispose();
+      HttpResponseMessage res = null;
+      lock (_listenerLock)
+      {
+        res = httpClient.SendAsync(msg).Result;
+      }
 
+      string body = res.Content.ReadAsStringAsync().Result;
       if (body.StartsWith("{\"error\":", StringComparison.InvariantCultureIgnoreCase))
       {
         // Diver sent back an error. We parse it here and throwing a 'proxied' exception
@@ -89,16 +93,6 @@ namespace ScubaDiver.API
       string body = SendRequest("die");
 
       return body?.Contains("Goodbye") ?? false;
-    }
-
-    public bool InjectDll(string path)
-    {
-      var res = SendRequest("inject", new Dictionary<string, string>()
-      {
-        { "dll_path", path }
-      });
-
-      return res.Contains("dll loaded");
     }
 
     /// <summary>
