@@ -14,6 +14,7 @@ using WotC.MtGO.Client.Model.Play;
 namespace MTGOSDK.API.Play;
 using static MTGOSDK.API.Events;
 using static MTGOSDK.API.Play.Event<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public static class EventManager
 {
@@ -49,13 +50,19 @@ public static class EventManager
     s_playService.m_matchesAndTournamentsAndQueuesById;
 
   /// <summary>
+  /// A dictionary of all events by their event token.
+  /// </summary>
+  private static dynamic eventsByToken =>
+    Unbind(s_playerEventManager).m_openEventsByToken;
+
+  /// <summary>
   /// All currently queryable events with GetEvent().
   /// </summary>
   public static IEnumerable<dynamic> Events
   {
     get
     {
-      foreach (var playerEvent in eventsById.Values)
+      foreach (var playerEvent in eventsByToken.Values)
         yield return FromPlayerEvent(playerEvent);
     }
   }

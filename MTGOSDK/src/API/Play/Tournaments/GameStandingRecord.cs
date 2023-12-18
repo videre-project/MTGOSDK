@@ -49,5 +49,17 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinnerIds => Map<int>(@base.WinnerIds).ToList();
+  public IList<int> WinnerIds // FIXME: .NET 8 DLR regression
+  {
+    get
+    {
+      var winnerIds = new List<int>();
+      foreach(var winnerId in @base.WinnerIds)
+      {
+        winnerIds.Add(winnerId);
+      }
+      return winnerIds;
+    }
+  }
+  // public IEnumerable<int> WinnerIds => @base.WinnerIds;
 }

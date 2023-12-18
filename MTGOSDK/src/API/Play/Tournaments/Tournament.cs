@@ -32,7 +32,8 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// <summary>
   /// The time the event is scheduled to end.
   /// </summary>
-  public DateTime EndTime => @base.ScheduledEndTime;
+  [Default(null)]
+  public DateTime? EndTime => @base.ScheduledEndTime;
 
   /// <summary>
   /// The number of rounds in the tournament.
@@ -50,7 +51,8 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
   /// </remarks>
   public TournamentStateEnum State =>
-    Cast<TournamentStateEnum>(Unbind(@base).State.EnumValue);
+    Try(() => Cast<TournamentStateEnum>(Unbind(@base).State.EnumValue),
+        fallback: TournamentStateEnum.NotSet);
 
   /// <summary>
   /// The time remaining in the current round or tournament phase.
@@ -66,6 +68,7 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// <summary>
   /// The current round of the tournament.
   /// </summary>
+  [Default(-1)]
   public int CurrentRound => @base.CurrentRound;
 
   /// <summary>
@@ -77,6 +80,12 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// Whether the tournament has progressed to playoffs (i.e. Top-8)
   /// </summary>
   public bool InPlayoffs => @base.IsInPlayoffs;
+
+  /// <summary>
+  /// The tournament's detailed round information.
+  /// </summary>
+  public IEnumerable<TournamentRound> Rounds =>
+    Map<TournamentRound>(@base.CurrentTournamentPart.Rounds);
 
   /// <summary>
   /// Standings for each player in the tournament.
