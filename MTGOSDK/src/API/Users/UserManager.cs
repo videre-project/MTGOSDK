@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Reflection;
 
 using MTGOSDK.Core;
@@ -19,6 +20,11 @@ using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public static class UserManager
 {
+  /// <summary>
+  /// A dictionary of cached user objects.
+  /// </summary>
+  public static ConcurrentDictionary<int, User> Users { get; } = new();
+
   //
   // UserManager wrapper methods
   //
@@ -47,12 +53,19 @@ public static class UserManager
   /// <exception cref="ArgumentException">
   /// Thrown if the user does not exist.
   /// </exception>
-  public static User GetUser(int id, string name) =>
-    new User(
-      // This is a private method that is not exposed by the IUserManager type.
-      s_userManager.CreateNewUser(id, name)
-        ?? throw new ArgumentException($"User '{name}' (#{id}) does not exist.")
-    );
+  public static User GetUser(int id, string name)
+  {
+    if (!Users.TryGetValue(id, out var user))
+    {
+      Users[id] = user = new User(
+        // This is a private method that is not exposed by the IUserManager type.
+        s_userManager.CreateNewUser(id, name)
+          ?? throw new ArgumentException($"User '{name}' (#{id}) does not exist.")
+      );
+    }
+
+    return user;
+  }
 
   /// <summary>
   /// Retrieves a user object from the client's UserManager.
