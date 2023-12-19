@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 
@@ -143,8 +144,15 @@ namespace RemoteNET
       {
         case DiverState.NoDiver:
           // No diver, we need to inject one
-          Bootstrapper.Inject(target, diverPort);
-          break;
+          try
+          {
+            Bootstrapper.Inject(target, diverPort);
+            break;
+          }
+          catch (IOException e)
+          {
+            throw new Exception("Failed to inject diver.", e);
+          }
         case DiverState.Alive:
           // Skip injection as diver assembly is already bootstrapped
           IsReconnected = true;
@@ -294,7 +302,10 @@ namespace RemoteNET
     //
     public void Dispose()
     {
-      Communicator?.KillDiver();
+      if (!(Communicator?.KillDiver() ?? false))
+      {
+        throw new Exception("Communicator failed to tear down HTTPClient.");
+      }
       _communicator = null;
       _procWithDiver = null;
     }
