@@ -65,7 +65,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <summary>
   /// Fetches the MTGO client process.
   /// </summary>
-  private static Process MTGOProcess() =>
+  private static Process? MTGOProcess() =>
     Process.GetProcessesByName("MTGO")
       .OrderBy(x => x.StartTime)
       .FirstOrDefault();
@@ -73,21 +73,21 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <summary>
   /// Whether the MTGO (ClickOnce) deployment has started.
   /// </summary>
-  private static bool IsStarting =>
+  public static bool IsStarting =>
     Try<bool>(() =>
       ClickOnceProcess().MainWindowTitle.Contains("Launching Process"));
 
   /// <summary>
   /// Whether ClickOnce is currently updating the MTGO client.
   /// </summary>
-  private static bool IsUpdating =>
+  public static bool IsUpdating =>
     Try<bool>(() =>
       ClickOnceProcess().MainWindowTitle.Contains("Magic The Gathering Online"));
 
   /// <summary>
   /// Whether the MTGO client process has started.
   /// </summary>
-  private static bool HasStarted => MTGOProcess() is not null;
+  public static bool HasStarted => MTGOProcess() is not null;
 
   /// <summary>
   /// Starts the MTGO client process.
