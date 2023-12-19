@@ -27,6 +27,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ImpromptuInterface"
+                      Version="8.0.4" />
     <ProjectReference Include="..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <ProjectReference Include="..\third_party\RemoteNET\src\RemoteNET\RemoteNET.csproj" />
     <ProjectReference Include="..\third_party\RemoteNET\src\ScubaDiver.API\ScubaDiver.API.csproj" />
@@ -56,9 +58,6 @@
     <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Chat.dll" />
     <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Core.dll" />
     <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Reference.dll" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="ImpromptuInterface" Version="8.0.4" />
   </ItemGroup>
 
 </Project>
