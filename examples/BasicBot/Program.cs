@@ -6,16 +6,29 @@
 using System;
 
 using MTGOSDK.API;
+using MTGOSDK.Core;
 using MTGOSDK.Core.Security;
 
 
 Console.WriteLine($"Connecting to MTGO v{Client.Version}...");
-var client = new Client(
-  new ClientOptions { CreateProcess = true, AcceptEULAPrompt = true }
+using var client = new Client(
+  RemoteClient.HasStarted
+    ? new ClientOptions()
+    : new ClientOptions
+      {
+        CreateProcess = true,
+        // DestroyOnExit = true,
+        AcceptEULAPrompt = true
+      }
 );
 
-DotEnv.LoadFile();
-await client.LogOn(
-  username: DotEnv.Get("USERNAME"),
-  password: DotEnv.Get("PASSWORD")
-);
+if (!client.IsConnected)
+{
+  DotEnv.LoadFile();
+  await client.LogOn(
+    username: DotEnv.Get("USERNAME"),
+    password: DotEnv.Get("PASSWORD")
+  );
+}
+
+Console.WriteLine($"Finished loading.");
