@@ -58,21 +58,39 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
     get
     {
       foreach(var player in @base.Users)
-        yield return new User(player.Id, player.Name);
+        yield return new User(player.Name);
     }
   }
 
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinningPlayerIds =>
-    Map<int>(@base.WinningPlayerIds).ToList();
+  public IList<int> WinningPlayerIds // FIXME: .NET 8 DLR regression
+  {
+    get
+    {
+      IList<int> winningPlayerIds = new List<int>();
+      foreach(var playerId in @base.WinningPlayerIds)
+        winningPlayerIds.Add(playerId);
+
+      return winningPlayerIds;
+    }
+  }
 
   /// <summary>
   /// The IDs of the losing player(s).
   /// </summary>
-  public IList<int> LosingPlayerIds =>
-    Map<int>(@base.LosingPlayerIds).ToList();
+  public IList<int> LosingPlayerIds // FIXME: .NET 8 DLR regression
+  {
+    get
+    {
+      IList<int> losingPlayerIds = new List<int>();
+      foreach(var playerId in @base.LosingPlayerIds)
+        losingPlayerIds.Add(playerId);
+
+      return losingPlayerIds;
+    }
+  }
 
   /// <summary>
   /// The results of each game in the match.

@@ -32,7 +32,7 @@ public sealed class StandingRecord(dynamic standingRecord)
   /// <summary>
   /// The user object of the player.
   /// </summary>
-  public User Player => new(@base.User);
+  public User Player => new(@base.User.Name);
 
   /// <summary>
   /// The number of points the player has earned.

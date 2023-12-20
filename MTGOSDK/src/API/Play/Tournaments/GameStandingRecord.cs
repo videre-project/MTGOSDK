@@ -37,7 +37,7 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <remarks>
   /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
   /// </remarks>
-  public GameState GateState =>
+  public GameState GameState =>
     Cast<GameState>(Unbind(@base).GameState);
 
   /// <summary>
