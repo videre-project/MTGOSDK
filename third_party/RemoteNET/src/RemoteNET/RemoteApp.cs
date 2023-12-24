@@ -302,10 +302,7 @@ namespace RemoteNET
     //
     public void Dispose()
     {
-      if (!(Communicator?.KillDiver() ?? false))
-      {
-        throw new Exception("Communicator failed to tear down HTTPClient.");
-      }
+      Communicator?.KillDiver();
       _communicator = null;
       _procWithDiver = null;
     }

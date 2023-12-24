@@ -90,12 +90,15 @@ namespace ScubaDiver.API
       if (_process_id.HasValue)
         UnregisterClient(_process_id.Value);
 
+      string body = SendRequest("die");
+      return body?.Contains("Goodbye") ?? false;
+    }
+
+    ~DiverCommunicator()
+    {
       lock (_listenerLock)
       {
-        string body = SendRequest("die");
         httpClient.Dispose();
-
-        return body?.Contains("Goodbye") ?? false;
       }
     }
 
