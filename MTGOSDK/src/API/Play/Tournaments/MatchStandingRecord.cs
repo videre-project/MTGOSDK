@@ -30,6 +30,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The ID of the match.
   /// </summary>
+  [Default(-1)]
   public int Id => @base.Id;
 
   /// <summary>
