@@ -1074,6 +1074,7 @@ public class Diver : IDisposable
       {
         if (retries == 0)
           return QuickError("Failed to retrieve the remote object. Error: " + e.Message);
+        Thread.Sleep(100);
       }
     }
     if (od == null)
