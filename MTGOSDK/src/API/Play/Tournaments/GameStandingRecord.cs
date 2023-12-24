@@ -54,10 +54,11 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
     get
     {
       var winnerIds = new List<int>();
-      foreach(var winnerId in @base.WinnerIds)
+      foreach(var winnerId in Try(() => @base.WinnerIds, Enumerable.Empty<int>()))
       {
         winnerIds.Add(winnerId);
       }
+
       return winnerIds;
     }
   }
