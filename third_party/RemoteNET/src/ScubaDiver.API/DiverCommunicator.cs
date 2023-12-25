@@ -94,14 +94,6 @@ namespace ScubaDiver.API
       return body?.Contains("Goodbye") ?? false;
     }
 
-    ~DiverCommunicator()
-    {
-      lock (_listenerLock)
-      {
-        httpClient.Dispose();
-      }
-    }
-
     /// <summary>
     /// Dumps the heap of the remote process
     /// </summary>

@@ -173,7 +173,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     var client = RemoteApp.Connect(_clientProcess, port);
 
     // Teardown on exception.
-    AppDomain.CurrentDomain.UnhandledException += (s, e) => this.Dispose();
+    AppDomain.CurrentDomain.UnhandledException += (s, e) => Dispose();
 
     // Verify that the injected assembly is loaded and reponding
     if (client.Communicator.CheckAliveness() is false)
