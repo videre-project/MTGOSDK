@@ -40,11 +40,13 @@ public static class DotEnv
   /// </exception>
   public static void LoadFile([CallerFilePath] string filepath = null)
   {
-    if (!Path.GetFileName(filepath).StartsWith(".env"))
-      filepath = Path.Combine(Path.GetDirectoryName(filepath), ".env");
-
-    if (!File.Exists(filepath))
-      throw new FileNotFoundException("Could not find .env file.", filepath);
+    // Recursively search for the .env file within each parent directory.
+    while (!(File.Exists(filepath) && Path.GetFileName(filepath) == ".env"))
+    {
+      filepath = Path.Combine(Path.GetDirectoryName(filepath), @"..\.env");
+      if (Path.GetDirectoryName(filepath) == Path.GetPathRoot(filepath))
+        throw new FileNotFoundException("Could not find .env file.");
+    }
 
     using (StreamReader reader = new(filepath))
     {
