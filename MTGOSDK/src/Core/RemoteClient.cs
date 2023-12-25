@@ -172,6 +172,9 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     var port = RemoteClient.Port ??= (ushort)_clientProcess.Id;
     var client = RemoteApp.Connect(_clientProcess, port);
 
+    // Teardown on exception.
+    AppDomain.CurrentDomain.UnhandledException += (s, e) => this.Dispose();
+
     // Verify that the injected assembly is loaded and reponding
     if (client.Communicator.CheckAliveness() is false)
       throw new TimeoutException(
