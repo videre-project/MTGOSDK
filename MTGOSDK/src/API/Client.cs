@@ -175,6 +175,14 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   }
 
   /// <summary>
+  /// Cleans up any cached remote objects pinning objects in client memory.
+  /// </summary>
+  public void ClearCaches()
+  {
+    UserManager.Users.Clear();
+  }
+
+  /// <summary>
   /// Disposes of the remote client handle.
   /// </summary>
   public void Dispose() => RemoteClient.Dispose();
