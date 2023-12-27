@@ -20,4 +20,12 @@ trap 'exit $?' 1 2 3 15
 
 curl.exe -sSL -k "$NUGET_URL" > "$NUGET_PATH"
 
-$NUGET_PATH add MTGOSDK/bin/Release/MTGOSDK.*.nupkg -source "$PACKAGE_DIR"
+#
+# Projects have to be bundled explicitly for packaging due to a bug with
+# NuGet that expects project references to be published separately.
+# Tracking issue: https://github.com/NuGet/Home/issues/3891
+#
+$NUGET_PATH add MTGOSDK/bin/Release/*.nupkg -source "$PACKAGE_DIR"
+$NUGET_PATH add MTGOSDK.Win32/bin/Release/*.nupkg -source "$PACKAGE_DIR"
+$NUGET_PATH add third_party/RemoteNET/src/RemoteNET/bin/Release/*.nupkg -source "$PACKAGE_DIR"
+$NUGET_PATH add third_party/RemoteNET/src/ScubaDiver.API/bin/Release/*.nupkg -source "$PACKAGE_DIR"

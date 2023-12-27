@@ -173,6 +173,7 @@
         "dependencies": {
           "ImpromptuInterface": "[8.0.4, )",
           "MTGOSDK.Win32": "[1.0.0, )",
+          "Newtonsoft.Json": "[13.0.3, )",
           "RemoteNET": "[1.0.0, )",
           "ScubaDiver.API": "[1.0.0, )"
         }

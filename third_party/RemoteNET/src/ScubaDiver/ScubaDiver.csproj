@@ -10,7 +10,6 @@
 	</PropertyGroup>
 
   <!-- Compiler Options -->
-  <!-- <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" /> -->
   <PropertyGroup>
     <Deterministic>true</Deterministic>
     <FileAlignment>512</FileAlignment>
