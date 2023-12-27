@@ -7,6 +7,7 @@ using System;
 using System.Security;
 using System.Security.Authentication;
 
+using MTGOSDK.API.Collection;
 using MTGOSDK.API.Users;
 using MTGOSDK.API.Interface;
 using MTGOSDK.Core;
@@ -180,6 +181,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   public void ClearCaches()
   {
     UserManager.Users.Clear();
+    CollectionManager.Cards.Clear();
   }
 
   /// <summary>

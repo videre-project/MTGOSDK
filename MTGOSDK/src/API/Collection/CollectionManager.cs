@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -34,6 +35,11 @@ public static class CollectionManager
   //
 
   /// <summary>
+  /// A dictionary of cached Card objects.
+  /// </summary>
+  public static ConcurrentDictionary<int, Card> Cards { get; } = new();
+
+  /// <summary>
   /// Returns a list of catalog ids for the given card name.
   /// </summary>
   /// <param name="cardName">The name of the card to query.</param>
@@ -49,12 +55,19 @@ public static class CollectionManager
   /// <exception cref="KeyNotFoundException">
   /// Thrown if no card is found with the given catalog id.
   /// </exception>
-  public static Card GetCard(int id) =>
-    new(
-      s_cardDataManager.GetCardDefinitionForCatId(id)
+  public static Card GetCard(int id)
+  {
+    if (!Cards.TryGetValue(id, out var card))
+    {
+      Cards[id] = card = new Card(
+        s_cardDataManager.GetCardDefinitionForCatId(id)
         ?? throw new KeyNotFoundException(
             $"No card found with catalog id #{id}.")
-    );
+      );
+    }
+
+    return card;
+  }
 
   /// <summary>
   /// Returns a card object by the given card name.
