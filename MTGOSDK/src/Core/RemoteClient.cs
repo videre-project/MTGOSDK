@@ -6,6 +6,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 using RemoteNET;
@@ -144,6 +145,19 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
 
     // Wait for the MTGO process UI to start and open kicker window.
     return await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero);
+  }
+
+  private const int SW_MAXIMIZE = 3;
+  private const int SW_MINIMIZE = 6;
+
+  [DllImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+  public static bool MinimizeWindow()
+  {
+    var handle = MTGOProcess().MainWindowHandle;
+    return ShowWindow(handle, SW_MINIMIZE);
   }
 
   //

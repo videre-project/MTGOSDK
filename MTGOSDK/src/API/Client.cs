@@ -166,6 +166,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     //
     Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
 
+    // Minimize the MTGO window after startup.
+    if (options.StartMinimized)
+      RemoteClient.MinimizeWindow();
+
     // Verify that any existing user sessions are valid.
     if ((SessionId == Guid.Empty) && IsConnected)
       throw new VerificationException("Current user session is invalid.");

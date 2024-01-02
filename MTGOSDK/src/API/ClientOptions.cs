@@ -17,6 +17,11 @@ public struct ClientOptions()
   public bool CreateProcess { get; init; } = false;
 
   /// <summary>
+  /// Whether to start the MTGO process minimized.
+  /// </summary>
+  public bool StartMinimized { get; init; } = false;
+
+  /// <summary>
   /// Whether to kill the MTGO process when the client object is disposed.
   /// </summary>
   public bool DestroyOnExit { get; init; } = false;
