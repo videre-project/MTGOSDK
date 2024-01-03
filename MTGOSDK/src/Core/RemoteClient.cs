@@ -13,6 +13,7 @@ using RemoteNET;
 
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Exceptions;
+using MTGOSDK.Win32.Utilities;
 
 
 namespace MTGOSDK.Core;
@@ -112,14 +113,39 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     try { using var p = MTGOProcess(); p.Kill(); p.WaitForExit(); } catch { }
 
     // Start MTGO using the ClickOnce application manifest uri.
-    using var process = new Process();
-    process.StartInfo = new ProcessStartInfo()
+    try
     {
-      FileName = "rundll32.exe",
-      Arguments = $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}",
-    };
-    process.Start();
-    process.WaitForExit();
+      //
+      // This makes a call to CreateProcessAsUser from the Win32 API to start the
+      // process as the current user. This requires the SeIncreaseQuotaPrivilege
+      // (and potentially SE_ASSIGNPRIMARYTOKEN_NAME if not assignable).
+      //
+      // This requires enabling 'Replace a process level token' for the user
+      // account running this process. Refer to the below resource for more info:
+      // https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/replace-a-process-level-token
+      //
+      // using var process = ProcessHandler.CreateProcessAsUser(
+      using var process = ProcessUtilities.RunAsDesktopUser(
+        "rundll32.exe",
+        $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}"
+      );
+      process.WaitForExit();
+    }
+    catch
+    {
+      //
+      // Fall back to starting the process assuming the process has proper
+      // permissions set to start as the current user (or is now set).
+      //
+      using var process = new Process();
+      process.StartInfo = new ProcessStartInfo()
+      {
+        FileName = "rundll32.exe",
+        Arguments = $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}",
+      };
+      process.Start();
+      process.WaitForExit();
+    }
 
     //
     // Check for ClickOnce installation or updates and wait for it to finish.
