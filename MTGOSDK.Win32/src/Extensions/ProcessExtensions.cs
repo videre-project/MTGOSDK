@@ -25,7 +25,7 @@ public static class ProcessExtensions
   /// </summary>
   /// <param name="process">The process to query.</param>
   /// <returns>An instance of the Process class.</returns>
-  public static Process GetParentProcess(this Process process)
+  public static Process? GetParentProcess(this Process process)
   {
     IntPtr handle = process.Handle;
     ParentProcessUtilities pbi = new ParentProcessUtilities();
