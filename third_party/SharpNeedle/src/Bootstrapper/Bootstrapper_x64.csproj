@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <MSVCPlatform>x64</MSVCPlatform>
+  </PropertyGroup>
+
+  <Import Project="Bootstrapper.csproj" />
+</Project>

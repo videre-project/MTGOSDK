@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+
+    <!-- Properties for MSVCFindCompilerPaths -->
+    <MSVCPlatform Condition="'$(MSVCPlatform)' == ''">x86</MSVCPlatform>
+    <MSVCOutputType>Exe</MSVCOutputType>
+
+    <CompilerArgs>/FS /GS /sdl</CompilerArgs>
+  </PropertyGroup>
+
+  <Import Project="$(SolutionDir)tools\MSVC\MSVCToolchain.props" />
+  <Import Project="$(SolutionDir)tools\MSVC\MSVCToolchain.targets" />
+</Project>
