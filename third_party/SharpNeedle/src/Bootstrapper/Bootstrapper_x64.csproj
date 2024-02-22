@@ -2,6 +2,13 @@
   <PropertyGroup>
     <MSVCPlatform>x64</MSVCPlatform>
   </PropertyGroup>
-
   <Import Project="Bootstrapper.csproj" />
+
+  <!-- Mark the base project as a dependency to avoid build race conditions. -->
+  <ItemGroup>
+    <ProjectReference Include="Bootstrapper.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>False</Private>
+    </ProjectReference>
+  </ItemGroup>
 </Project>
