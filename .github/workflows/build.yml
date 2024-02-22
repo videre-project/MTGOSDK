@@ -79,7 +79,7 @@ jobs:
         run: msbuild Ref.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}
       # Build the SDK
       - name: Build SDK Solution
-        run: msbuild SDK.sln /t:Build ${{ env.MSBUILD_DEFAULTS }} /m:1
+        run: msbuild SDK.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}
 
       # Evict expired cache entries
       - name: Purge expired cache entries
