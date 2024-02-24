@@ -24,7 +24,7 @@ env:
     **/obj
     **/Win32
     **/x64
-  MSBUILD_DEFAULTS: /m:2 /v:m /p:Configuration=Release /p:Platform="Any CPU"
+  MSBUILD_DEFAULTS: /m /v:m /p:Configuration=Release /p:Platform="Any CPU"
   NUGET_CACHES: |
     ~/.nuget/packages
   NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -UseLockFile
