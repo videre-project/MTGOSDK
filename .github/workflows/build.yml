@@ -71,8 +71,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
       - name: Restore NuGet packages
-        if: steps.nuget-cache.outputs.cache-hit != 'true'
-        run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
+        # if: steps.nuget-cache.outputs.cache-hit != 'true'
+        # run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
+        run: dotnet restore SDK.sln --force-evaluate
 
       # Build MTGO reference assemblies
       - name: Build Reference Assemblies
