@@ -69,7 +69,8 @@ jobs:
             ${{ runner.os }}-nuget-
       - name: Restore NuGet packages
         if: steps.nuget-cache.outputs.cache-hit != 'true'
-        run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
+        # run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
+        run: msbuild SDK.sln /t:Restore /m /v:m
       # - name: List all Nuget packages downloaded
       #   run: dotnet list "$(Resolve-Path SDK.sln)" package
 
