@@ -37,7 +37,7 @@ This project consists of four main components:
 
 **MTGOSDK** — provides an API that exposes high-level abstractions of MTGO functions to read and manage the state of the client. This works by injecting the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) assembly into the MTGO process, bootstrapping a debugger interface to inspect objects from process memory. These objects are compiled by the runtime to enable reflection on heap objects as if they were live objects. This SDK is optimized for performance and ease-of-use without obstructing the player experience of the MTGO client.
 
-**MTGOSDK.MSBuild** — an MSBuild library that manages the code-generation of the SDK. This is used to generate the SDK's API bindings and reference assemblies for the latest builds of MTGO. These assemblies contain only the public types and members for internal classes from the MTGO client and do not handle or contain any implementation details or private code. As the MTGO client is updated, these assemblies can be regenerated to provide the latest public types and members for use in the SDK.
+**MTGOSDK.MSBuild** — an MSBuild library that manages the code-generation of the SDK. This is used to generate the SDK's API bindings and reference assemblies for the latest builds of MTGO. These assemblies contain only the public types and members of internal classes from the MTGO client and do not handle or contain any implementation details or private code. As the MTGO client is updated, these assemblies can be regenerated to provide the latest public types and members for use in the SDK.
 
 **MTGOSDK.Ref** — a library to bootstrap the code-generation process by ensuring that MSBuild targets are available for the SDK project to reference. Various metadata like the client version is extracted at build-time, which can bootstrap version-specific targets for compatibility. This project is also an optional build target that can be used independently to generate reference assemblies for the latest build of MTGO. This library is not intended to be used directly by consumers of the SDK.
 
@@ -82,11 +82,11 @@ This SDK does not intend nor support creating cheating tools or hacks that viola
 
 ### Does using this SDK modify the MTGO client?
 
-No, this SDK does not ever modify the contents or behavior of the MTGO client.
+No, this SDK does not modify the contents or behavior of the MTGO client. Specifically, no code is ever modified or altered to read or manage the state of the client. Instead, the SDK manages state changes through reflecting public APIs bound to MTGO's UI (i.e. viewmodels and controllers) to avoid bypassing internal safeguards used by the client.
 
-Interactions with the MTGO process are managed through use of the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library from Microsoft, which is injected into the MTGO process to inspect client memory. As this library does not support inspecting it's own process, it is isolated into a separate [application domain](https://learn.microsoft.com/en-us/dotnet/framework/app-domains/application-domains) which acts as a process boundary.
+This is enforced through a tightly-integrated type marshalling protocol that only allows public interfaces to be exposed by the runtime. The use of these types (from **MTGOSDK.Ref**) caches and validates all interactions through use of the reflection cache managed by the .NET runtime, which cannot be unloaded or modified for the lifetime of the application. This ensures that faults in the SDK cannot bypass or affect the client, and vice versa.
 
-This allows for the SDK to read the state of the MTGO client and manage state changes without altering the contents or behavior of the client. Additionally, this ensures that faults in the SDK cannot bypass or affect the client, and vice versa.
+Interactions with the MTGO process are managed through use of the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library from Microsoft, which is injected into the MTGO process to inspect client memory. As this library does not support inspecting it's own process, it is isolated into a separate [application domain](https://learn.microsoft.com/en-us/dotnet/framework/app-domains/application-domains) which acts as a process boundary. This allows for the SDK to read the state of the MTGO client and manage state changes without altering the client directly.
 
 ### Is this SDK safe to use?
 
