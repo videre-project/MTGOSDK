@@ -41,7 +41,7 @@ This project consists of four main components:
 
 **MTGOSDK.Ref** — a library to bootstrap the code-generation process by ensuring that MSBuild targets are available for the SDK project to reference. Various metadata like the client version is extracted at build-time, which can bootstrap version-specific targets for compatibility. This project is also an optional build target that can be used independently to generate reference assemblies for the latest build of MTGO. This library is not intended to be used directly by consumers of the SDK.
 
-**MTGOSDK.Win32** — a library containing Win32 API definitions and helper functions used by the SDK. These are used to provide a more idiomatic C# API for Win32 functions and to ensure consistent API behavior across different versions of Windows. Additinonally, this library serves as a reference for using Win32 APIs that are not yet implemented as part of the .NET Framework. This library is not intended to be used directly by consumers of the SDK.
+**MTGOSDK.Win32** — a library containing Win32 API definitions and helper functions used by the SDK. These are used to provide a more idiomatic C# API for Win32 functions and to ensure consistent API behavior across different versions of Windows. Additionally, this library serves as a reference for using Win32 APIs that are not yet implemented as part of the .NET Framework. This library is not intended to be used directly by consumers of the SDK.
 
 ## Building this Project
 
@@ -61,14 +61,17 @@ $ dotnet build Ref.sln
 $ msbuild Ref.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
 ```
 
-Then build the SDK with the below command from the root of the repository:
+Then build the SDK.sln solution in Visual Studio, or with either of the below commands:
 
 ```powershell
+# Build using the .NET CLI
+$ dotnet build SDK.sln
+
 # Build using MSBuild in Visual Studio
 $ msbuild SDK.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
 ```
 
-The SDK.sln solution which will now re-build targets from the Ref.sln solution in subsequent builds to ensure that the latest reference assemblies are available for the SDK.
+The SDK.sln solution will now re-build targets from the Ref.sln solution in subsequent builds to ensure that the latest reference assemblies are available for the SDK.
 
 ## Frequently Asked Questions
 
@@ -82,25 +85,27 @@ This SDK does not intend nor support creating cheating tools or hacks that viola
 
 ### Does using this SDK modify the MTGO client?
 
-No, this SDK does not modify the contents or behavior of the MTGO client. Specifically, no code is ever modified or altered to read or manage the state of the client. Instead, the SDK manages state changes through reflecting public APIs bound to MTGO's UI (i.e. viewmodels and controllers) to avoid bypassing internal safeguards used by the client.
+No, this SDK does not modify or alter the MTGO client's code or start-up behavior.
 
-This is enforced through a tightly-integrated type marshalling protocol that only allows public interfaces to be exposed by the runtime. The use of these types (from **MTGOSDK.Ref**) caches and validates all interactions through use of the reflection cache managed by the .NET runtime, which cannot be unloaded or modified for the lifetime of the application. This ensures that faults in the SDK cannot bypass or affect the client, and vice versa.
+Interactions with the MTGO process are managed through use of the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library from Microsoft, which is injected into the MTGO process to inspect client memory through the use of snapshots. As this library does not support inspecting it's own process, it is isolated into a separate [application domain](https://learn.microsoft.com/en-us/dotnet/framework/app-domains/application-domains) which acts as a process boundary. This allows for the SDK to read the state of the MTGO client without the ability to modify it's memory.
 
-Interactions with the MTGO process are managed through use of the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library from Microsoft, which is injected into the MTGO process to inspect client memory. As this library does not support inspecting it's own process, it is isolated into a separate [application domain](https://learn.microsoft.com/en-us/dotnet/framework/app-domains/application-domains) which acts as a process boundary. This allows for the SDK to read the state of the MTGO client and manage state changes without altering the client directly.
+State changes are managed by [reflection](https://learn.microsoft.com/en-us/dotnet/framework/reflection-and-codedom/reflection) on public APIs and events bound to MTGO's UI (i.e. viewmodels and controllers). This avoids hooking or executing code from MTGO's UI thread which might stall or break the state of the application. Instead, the underlying events bound to a UI element are used to propagate an interaction without locking the UI thread. These events enforce the same limits and safeguards set for a UI interaction, ensuring that all interactions are handled correctly.
 
 ### Is this SDK safe to use?
 
-As this project uses the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library to inspect the MTGO client's memory, only COM debugging APIs are used to inspect the runtime. All Windows APIs exposed by this SDK are documented and published as part of the **MTGOSDK.Win32** project. This protects against access to sensitive objects in memory (such as user credentials, e.g. `SecureString` objects) and ensures that the SDK is only used for legitimate purposes even if compromised.
+As this project uses the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library to inspect the MTGO client's memory, only [user-mode COM debugging APIs](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/getting-started-with-windbg) are used to inspect the runtime and inform reflection. These APIs along with .NET's security model restrict access to sensitive objects in memory (such as user credentials, e.g. `SecureString` objects), ensuring that the SDK is only used for legitimate purposes even if compromised.
 
-Additionally, the high-level APIs provided by this SDK helps ensure safety and security in writing applications that interact with MTGO without worrying about the complexity of MTGO's internal workings. This SDK is designed to be easy to use and understand, and provide a consistent API for building all shapes and sizes of applications for MTGO.
+This is enforced through a tightly-integrated type marshalling protocol that only allows public interfaces to be exposed by MTGO. The use of these types (from **MTGOSDK.Ref**) eagerly validates and caches type metadata for all interactions (including reflection) managed by the .NET runtime, which cannot be unloaded or modified for the lifetime of the application. This ensures that faults in the SDK cannot bypass or affect internal states of the client.
+
+Additionally, the high-level APIs provided by this SDK helps ensure safety and security in writing applications by providing simplified abstractions for interacting with the MTGO client. By only utilizing public interfaces and events, applications built on top of the SDK are less likely to break between updates or introduce bugs or security vulnerabilities. This SDK is designed to be easy to use and understand, and provides a consistent API for building all shapes and sizes of applications for MTGO.
 
 ### Is this SDK legal to use?
 
-Daybreak Games reserves the right to terminate your account without notice or liability (at its sole discretion) upon breach of MTGO's [End User License Agreement (EULA)](https://www.mtgo.com/en/mtgo/eula), the Daybreak Games [Terms of Service](https://www.daybreakgames.com/terms-of-service), or infringement of intellectual property rights (this is not an exhaustive list; refer to **Section 16** of the EULA for more information).
+Yes, however there are important restrictions on how this SDK can be used with the MTGO client.
 
-However, this does not apply for purposes that do not violate the EULA and applicable law (such as copyright or intellectual property laws), or the aforementioned Daybreak Games policies.
+Daybreak Games reserves the right to terminate your account without notice or liability (at its sole discretion) upon breach of MTGO's [End User License Agreement (EULA)](https://www.mtgo.com/en/mtgo/eula), the Daybreak Games [Terms of Service](https://www.daybreakgames.com/terms-of-service), or infringement of intellectual property rights (refer to **Section 16** of the EULA for more information on termination).
 
-This includes such purposes protected under **Section 103** of the Digital Millennium Copyright Act (DMCA) ([17 USC § 1201 (f)](http://www.law.cornell.edu/uscode/text/17/1201)) that do not otherwise infringe upon the rights granted to Daybreak Games (refer to the [Disclaimer](#disclaimer) for more information on protections afforded to this project).
+However, this restriction does not apply for purposes that do not violate the EULA and applicable law (such as copyright or intellectual property laws), or the aforementioned Daybreak Games policies. This includes such purposes protected under **Section 103** of the Digital Millennium Copyright Act (DMCA) ([17 USC § 1201 (f)](http://www.law.cornell.edu/uscode/text/17/1201)) that do not otherwise infringe upon the rights granted to Daybreak Games (refer to the [Disclaimer](#disclaimer) for more information on protections afforded to this project).
 
 **This is not legal advice.** Please consult with a legal professional for your specific situation.
 
@@ -115,6 +120,6 @@ This project is licensed under the [Apache-2.0 License](/LICENSE).
 
 **Section 12.1(b)** of MTGO's [End User License Agreement (EULA)](https://www.mtgo.com/en/mtgo/eula) prohibits any modification, reverse engineering, or decompilation of the client '*except to the extent that such restriction is expressly prohibited by applicable law*'.
 
-For such purposes protected under **Section 103(f)** of the DMCA, however, this EULA clause is pre-empted by federal law and rendered null and void. All other provisions of the EULA remain in full force and effect.
+However, for such purposes protected under **Section 103(f)** of the DMCA, this EULA clause is statutorily preempted by federal copyright law and rendered null and void; see also [*ML Genius Holdings LLC v. Google LLC, No. 20-3113* (2d Cir. Mar. 10, 2022)](https://casetext.com/case/ml-genius-holdings-llc-v-google-llc). All other provisions of the EULA remain in full force and effect unless otherwise prohibited by law.
 
 Usage of this project for purposes prohibited by MTGO EULA and applicable law is not condoned by the project authors. The project authors are not responsible for any consequences of such usage.
