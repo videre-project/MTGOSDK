@@ -1,0 +1,3 @@
+[submodule "tools/MSVC"]
+	path = tools/MSVC
+	url = https://github.com/Qonfused/MSVCToolchain

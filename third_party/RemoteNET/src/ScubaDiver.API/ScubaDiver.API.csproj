@@ -2,10 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>Latest</LangVersion>
     <Nullable>enable</Nullable>
     <NoWarn>1701;1702;8600;8602;8603;8618;8625</NoWarn>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>

@@ -24,7 +24,7 @@ env:
     **/obj
     **/Win32
     **/x64
-  MSBUILD_DEFAULTS: /m:2 /v:m /p:Configuration=Release /p:Platform="Any CPU"
+  MSBUILD_DEFAULTS: /m /v:m /p:Configuration=Release /p:Platform="Any CPU"
   NUGET_CACHES: |
     ~/.nuget/packages
   NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -UseLockFile
@@ -34,24 +34,21 @@ jobs:
     runs-on: windows-latest
     name: "MSBuild Runner"
     steps:
-      # Fetches remote repository without --progress option.
-      #
-      # The default behavior of @actions/checkout outputs many noisy lines of
-      # status output in the workflow log, which is problematic for log size.
+      # Fetches remote repository
       - name: Checkout latest repository commit
         uses: actions/checkout@v4
         with:
           show-progress: false
-
+          submodules: recursive
       # Setup the .NET environment
       - name: Install .NET Core
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
       # Setup MSBuild environment
       - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v1.3.1
+        uses: microsoft/setup-msbuild@v2
       - name: Restore Build Cache
         id: msbuild-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.MSBUILD_CACHES }}
           key: ${{ runner.os }}-msbuild-${{ github.ref_name }}-${{ github.sha }}
@@ -61,10 +58,10 @@ jobs:
 
       # Setup NuGet environment
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v1.2.0
+        uses: NuGet/setup-nuget@v2
       - name: Restore NuGet Cache
         id: nuget-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.NUGET_CACHES }}
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
@@ -73,6 +70,8 @@ jobs:
       - name: Restore NuGet packages
         if: steps.nuget-cache.outputs.cache-hit != 'true'
         run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
+      # - name: List all Nuget packages downloaded
+      #   run: dotnet list "$(Resolve-Path SDK.sln)" package
 
       # Build MTGO reference assemblies
       - name: Build Reference Assemblies
@@ -83,7 +82,7 @@ jobs:
 
       # Evict expired cache entries
       - name: Purge expired cache entries
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         env:
           MSBUILD_HIT: ${{ steps.msbuild-cache.outputs.cache-hit }}
           NUGET_HIT:   ${{ steps.nuget-cache.outputs.cache-hit }}
