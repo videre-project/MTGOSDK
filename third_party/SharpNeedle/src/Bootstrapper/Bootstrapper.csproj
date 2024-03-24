@@ -1,14 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
-
-    <!-- Properties for MSVCFindCompilerPaths -->
-    <MSVCPlatform Condition="'$(MSVCPlatform)' == ''">x86</MSVCPlatform>
-    <MSVCOutputType>Dll</MSVCOutputType>
-
-    <CompilerArgs>/FS</CompilerArgs>
-    <PreprocessorDefines Condition="'$(MSVCPlatform)' == 'x86'" >/D WIN32</PreprocessorDefines>
+    <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
 
   <!--
@@ -16,19 +9,30 @@
     This is needed for building against Windows SDK 10.0.15063.0 and later.
   -->
   <PropertyGroup>
-    <!-- Get the .NET Framework SDK Kits path from registry -->
     <SDK40Version>4.8</SDK40Version>
+    <!-- Get the .NET Framework SDK Kits path from registry -->
     <SDK40KitsPath>$([MSBuild]::GetRegistryValueFromView(
       'HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\NETFXSDK\$(SDK40Version)',
       'KitsInstallationFolder',
       null,
       RegistryView.Registry32
     ))</SDK40KitsPath>
-
-    <!-- Include metahost.h and mscoree.lib from the .NET Framework SDK -->
-    <IncPaths>/I &quot;$(SDK40KitsPath)Include\um&quot;</IncPaths>
-    <LibPaths>/LIBPATH:&quot;$(SDK40KitsPath)Lib\um\$(MSVCPlatform)&quot;</LibPaths>
   </PropertyGroup>
+
+  <!-- Properties for MSVCFindCompilerPaths -->
+  <PropertyGroup>
+    <MSVCPlatform Condition="'$(MSVCPlatform)' == ''">x86</MSVCPlatform>
+    <MSVCOutputType>Dll</MSVCOutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerArgs Include="/FS" />
+    <PreprocessorDefines Condition="'$(MSVCPlatform)' == 'x86'"
+                         Include="/D WIN32" />
+    <!-- Include metahost.h and mscoree.lib from the .NET Framework SDK -->
+    <IncludePaths Include="$(SDK40KitsPath)Include\um" />
+    <LibPaths Include="$(SDK40KitsPath)Lib\um\$(MSVCPlatform)" />
+  </ItemGroup>
 
   <Import Project="$(SolutionDir)tools\MSVC\MSVCToolchain.props" />
   <Import Project="$(SolutionDir)tools\MSVC\MSVCToolchain.targets" />
