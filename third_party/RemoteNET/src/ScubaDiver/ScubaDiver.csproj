@@ -33,14 +33,11 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime"
-                      Version="3.0.442202" />
+                      Version="3.1.512801" />
     <!-- .NET Framework references and redirects -->
     <None Include="app.config" />
-    <!-- <Reference Include="System" />
-    <Reference Include="System.Net.Http" />
-    <Reference Include="System.Numerics" /> -->
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces"
-                      Version="7.0.0" />
+                      Version="8.0.0" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe"
                       Version="6.0.0" />
     <!-- Build time dependencies -->
@@ -48,7 +45,7 @@
                       Version="3.0.41" />
   </ItemGroup>
 
-  <Target Name="ILMerge" AfterTargets="PostBuildEvent">
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <Exec Command="$(ILMergeConsolePath) ^
       ScubaDiver.dll /ndebug ^
         Microsoft.Bcl.AsyncInterfaces.dll ^
@@ -73,9 +70,8 @@
       /lib=$(TargetDir) ^
       /out=$(TargetDir)Microsoft.Diagnostics.Runtime.dll"
     />
-  </Target>
-  <Target Name="PostBuild" DependsOnTargets="ILMerge" AfterTargets="PostBuildEvent">
-    <Exec Command="xcopy /Y &quot;$(TargetDir)\Microsoft.Diagnostics.Runtime.dll&quot; &quot;$(SolutionDir)dist\$(ConfigurationName)\Microsoft.Diagnostics.Runtime.dll*&quot;" />
+    <Copy SourceFiles="$(TargetDir)\Microsoft.Diagnostics.Runtime.dll"
+          DestinationFolder="$(SolutionDir)dist\$(ConfigurationName)" />
   </Target>
 
 </Project>

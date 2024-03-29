@@ -10,18 +10,18 @@
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Direct",
-        "requested": "[7.0.0, )",
-        "resolved": "7.0.0",
-        "contentHash": "3aeMZ1N0lJoSyzqiP03hqemtb1BijhsJADdobn/4nsMJ8V1H+CrpuduUe4hlRdx+ikBQju1VGjMD1GJ3Sk05Eg==",
+        "requested": "[8.0.0, )",
+        "resolved": "8.0.0",
+        "contentHash": "3WA9q9yVqJp222P3x1wYIGDAkpjAku0TMUaaQV22g6L67AI0LdOIrVS7Ht2vJfLHGSPVuqN94vIr15qn+HEkHw==",
         "dependencies": {
           "System.Threading.Tasks.Extensions": "4.5.4"
         }
       },
       "Microsoft.Diagnostics.Runtime": {
         "type": "Direct",
-        "requested": "[3.0.442202, )",
-        "resolved": "3.0.442202",
-        "contentHash": "lLKVmm5EsxtEYuPivwMNsS+EtNqWPO9kPs99kFGeGN/XH3brzrmyoN5YX8Adwcpzom4OUk5AifKn1K3Eo2EGWQ==",
+        "requested": "[3.1.512801, )",
+        "resolved": "3.1.512801",
+        "contentHash": "0lMUDr2oxNZa28D6NH5BuSQEe5T9tZziIkvkD44YkkCGQXPJqvFjLq5ZQq1hYLl3RjQJrY+hR0jFgap+EWPDTw==",
         "dependencies": {
           "Microsoft.Diagnostics.NETCore.Client": "0.2.410101",
           "System.Collections.Immutable": "6.0.0",
