@@ -37,7 +37,7 @@
     <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
     <ProjectReference Include="@(ResourceProjects)"
                       ReferenceOutputAssembly="false"
-                      Private="False" />
+                      Private="false" />
 	</ItemGroup>
 
   <!-- Bundle all build artifacts into this assembly's resources -->

@@ -21,6 +21,11 @@
           "System.Reflection.Emit": "4.7.0"
         }
       },
+      "Meziantou.Polyfill": {
+        "type": "Transitive",
+        "resolved": "1.0.37",
+        "contentHash": "kFlH4Ye5lEK9AjViSWm32JrH3Ee42jd15FNnv4X4fK4JzdSlkMR7mqzsgRCBgZzszWLr0ioIA78dsMNxRoouSw=="
+      },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
         "resolved": "1.1.0",
@@ -42,12 +47,10 @@
       },
       "Microsoft.Diagnostics.Runtime": {
         "type": "Transitive",
-        "resolved": "3.0.442202",
-        "contentHash": "lLKVmm5EsxtEYuPivwMNsS+EtNqWPO9kPs99kFGeGN/XH3brzrmyoN5YX8Adwcpzom4OUk5AifKn1K3Eo2EGWQ==",
+        "resolved": "3.1.512801",
+        "contentHash": "0lMUDr2oxNZa28D6NH5BuSQEe5T9tZziIkvkD44YkkCGQXPJqvFjLq5ZQq1hYLl3RjQJrY+hR0jFgap+EWPDTw==",
         "dependencies": {
-          "Microsoft.Diagnostics.NETCore.Client": "0.2.410101",
-          "System.Collections.Immutable": "6.0.0",
-          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
+          "Microsoft.Diagnostics.NETCore.Client": "0.2.410101"
         }
       },
       "Microsoft.Extensions.Configuration": {
@@ -128,14 +131,6 @@
         "resolved": "13.0.3",
         "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
       },
-      "System.Collections.Immutable": {
-        "type": "Transitive",
-        "resolved": "6.0.0",
-        "contentHash": "l4zZJ1WU2hqpQQHXz1rvC3etVZN+2DLmQMO79FhOTZHMn8tDRr+WU287sbomD0BETlmKDn0ygUgVy9k5xkkJdA==",
-        "dependencies": {
-          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
-        }
-      },
       "System.ComponentModel": {
         "type": "Transitive",
         "resolved": "4.3.0",
@@ -165,36 +160,22 @@
       },
       "System.Runtime.CompilerServices.Unsafe": {
         "type": "Transitive",
-        "resolved": "6.0.0",
-        "contentHash": "/iUeP3tq1S0XdNNoMz5C9twLSrM/TH+qElHkXWaPvuNOt+99G75NrV0OS2EqHx5wMN7popYjpc8oTjC1y16DLg=="
+        "resolved": "4.5.1",
+        "contentHash": "Zh8t8oqolRaFa9vmOZfdQm/qKejdqz0J9kr7o2Fu0vPeoH3BL1EOXipKWwkWtLT1JPzjByrF19fGuFlNbmPpiw=="
       },
       "mtgosdk": {
         "type": "Project",
         "dependencies": {
           "ImpromptuInterface": "[8.0.4, )",
           "MTGOSDK.Win32": "[1.0.0, )",
-          "Newtonsoft.Json": "[13.0.3, )",
-          "RemoteNET": "[1.0.0, )",
-          "ScubaDiver.API": "[1.0.0, )"
+          "Meziantou.Polyfill": "[1.0.37, )",
+          "Microsoft.CSharp": "[4.7.0, )",
+          "Microsoft.Diagnostics.Runtime": "[3.1.512801, )",
+          "Newtonsoft.Json": "[13.0.3, )"
         }
       },
       "mtgosdk.win32": {
         "type": "Project"
-      },
-      "remotenet": {
-        "type": "Project",
-        "dependencies": {
-          "MTGOSDK.Win32": "[1.0.0, )",
-          "Microsoft.CSharp": "[4.7.0, )",
-          "ScubaDiver.API": "[1.0.0, )"
-        }
-      },
-      "scubadiver.api": {
-        "type": "Project",
-        "dependencies": {
-          "Microsoft.Diagnostics.Runtime": "[3.0.442202, )",
-          "Newtonsoft.Json": "[13.0.3, )"
-        }
       }
     }
   }

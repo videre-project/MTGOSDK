@@ -2,12 +2,15 @@
 <Project>
 
   <PropertyGroup>
+    <!-- Project Directories -->
     <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
     <DistDir>$(SolutionDir)\dist</DistDir>
+    <!-- User Directories -->
+    <LocalDir>$([MSBuild]::NormalizeDirectory($(AppData)\..\Local))</LocalDir>
   </PropertyGroup>
 
   <PropertyGroup>
-    <LocalDir>$([MSBuild]::NormalizeDirectory($(AppData)\..\Local))</LocalDir>
+    <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
 </Project>

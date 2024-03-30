@@ -15,14 +15,14 @@ public class DllEntry
       _instance.Start(port);
 
       // Diver killed (politely)
-      Logger.Debug("[DiverHost] Diver finished gracefully, returning");
+      Logger.Debug("[DiverHost] Diver finished gracefully.");
     }
     catch (Exception e)
     {
       Logger.Debug("[DiverHost] ScubaDiver crashed.");
       Logger.Debug(e.ToString());
-      Logger.Debug("[DiverHost] Exiting entry point in 60 secs...");
-      Thread.Sleep(TimeSpan.FromSeconds(60));
+      Logger.Debug("[DiverHost] Exiting entry point in 10 seconds.");
+      Thread.Sleep(TimeSpan.FromSeconds(10));
     }
   }
 
