@@ -3,16 +3,10 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <NoWarn>1701;1702;8600;8602;8603;8618;8625</NoWarn>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Diagnostics.Runtime"
-                      Version="3.0.442202" />
-    <PackageReference Include="Newtonsoft.Json"
-                      Version="13.0.3" />
-  </ItemGroup>
+  <!-- Override MSBuild compile targets to implicitly skip compilation. -->
+  <Target Name="CoreCompile" />
+  <Target Name="CopyFilesToOutputDirectory" />
 
 </Project>

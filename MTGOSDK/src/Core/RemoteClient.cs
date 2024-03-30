@@ -37,7 +37,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// The directory path to extract runtime injector and diver assemblies to.
   /// </summary>
   public static string ExtractDir =
-    Path.Join(/* %appdata%\..\Local\ */ "MTGOSDK", "MTGOInjector", "bin");
+    Path.Combine(/* %appdata%\..\Local\ */ "MTGOSDK", "MTGOInjector", "bin");
 
   /// <summary>
   /// Whether to destroy the MTGO process when disposing of the Remote Client.

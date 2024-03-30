@@ -3,36 +3,10 @@
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
 		<LangVersion>Latest</LangVersion>
-    <NoWarn>$(NoWarn);NU1702</NoWarn>
 	</PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-		<ProjectReference Include="..\..\..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-		<ProjectReference Include="..\ScubaDiver.API\ScubaDiver.API.csproj" />
-
-    <!-- Configures build-time resource dependencies for MSBuild -->
-    <ResourceProjects Include="..\ScubaDiver\ScubaDiver.csproj" />
-    <ResourceProjects Include="..\..\..\SharpNeedle\src\Bootstrapper\*.vcxproj" />
-    <ResourceProjects Include="..\..\..\SharpNeedle\src\Launcher\*.vcxproj" />
-    <ProjectReference Include="@(ResourceProjects)"
-                      ReferenceOutputAssembly="false"
-                      Private="False" />
-	</ItemGroup>
-
-  <Target Name="EmbedResources"
-          BeforeTargets="CoreCompile"
-          AfterTargets="ResolveProjectReferences">
-    <ItemGroup>
-      <!-- Bundle all build artifacts into this assembly's resources -->
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.dll" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.exe" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.dll" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.exe" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.dll" />
-      <EmbeddedResource Include="@(ResourceFiles)"
-                        LogicalName="Resources\%(Filename)" />
-    </ItemGroup>
-	</Target>
+  <!-- Override MSBuild compile targets to implicitly skip compilation. -->
+  <Target Name="CoreCompile" />
+  <Target Name="CopyFilesToOutputDirectory" />
 
 </Project>

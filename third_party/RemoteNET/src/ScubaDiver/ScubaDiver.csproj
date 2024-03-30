@@ -5,7 +5,6 @@
 		<LangVersion>Latest</LangVersion>
     <OutputType>Library</OutputType>
     <RootNamespace>ScubaDiver</RootNamespace>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
     <IsPackable>false</IsPackable>
 	</PropertyGroup>
 
@@ -27,8 +26,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+		<ProjectReference Include="..\..\..\..\MTGOSDK\MTGOSDK.csproj" />
 		<ProjectReference Include="..\..\..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-    <ProjectReference Include="..\ScubaDiver.API\ScubaDiver.API.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,30 +45,22 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="$(ILMergeConsolePath) ^
-      ScubaDiver.dll /ndebug ^
-        Microsoft.Bcl.AsyncInterfaces.dll ^
-        Microsoft.Diagnostics.NETCore.Client.dll ^
-        Microsoft.Diagnostics.Runtime.dll ^
-        Microsoft.Extensions.Configuration.Abstractions.dll ^
-        Microsoft.Extensions.Configuration.Binder.dll ^
-        Microsoft.Extensions.DependencyInjection.Abstractions.dll ^
-        Microsoft.Extensions.Logging.Abstractions.dll ^
-        Microsoft.Extensions.Logging.dll ^
-        Microsoft.Extensions.Options.dll ^
-        Microsoft.Extensions.Primitives.dll ^
-        MTGOSDK.Win32.dll ^
-        Newtonsoft.Json.dll ^
-        ScubaDiver.API.dll ^
-        System.Buffers.dll ^
-        System.Collections.Immutable.dll ^
-        System.Memory.dll ^
-        System.Numerics.Vectors.dll ^
-        System.Runtime.CompilerServices.Unsafe.dll ^
-        System.Threading.Tasks.Extensions.dll ^
-      /lib=$(TargetDir) ^
-      /out=$(TargetDir)Microsoft.Diagnostics.Runtime.dll"
-    />
+    <ItemGroup>
+      <ReferenceAssemblies Include="$(SolutionDir)dist\*\Reference\MTGO\*\*.dll" />
+      <Assemblies Include="$(TargetDir)*.dll"
+                  Exclude="@(ReferenceAssemblies-> '$(TargetDir)%(Filename)%(Extension)')" />
+      <Flags Include="/ndebug" />
+      <Flags Include="/allowDup" />
+      <Flags Include="/lib=$(TargetDir)" />
+      <Flags Include="/out=$(TargetDir)Microsoft.Diagnostics.Runtime.dll" />
+    </ItemGroup>
+    <PropertyGroup>
+      <ILMergeAssemblies>@(Assemblies-> '%(Filename)%(Extension)', ' ')</ILMergeAssemblies>
+      <ILMergeFlags>@(Flags-> '%(Identity)', ' ')</ILMergeFlags>
+      <ILMergeCommand>$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)</ILMergeCommand>
+    </PropertyGroup>
+
+    <Exec Command="$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)" />
     <Copy SourceFiles="$(TargetDir)\Microsoft.Diagnostics.Runtime.dll"
           DestinationFolder="$(SolutionDir)dist\$(ConfigurationName)" />
   </Target>

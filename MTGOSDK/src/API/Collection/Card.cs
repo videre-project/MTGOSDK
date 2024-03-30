@@ -50,7 +50,7 @@ public sealed class Card(dynamic card) : CollectionItem<ICardDefinition>
   /// </summary>
   public IList<string> Types =>
     ((string)Unbind(@base).Types.ToString())
-      .Split(", ")
+      .Split(new string[] { ", " }, StringSplitOptions.RemoveEmptyEntries)
       .ToList();
 
   /// <summary>
