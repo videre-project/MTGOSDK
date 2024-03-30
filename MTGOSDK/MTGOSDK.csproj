@@ -31,19 +31,24 @@
   </ItemGroup>
 
   <!-- Configures build-time resource dependencies for MSBuild -->
-	<ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
-    <ResourceProjects Include="..\third_party\RemoteNET\src\ScubaDiver\ScubaDiver.csproj" />
-    <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
-    <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
-    <ProjectReference Include="@(ResourceProjects)"
-                      ReferenceOutputAssembly="false"
-                      Private="false" />
-	</ItemGroup>
+  <Target Name="CollectResourceProjects"
+          BeforeTargets="ResolveProjectReferences"
+          Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <ItemGroup>
+      <ResourceProjects Include="..\third_party\RemoteNET\src\ScubaDiver\ScubaDiver.csproj" />
+      <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
+      <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
+      <ProjectReference Include="@(ResourceProjects)"
+                        ReferenceOutputAssembly="false"
+                        Private="false" />
+    </ItemGroup>
+  </Target>
 
   <!-- Bundle all build artifacts into this assembly's resources -->
   <Target Name="EmbedResources"
           BeforeTargets="CoreCompile"
           AfterTargets="ResolveProjectReferences"
+          DependsOnTargets="CollectResourceProjects"
           Condition="'@(ResourceProjects)' != ''">
     <ItemGroup>
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.dll" />
