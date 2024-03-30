@@ -39,9 +39,6 @@
       <Output TaskParameter="Version" PropertyName="MTGOVersion" />
     </ExtractMTGOInstallation>
 
-    <Message Text="MTGOSDK.MSBuild: Extracted MTGO version $(MTGOVersion)"
-             Importance="high" />
-
     <!--
       We build reference assemblies from the latest MTGO installation directory
       to ensure that we're only targeting the latest APIs of the MTGO client.
@@ -54,6 +51,10 @@
         Version="$(MTGOVersion)"
         OutputPath="$(_MTGOSDK_Refs)">
       <!--
+        Indicates whether the task has skipped generating reference assemblies.
+      -->
+      <Output TaskParameter="HasSkipped" PropertyName="HasSkipped" />
+      <!--
         Updates the internal reference path to reflect the new subpath.
 
         Note that this is only resolved after project dependencies are resolved,
@@ -64,9 +65,11 @@
 
     <!-- TODO: Verify the output reference assemblies w/ ILVerify -->
     <Message Text="MTGOSDK.MSBuild: Updated reference assemblies for MTGO version $(MTGOVersion)"
-             Importance="high" />
+             Importance="high"
+             Condition="'$(HasSkipped)' != 'true'" />
     <Message Text="MTGOSDK.MSBuild: Reference assemblies are located at $(_MTGOSDK_Refs)"
-             Importance="high" />
+             Importance="high"
+             Condition="'$(HasSkipped)' != 'true'" />
   </Target>
 
 </Project>

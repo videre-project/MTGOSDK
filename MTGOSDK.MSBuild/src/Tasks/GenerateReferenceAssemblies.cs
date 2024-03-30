@@ -17,7 +17,7 @@ namespace MTGOSDK.MSBuild.Tasks;
 public class GenerateReferenceAssemblies : Task
 {
   /// <summary>
-  ///  The path to the MTGO application directory.
+  /// The path to the MTGO application directory.
   /// </summary>
   [Required]
   public string MTGOAppDir { get; set; } = string.Empty;
@@ -29,9 +29,14 @@ public class GenerateReferenceAssemblies : Task
   public string Version { get; set; } = string.Empty;
 
   /// <summary>
+  /// Whether the task has been skipped.
+  /// </summary>
+  [Output]
+  public bool HasSkipped { get; set; } = false;
+
+  /// <summary>
   /// The path to store the generated reference assemblies.
   /// </summary>
-  ///
   [Required]
   [Output]
   public string OutputPath { get; set; } = string.Empty;
@@ -45,7 +50,9 @@ public class GenerateReferenceAssemblies : Task
       Log.LogMessage(MessageImportance.High,
           $"MTGOSDK.MSBuild: Reference assemblies for version {Version} already exist.");
 
+      HasSkipped = true;
       OutputPath = versionPath;
+
       return true;
     }
     // Clear out previous versions' reference assemblies
