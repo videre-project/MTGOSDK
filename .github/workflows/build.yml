@@ -27,7 +27,8 @@ env:
   MSBUILD_DEFAULTS: /m:2 /v:m /p:Configuration=Release /p:Platform="Any CPU"
   NUGET_CACHES: |
     ~/.nuget/packages
-  NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -UseLockFile
+  # NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -UseLockFile
+  NUGET_DEFAULTS: -Verbosity detailed -NonInteractive -UseLockFile
 jobs:
   # Runs test suite
   build:
