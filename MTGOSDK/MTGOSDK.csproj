@@ -42,6 +42,8 @@
                         ReferenceOutputAssembly="false"
                         Private="false" />
     </ItemGroup>
+    <Message Text="MTGOSDK.Resources: Collected @(ResourceProjects->Count()) resource projects."
+             Importance="High" />
   </Target>
 
   <!-- Bundle all build artifacts into this assembly's resources -->
@@ -59,6 +61,8 @@
       <EmbeddedResource Include="@(ResourceFiles)"
                         LogicalName="Resources\%(Filename)" />
     </ItemGroup>
+    <Message Text="MTGOSDK.Resources: Embedded @(ResourceFiles->Count()) resources into $(AssemblyName)."
+             Importance="High" />
 	</Target>
 
   <!-- Import MTGOSDK package properties -->
