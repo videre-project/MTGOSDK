@@ -11,15 +11,15 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
-using ScubaDiver.API;
-using ScubaDiver.API.Interactions.Dumps;
-using ScubaDiver.API.Utils;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop.Utils;
 
-using RemoteNET.Internal;
-using RemoteNET.Internal.Reflection;
+using MTGOSDK.Core.Remoting.Internal;
+using MTGOSDK.Core.Remoting.Internal.Reflection;
 
 
-namespace RemoteNET;
+namespace MTGOSDK.Core.Remoting;
 
 public class RemoteApp : IDisposable
 {

@@ -10,7 +10,7 @@ using System.Linq;
 using System.Reflection;
 
 
-namespace RemoteNET.Internal.ProxiedReflection;
+namespace MTGOSDK.Core.Remoting.Internal.ProxiedReflection;
 
 public class ProxiedEventInfo(RemoteObject ro, string name, List<Type> args)
     : IProxiedMember

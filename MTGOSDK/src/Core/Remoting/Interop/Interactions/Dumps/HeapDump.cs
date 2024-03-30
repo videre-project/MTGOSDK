@@ -1,18 +1,23 @@
-﻿using System.Collections.Generic;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System.Collections.Generic;
 
 
-namespace ScubaDiver.API.Interactions.Dumps
+namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
+
+public class HeapDump
 {
-  public class HeapDump
+  public class HeapObject
   {
-    public class HeapObject
-    {
-      public ulong Address { get; set; }
-      public string Type { get; set; }
-      public int HashCode { get; set; }
-      public ulong MethodTable { get; set; }
-    }
-
-    public List<HeapObject> Objects { get; set; }
+    public ulong Address { get; set; }
+    public string Type { get; set; }
+    public int HashCode { get; set; }
+    public ulong MethodTable { get; set; }
   }
+
+  public List<HeapObject> Objects { get; set; }
 }

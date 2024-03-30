@@ -7,12 +7,12 @@
 using System;
 using System.Linq;
 
-using ScubaDiver.API;
-using ScubaDiver.API.Interactions;
-using ScubaDiver.API.Utils;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Utils;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 /// <summary>
 /// In this context: "function" = Methods + Constructors.

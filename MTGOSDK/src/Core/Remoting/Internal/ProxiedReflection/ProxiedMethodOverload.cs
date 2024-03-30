@@ -7,10 +7,10 @@
 using System;
 using System.Collections.Generic;
 
-using RemoteNET.Internal.Reflection;
+using MTGOSDK.Core.Remoting.Internal.Reflection;
 
 
-namespace RemoteNET.Internal.ProxiedReflection;
+namespace MTGOSDK.Core.Remoting.Internal.ProxiedReflection;
 
 public class ProxiedMethodOverload
 {

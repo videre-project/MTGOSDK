@@ -4,10 +4,10 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-using ScubaDiver.API.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
-namespace RemoteNET.Internal;
+namespace MTGOSDK.Core.Remoting.Internal;
 
 public class DynamicRemoteObjectFactory
 {

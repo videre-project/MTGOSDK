@@ -7,12 +7,12 @@
 using System;
 using System.Linq;
 
-using ScubaDiver.API;
-using ScubaDiver.API.Interactions;
-using ScubaDiver.API.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
-namespace RemoteNET.Internal;
+namespace MTGOSDK.Core.Remoting.Internal;
 
 internal class RemoteObjectRef(
   ObjectDump remoteObjectInfo,

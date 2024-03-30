@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using ScubaDiver.API.Interactions.Dumps;
-using ScubaDiver.API.Utils;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop.Utils;
 
 
 namespace ScubaDiver;
@@ -130,7 +130,7 @@ public static class ObjectDumpFactory
         //
         // Property dumping is disabled. It should be accessed using the 'get_' function.
         //
-        
+
         //var propValue = propInfo.GetValue(instance);
         //bool hasEncValue = false;
         //string encValue = null;

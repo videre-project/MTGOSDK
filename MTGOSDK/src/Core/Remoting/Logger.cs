@@ -8,8 +8,9 @@ using System;
 using System.Diagnostics;
 
 
-namespace RemoteNET;
+namespace MTGOSDK.Core.Remoting;
 
+#TODO: Refactor this to use the Microsoft.Extensions.Logging abstractions.
 internal class Logger
 {
   public static Lazy<bool> DebugInRelease = new Lazy<bool>(() =>

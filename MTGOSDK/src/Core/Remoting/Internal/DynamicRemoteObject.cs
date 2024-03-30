@@ -16,14 +16,15 @@ using System.Runtime.CompilerServices;
 using Microsoft.CSharp.RuntimeBinder;
 using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
 
-using ScubaDiver.API.Utils;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Utils;
 
-using RemoteNET.Internal.ProxiedReflection;
-using RemoteNET.Internal.Reflection;
-using RemoteNET.Internal.Utils;
+using MTGOSDK.Core.Remoting.Internal.ProxiedReflection;
+using MTGOSDK.Core.Remoting.Internal.Reflection;
+using MTGOSDK.Core.Remoting.Internal.Utils;
 
 
-namespace RemoteNET.Internal;
+namespace MTGOSDK.Core.Remoting.Internal;
 
 /// <summary>
 /// A proxy of a remote object.
@@ -544,8 +545,8 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     get
     {
 
-      ScubaDiver.API.ObjectOrRemoteAddress ooraKey = RemoteFunctionsInvokeHelper.CreateRemoteParameter(key);
-      ScubaDiver.API.ObjectOrRemoteAddress item = __ro.GetItem(ooraKey);
+      ObjectOrRemoteAddress ooraKey = RemoteFunctionsInvokeHelper.CreateRemoteParameter(key);
+      ObjectOrRemoteAddress item = __ro.GetItem(ooraKey);
       if (item.IsNull)
       {
         return null;

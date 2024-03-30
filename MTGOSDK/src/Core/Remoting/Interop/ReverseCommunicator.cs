@@ -1,12 +1,19 @@
-﻿using System.Collections.Generic;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using ScubaDiver.API.Interactions;
-using ScubaDiver.API.Interactions.Callbacks;
-using ScubaDiver.API.Utils;
 
-namespace ScubaDiver.API
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Interop.Utils;
+
+namespace MTGOSDK.Core.Remoting.Interop
 {
   /// <summary>
   /// The reverse communicator is used by the Diver to communicate back with its

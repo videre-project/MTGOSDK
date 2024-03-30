@@ -7,14 +7,14 @@
 using System;
 using System.Collections.Generic;
 
-using ScubaDiver.API;
-using ScubaDiver.API.Interactions;
-using ScubaDiver.API.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
-using RemoteNET.Internal;
+using MTGOSDK.Core.Remoting.Internal;
 
 
-namespace RemoteNET;
+namespace MTGOSDK.Core.Remoting;
 
 public class RemoteObject
 {

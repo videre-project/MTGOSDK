@@ -11,7 +11,7 @@ using System.Linq;
 using System.Reflection;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 internal class RemoteAssemblyDummy(string assemblyName) : Assembly
 {

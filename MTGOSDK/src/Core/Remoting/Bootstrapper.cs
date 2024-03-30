@@ -12,7 +12,7 @@ using System.Reflection;
 using MTGOSDK.Win32.Extensions;
 
 
-namespace RemoteNET;
+namespace MTGOSDK.Core.Remoting;
 
 public static class Bootstrapper
 {

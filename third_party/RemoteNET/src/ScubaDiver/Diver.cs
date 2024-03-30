@@ -18,14 +18,14 @@ using Exception = System.Exception;
 
 using MTGOSDK.Win32.API;
 
-using ScubaDiver.API;
-using ScubaDiver.API.Extensions;
-using ScubaDiver.API.Interactions;
-using ScubaDiver.API.Interactions.Callbacks;
-using ScubaDiver.API.Interactions.Client;
-using ScubaDiver.API.Interactions.Dumps;
-using ScubaDiver.API.Interactions.Object;
-using ScubaDiver.API.Utils;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Extensions;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
+using MTGOSDK.Core.Remoting.Interop.Utils;
 using ScubaDiver.Utils;
 
 
@@ -696,7 +696,7 @@ public class Diver : IDisposable
 
     UnregisterClientResponse ucResponse = new()
     {
-      WasRemvoed = removed,
+      WasRemoved = removed,
       OtherClientsAmount = remaining
     };
 

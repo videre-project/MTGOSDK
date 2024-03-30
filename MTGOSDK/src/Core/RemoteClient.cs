@@ -9,7 +9,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
-using RemoteNET;
+using MTGOSDK.Core.Remoting;
 
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Exceptions;

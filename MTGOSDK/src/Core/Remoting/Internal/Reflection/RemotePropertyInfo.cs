@@ -9,7 +9,7 @@ using System.Globalization;
 using System.Reflection;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class RemotePropertyInfo(Type declaringType, Lazy<Type> propType, string name) : PropertyInfo
 {

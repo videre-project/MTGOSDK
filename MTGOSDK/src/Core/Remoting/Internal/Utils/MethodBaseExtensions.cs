@@ -7,7 +7,7 @@
 using System.Reflection;
 
 
-namespace RemoteNET.Internal.Utils;
+namespace MTGOSDK.Core.Remoting.Internal.Utils;
 
 public static class MethodBaseExtensions
 {

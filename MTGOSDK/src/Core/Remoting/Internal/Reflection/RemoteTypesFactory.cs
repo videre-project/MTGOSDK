@@ -11,11 +11,11 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
-using ScubaDiver.API;
-using ScubaDiver.API.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class RemoteTypesFactory(TypesResolver resolver,
                                 DiverCommunicator communicator)

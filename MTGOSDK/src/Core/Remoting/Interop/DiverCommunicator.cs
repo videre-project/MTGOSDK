@@ -1,4 +1,10 @@
-﻿using System;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
@@ -8,15 +14,16 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
-using ScubaDiver.API.Exceptions;
-using ScubaDiver.API.Interactions;
-using ScubaDiver.API.Interactions.Callbacks;
-using ScubaDiver.API.Interactions.Dumps;
-using ScubaDiver.API.Interactions.Object;
-using ScubaDiver.API.Utils;
+
+using MTGOSDK.Core.Remoting.Interop.Exceptions;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
+using MTGOSDK.Core.Remoting.Interop.Utils;
 
 
-namespace ScubaDiver.API
+namespace MTGOSDK.Core.Remoting.Interop
 {
   /// <summary>
   /// Communicates with a diver in a remote process

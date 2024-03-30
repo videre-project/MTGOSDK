@@ -4,7 +4,7 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-namespace RemoteNET;
+namespace MTGOSDK.Core.Remoting;
 
 /// <summary>
 /// A candidate for a remote object.

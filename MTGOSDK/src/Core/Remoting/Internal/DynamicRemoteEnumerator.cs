@@ -7,7 +7,7 @@
 using System.Collections;
 
 
-namespace RemoteNET.Internal;
+namespace MTGOSDK.Core.Remoting.Internal;
 
 public class DynamicRemoteEnumerator(dynamic remoteEnumerator) : IEnumerator
 {

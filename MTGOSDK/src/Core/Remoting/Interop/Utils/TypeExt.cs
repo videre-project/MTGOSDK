@@ -1,180 +1,187 @@
-﻿using System;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using ScubaDiver.API.Extensions;
 
-namespace ScubaDiver.API.Utils
+using MTGOSDK.Core.Remoting.Interop.Extensions;
+
+
+namespace MTGOSDK.Core.Remoting.Interop.Utils;
+
+public static class TypeExt
 {
-  public static class TypeExt
+  public class WildCardEnabledTypesComparer : IEqualityComparer<Type>
   {
-    public class WildCardEnabledTypesComparer : IEqualityComparer<Type>
+    public bool Equals(Type x, Type y)
     {
-      public bool Equals(Type x, Type y)
-      {
-        if (x is WildCardType || y is WildCardType)
-          return true;
-        return x.IsAssignableFrom(y);
-      }
-
-      public int GetHashCode(Type obj) => obj.GetHashCode();
+      if (x is WildCardType || y is WildCardType)
+        return true;
+      return x.IsAssignableFrom(y);
     }
 
-    private static readonly WildCardEnabledTypesComparer _wildCardTypesComparer = new();
+    public int GetHashCode(Type obj) => obj.GetHashCode();
+  }
 
-    /// <summary>
-    /// Searches a type for a specific method. If not found searches its ancestors.
-    /// </summary>
-    /// <param name="t">TypeFullName to search</param>
-    /// <param name="methodName">Method name</param>
-    /// <param name="parameterTypes">Types of parameters in the function, in order.</param>
-    /// <returns></returns>
-    public static MethodInfo GetMethodRecursive(
-      this Type t,
-      string methodName,
-      Type[]? parameterTypes = null)
-    => GetMethodRecursive(t, methodName, null, parameterTypes);
+  private static readonly WildCardEnabledTypesComparer _wildCardTypesComparer = new();
 
-    public static MethodInfo GetMethodRecursive(
-      this Type t,
-      string methodName,
-      Type[]? genericArgumentTypes,
-      Type[]? parameterTypes)
+  /// <summary>
+  /// Searches a type for a specific method. If not found searches its ancestors.
+  /// </summary>
+  /// <param name="t">TypeFullName to search</param>
+  /// <param name="methodName">Method name</param>
+  /// <param name="parameterTypes">Types of parameters in the function, in order.</param>
+  /// <returns></returns>
+  public static MethodInfo GetMethodRecursive(
+    this Type t,
+    string methodName,
+    Type[]? parameterTypes = null)
+  => GetMethodRecursive(t, methodName, null, parameterTypes);
+
+  public static MethodInfo GetMethodRecursive(
+    this Type t,
+    string methodName,
+    Type[]? genericArgumentTypes,
+    Type[]? parameterTypes)
+  {
+    var methods = t.GetMethods((BindingFlags)0xffff)
+      .Where(m => m.Name == methodName);
+    if (genericArgumentTypes != null && genericArgumentTypes.Length > 0)
     {
-      var methods = t.GetMethods((BindingFlags)0xffff)
-        .Where(m => m.Name == methodName);
-      if (genericArgumentTypes != null && genericArgumentTypes.Length > 0)
-      {
-        methods = methods
-          .Where(m => m.ContainsGenericParameters == true)
-          .Where(m => m.GetGenericArguments().Length == genericArgumentTypes.Length)
-          .Select(m => m.MakeGenericMethod(genericArgumentTypes));
-      }
-
-      MethodInfo method;
-      if (parameterTypes == null)
-      {
-        method = methods.SingleOrDefault();
-      }
-      else
-      {
-        MethodInfo[]? exactMatches = methods.Where(m =>
-            m.GetParameters()
-              .Select(pi => pi.ParameterType)
-              .SequenceEqual(parameterTypes))
-          .ToArray();
-        if (exactMatches != null && exactMatches.Length == 1)
-        {
-          method = exactMatches.First();
-        }
-        else
-        {
-          // Do a less strict search
-          method = methods.SingleOrDefault(m =>
-              m.GetParameters()
-                .Select(pi => pi.ParameterType)
-                .SequenceEqual(parameterTypes, _wildCardTypesComparer));
-        }
-      }
-
-      if (method != null)
-        return method;
-
-      // Not found in this type...
-      if (t == typeof(object))
-        return null; // No more parents
-
-      // Check parent (until `object`)
-      return t.BaseType.GetMethodRecursive(methodName, parameterTypes);
+      methods = methods
+        .Where(m => m.ContainsGenericParameters == true)
+        .Where(m => m.GetGenericArguments().Length == genericArgumentTypes.Length)
+        .Select(m => m.MakeGenericMethod(genericArgumentTypes));
     }
-    public static MethodInfo GetMethodRecursive(this Type t, string methodName)
-      => GetMethodRecursive(t, methodName, null);
 
-    public static ConstructorInfo GetConstructor(
-      Type resolvedType,
-      Type[]? parameterTypes = null)
+    MethodInfo method;
+    if (parameterTypes == null)
     {
-      ConstructorInfo ctorInfo;
-
-      var methods = resolvedType.GetConstructors((BindingFlags)0xffff);
-      ConstructorInfo[] exactMatches = methods
-        .Where(m =>
+      method = methods.SingleOrDefault();
+    }
+    else
+    {
+      MethodInfo[]? exactMatches = methods.Where(m =>
           m.GetParameters()
             .Select(pi => pi.ParameterType)
             .SequenceEqual(parameterTypes))
         .ToArray();
-      if (exactMatches.Length == 1)
+      if (exactMatches != null && exactMatches.Length == 1)
       {
-        ctorInfo = exactMatches.First();
+        method = exactMatches.First();
       }
       else
       {
         // Do a less strict search
-        ctorInfo = methods.SingleOrDefault(m =>
-          m.GetParameters()
-            .Select(pi => pi.ParameterType)
-            .SequenceEqual(parameterTypes,
-                new TypeExt.WildCardEnabledTypesComparer()));
+        method = methods.SingleOrDefault(m =>
+            m.GetParameters()
+              .Select(pi => pi.ParameterType)
+              .SequenceEqual(parameterTypes, _wildCardTypesComparer));
       }
-
-      return ctorInfo;
     }
 
-    /// <summary>
-    /// Searches a type for a specific field. If not found searches its ancestors.
-    /// </summary>
-    /// <param name="t">TypeFullName to search</param>
-    /// <param name="fieldName">Field name to search</param>
-    public static FieldInfo GetFieldRecursive(this Type t, string fieldName)
+    if (method != null)
+      return method;
+
+    // Not found in this type...
+    if (t == typeof(object))
+      return null; // No more parents
+
+    // Check parent (until `object`)
+    return t.BaseType.GetMethodRecursive(methodName, parameterTypes);
+  }
+  public static MethodInfo GetMethodRecursive(this Type t, string methodName)
+    => GetMethodRecursive(t, methodName, null);
+
+  public static ConstructorInfo GetConstructor(
+    Type resolvedType,
+    Type[]? parameterTypes = null)
+  {
+    ConstructorInfo ctorInfo;
+
+    var methods = resolvedType.GetConstructors((BindingFlags)0xffff);
+    ConstructorInfo[] exactMatches = methods
+      .Where(m =>
+        m.GetParameters()
+          .Select(pi => pi.ParameterType)
+          .SequenceEqual(parameterTypes))
+      .ToArray();
+    if (exactMatches.Length == 1)
     {
-      var field = t.GetFields((BindingFlags)0xffff)
-        .SingleOrDefault(fi => fi.Name == fieldName);
-      if (field != null)
-        return field;
-
-      // Not found in this type...
-      if (t == typeof(object))
-        return null; // No more parents
-
-      // Check parent (until `object`)
-      return t.BaseType.GetFieldRecursive(fieldName);
+      ctorInfo = exactMatches.First();
     }
-
-    public static bool IsPrimitiveEtcArray(this Type realType)
+    else
     {
-      if (!realType.IsArray)
-        return false;
-
-      Type elementsType = realType.GetElementType();
-      return elementsType.IsPrimitiveEtc();
+      // Do a less strict search
+      ctorInfo = methods.SingleOrDefault(m =>
+        m.GetParameters()
+          .Select(pi => pi.ParameterType)
+          .SequenceEqual(parameterTypes,
+              new TypeExt.WildCardEnabledTypesComparer()));
     }
 
-    public static bool IsPrimitiveEtc(this Type realType)
+    return ctorInfo;
+  }
+
+  /// <summary>
+  /// Searches a type for a specific field. If not found searches its ancestors.
+  /// </summary>
+  /// <param name="t">TypeFullName to search</param>
+  /// <param name="fieldName">Field name to search</param>
+  public static FieldInfo GetFieldRecursive(this Type t, string fieldName)
+  {
+    var field = t.GetFields((BindingFlags)0xffff)
+      .SingleOrDefault(fi => fi.Name == fieldName);
+    if (field != null)
+      return field;
+
+    // Not found in this type...
+    if (t == typeof(object))
+      return null; // No more parents
+
+    // Check parent (until `object`)
+    return t.BaseType.GetFieldRecursive(fieldName);
+  }
+
+  public static bool IsPrimitiveEtcArray(this Type realType)
+  {
+    if (!realType.IsArray)
+      return false;
+
+    Type elementsType = realType.GetElementType();
+    return elementsType.IsPrimitiveEtc();
+  }
+
+  public static bool IsPrimitiveEtc(this Type realType)
+  {
+    return realType.IsPrimitive ||
+      realType == typeof(string) ||
+      realType == typeof(decimal) ||
+      realType == typeof(DateTime);
+  }
+
+  public static bool IsStringCoercible(this Type realType)
+  {
+    // TODO: Apply more comprehensive check to ensure that these types are
+    //       present in the consumer AppDomain and have `ToString` and `Parse`
+    //       methods.
+    return realType == typeof(Guid);
+  }
+
+  public static Type GetType(this AppDomain domain, string typeFullName)
+  {
+    var assemblies = domain.GetAssemblies();
+    foreach (Assembly assm in assemblies)
     {
-      return realType.IsPrimitive ||
-        realType == typeof(string) ||
-        realType == typeof(decimal) ||
-        realType == typeof(DateTime);
+      Type t = assm.GetType(typeFullName);
+      if (t != null)
+        return t;
     }
-
-    public static bool IsStringCoercible(this Type realType)
-    {
-      // TODO: Apply more comprehensive check to ensure that these types are
-      //       present in the consumer AppDomain and have `ToString` and `Parse`
-      //       methods.
-      return realType == typeof(Guid);
-    }
-
-    public static Type GetType(this AppDomain domain, string typeFullName)
-    {
-      var assemblies = domain.GetAssemblies();
-      foreach (Assembly assm in assemblies)
-      {
-        Type t = assm.GetType(typeFullName);
-        if (t != null)
-          return t;
-      }
-      return null;
-    }
+    return null;
   }
 }

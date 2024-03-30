@@ -7,13 +7,13 @@
 using System;
 using System.Linq;
 
-using ScubaDiver.API;
-using ScubaDiver.API.Interactions;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
 
-using RemoteNET.Internal.Reflection;
+using MTGOSDK.Core.Remoting.Internal.Reflection;
 
 
-namespace RemoteNET;
+namespace MTGOSDK.Core.Remoting;
 
 public class RemoteActivator(DiverCommunicator communicator, RemoteApp app)
 {

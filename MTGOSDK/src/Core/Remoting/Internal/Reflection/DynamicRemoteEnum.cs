@@ -7,7 +7,7 @@
 using System.Dynamic;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class DynamicRemoteEnum(RemoteEnum remoteEnum) : DynamicObject
 {

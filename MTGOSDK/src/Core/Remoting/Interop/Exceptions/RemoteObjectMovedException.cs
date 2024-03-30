@@ -1,13 +1,16 @@
-﻿using System;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
 
-namespace ScubaDiver.API.Exceptions
+using System;
+
+
+namespace MTGOSDK.Core.Remoting.Interop.Exceptions;
+
+internal class RemoteObjectMovedException(ulong testedAddress,
+                                          string msg) : Exception(msg)
 {
-    internal class RemoteObjectMovedException : Exception
-    {
-        public ulong TestedAddress { get; private set; }
-        public RemoteObjectMovedException(ulong testedAddress, string msg) : base(msg) 
-        {
-            TestedAddress = testedAddress;
-        }
-    }
+  public ulong TestedAddress { get; private set; } = testedAddress;
 }

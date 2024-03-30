@@ -8,11 +8,11 @@ using System;
 using System.Globalization;
 using System.Reflection;
 
-using ScubaDiver.API;
-using ScubaDiver.API.Utils;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Utils;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class RemoteFieldInfo(
   Type declaringType,

@@ -7,7 +7,7 @@
 using System;
 
 
-namespace RemoteNET.Internal.ProxiedReflection;
+namespace MTGOSDK.Core.Remoting.Internal.ProxiedReflection;
 
 /// <summary>
 /// Info of proxied field or property

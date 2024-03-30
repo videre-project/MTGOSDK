@@ -1,9 +1,15 @@
-﻿using System;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
 
-using ScubaDiver.API.Utils;
+using System;
+
+using MTGOSDK.Core.Remoting.Interop.Utils;
 
 
-namespace ScubaDiver.API
+namespace MTGOSDK.Core.Remoting.Interop
 {
   /// <summary>
   /// Either an encoded object (for primitive types like int, string, primitibe arrays...) or info of a remote object

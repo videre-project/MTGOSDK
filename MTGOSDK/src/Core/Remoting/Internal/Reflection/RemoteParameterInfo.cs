@@ -8,7 +8,7 @@ using System;
 using System.Reflection;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 /// <summary>
 /// A parameter of a remote method. The parameter's type itself might be a remote type (but can also be local)

@@ -4,7 +4,7 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-namespace RemoteNET.Internal.ProxiedReflection;
+namespace MTGOSDK.Core.Remoting.Internal.ProxiedReflection;
 
 public interface IProxiedMember
 {

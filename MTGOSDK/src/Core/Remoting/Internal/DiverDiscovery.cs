@@ -11,10 +11,10 @@ using System.Net.Sockets;
 
 using MTGOSDK.Win32.Extensions;
 
-using ScubaDiver.API;
+using MTGOSDK.Core.Remoting.Interop;
 
 
-namespace RemoteNET.Internal;
+namespace MTGOSDK.Core.Remoting.Internal;
 
 public enum DiverState
 {

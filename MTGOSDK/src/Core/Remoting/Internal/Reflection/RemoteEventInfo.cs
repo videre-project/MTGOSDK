@@ -8,7 +8,7 @@ using System;
 using System.Reflection;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class RemoteEventInfo(
   RemoteType declaringType,

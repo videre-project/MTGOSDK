@@ -7,7 +7,7 @@
 using System;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class LazyRemoteTypeResolver
 {

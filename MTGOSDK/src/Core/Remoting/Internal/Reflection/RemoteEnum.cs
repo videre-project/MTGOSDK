@@ -4,7 +4,7 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class RemoteEnum(RemoteType remoteType)
 {

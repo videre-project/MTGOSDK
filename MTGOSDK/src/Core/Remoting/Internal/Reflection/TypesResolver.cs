@@ -10,7 +10,7 @@ using System.Linq;
 using System.Reflection;
 
 
-namespace RemoteNET.Internal.Reflection;
+namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 /// <summary>
 /// Resolves local and remote types. Contains a cache so the same TypeFullName

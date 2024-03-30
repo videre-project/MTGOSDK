@@ -1,16 +1,16 @@
-﻿using System.Collections.Generic;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System.Collections.Generic;
 
 
-namespace ScubaDiver.API.Interactions.Object
+namespace MTGOSDK.Core.Remoting.Interop.Interactions.Object;
+
+public class CtorInvocationRequest()
 {
-  public class CtorInvocationRequest
-  {
-    public string TypeFullName { get; set; }
-    public List<ObjectOrRemoteAddress> Parameters { get; set; }
-
-    public CtorInvocationRequest()
-    {
-      Parameters = new();
-    }
-  }
+  public string TypeFullName { get; set; }
+  public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
 }
