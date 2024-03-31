@@ -7,12 +7,9 @@
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);
       <!-- Disables unenforcable nullable warnings - breaks static analysis -->
-      CS8597;CS8600;CS8602;CS8603;CS8604;CS8625;IDE0065;
+      CS8597;CS8600;CS8602;CS8603;CS8604;CS8625;CS8767;CS9113;IDE0065;
       <!-- FIXME: From RemoteNET library -->
       CS8601;CS8608;CS8610;CS8618;CS8619;CS8620;CS8765;
-      <!-- FIXME: From ScubaDiver.API library -->
-      1701;1702;8600;8602;8603;8618;8625;
-      CS0436;CS9113;CS8767;MSB3277
     </NoWarn>
   </PropertyGroup>
 
@@ -42,8 +39,6 @@
                         ReferenceOutputAssembly="false"
                         Private="false" />
     </ItemGroup>
-    <Message Text="MTGOSDK.Resources: Collected @(ResourceProjects->Count()) resource projects."
-             Importance="High" />
   </Target>
 
   <!-- Bundle all build artifacts into this assembly's resources -->
@@ -61,8 +56,6 @@
       <EmbeddedResource Include="@(ResourceFiles)"
                         LogicalName="Resources\%(Filename)" />
     </ItemGroup>
-    <Message Text="MTGOSDK.Resources: Embedded @(ResourceFiles->Count()) resources into $(AssemblyName)."
-             Importance="High" />
 	</Target>
 
   <!-- Import MTGOSDK package properties -->

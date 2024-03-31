@@ -3,7 +3,7 @@
 
   <PropertyGroup>
     <!-- Disables warnings for referencing incompatible project TFMs -->
-    <NoWarn>$(NoWarn);NU1702;</NoWarn>
+    <NoWarn>$(NoWarn);NU1702;MSB3277;</NoWarn>
     <!-- Used for referencing WPF assemblies at runtime (w/ reflection) -->
     <UseWPF>true</UseWPF>
   </PropertyGroup>
