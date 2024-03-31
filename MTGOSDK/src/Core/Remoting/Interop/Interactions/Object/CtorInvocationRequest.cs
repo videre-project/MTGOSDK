@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
-public struct CtorInvocationRequest()
+public class CtorInvocationRequest()
 {
   public string TypeFullName { get; set; }
   public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();

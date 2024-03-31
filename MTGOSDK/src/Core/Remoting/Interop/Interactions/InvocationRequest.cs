@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions;
 
-public struct InvocationRequest()
+public class InvocationRequest
 {
   public ulong ObjAddress { get; set; }
   public string MethodName { get; set; }

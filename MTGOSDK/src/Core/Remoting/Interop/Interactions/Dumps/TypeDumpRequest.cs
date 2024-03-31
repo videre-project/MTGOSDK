@@ -7,7 +7,7 @@
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
-public struct TypeDumpRequest
+public class TypeDumpRequest
 {
   public string Assembly { get; set; }
   public string TypeFullName { get; set; }
