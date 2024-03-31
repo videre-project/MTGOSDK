@@ -6,7 +6,7 @@
 using System;
 
 using MTGOSDK.API;
-using MTGOSDK.Core;
+using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
 
 
