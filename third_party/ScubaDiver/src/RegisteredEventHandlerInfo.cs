@@ -1,11 +1,17 @@
-﻿using System;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System;
 using System.Net;
 using System.Reflection;
 
 
 namespace ScubaDiver;
 
-public class RegisteredEventHandlerInfo 
+public class RegisteredEventHandlerInfo
 {
   /// <summary>
   /// Event handler that was registered on the event

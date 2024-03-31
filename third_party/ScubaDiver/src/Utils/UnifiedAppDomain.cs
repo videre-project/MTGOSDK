@@ -1,4 +1,10 @@
-﻿using System;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System;
 using System.Linq;
 using System.Reflection;
 
@@ -8,19 +14,8 @@ namespace ScubaDiver.Utils;
 /// <summary>
 /// Encapsulates access to all AppDomains in the process
 /// </summary>
-public class UnifiedAppDomain
+public class UnifiedAppDomain(Diver parentDiver)
 {
-  private readonly Diver _parentDiver;
-
-  /// <summary>
-  /// Parent diver, which is currently running in the app
-  /// </summary>
-  /// <param name="parentDiver"></param>
-  public UnifiedAppDomain(Diver parentDiver)
-  {
-    _parentDiver = parentDiver;
-  }
-
   private AppDomain[] _domains = new[] { AppDomain.CurrentDomain };
 
   public AppDomain[] GetDomains()
@@ -30,7 +25,7 @@ public class UnifiedAppDomain
       // Using Diver's heap searching abilities to locate all 'System.AppDomain'
       try
       {
-        (bool anyErrors, var candidates) = _parentDiver
+        (bool anyErrors, var candidates) = parentDiver
           .GetHeapObjects(heapObjType =>
               heapObjType == typeof(AppDomain).FullName, true);
 
@@ -41,7 +36,7 @@ public class UnifiedAppDomain
 
         _domains = candidates
           .Select(cand =>
-              _parentDiver
+              parentDiver
                 .GetObject(cand.Address, false, cand.Type, cand.HashCode)
                 .instance)
           .Cast<AppDomain>().ToArray();

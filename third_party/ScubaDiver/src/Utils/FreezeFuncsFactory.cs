@@ -1,4 +1,10 @@
-﻿using System;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
@@ -35,10 +41,10 @@ public static class FreezeFuncsFactory
       typeof(void),
       new[]
       {
-        typeof(object[]), // objs
-        typeof(ulong[]), // addr_param
+        typeof(object[]),         // objs
+        typeof(ulong[]),          // addr_param
         typeof(ManualResetEvent), // frozenFeedback
-        typeof(ManualResetEvent) // unfreezeRequested
+        typeof(ManualResetEvent)  // unfreezeRequested
       },
       typeof(FreezeFuncsFactory)
     );
@@ -111,7 +117,7 @@ public static class FreezeFuncsFactory
       //                 🠗
       // [ Method Table ][ Field 1 ][ Field 2 ]...
       //
-      // And we want: 
+      // And we want:
       // 🠗
       // [ Method Table ][ Field 1 ][ Field 2 ]...
       //

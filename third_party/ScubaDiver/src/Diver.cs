@@ -1,3 +1,9 @@
+/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -26,6 +32,7 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 using MTGOSDK.Core.Remoting.Interop.Utils;
+
 using ScubaDiver.Utils;
 
 

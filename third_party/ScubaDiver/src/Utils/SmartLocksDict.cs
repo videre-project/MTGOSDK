@@ -1,4 +1,10 @@
-﻿using System;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
@@ -16,13 +22,13 @@ public class SmartLocksDict<T>
 {
   private ConcurrentDictionary<int, SmartLockThreadState> _threadStates = new();
 
-  public class Entry
+  public struct LockEntry()
   {
     public object _lock = new();
     public HashSet<int> _holdersThreadIDs = new();
   }
 
-  private ConcurrentDictionary<T, Entry> _dict = new();
+  private ConcurrentDictionary<T, LockEntry> _dict = new();
 
   [Flags]
   public enum SmartLockThreadState
@@ -51,7 +57,7 @@ public class SmartLocksDict<T>
     }
   }
 
-  public void Add(T item) => _dict.TryAdd(item, new Entry());
+  public void Add(T item) => _dict.TryAdd(item, new LockEntry());
 
   public void Remove(T item) => _dict.TryRemove(item, out _);
 
@@ -77,19 +83,19 @@ public class SmartLocksDict<T>
       }
     }
 
-    if (!_dict.TryGetValue(item, out Entry entry))
+    if (!_dict.TryGetValue(item, out LockEntry LockEntry))
       return AcquireResults.NoSuchItem;
 
     AcquireResults result;
-    lock (entry._lock)
+    lock (LockEntry._lock)
     {
-      if (entry._holdersThreadIDs.Contains(currentThreadId))
+      if (LockEntry._holdersThreadIDs.Contains(currentThreadId))
       {
         result = AcquireResults.AlreadyAcquireByCurrentThread;
       }
       else
       {
-        entry._holdersThreadIDs.Add(currentThreadId);
+        LockEntry._holdersThreadIDs.Add(currentThreadId);
         result = AcquireResults.Acquired;
       }
     }
@@ -99,13 +105,13 @@ public class SmartLocksDict<T>
 
   public void Release(T item)
   {
-    if (!_dict.TryGetValue(item, out Entry entry))
+    if (!_dict.TryGetValue(item, out LockEntry LockEntry))
       return;
 
-    lock (entry._lock)
+    lock (LockEntry._lock)
     {
       int currentThreadId = Thread.CurrentThread.ManagedThreadId;
-      entry._holdersThreadIDs.Remove(currentThreadId);
+      LockEntry._holdersThreadIDs.Remove(currentThreadId);
     }
   }
 }

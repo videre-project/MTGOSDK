@@ -1,4 +1,10 @@
-﻿using System.Collections.Generic;
+﻿/** @file
+  Copyright (c) 2021, Xappy.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0 and MIT
+**/
+
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,19 +14,10 @@ namespace ScubaDiver;
 
 public class FrozenObjectsCollection
 {
-  private object _lock;
-  Dictionary<object, ulong> _frozenObjects;
-  private Task _freezerTask;
-  private ManualResetEvent _unfreezeRequested;
-
-
-  public FrozenObjectsCollection()
-  {
-    _lock = new object();
-    _frozenObjects = new Dictionary<object, ulong>();
-    _freezerTask = null;
-    _unfreezeRequested = null;
-  }
+  private object _lock = new object();
+  private Dictionary<object, ulong> _frozenObjects = new();
+  private Task _freezerTask = null!;
+  private ManualResetEvent _unfreezeRequested = null!;
 
   /// <summary>
   /// Return the address where an object is pinned, otherwise returns false.
