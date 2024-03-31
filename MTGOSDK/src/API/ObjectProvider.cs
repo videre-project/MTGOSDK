@@ -4,9 +4,10 @@
 **/
 
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Reflection;
 
 
-namespace MTGOSDK.Core.Reflection;
+namespace MTGOSDK.API;
 
 /// <summary>
 /// Global manager for all singleton objects registered with the client.

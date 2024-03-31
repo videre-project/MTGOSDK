@@ -67,6 +67,7 @@
   <Import Project="MTGOSDK.pkg.props" />
 
   <!-- Import MTGOSDK reference assemblies -->
-  <Import Project="MTGOSDK.ref.props" />
+  <Import Project="MTGOSDK.ref.props"
+          Condition="'$(TargetFramework)' != 'netstandard2.0'" />
 
 </Project>
