@@ -36,14 +36,14 @@ public class RemoteType : Type
   private readonly bool _isArray;
   private readonly bool _isGenericParameter;
 
-  public RemoteApp App { get; set; }
+  public RemoteHandle App { get; set; }
 
   public override bool IsGenericParameter => _isGenericParameter;
 
   private Lazy<Type> _parent;
   public override Type BaseType => _parent?.Value;
 
-  public RemoteType(RemoteApp app, Type localType)
+  public RemoteType(RemoteHandle app, Type localType)
       : this(app, localType.FullName, localType.Assembly.GetName().Name, localType.IsArray, localType.IsGenericParameter)
   {
     if (localType is RemoteType)
@@ -73,7 +73,7 @@ public class RemoteType : Type
   }
 
   public RemoteType(
-    RemoteApp app,
+    RemoteHandle app,
     string fullName,
     string assemblyName,
     bool isArray,

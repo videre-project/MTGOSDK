@@ -53,7 +53,7 @@ public class RemoteMethodInfo(
 
   public Type[] AssignedGenericArgs { get; } = genericArgs ?? Type.EmptyTypes;
 
-  private RemoteApp App => (DeclaringType as RemoteType)?.App;
+  private RemoteHandle App => (DeclaringType as RemoteType)?.App;
 
   public RemoteMethodInfo(RemoteType declaringType, MethodInfo mi) :
     this(declaringType,

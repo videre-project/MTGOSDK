@@ -9,14 +9,12 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
-using MTGOSDK.Core.Remoting;
-
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Win32.Utilities;
 
 
-namespace MTGOSDK.Core;
+namespace MTGOSDK.Core.Remoting;
 using static MTGOSDK.Win32.Constants;
 
 /// <summary>
@@ -30,7 +28,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
 
   private static readonly Lazy<RemoteClient> s_instance = new(() => new RemoteClient());
   public static RemoteClient @this => s_instance.Value;
-  public static RemoteApp @client => @this._clientHandle;
+  public static RemoteHandle @client => @this._clientHandle;
   public static Process @process => @this._clientProcess;
 
   /// <summary>
@@ -193,7 +191,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <summary>
   /// The RemoteNET handle to interact with the client.
   /// </summary>
-  private readonly RemoteApp _clientHandle;
+  private readonly RemoteHandle _clientHandle;
 
   /// <summary>
   /// The native process handle to the MTGO client.
@@ -206,11 +204,11 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// Connects to the target process and returns a RemoteNET client handle.
   /// </summary>
   /// <returns>A RemoteNET client handle.</returns>
-  private RemoteApp GetClientHandle()
+  private RemoteHandle GetClientHandle()
   {
     // Connect to the target process
     var port = RemoteClient.Port ??= (ushort)_clientProcess.Id;
-    var client = RemoteApp.Connect(_clientProcess, port);
+    var client = RemoteHandle.Connect(_clientProcess, port);
 
     // Teardown on exception.
     AppDomain.CurrentDomain.UnhandledException += (s, e) => Dispose();
@@ -236,7 +234,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   ~RemoteClient() => Dispose();
 
   //
-  // RemoteApp wrapper methods
+  // RemoteHandle wrapper methods
   //
 
   /// <summary>

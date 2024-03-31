@@ -8,7 +8,7 @@ namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class RemoteEnum(RemoteType remoteType)
 {
-  public RemoteApp App => remoteType?.App;
+  public RemoteHandle App => remoteType?.App;
 
   public object GetValue(string valueName)
   {

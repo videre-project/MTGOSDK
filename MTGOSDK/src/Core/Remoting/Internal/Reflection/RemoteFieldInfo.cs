@@ -19,7 +19,7 @@ public class RemoteFieldInfo(
   Lazy<Type> fieldType,
   string name) : FieldInfo
 {
-  private RemoteApp App => (DeclaringType as RemoteType)?.App;
+  private RemoteHandle App => (DeclaringType as RemoteType)?.App;
 
   public override Type FieldType => fieldType.Value;
   public override Type DeclaringType { get; } = declaringType;
@@ -61,7 +61,7 @@ public class RemoteFieldInfo(
         throw new InvalidOperationException(
             $"Trying to get a static field (null target object) " +
             $"on a {nameof(RemoteFieldInfo)} but it's associated " +
-            $"Declaring Type ({DeclaringType}) does not have a RemoteApp associated. " +
+            $"Declaring Type ({DeclaringType}) does not have a RemoteHandle associated. " +
             $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
       }
 
@@ -134,7 +134,7 @@ public class RemoteFieldInfo(
         throw new InvalidOperationException(
             $"Trying to get a static field (null target object) " +
             $"on a {nameof(RemoteFieldInfo)} but it's associated " +
-            $"Declaring Type ({DeclaringType}) does not have a RemoteApp associated. " +
+            $"Declaring Type ({DeclaringType}) does not have a RemoteHandle associated. " +
             $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
       }
 

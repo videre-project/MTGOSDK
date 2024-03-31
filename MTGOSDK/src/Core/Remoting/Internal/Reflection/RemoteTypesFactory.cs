@@ -29,7 +29,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
     new Dictionary<Tuple<string, string>, Type>();
 
   public Type ResolveTypeWhileCreating(
-    RemoteApp app,
+    RemoteHandle app,
     string typeInProgress,
     string methodName,
     string assembly,
@@ -66,7 +66,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
         paramType = new RemoteType(app, paramType);
         // TODO: Registring here in the cache is a hack but we couldn't
         // register within "TypesResolver.Resolve" because we don't have the
-        // RemoteApp to associate the fake remote type with.
+        // RemoteHandle to associate the fake remote type with.
         //
         // Maybe this should move somewhere else...
         resolver.RegisterType(paramType);
@@ -98,7 +98,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
     return paramType;
   }
 
-  private Type Create(RemoteApp app, string fullTypeName, string assembly)
+  private Type Create(RemoteHandle app, string fullTypeName, string assembly)
   {
     Type shortOutput = resolver.Resolve(assembly, fullTypeName);
     if (shortOutput != null)
@@ -113,7 +113,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
     return Create(app, parentDump);
   }
 
-  public Type Create(RemoteApp app, TypeDump typeDump)
+  public Type Create(RemoteHandle app, TypeDump typeDump)
   {
     Type shortOutput = resolver.Resolve(typeDump.Assembly, typeDump.Type);
     if (shortOutput != null)
@@ -155,7 +155,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
     return output;
   }
 
-  private void AddMembers(RemoteApp app, TypeDump typeDump, RemoteType output)
+  private void AddMembers(RemoteHandle app, TypeDump typeDump, RemoteType output)
   {
     AddGroupOfFunctions(app, typeDump, typeDump.Methods, output, areConstructors: false);
     AddGroupOfFunctions(app, typeDump, typeDump.Constructors, output, areConstructors: true);
@@ -183,7 +183,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
     }
   }
 
-  private void AddProperties(RemoteApp app, TypeDump typeDump, RemoteType output)
+  private void AddProperties(RemoteHandle app, TypeDump typeDump, RemoteType output)
   {
     foreach (TypeDump.TypeProperty propDump in typeDump.Properties)
     {
@@ -220,7 +220,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
     }
   }
 
-  private void AddEvents(RemoteApp app, TypeDump typeDump, RemoteType output)
+  private void AddEvents(RemoteHandle app, TypeDump typeDump, RemoteType output)
   {
     foreach (TypeDump.TypeEvent eventType in typeDump.Events)
     {
@@ -243,7 +243,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
     }
   }
 
-  private void AddFields(RemoteApp app, TypeDump typeDump, RemoteType output)
+  private void AddFields(RemoteHandle app, TypeDump typeDump, RemoteType output)
   {
     foreach (TypeDump.TypeField fieldDump in typeDump.Fields)
     {
@@ -267,7 +267,7 @@ public class RemoteTypesFactory(TypesResolver resolver,
     }
   }
 
-  private void AddGroupOfFunctions(RemoteApp app, TypeDump typeDump, List<TypeDump.TypeMethod> functions, RemoteType declaringType, bool areConstructors)
+  private void AddGroupOfFunctions(RemoteHandle app, TypeDump typeDump, List<TypeDump.TypeMethod> functions, RemoteType declaringType, bool areConstructors)
   {
     foreach (TypeDump.TypeMethod func in functions)
     {

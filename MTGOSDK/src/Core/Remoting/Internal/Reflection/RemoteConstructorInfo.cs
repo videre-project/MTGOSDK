@@ -25,7 +25,7 @@ public class RemoteConstructorInfo(Type declaringType,
 
   public override Type ReflectedType => throw new NotImplementedException();
 
-  private RemoteApp App => (DeclaringType as RemoteType)?.App;
+  private RemoteHandle App => (DeclaringType as RemoteType)?.App;
 
   public RemoteConstructorInfo(RemoteType declaringType, ConstructorInfo ci) :
     this(declaringType,

@@ -5,8 +5,8 @@
 
 using System.Collections.Generic;
 
-using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Play;
 

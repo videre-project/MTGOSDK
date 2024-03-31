@@ -22,7 +22,7 @@ public static class Bootstrapper
       ExtractDir
     );
 
-  public static string ExtractDir = typeof(RemoteApp).Assembly.GetName().Name;
+  public static string ExtractDir = typeof(RemoteClient).Assembly.GetName().Name;
 
   public static void Inject(Process target, ushort diverPort)
   {

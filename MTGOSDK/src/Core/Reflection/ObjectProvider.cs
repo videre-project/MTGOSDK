@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.Core;
+using MTGOSDK.Core.Remoting;
 
 
 namespace MTGOSDK.Core.Reflection;

@@ -18,7 +18,7 @@ namespace MTGOSDK.Core.Remoting;
 
 public class RemoteObject
 {
-  private readonly RemoteApp _app;
+  private readonly RemoteHandle _app;
   private RemoteObjectRef _ref;
   private Type _type = null;
 
@@ -26,7 +26,7 @@ public class RemoteObject
 
   public ulong RemoteToken => _ref.Token;
 
-  internal RemoteObject(RemoteObjectRef reference, RemoteApp remoteApp)
+  internal RemoteObject(RemoteObjectRef reference, RemoteHandle remoteApp)
   {
     _app = remoteApp;
     _ref = reference;

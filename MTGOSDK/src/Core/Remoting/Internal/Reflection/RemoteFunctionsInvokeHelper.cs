@@ -56,7 +56,7 @@ internal static class RemoteFunctionsInvokeHelper
   }
 
   public static object Invoke(
-    RemoteApp app,
+    RemoteHandle app,
     Type declaringType,
     string funcName,
     object obj,
@@ -71,7 +71,7 @@ internal static class RemoteFunctionsInvokeHelper
       parameters);
 
   public static object Invoke(
-    RemoteApp app,
+    RemoteHandle app,
     Type declaringType,
     string funcName,
     object obj,
@@ -109,7 +109,7 @@ internal static class RemoteFunctionsInvokeHelper
         throw new InvalidOperationException(
           $"Trying to invoke a static call (null target object) " +
           $"on a {nameof(RemoteMethodInfo)} but it's associated " +
-          $"Declaring Type ({declaringType}) does not have a RemoteApp associated. " +
+          $"Declaring Type ({declaringType}) does not have a RemoteHandle associated. " +
           $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
       }
 

@@ -11,10 +11,10 @@ namespace MTGOSDK.Core.Remoting.Internal;
 
 public class DynamicRemoteObjectFactory
 {
-  private RemoteApp _app;
+  private RemoteHandle _app;
 
   public DynamicRemoteObject Create(
-    RemoteApp rApp,
+    RemoteHandle rApp,
     RemoteObject remoteObj,
     TypeDump typeDump)
   {

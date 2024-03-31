@@ -13,7 +13,7 @@ namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class RemotePropertyInfo(Type declaringType, Lazy<Type> propType, string name) : PropertyInfo
 {
-  private RemoteApp App => (DeclaringType as RemoteType)?.App;
+  private RemoteHandle App => (DeclaringType as RemoteType)?.App;
   public override PropertyAttributes Attributes =>
     throw new NotImplementedException();
 

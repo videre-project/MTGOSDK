@@ -9,7 +9,7 @@ namespace MTGOSDK.Core.Remoting;
 
 /// <summary>
 /// A candidate for a remote object.
-/// Holding this item does not mean having a meaningful hold of the remote object. To gain one use <see cref="RemoteApp"/>
+/// Holding this item does not mean having a meaningful hold of the remote object. To gain one use <see cref="RemoteHandle"/>
 /// </summary>
 public struct CandidateObject(ulong address, string typeFullName, int hashCode)
 {

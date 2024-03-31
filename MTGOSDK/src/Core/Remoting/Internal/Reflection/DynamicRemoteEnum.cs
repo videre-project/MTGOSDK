@@ -11,7 +11,7 @@ namespace MTGOSDK.Core.Remoting.Internal.Reflection;
 
 public class DynamicRemoteEnum(RemoteEnum remoteEnum) : DynamicObject
 {
-  public RemoteApp App => remoteEnum.App;
+  public RemoteHandle App => remoteEnum.App;
 
   public override bool TryGetMember(GetMemberBinder binder, out dynamic result)
   {

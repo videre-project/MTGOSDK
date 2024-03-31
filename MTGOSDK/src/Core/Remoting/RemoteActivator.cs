@@ -14,7 +14,7 @@ using MTGOSDK.Core.Remoting.Internal.Reflection;
 
 namespace MTGOSDK.Core.Remoting;
 
-public class RemoteActivator(DiverCommunicator communicator, RemoteApp app)
+public class RemoteActivator(DiverCommunicator communicator, RemoteHandle app)
 {
   public RemoteObject CreateInstance(Type t) =>
     CreateInstance(t, new object[0]);

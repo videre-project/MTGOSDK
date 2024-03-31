@@ -21,7 +21,7 @@ using MTGOSDK.Core.Remoting.Internal.Reflection;
 
 namespace MTGOSDK.Core.Remoting;
 
-public class RemoteApp : IDisposable
+public class RemoteHandle : IDisposable
 {
   internal class RemoteObjectsCollection
   {
@@ -29,9 +29,9 @@ public class RemoteApp : IDisposable
     private readonly Dictionary<ulong, WeakReference<RemoteObject>> _pinnedAddressesToRemoteObjects;
     private readonly object _lock = new object();
 
-    private readonly RemoteApp _app;
+    private readonly RemoteHandle _app;
 
-    public RemoteObjectsCollection(RemoteApp app)
+    public RemoteObjectsCollection(RemoteHandle app)
     {
       _app = app;
       _pinnedAddressesToRemoteObjects = new Dictionary<ulong, WeakReference<RemoteObject>>();
@@ -120,7 +120,7 @@ public class RemoteApp : IDisposable
   public DiverCommunicator Communicator => _communicator;
   public static bool IsReconnected = false;
 
-  internal RemoteApp(Process procWithDiver, DiverCommunicator communicator)
+  internal RemoteHandle(Process procWithDiver, DiverCommunicator communicator)
   {
     _procWithDiver = procWithDiver;
     _communicator = communicator;
@@ -137,12 +137,12 @@ public class RemoteApp : IDisposable
   /// </summary>
   /// <param name="target">Process to create the provider for</param>
   /// <returns>A provider for the given process</returns>
-  public static RemoteApp Connect(Process target)
+  public static RemoteHandle Connect(Process target)
   {
     return Connect(target, (ushort)target.Id);
   }
 
-  public static RemoteApp Connect(Process target, ushort diverPort)
+  public static RemoteHandle Connect(Process target, ushort diverPort)
   {
     // Use discovery to check for existing diver
     string diverAddr = "127.0.0.1";
@@ -174,7 +174,7 @@ public class RemoteApp : IDisposable
     if (com.RegisterClient() == false)
       throw new Exception("Registering as a client in the Diver failed.");
 
-    return new RemoteApp(target, com);
+    return new RemoteHandle(target, com);
   }
 
   //
@@ -198,7 +198,7 @@ public class RemoteApp : IDisposable
         catch
         {
           // TODO:
-          Debug.WriteLine($"[{nameof(RemoteApp)}][{nameof(QueryTypes)}] Exception thrown when Dumping/Iterating assembly: {assembly}");
+          Debug.WriteLine($"[{nameof(RemoteHandle)}][{nameof(QueryTypes)}] Exception thrown when Dumping/Iterating assembly: {assembly}");
           continue;
         }
         foreach (TypesDump.TypeIdentifiers type in typeIdentifiers)
@@ -257,7 +257,7 @@ public class RemoteApp : IDisposable
         res = new RemoteType(this, res);
         // TODO: Registering here in the cache is a hack but we couldn't
         // register within "TypesResolver.Resolve" because we don't have the
-        // RemoteApp to associate the fake remote type with.
+        // RemoteHandle to associate the fake remote type with.
         // Maybe this should move somewhere else...
         resolver.RegisterType(res);
       }

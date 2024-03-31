@@ -168,7 +168,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       this[t1, t2, t3, t4][t5];
   }
 
-  public RemoteApp __ra;
+  public RemoteHandle __ra;
   public RemoteObject __ro;
   public RemoteType __type;
 
@@ -177,7 +177,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   private List<MemberInfo> __membersInner = null;
   public IEnumerable<MemberInfo> __members => MindFuck();
 
-  public DynamicRemoteObject(RemoteApp ra, RemoteObject ro)
+  public DynamicRemoteObject(RemoteHandle ra, RemoteObject ro)
   {
     __ra = ra;
     __ro = ro;
