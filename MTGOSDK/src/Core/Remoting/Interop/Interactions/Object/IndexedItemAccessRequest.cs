@@ -7,7 +7,7 @@
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
-public class IndexedItemAccessRequest
+public struct IndexedItemAccessRequest
 {
   public ulong CollectionAddress { get; set; }
   public bool PinRequest { get; set; }

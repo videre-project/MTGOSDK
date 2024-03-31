@@ -7,9 +7,10 @@
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 
-public class UnregisterClientResponse
+public struct UnregisterClientResponse
 {
   public bool WasRemoved { get; set; }
+
   /// <summary>
   /// Number of remaining clients, after the removal was done
   /// </summary>

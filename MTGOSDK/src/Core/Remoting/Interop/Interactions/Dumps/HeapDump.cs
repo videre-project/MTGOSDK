@@ -11,7 +11,7 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 public class HeapDump
 {
-  public class HeapObject
+  public struct HeapObject
   {
     public ulong Address { get; set; }
     public string Type { get; set; }

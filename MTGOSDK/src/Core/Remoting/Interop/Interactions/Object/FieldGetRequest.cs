@@ -7,7 +7,7 @@
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
-public class FieldGetRequest
+public struct FieldGetRequest
 {
   public ulong ObjAddress { get; set; }
   public string TypeFullName { get; set; }

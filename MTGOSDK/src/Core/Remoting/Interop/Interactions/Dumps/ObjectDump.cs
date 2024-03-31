@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
-public class ObjectDump()
+public class ObjectDump
 {
   public ObjectType ObjectType { get; set; }
   public ObjectType SubObjectsType { get; set; }

@@ -9,7 +9,6 @@ using System.Linq;
 
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
-
 using MTGOSDK.Core.Remoting.Internal.Reflection;
 
 

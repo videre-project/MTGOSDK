@@ -11,7 +11,7 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 public class DomainsDump
 {
-  public class AvailableDomain
+  public struct AvailableDomain
   {
     public string Name { get; set; }
     public List<string> AvailableModules { get; set; }

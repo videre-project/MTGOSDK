@@ -16,9 +16,9 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 [DebuggerDisplay("TypeDump of {" + nameof(Type) + "} (Assembly: {" + nameof(Assembly) + "})")]
 public class TypeDump
 {
-  public class TypeMethod
+  public struct TypeMethod
   {
-    public class MethodParameter
+    public struct MethodParameter
     {
       public bool IsGenericType { get; set; }
       public bool IsGenericParameter { get; set; }
@@ -130,63 +130,33 @@ public class TypeDump
       return $"{ReturnTypeFullName} {Name}({string.Join(",", Parameters)})";
     }
   }
-  public class TypeField
+
+  public struct TypeField(FieldInfo fi)
   {
-    public string Visibility { get; set; }
-    public string Name { get; set; }
-    public string TypeFullName { get; set; }
-    public string Assembly { get; set; }
-
-    public TypeField() {}
-
-    public TypeField(FieldInfo fi)
-    {
-      Visibility = fi.IsPublic ? "Public" : "Private";
-      Name = fi.Name;
-      TypeFullName = fi.FieldType.FullName;
-      Assembly = fi.FieldType.Assembly.GetName().Name;
-    }
-  }
-  public class TypeEvent
-  {
-    public string Name { get; set; }
-    public string TypeFullName { get; set; }
-    public string Assembly { get; set; }
-
-    public TypeEvent() {}
-    public TypeEvent(EventInfo ei)
-    {
-      Name = ei.Name;
-      TypeFullName = ei.EventHandlerType.FullName;
-      Assembly = ei.EventHandlerType.Assembly.GetName().Name;
-    }
+    public string Visibility = fi.IsPublic ? "Public" : "Private";
+    public string Name = fi.Name;
+    public string TypeFullName = fi.FieldType.FullName;
+    public string Assembly = fi.FieldType.Assembly.GetName().Name;
   }
 
-  public class TypeProperty
+  public struct TypeEvent(EventInfo ei)
   {
-    public string GetVisibility { get; set; }
-    public string SetVisibility { get; set; }
-    public string Name { get; set; }
-    public string TypeFullName { get; set; }
-    public string Assembly { get; set; }
+    public string Name = ei.Name;
+    public string TypeFullName = ei.EventHandlerType.FullName;
+    public string Assembly = ei.EventHandlerType.Assembly.GetName().Name;
+  }
 
-    public TypeProperty() {}
-
-    public TypeProperty(PropertyInfo pi)
-    {
-      if (pi.GetMethod != null)
-      {
-        GetVisibility = pi.GetMethod.IsPublic ? "Public" : "Private";
-      }
-      if (pi.SetMethod != null)
-      {
-        SetVisibility = pi.SetMethod.IsPublic ? "Public" : "Private";
-      }
-
-      Name = pi.Name;
-      TypeFullName = pi.PropertyType.FullName;
-      Assembly = pi.PropertyType.Assembly.GetName().Name;
-    }
+  public struct TypeProperty(PropertyInfo pi)
+  {
+    public string Name = pi.Name;
+    public string TypeFullName = pi.PropertyType.FullName;
+    public string Assembly = pi.PropertyType.Assembly.GetName().Name;
+    public string GetVisibility = pi.GetMethod != null
+      ? (pi.GetMethod.IsPublic ? "Public" : "Private")
+      : null!;
+    public string SetVisibility = pi.SetMethod != null
+      ? (pi.SetMethod.IsPublic ? "Public" : "Private")
+      : null!;
   }
 
   public string Type { get; set; }

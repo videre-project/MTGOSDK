@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
-public class CallbackInvocationRequest()
+public class CallbackInvocationRequest
 {
   public string StackTrace { get; set; }
   public int Token { get; set; }

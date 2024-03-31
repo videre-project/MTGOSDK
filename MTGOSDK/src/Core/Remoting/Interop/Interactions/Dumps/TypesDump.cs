@@ -11,10 +11,11 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 public class TypesDump
 {
-  public class TypeIdentifiers
+  public struct TypeIdentifiers
   {
     public string TypeName { get; set; }
   }
+
   public string AssemblyName { get; set; }
   public List<TypeIdentifiers> Types { get; set; }
 }

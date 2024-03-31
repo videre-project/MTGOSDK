@@ -4,9 +4,10 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
+
 namespace MTGOSDK.Core.Remoting;
 
-public class CandidateType(string typeName, string assembly)
+public struct CandidateType(string typeName, string assembly)
 {
   public string TypeFullName = typeName;
   public string Assembly = assembly;

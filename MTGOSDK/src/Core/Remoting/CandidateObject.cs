@@ -4,13 +4,14 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
+
 namespace MTGOSDK.Core.Remoting;
 
 /// <summary>
 /// A candidate for a remote object.
 /// Holding this item does not mean having a meaningful hold of the remote object. To gain one use <see cref="RemoteApp"/>
 /// </summary>
-public class CandidateObject(ulong address, string typeFullName, int hashCode)
+public struct CandidateObject(ulong address, string typeFullName, int hashCode)
 {
   public ulong Address = address;
   public string TypeFullName = typeFullName;
