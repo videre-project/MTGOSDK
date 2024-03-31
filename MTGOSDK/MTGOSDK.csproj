@@ -45,7 +45,7 @@
           BeforeTargets="ResolveProjectReferences"
           Condition="'$(TargetFramework)' != 'netstandard2.0'">
     <ItemGroup>
-      <ResourceProjects Include="..\third_party\RemoteNET\src\ScubaDiver\ScubaDiver.csproj" />
+      <ResourceProjects Include="..\third_party\ScubaDiver\ScubaDiver.csproj" />
       <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
       <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
       <ProjectReference Include="@(ResourceProjects)"

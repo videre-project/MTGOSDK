@@ -16,7 +16,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MTGOSDK.Ref", "MTGOSDK.Ref\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MTGOSDK.Win32", "MTGOSDK.Win32\MTGOSDK.Win32.csproj", "{0DE6081F-5E88-4B34-8CAB-4035DCAA30EB}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ScubaDiver", "third_party\RemoteNET\src\ScubaDiver\ScubaDiver.csproj", "{8DF5D538-941D-44E8-803E-9E135926EBE8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ScubaDiver", "third_party\ScubaDiver\ScubaDiver.csproj", "{8DF5D538-941D-44E8-803E-9E135926EBE8}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Bootstrapper", "third_party\SharpNeedle\src\Bootstrapper\Bootstrapper.vcxproj", "{5DE7F97C-B97B-489F-A1E4-9F9656317F94}"
 EndProject
