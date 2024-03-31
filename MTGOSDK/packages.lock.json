@@ -238,12 +238,6 @@
           "System.Reflection.Emit": "4.7.0"
         }
       },
-      "Meziantou.Polyfill": {
-        "type": "Direct",
-        "requested": "[1.0.37, )",
-        "resolved": "1.0.37",
-        "contentHash": "kFlH4Ye5lEK9AjViSWm32JrH3Ee42jd15FNnv4X4fK4JzdSlkMR7mqzsgRCBgZzszWLr0ioIA78dsMNxRoouSw=="
-      },
       "Microsoft.CSharp": {
         "type": "Direct",
         "requested": "[4.7.0, )",

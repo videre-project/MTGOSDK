@@ -79,21 +79,21 @@ public static class Bootstrapper
       remoteNetAppDataDirInfo.Create();
 
     byte[] launcherResource = target.Is64Bit()
-      ? ExtractResource(@"Resources\Launcher_x64")
-      : ExtractResource(@"Resources\Launcher");
+      ? ExtractResource(@"Resources\Launcher_x64.exe")
+      : ExtractResource(@"Resources\Launcher.exe");
     launcherPath = target.Is64Bit()
       ? Path.Combine(AppDataDir, "Launcher_x64.exe")
       : Path.Combine(AppDataDir, "Launcher.exe");
 
     byte[] adapterResource = target.Is64Bit()
-      ? ExtractResource(@"Resources\Bootstrapper_x64")
-      : ExtractResource(@"Resources\Bootstrapper");
+      ? ExtractResource(@"Resources\Bootstrapper_x64.dll")
+      : ExtractResource(@"Resources\Bootstrapper.dll");
     var adapterPath = target.Is64Bit()
       ? Path.Combine(AppDataDir, "Bootstrapper_x64.dll")
       : Path.Combine(AppDataDir, "Bootstrapper.dll");
 
     // Get the .NET diver assembly to inject into the target process
-    byte[] diverResource = ExtractResource(@"Resources\Microsoft.Diagnostics.Runtime");
+    byte[] diverResource = ExtractResource(@"Resources\Microsoft.Diagnostics.Runtime.dll");
     diverPath = Path.Combine(AppDataDir, "Microsoft.Diagnostics.Runtime.dll");
 
     // Check if injector or bootstrap resources differ from copies on disk

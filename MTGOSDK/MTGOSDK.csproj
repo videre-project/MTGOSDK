@@ -13,13 +13,17 @@
     </NoWarn>
   </PropertyGroup>
 
+  <!-- Import MTGOSDK package properties -->
+  <Import Project="MTGOSDK.pkg.props" />
+
   <ItemGroup>
 		<PackageReference Include="Microsoft.CSharp"
                       Version="4.7.0" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime"
                       Version="3.1.512801" />
     <PackageReference Include="Meziantou.Polyfill"
-                      Version="1.0.37" />
+                      Version="1.0.37"
+                      Condition="'$(TargetFramework)' == 'netstandard2.0'" />
     <PackageReference Include="ImpromptuInterface"
                       Version="8.0.4" />
     <PackageReference Include="Newtonsoft.Json"
@@ -27,7 +31,16 @@
     <ProjectReference Include="..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>
 
-  <!-- Configures build-time resource dependencies for MSBuild -->
+  <!-- For builds used by the ScubaDiver assembly, exclude compiling the API -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <!-- Import MTGOSDK reference assemblies -->
+  <Import Project="MTGOSDK.ref.props"
+          Condition="'$(TargetFramework)' != 'netstandard2.0'" />
+
+  <!-- Configures build-time resource dependencies for the main library -->
   <Target Name="CollectResourceProjects"
           BeforeTargets="ResolveProjectReferences"
           Condition="'$(TargetFramework)' != 'netstandard2.0'">
@@ -41,33 +54,19 @@
     </ItemGroup>
   </Target>
 
-  <!-- Bundle all build artifacts into this assembly's resources -->
+  <!-- Bundle resource projects' build artifacts into the main library -->
   <Target Name="EmbedResources"
           BeforeTargets="CoreCompile"
           AfterTargets="ResolveProjectReferences"
           DependsOnTargets="CollectResourceProjects"
           Condition="'@(ResourceProjects)' != ''">
     <ItemGroup>
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.dll" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.exe" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.dll" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.exe" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.dll" />
+      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.*" />
+      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.*" />
+      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
       <EmbeddedResource Include="@(ResourceFiles)"
-                        LogicalName="Resources\%(Filename)" />
+                        LogicalName="Resources\%(Filename)%(Extension)" />
     </ItemGroup>
 	</Target>
-
-  <!-- For builds used by the ScubaDiver assembly, exclude compiling the API -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
-  </PropertyGroup>
-
-  <!-- Import MTGOSDK package properties -->
-  <Import Project="MTGOSDK.pkg.props" />
-
-  <!-- Import MTGOSDK reference assemblies -->
-  <Import Project="MTGOSDK.ref.props"
-          Condition="'$(TargetFramework)' != 'netstandard2.0'" />
 
 </Project>
