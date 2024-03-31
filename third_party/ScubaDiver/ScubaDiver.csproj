@@ -26,8 +26,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-		<ProjectReference Include="..\..\..\..\MTGOSDK\MTGOSDK.csproj" />
-		<ProjectReference Include="..\..\..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
+		<ProjectReference Include="..\..\MTGOSDK\MTGOSDK.csproj" />
+		<ProjectReference Include="..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>
 
   <ItemGroup>
