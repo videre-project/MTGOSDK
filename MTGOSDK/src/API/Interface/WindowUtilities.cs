@@ -38,9 +38,6 @@ public static class WindowUtilities
   /// </exception>
   public static ICollection<dynamic> GetWindows()
   {
-#if NETSTANDARD2_0
-    throw new PlatformNotSupportedException();
-#else
     // This is a hack that caches the dispatcher's registered windows.
     _ = Unbind(s_windowUtilities).AllWindows;
     _ = s_windowUtilities.AllWindows;
@@ -60,7 +57,6 @@ public static class WindowUtilities
     }
 
     throw new InvalidOperationException("Failed to get window collection.");
-#endif
   }
 
   /// <summary>

@@ -18,6 +18,8 @@ public sealed class RemoteProxy<I>(Func<I> c) : DLRWrapper<I>() where I : class
   /// </summary>
 #if !NETSTANDARD2_0
   internal override Lazy<I> obj => new(() => c.Invoke());
+#else // Avoid co-variant type conversion.
+  internal override dynamic obj => new Lazy<I>(() => c.Invoke());
 #endif
 
   private object refLock = new();

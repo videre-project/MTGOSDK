@@ -58,6 +58,11 @@
     </ItemGroup>
 	</Target>
 
+  <!-- For builds used by the ScubaDiver assembly, exclude compiling the API -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
+  </PropertyGroup>
+
   <!-- Import MTGOSDK package properties -->
   <Import Project="MTGOSDK.pkg.props" />
 
