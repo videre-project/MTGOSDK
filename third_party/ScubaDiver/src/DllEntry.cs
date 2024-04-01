@@ -6,13 +6,30 @@
 
 using System;
 using System.Threading;
+using System.Diagnostics;
+using System.Linq;
 
 
 namespace ScubaDiver;
 
 public class DllEntry
 {
-  public static void DiverHost(object pwzArgument)
+  private static bool UnloadBootstrapper()
+  {
+    foreach(ProcessModule module in Process.GetCurrentProcess().Modules)
+    {
+      if (new string[] {
+          "Bootstrapper.dll",
+          "Bootstrapper_x64.dll"
+        }.Any(s => module.ModuleName == s))
+      {
+        return Kernel32.FreeLibrary(module.BaseAddress);
+      }
+    }
+    return false;
+  }
+
+  private static void DiverHost(object pwzArgument)
   {
     try
     {
@@ -38,10 +55,15 @@ public class DllEntry
     // then we need to allocate a console and redirect STDOUT to it.
     Logger.RedirectConsole();
 
-    //
+    // Unload the native bootstrapper DLL to free up the file handle.
+    if (!UnloadBootstrapper())
+    {
+      Logger.Debug("[EntryPoint] Failed to unload Bootstrapper.");
+      return 1;
+    }
+
     // The Bootstrapper needs to call a C# function with exactly this signature,
     // so we use it to just create a diver, and run the Start func (blocking)
-    //
     ParameterizedThreadStart func = DiverHost;
     Logger.Debug($"[EntryPoint] Starting ScubaDiver with argument: {pwzArgument}");
     Thread diverHostThread = new(func);
