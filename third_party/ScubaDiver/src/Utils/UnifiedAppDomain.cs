@@ -5,8 +5,11 @@
 **/
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
 namespace ScubaDiver.Utils;
@@ -14,13 +17,13 @@ namespace ScubaDiver.Utils;
 /// <summary>
 /// Encapsulates access to all AppDomains in the process
 /// </summary>
-public class UnifiedAppDomain(Diver parentDiver)
+public class UnifiedAppDomain
 {
   private AppDomain[] _domains = new[] { AppDomain.CurrentDomain };
 
-  public AppDomain[] GetDomains()
+  public UnifiedAppDomain(Diver parentDiver = null)
   {
-    if (_domains == null)
+    if (parentDiver != null)
     {
       // Using Diver's heap searching abilities to locate all 'System.AppDomain'
       try
@@ -40,40 +43,23 @@ public class UnifiedAppDomain(Diver parentDiver)
                 .GetObject(cand.Address, false, cand.Type, cand.HashCode)
                 .instance)
           .Cast<AppDomain>().ToArray();
-        Logger.Debug("[Diver][UnifiedAppDomain] All assemblies were retrieved from all AppDomains");
+        Logger.Debug("[Diver][UnifiedAppDomain] All assemblies were retrieved from all AppDomains.");
       }
       catch (Exception ex)
       {
-        Logger.Debug("[Diver][UnifiedAppDomain] Failed to search heap for Runtime Assemblies. Error: " + ex.Message);
-
-        // Fallback - Just return all assemblies in the current AppDomain.
-        // Obviously, it's not ALL of them but sometimes it's good enough.
-        _domains = new[] { AppDomain.CurrentDomain };
+        Logger.Debug("[Diver][UnifiedAppDomain] Failed to search heap for runtime assemblies. Error: " + ex.Message);
       }
     }
-    return _domains;
   }
 
-  public Assembly GetAssembly(string name)
-  {
-    return _domains.SelectMany(domain => domain.GetAssemblies())
-      .Where(asm => asm.GetName().Name == name)
-      .SingleOrDefault();
-  }
-
-  public Assembly[] GetAssemblies()
-  {
-    return _domains.SelectMany(domain => domain.GetAssemblies()).ToArray();
-  }
-
-  public Type ResolveType(string typeFullName, string assembly = null)
+  public Type ResolveType(string typeFullName, string assemblyName = null)
   {
     // TODO: Nullable gets a special case but in general we should switch to a
     //       recursive type-resolution to account for types like:
     //           Dictionary<FirstAssembly.FirstType, SecondAssembly.SecondType>
     if (typeFullName.StartsWith("System.Nullable`1[["))
     {
-      return ResolveNullableType(typeFullName, assembly);
+      return ResolveNullableType(typeFullName, assemblyName);
     }
 
     if (typeFullName.Contains('<') && typeFullName.EndsWith(">"))
@@ -86,25 +72,43 @@ public class UnifiedAppDomain(Diver parentDiver)
       typeFullName = $"{nonGenericPart}`{numOfParams}";
     }
 
-
-    foreach (Assembly assm in GetAssemblies())
+    foreach (Assembly assm in _domains.SelectMany(d => d.GetAssemblies()))
     {
       Type t = assm.GetType(typeFullName, throwOnError: false);
       if (t != null)
-      {
         return t;
-      }
     }
-    throw new Exception($"Could not find type '{typeFullName}' in any of the known assemblies");
+
+    throw new Exception(
+        $"Could not find type '{typeFullName}' in any of the known assemblies");
   }
 
-  private Type ResolveNullableType(string typeFullName, string assembly)
+  public TypesDump ResolveTypes(string assemblyName)
+  {
+    Assembly matchingAssembly = _domains
+      .SelectMany(d => d.GetAssemblies())
+      .Where(asm => asm.GetName().Name == assemblyName)
+      .SingleOrDefault();
+
+    if (matchingAssembly == null)
+      throw new Exception($"No assemblies were found matching '{assemblyName}'.");
+
+    List<TypesDump.TypeIdentifiers> types = new();
+    foreach (Type type in matchingAssembly.GetTypes())
+    {
+      types.Add(new TypesDump.TypeIdentifiers() { TypeName = type.FullName });
+    }
+
+    return new TypesDump() { AssemblyName = assemblyName, Types = types };
+  }
+
+  private Type ResolveNullableType(string typeFullName, string assemblyName)
   {
     // Remove prefix: "System.Nullable`1[["
     string innerTypeName = typeFullName.Substring("System.Nullable`1[[".Length);
     // Remove suffix: "]]"
     innerTypeName = innerTypeName.Substring(0, innerTypeName.Length - 2);
-    // Type name is everything before the first comma (affter that we have some assembly info)
+    // Type name is everything before the first comma (after that we have some assembly info)
     innerTypeName = innerTypeName.Substring(0, innerTypeName.IndexOf(',')).Trim();
 
     Type innerType = ResolveType(innerTypeName);
