@@ -41,7 +41,11 @@ public class ProxyObject(
 
           // Get the default value for the return type.
           Type returnType = binder.ReturnType;
+#if !NETSTANDARD2_0
           dynamic typeRef = RuntimeHelpers.GetUninitializedObject(returnType);
+#else // 'GetUninitializedObject' is not available in .NET Standard 2.0.
+          dynamic typeRef = Activator.CreateInstance(returnType);
+#endif
           dynamic typeDefault = typeRef
             .GetType()
             .GetConstructor(Type.EmptyTypes)

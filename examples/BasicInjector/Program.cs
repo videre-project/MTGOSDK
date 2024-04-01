@@ -8,7 +8,7 @@ using System;
 using MTGOSDK.API;
 
 // using MTGOInjector;
-// using ScubaDiver.API.Hooking;
+// using MTGOSDK.Core.Remoting.Interop.Hooking;
 
 
 //

@@ -5,8 +5,8 @@
 
 using System.Windows;
 
-using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 
 using Shiny.Core.Interfaces;
 

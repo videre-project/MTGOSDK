@@ -1,65 +1,72 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFrameworks>netstandard2.0;net8.0-windows</TargetFrameworks>
     <LangVersion>Latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- Disables unenforcable nullable warnings - breaks static analysis -->
-    <NoWarn>$(NoWarn);CS8597;CS8600;CS8602;CS8603;CS8604;CS8625;IDE0065;</NoWarn>
-    <!-- Used for referencing WPF assemblies at runtime (w/ reflection) -->
-    <UseWPF>true</UseWPF>
+    <NoWarn>$(NoWarn);
+      <!-- Disables unenforcable nullable warnings - breaks static analysis -->
+      CS8597;CS8600;CS8602;CS8603;CS8604;CS8625;CS8767;CS9113;IDE0065;
+      <!-- FIXME: From RemoteNET library -->
+      CS8601;CS8608;CS8610;CS8618;CS8619;CS8620;CS8765;
+    </NoWarn>
   </PropertyGroup>
 
-  <!-- Package Properties -->
-  <PropertyGroup>
-    <PackageId>MTGOSDK</PackageId>
-    <Version>1.0.0</Version>
-    <Authors>Cory Bennett</Authors>
-    <Company>Videre Project</Company>
-  </PropertyGroup>
-
-  <!-- Publishing Configuration -->
-  <PropertyGroup>
-    <PublishDir>..\publish\</PublishDir>
-    <DebugType>embedded</DebugType>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-  </PropertyGroup>
+  <!-- Import MTGOSDK package properties -->
+  <Import Project="MTGOSDK.pkg.props" />
 
   <ItemGroup>
+		<PackageReference Include="Microsoft.CSharp"
+                      Version="4.7.0" />
+    <PackageReference Include="Microsoft.Diagnostics.Runtime"
+                      Version="3.1.512801" />
+    <PackageReference Include="Meziantou.Polyfill"
+                      Version="1.0.37"
+                      Condition="'$(TargetFramework)' == 'netstandard2.0'" />
     <PackageReference Include="ImpromptuInterface"
                       Version="8.0.4" />
     <PackageReference Include="Newtonsoft.Json"
                       Version="13.0.3" />
     <ProjectReference Include="..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-    <ProjectReference Include="..\third_party\RemoteNET\src\RemoteNET\RemoteNET.csproj" />
-    <ProjectReference Include="..\third_party\RemoteNET\src\ScubaDiver.API\ScubaDiver.API.csproj" />
   </ItemGroup>
 
-  <!--
-    Bootstrap the MTGOSDK.Ref project to generate reference assemblies for
-    the current MTGO version. Due to the way that MSBuild works, this must
-    import the MTGOSDK.MSBuild.props file before referencing the project.
-  -->
-  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
-  <PropertyGroup>
-    <MTGOSDK_Refs>$(_MTGOSDK_Refs)\3.4.*.*</MTGOSDK_Refs>
+  <!-- For builds used by the ScubaDiver assembly, exclude compiling the API -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
-                      ReferenceOutputAssembly="false" />
-    <!--
-      Include reference assemblies to compile against the current MTGO version.
-      Note that the '_MTGOSDK_Refs' path does not reference the updated version
-      subpath as it is only evaluated after building the MTGOSDK.Ref project.
-    -->
-    <Reference Include="$(MTGOSDK_Refs)\Core.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\FlsClient.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\MTGOEnumStruct.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Common.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Chat.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Core.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Reference.dll" />
-  </ItemGroup>
+
+  <!-- Import MTGOSDK reference assemblies -->
+  <Import Project="MTGOSDK.ref.props"
+          Condition="'$(TargetFramework)' != 'netstandard2.0'" />
+
+  <!-- Configures build-time resource dependencies for the main library -->
+  <Target Name="CollectResourceProjects"
+          BeforeTargets="ResolveProjectReferences"
+          Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <ItemGroup>
+      <ResourceProjects Include="..\third_party\ScubaDiver\ScubaDiver.csproj" />
+      <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
+      <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
+      <ProjectReference Include="@(ResourceProjects)"
+                        ReferenceOutputAssembly="false"
+                        Private="false" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Bundle resource projects' build artifacts into the main library -->
+  <Target Name="EmbedResources"
+          BeforeTargets="CoreCompile"
+          AfterTargets="ResolveProjectReferences"
+          DependsOnTargets="CollectResourceProjects"
+          Condition="'@(ResourceProjects)' != ''">
+    <ItemGroup>
+      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.*" />
+      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.*" />
+      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
+      <EmbeddedResource Include="@(ResourceFiles)"
+                        LogicalName="Resources\%(Filename)%(Extension)" />
+    </ItemGroup>
+	</Target>
 
 </Project>

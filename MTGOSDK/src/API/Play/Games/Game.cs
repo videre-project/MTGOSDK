@@ -5,8 +5,8 @@
 
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Interface.ViewModels;
-using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Play;
 

@@ -78,6 +78,19 @@ public static class ProcessExtensions
   }
 
   /// <summary>
+  /// Converts a <see cref="ProcessModuleCollection"/> to an enumerable collection of <see cref="ProcessModule"/>.
+  /// </summary>
+  /// <param name="collection">The <see cref="ProcessModuleCollection"/> to convert.</param>
+  /// <returns>An enumerable collection of <see cref="ProcessModule"/>.</returns>
+  public static IEnumerable<ProcessModule> AsEnumerable(this ProcessModuleCollection collection)
+  {
+    foreach (ProcessModule module in collection)
+    {
+      yield return module;
+    }
+  }
+
+  /// <summary>
   /// Determines whether the specified process is a 64-bit process.
   /// </summary>
   /// <param name="process">The process to query.</param>

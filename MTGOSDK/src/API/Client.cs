@@ -10,9 +10,9 @@ using System.Security.Authentication;
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Users;
 using MTGOSDK.API.Interface;
-using MTGOSDK.Core;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
 
 using FlsClient.Interface;

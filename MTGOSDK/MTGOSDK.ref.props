@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <!-- Disables warnings for referencing incompatible project TFMs -->
+    <NoWarn>$(NoWarn);NU1702;MSB3277;</NoWarn>
+    <!-- Used for referencing WPF assemblies at runtime (w/ reflection) -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <!--
+    Bootstrap the MTGOSDK.Ref project to generate reference assemblies for
+    the current MTGO version. Due to the way that MSBuild works, this must
+    import the MTGOSDK.MSBuild.props file before referencing the project.
+  -->
+  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
+  <PropertyGroup>
+    <MTGOSDK_Refs>$(_MTGOSDK_Refs)\3.4.*.*</MTGOSDK_Refs>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
+                      ReferenceOutputAssembly="false" />
+    <!--
+      Include reference assemblies to compile against the current MTGO version.
+      Note that the '_MTGOSDK_Refs' path does not reference the updated version
+      subpath as it is only evaluated after building the MTGOSDK.Ref project.
+    -->
+    <Reference Include="$(MTGOSDK_Refs)\Core.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\FlsClient.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\MTGOEnumStruct.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Common.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Chat.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Core.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Reference.dll" />
+  </ItemGroup>
+
+</Project>

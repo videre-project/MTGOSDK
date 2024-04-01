@@ -20,14 +20,14 @@ namespace MTGOSDK.MSBuild.Tasks;
 public class ExtractMTGOInstallation : Task
 {
   /// <summary>
-  ///  The path to the MTGO application directory.
+  /// The path to the MTGO application directory.
   /// </summary>
   [Required]
   [Output]
   public string MTGOAppDir { get; set; } = string.Empty;
 
   /// <summary>
-  ///  The path to the MTGO user data directory.
+  /// The path to the MTGO user data directory.
   /// </summary>
   [Output]
   public string MTGODataDir { get; set; } = string.Empty;

@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using RemoteNET.Internal;
+using MTGOSDK.Core.Remoting.Internal;
 
 
 namespace MTGOSDK.Core.Reflection;
@@ -16,7 +16,11 @@ public sealed class RemoteProxy<I>(Func<I> c) : DLRWrapper<I>() where I : class
   /// <summary>
   /// Converts the captured member group to a typed delegate.
   /// </summary>
+#if !NETSTANDARD2_0
   internal override Lazy<I> obj => new(() => c.Invoke());
+#else // Avoid co-variant type conversion.
+  internal override dynamic obj => new Lazy<I>(() => c.Invoke());
+#endif
 
   private object refLock = new();
   private dynamic refObj = new DynamicRemoteObject();
