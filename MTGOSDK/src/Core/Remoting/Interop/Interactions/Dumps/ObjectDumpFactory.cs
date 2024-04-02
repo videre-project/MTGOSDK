@@ -9,14 +9,23 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Utils;
 
 
-namespace ScubaDiver;
+namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
+/// <summary>
+/// Factory for creating ObjectDump instances from object instances.
+/// </summary>
 public static class ObjectDumpFactory
 {
+  /// <summary>
+  /// Creates an ObjectDump from an object instance.
+  /// </summary>
+  /// <param name="instance">The object instance to dump</param>
+  /// <param name="retrievalAddr">The address where the object was retrieved from</param>
+  /// <param name="pinAddr">The address where the object is pinned</param>
+  /// <returns>The ObjectDump instance</returns>
   public static ObjectDump Create(
     object instance,
     ulong retrievalAddr,

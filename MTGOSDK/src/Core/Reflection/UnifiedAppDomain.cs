@@ -12,7 +12,7 @@ using System.Reflection;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
-namespace ScubaDiver.Utils;
+namespace MTGOSDK.Core.Reflection;
 
 /// <summary>
 /// Encapsulates access to all AppDomains in the process
@@ -21,14 +21,14 @@ public class UnifiedAppDomain
 {
   private AppDomain[] _domains = new[] { AppDomain.CurrentDomain };
 
-  public UnifiedAppDomain(Diver parentDiver = null)
+  public UnifiedAppDomain(SnapshotRuntime snapshot = null)
   {
-    if (parentDiver != null)
+    if (snapshot != null)
     {
-      // Using Diver's heap searching abilities to locate all 'System.AppDomain'
+      // Using runtime's heap searching to locate all 'System.AppDomain' refs
       try
       {
-        (bool anyErrors, var candidates) = parentDiver
+        (bool anyErrors, var candidates) = snapshot
           .GetHeapObjects(heapObjType =>
               heapObjType == typeof(AppDomain).FullName, true);
 
@@ -39,15 +39,15 @@ public class UnifiedAppDomain
 
         _domains = candidates
           .Select(cand =>
-              parentDiver
-                .GetObject(cand.Address, false, cand.Type, cand.HashCode)
+              snapshot
+                .GetHeapObject(cand.Address, false, cand.Type, cand.HashCode)
                 .instance)
           .Cast<AppDomain>().ToArray();
-        Logger.Debug("[Diver][UnifiedAppDomain] All assemblies were retrieved from all AppDomains.");
+        // Logger.Debug("[Diver][UnifiedAppDomain] All assemblies were retrieved from all AppDomains.");
       }
       catch (Exception ex)
       {
-        Logger.Debug("[Diver][UnifiedAppDomain] Failed to search heap for runtime assemblies. Error: " + ex.Message);
+        // Logger.Debug("[Diver][UnifiedAppDomain] Failed to search heap for runtime assemblies. Error: " + ex.Message);
       }
     }
   }

@@ -13,6 +13,8 @@
       <!-- FIXME: From RemoteNET library -->
       CS8601;CS8608;CS8610;CS8618;CS8619;CS8620;CS8765;
     </NoWarn>
+    <!-- Allows access to raw pointers for performance-critical IL building -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- Import MTGOSDK package properties -->
@@ -23,7 +25,8 @@
           Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'" />
 
   <ItemGroup>
-		<PackageReference Include="Microsoft.CSharp" />
+    <PackageReference Include="Microsoft.CSharp" />
+    <PackageReference Include="System.Reflection.Emit.Lightweight" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="ImpromptuInterface" />
     <PackageReference Include="Newtonsoft.Json" />

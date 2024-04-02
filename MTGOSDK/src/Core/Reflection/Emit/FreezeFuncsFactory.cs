@@ -11,7 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 
 
-namespace ScubaDiver;
+namespace MTGOSDK.Core.Reflection.Emit;
 
 public static class FreezeFuncsFactory
 {

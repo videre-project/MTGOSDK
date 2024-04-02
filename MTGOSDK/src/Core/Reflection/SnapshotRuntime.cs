@@ -14,38 +14,74 @@ using Microsoft.Diagnostics.Runtime;
 
 using MTGOSDK.Win32.API;
 
+using MTGOSDK.Core.Reflection.Emit;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Utils;
 
-using ScubaDiver.Utils;
 
+namespace MTGOSDK.Core.Reflection;
 
-namespace ScubaDiver;
-
-public class SnapshotService : IDisposable
+/// <summary>
+/// The snapshot runtime used to interact with the ClrMD runtime and snapshot
+/// to perform runtime analysis and exploration on objects in heap memory.
+/// </summary>
+public class SnapshotRuntime : IDisposable
 {
-  // Runtime analysis and exploration fields
   private static readonly object _clrMdLock = new();
-  private DataTarget _dt = null;
-  private ClrRuntime _runtime = null;
+  private DataTarget _dt;
+  private ClrRuntime _runtime;
+
+  /// <summary>
+  /// The unified application domain object used to resolve type reflection.
+  /// </summary>
+  private readonly UnifiedAppDomain _unifiedAppDomain = new();
 
   /// <summary>
   /// The converter used to convert an object address to an object instance.
   /// </summary>
   private readonly Converter<object> _converter = new();
 
-  private readonly UnifiedAppDomain _unifiedAppDomain = new();
-
-  // Object freezing (pinning)
+  /// <summary>
+  /// The collection of frozen (pinned) objects.
+  /// </summary>
   private readonly FrozenObjectsCollection _freezer = new();
 
-  public SnapshotService()
+  public SnapshotRuntime()
   {
-    RefreshRuntime();
+    // _unifiedAppDomain = new UnifiedAppDomain(this);
+    this.CreateRuntime();
   }
 
-  private void DisposeRuntime()
+  /// <summary>
+  /// Creates the ClrMD runtime and data target (snapshot process).
+  /// </summary>
+  /// <remarks>
+  /// This works like 'fork()': it creates a secondary snapshot process which is
+  /// a copy of the current one, but without any running threads. Then our
+  /// process attaches to the snapshot process and reads its memory.
+  /// <para>
+  /// This method is thread-safe and should be called before any runtime access.
+  /// </para>
+  /// </remarks>
+  public void CreateRuntime()
+  {
+    lock (_clrMdLock)
+    {
+      // NOTE: This subprocess inherits handles to DLLs in the current process
+      //       so it might "lock" both the Bootstrapper and ScubaDiver dlls.
+      _dt = DataTarget.CreateSnapshotAndAttach(Process.GetCurrentProcess().Id);
+      _runtime = _dt.ClrVersions.Single().CreateRuntime();
+    }
+  }
+
+  /// <summary>
+  /// Disposes the ClrMD runtime and data target (snapshot process).
+  /// </summary>
+  /// <remarks>
+  /// This method is thread-safe and can be called even if no runtime exists.
+  /// </remarks>
+  public void DisposeRuntime()
   {
     lock (_clrMdLock)
     {
@@ -128,24 +164,31 @@ public class SnapshotService : IDisposable
     }
   }
 
-  private void RefreshRuntime()
+  /// <summary>
+  /// Refreshes the ClrMD runtime and data target (snapshot process).
+  /// </summary>
+  /// <remarks>
+  /// Refer to the <see cref="CreateRuntime"/> and <see cref="DisposeRuntime"/>
+  /// methods for more information on the snapshot process lifecycle.
+  /// <para>
+  /// This method is thread-safe and should be called to refresh the runtime
+  /// after any changes to the target process or runtime state.
+  /// </para>
+  /// </remarks>
+  public void RefreshRuntime()
   {
     lock (_clrMdLock)
     {
-      // Refresh the runtime and update the last refresh time
       DisposeRuntime();
-
-      // This works like 'fork()': it creates a secondary process which is a
-      // copy of the current one, but without any running threads.
-      // Then our process attaches to the other one and reads its memory.
-      //
-      // NOTE: This subprocess inherits handles to DLLs in the current process
-      // so it might "lock" both the Bootstrapper and ScubaDiver dlls.
-      _dt = DataTarget.CreateSnapshotAndAttach(Process.GetCurrentProcess().Id);
-      _runtime = _dt.ClrVersions.Single().CreateRuntime();
+      CreateRuntime();
     }
   }
 
+  /// <summary>
+  /// Returns an object based on an encoded object for a remote object address.
+  /// </summary>
+  /// <param name="param">The object or remote address.</param>
+  /// <returns>The object instance.</returns>
   public object ParseParameterObject(ObjectOrRemoteAddress param)
   {
     switch (param)
@@ -168,6 +211,26 @@ public class SnapshotService : IDisposable
       $"Unable to parse the given address into an object of type `{param.Type}`");
   }
 
+  /// <summary>
+  /// Gets an object from the heap based on its address and type name.
+  /// </summary>
+  /// <param name="objAddr">The object address.</param>
+  /// <param name="pinningRequested">Whether to pin the object.</param>
+  /// <param name="typeName">The expected type name.</param>
+  /// <param name="hashcode">The object hash code.</param>
+  /// <returns>The object instance and pinned address.</returns>
+  /// <exception cref="Exception">Thrown when the object is not found.</exception>
+  /// <remarks>
+  /// This method is used to retrieve an object from the heap based on its
+  /// location in the ClrMD snapshot. It will attempt to resolve the object by
+  /// its type name and hash code, and will fallback to searching by using the
+  /// last known object type if the object has moved.
+  /// <para>
+  /// Any objects that have been pinned will be returned directly from the
+  /// frozen objects collection. Otherwise, the object will be resolved from the
+  /// snapshot and converted to an object instance.
+  /// </para>
+  /// </remarks>
   public (object instance, ulong pinnedAddress) GetHeapObject(
     ulong objAddr,
     bool pinningRequested,
@@ -294,6 +357,23 @@ public class SnapshotService : IDisposable
     return (instance, pinnedAddress);
   }
 
+  /// <summary>
+  /// Gets all heap objects that match the given type filter.
+  /// </summary>
+  /// <param name="filter">The type filter predicate.</param>
+  /// <param name="dumpHashcodes">Whether to dump object hash codes.</param>
+  /// <returns>The list of heap objects.</returns>
+  /// <remarks>
+  /// This method is used to dump all heap objects that match the given type
+  /// filter. It will attempt to enumerate all objects in the heap and filter
+  /// them by their type name. If the 'dumpHashcodes' parameter is set, it will
+  /// also attempt to retrieve the hash code of each object.
+  /// <para>
+  /// This method will attempt to dump all objects several times to ensure that
+  /// all objects are captured. If any errors occur during the enumeration, the
+  /// method will return an empty list of objects and set 'anyErrors' to true.
+  /// </para>
+  /// </remarks>
   public (bool anyErrors, List<HeapDump.HeapObject> objects) GetHeapObjects(
     Predicate<string> filter,
     bool dumpHashcodes)
@@ -303,7 +383,7 @@ public class SnapshotService : IDisposable
     // Trying several times to dump all candidates
     for (int i = 0; i < 10; i++)
     {
-      Logger.Debug($"Trying to dump heap objects. Try #{i + 1}");
+      // Logger.Debug($"Trying to dump heap objects. Try #{i + 1}");
       // Clearing leftovers from last trial
       objects.Clear();
       anyErrors = false;
@@ -375,7 +455,7 @@ public class SnapshotService : IDisposable
     }
     if (anyErrors)
     {
-      Logger.Debug($"Failt to dump heap objects. Aborting.");
+      // Logger.Debug($"Failed to dump heap objects. Aborting.");
       objects.Clear();
     }
     return (anyErrors, objects);
