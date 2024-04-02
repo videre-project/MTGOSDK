@@ -20,7 +20,7 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Utils;
 
 
-namespace MTGOSDK.Core.Reflection;
+namespace MTGOSDK.Core.Reflection.Snapshot;
 
 /// <summary>
 /// The snapshot runtime used to interact with the ClrMD runtime and snapshot

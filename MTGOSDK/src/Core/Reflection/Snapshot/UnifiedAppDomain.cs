@@ -12,7 +12,7 @@ using System.Reflection;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
-namespace MTGOSDK.Core.Reflection;
+namespace MTGOSDK.Core.Reflection.Snapshot;
 
 /// <summary>
 /// Encapsulates access to all AppDomains in the process
@@ -25,7 +25,7 @@ public class UnifiedAppDomain
   {
     if (snapshot != null)
     {
-      // Using runtime's heap searching to locate all 'System.AppDomain' refs
+      // Use snapshot's heap searching to locate all 'System.AppDomain' objects.
       try
       {
         (bool anyErrors, var candidates) = snapshot

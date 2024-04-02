@@ -460,21 +460,6 @@ public class Diver : IDisposable
     return QuickError("Unknown token for event callback subscription");
   }
 
-  public class EventWrapper<T> where T : EventArgs
-  {
-    private readonly EventHandler m_HandlerToCall;
-
-    public EventWrapper(EventHandler handler_to_call)
-    {
-      m_HandlerToCall = handler_to_call;
-    }
-
-    public void Handle(object sender, T args)
-    {
-      m_HandlerToCall.Invoke(sender, args);
-    }
-  }
-
   private string MakeEventSubscribeResponse(HttpListenerRequest arg)
   {
     string objAddrStr = arg.QueryString.Get("address");
@@ -583,9 +568,9 @@ public class Diver : IDisposable
       {
         remoteParams[i] = ObjectOrRemoteAddress.FromObj(parameter);
       }
-      else // Not primitive
+      else
       {
-        // Check fi the object was pinned
+        // Check if the object was pinned
         if (!_freezer.TryGetPinningAddress(parameter, out ulong addr))
         {
           // Pin and mark for unpinning later

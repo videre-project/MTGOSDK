@@ -520,7 +520,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       return false;
     }
   }
-#endregion
+  #endregion
 
   #region ToString / GetHashCode / Equals
 

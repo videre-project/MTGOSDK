@@ -3,10 +3,11 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Internal;
 
 
-namespace MTGOSDK.Core.Reflection;
+namespace MTGOSDK.Core.Remoting;
 
 /// <summary>
 /// A wrapper for lazy initializing typed references to remote objects.

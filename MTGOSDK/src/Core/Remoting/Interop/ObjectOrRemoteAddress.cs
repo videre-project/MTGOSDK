@@ -10,7 +10,8 @@ using MTGOSDK.Core.Remoting.Interop.Utils;
 namespace MTGOSDK.Core.Remoting.Interop
 {
   /// <summary>
-  /// Either an encoded object (for primitive types like int, string, primitibe arrays...) or info of a remote object
+  /// Represents either an encoded object (for primitive types like int, string,
+  /// primitive arrays...) or info of a remote object.
   /// </summary>
   public class ObjectOrRemoteAddress
   {

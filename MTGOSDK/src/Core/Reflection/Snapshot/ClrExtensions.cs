@@ -10,17 +10,16 @@ using System.Collections.Generic;
 using Microsoft.Diagnostics.Runtime;
 
 
-namespace ScubaDiver;
-
-
-public struct TypeDefToMethod
-{
-  public ulong MethodTable { get; set; }
-  public int Token { get; set; }
-}
+namespace MTGOSDK.Core.Reflection.Snapshot;
 
 public static class ClrExt
 {
+  public struct TypeDefToMethod
+  {
+    public ulong MethodTable { get; set; }
+    public int Token { get; set; }
+  }
+
   public static byte[] ToByteArray(this ClrArray arr)
   {
     try
