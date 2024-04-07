@@ -1,15 +1,14 @@
 <!-- This file is used to provide missing properties for the msbuild cli. -->
 <Project>
 
+  <!-- Project Directories -->
   <PropertyGroup>
-    <!-- Project Directories -->
     <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
     <DistDir>$(SolutionDir)\dist</DistDir>
-    <!-- User Directories -->
-    <LocalDir>$([MSBuild]::NormalizeDirectory($(AppData)\..\Local))</LocalDir>
   </PropertyGroup>
 
   <PropertyGroup>
+    <UseFullSDKPaths>true</UseFullSDKPaths>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 

@@ -6,32 +6,48 @@
     <NoWarn>$(NoWarn);NU1702;MSB3277;</NoWarn>
     <!-- Used for referencing WPF assemblies at runtime (w/ reflection) -->
     <UseWPF>true</UseWPF>
+    <!-- Whether to include reference assemblies as part of the package. -->
+    <UseRef>true</UseRef>
+    <!-- <UseRef>false</UseRef>
+    <UseRef Condition="'$(UseFullSDKPaths)' == 'false'">true</UseRef> -->
   </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Add a `ProjectReference` to ensure that the task is built before being
+      called in a consuming project. This is necessary because the task assembly
+      is not referenced to be built by default, which will fail the build.
+    -->
+    <ProjectReference Include="..\MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj"
+                      PrivateAssets="all" />
+    <!--
+      Include reference assemblies to compile against the current MTGO version.
+
+      We optionally disable copying reference assemblies to the output directory
+      when specifying `Private="false"`. This tells the compiler that the GAC
+      will provide the assemblies instead. We do this to only use the reference
+      assemblies for compilation, and not include them as part of the package.
+
+      Instead, consumers of the SDK will generate their own reference assemblies
+      using transitive build targets provided by the `MTGOSDK.MSBuild` project.
+    -->
+    <Reference Include="Core"                             Private="$(UseRef)" />
+    <Reference Include="FlsClient"                        Private="$(UseRef)" />
+    <Reference Include="MTGOEnumStruct"                   Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Common"          Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Chat"      Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Core"      Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Reference" Private="$(UseRef)" />
+  </ItemGroup>
 
   <!--
     Bootstrap the MTGOSDK.Ref project to generate reference assemblies for
     the current MTGO version. Due to the way that MSBuild works, this must
     import the MTGOSDK.MSBuild.props file before referencing the project.
   -->
-  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
-  <PropertyGroup>
-    <MTGOSDK_Refs>$(_MTGOSDK_Refs)\3.4.*.*</MTGOSDK_Refs>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
-                      ReferenceOutputAssembly="false" />
-    <!--
-      Include reference assemblies to compile against the current MTGO version.
-      Note that the '_MTGOSDK_Refs' path does not reference the updated version
-      subpath as it is only evaluated after building the MTGOSDK.Ref project.
-    -->
-    <Reference Include="$(MTGOSDK_Refs)\Core.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\FlsClient.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\MTGOEnumStruct.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Common.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Chat.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Core.dll" />
-    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Reference.dll" />
-  </ItemGroup>
+  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props"
+          Condition="'$(UseFullSDKPaths)' == 'true'" />
+  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets"
+          Condition="'$(UseFullSDKPaths)' == 'true'" />
 
 </Project>

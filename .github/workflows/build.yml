@@ -74,9 +74,6 @@ jobs:
         if: steps.nuget-cache.outputs.cache-hit != 'true'
         run: nuget restore SDK.sln ${{ env.NUGET_DEFAULTS }}
 
-      # Build MTGO reference assemblies
-      - name: Build Reference Assemblies
-        run: msbuild Ref.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}
       # Build the SDK
       - name: Build SDK Solution
         run: msbuild SDK.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}

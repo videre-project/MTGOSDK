@@ -28,18 +28,15 @@ For more in-depth information on the SDK's APIs, refer to the project [documenta
 
 ## Overview
 
-This project consists of four main components:
+This project consists of three main components:
 
 * [**MTGOSDK**](MTGOSDK), a library providing high-level APIs for interacting with the MTGO client.
 * [**MTGOSDK.MSBuild**](MTGOSDK.MSBuild), a MSBuild library for design/compile-time code generation of the SDK.
-* [**MTGOSDK.Ref**](MTGOSDK.Ref), a library containing internal types used by the MTGO client and SDK.
 * [**MTGOSDK.Win32**](MTGOSDK.Win32), a library containing Win32 API definitions used by the SDK.
 
 **MTGOSDK** — provides an API that exposes high-level abstractions of MTGO functions to read and manage the state of the client. This works by injecting the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) assembly into the MTGO process, bootstrapping a debugger interface to inspect objects from process memory. These objects are compiled by the runtime to enable reflection on heap objects as if they were live objects. This SDK is optimized for performance and ease-of-use without obstructing the player experience of the MTGO client.
 
-**MTGOSDK.MSBuild** — an MSBuild library that manages the code-generation of the SDK. This is used to generate the SDK's API bindings and reference assemblies for the latest builds of MTGO. These assemblies contain only the public types and members of internal classes from the MTGO client and do not handle or contain any implementation details or private code. As the MTGO client is updated, these assemblies can be regenerated to provide the latest public types and members for use in the SDK.
-
-**MTGOSDK.Ref** — a library to bootstrap the code-generation process by ensuring that MSBuild targets are available for the SDK project to reference. Various metadata like the client version is extracted at build-time, which can bootstrap version-specific targets for compatibility. This project is also an optional build target that can be used independently to generate reference assemblies for the latest build of MTGO. This library is not intended to be used directly by consumers of the SDK.
+**MTGOSDK.MSBuild** — an MSBuild library that manages the code-generation of the SDK. This is used to generate the SDK's API bindings and reference assemblies for the latest builds of MTGO. These assemblies contain only the public types and members of internal classes from the MTGO client and do not handle or contain any implementation details or private code. As the MTGO client is updated, these assemblies can be regenerated to provide the latest public types and members for use in the SDK. This library is not intended to be used directly by consumers of the SDK.
 
 **MTGOSDK.Win32** — a library containing Win32 API definitions and helper functions used by the SDK. These are used to provide a more idiomatic C# API for Win32 functions and to ensure consistent API behavior across different versions of Windows. Additionally, this library serves as a reference for using Win32 APIs that are not yet implemented as part of the .NET Framework. This library is not intended to be used directly by consumers of the SDK.
 
@@ -49,19 +46,7 @@ This project requires the [.NET Framework 4.8 SDK](https://dotnet.microsoft.com/
 
 Building this project with [MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild?view=vs-2022) (e.g. when using the msbuild or dotnet CLI) requires [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) to be installed. These redistributables are also optionally included with Visual Studio 2015 Update 3 and newer.
 
-When first building this project, it is recommended to build the Ref.sln solution first to ensure that all MSBuild dependencies are available for the SDK project. This is an optional step, but is recommended to ensure that builds of the SDK can be built incrementally.
-
 To build this solution, run either of the below commands from the root of the repository:
-
-```powershell
-# Build using the .NET CLI
-$ dotnet build Ref.sln
-
-# Build using MSBuild in Visual Studio
-$ msbuild Ref.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
-```
-
-Then build the SDK.sln solution in Visual Studio, or with either of the below commands:
 
 ```powershell
 # Build using the .NET CLI
@@ -71,7 +56,7 @@ $ dotnet build SDK.sln
 $ msbuild SDK.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
 ```
 
-The SDK.sln solution will now re-build targets from the Ref.sln solution in subsequent builds to ensure that the latest reference assemblies are available for the SDK.
+The SDK.sln solution will automatically build reference assemblies for the latest version of MTGO, even if no existing MTGO installation exists. This helps ensure that the SDK is always up-to-date with the latest versions of MTGO.
 
 ## Frequently Asked Questions
 
@@ -95,7 +80,7 @@ State changes are managed by [reflection](https://learn.microsoft.com/en-us/dotn
 
 As this project uses the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library to inspect the MTGO client's memory, only [user-mode COM debugging APIs](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/getting-started-with-windbg) are used to inspect the runtime and inform reflection. These APIs along with .NET's security model restrict access to sensitive objects in memory (such as user credentials, e.g. `SecureString` objects), ensuring that the SDK is only used for legitimate purposes even if compromised.
 
-This is enforced through a tightly-integrated type marshalling protocol that only allows public interfaces to be exposed by MTGO. The use of these types (from **MTGOSDK.Ref**) eagerly validates and caches type metadata for all interactions (including reflection) managed by the .NET runtime, which cannot be unloaded or modified for the lifetime of the application. This ensures that faults in the SDK cannot bypass or affect internal states of the client.
+This is enforced through a tightly-integrated type marshalling protocol that only allows public interfaces to be exposed by MTGO. The use of these types (from **MTGOSDK.MSBuild**) eagerly validates and caches type metadata for all interactions (including reflection) managed by the .NET runtime, which cannot be unloaded or modified for the lifetime of the application. This ensures that faults in the SDK cannot bypass or affect internal states of the client.
 
 Additionally, the high-level APIs provided by this SDK helps ensure safety and security in writing applications by providing simplified abstractions for interacting with the MTGO client. By only utilizing public interfaces and events, applications built on top of the SDK are less likely to break between updates or introduce bugs or security vulnerabilities. This SDK is designed to be easy to use and understand, and provides a consistent API for building all shapes and sizes of applications for MTGO.
 
