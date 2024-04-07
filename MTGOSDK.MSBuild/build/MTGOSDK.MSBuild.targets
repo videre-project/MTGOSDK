@@ -12,19 +12,8 @@
              TaskName="GenerateReferenceAssemblies"
              TaskFactory="TaskHostFactory" />
 
-  <ItemGroup>
-    <!--
-      Add a `ProjectReference` to ensure that the task is built before being
-      called in a consuming project. This is necessary because the task assembly
-      is not referenced to be built by default, which will fail the build.
-    -->
-    <ProjectReference Include="..\MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj"
-                      ReferenceOutputAssembly="false" />
-  </ItemGroup>
-
   <Target Name="GenerateReferenceAssemblies"
-          BeforeTargets="CoreCompile"
-          DependsOnTargets="ResolveProjectReferences;ResolveAssemblyReferences">
+          BeforeTargets="ResolveAssemblyReferences">
     <!--
       Extract the MTGO installation directory paths, or create a temporary
       extraction directory if no existing MTGO installation could be found.
@@ -70,6 +59,19 @@
     <Message Text="MTGOSDK.MSBuild: Reference assemblies are located at $(_MTGOSDK_Refs)"
              Importance="high"
              Condition="'$(HasSkipped)' != 'true'" />
+
+    <!-- Include reference assemblies in search path of a consuming project -->
+    <PropertyGroup>
+      <AssemblySearchPaths>$(AssemblySearchPaths);$(_MTGOSDK_Refs)</AssemblySearchPaths>
+    </PropertyGroup>
+
+    <!-- Notify if the task has skipped generating reference assemblies -->
+    <Message Text="MTGOSDK.MSBuild: Finished bootstrapping MTGOSDK reference assemblies."
+             Importance="high"
+             Condition="Exists('$(_MTGOSDK_Refs)\MTGO.exe')" />
+    <Message Text="MTGOSDK.MSBuild: Failed to bootstrap MTGOSDK reference assemblies."
+             Importance="high"
+             Condition="!Exists('$(_MTGOSDK_Refs)\MTGO.exe')" />
   </Target>
 
 </Project>

@@ -10,18 +10,21 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Label="Package">
 		<!--
-      These lines pack the build props/targets files to the `build` folder in
-      the generated package. By convention, the .NET SDK will look for
-      build\<Package Id>.props and build\<Package Id>.targets for automatic
-      inclusion in the build.
+      These lines pack the build props/targets files to the `build` and
+      `buildTransitive` folders in the generated package. By convention, the
+      .NET SDK will look for build\<packageId>.props and build\<packageId>.targets
+      for automatic inclusion in the build.
+
+      The `build` folder is for the props/targets files that are directly
+      imported by the consuming project. The `buildTransitive` folder is for
+      the props/targets files that are imported by any upstream consumers.
     -->
-		<Content Include="build\MTGOSDK.MSBuild.props" PackagePath="build\" />
-		<Content Include="build\MTGOSDK.MSBuild.targets" PackagePath="build\" />
+		<None Include="build\**" Pack="true" PackagePath="build;buildTransitive" />
 	</ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Label="Dependencies">
     <!--
       These dependencies are provided by MSBuild at runtime, so we don't need to
       include them in the package.
