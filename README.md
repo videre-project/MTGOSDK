@@ -46,19 +46,7 @@ This project requires the [.NET Framework 4.8 SDK](https://dotnet.microsoft.com/
 
 Building this project with [MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild?view=vs-2022) (e.g. when using the msbuild or dotnet CLI) requires [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) to be installed. These redistributables are also optionally included with Visual Studio 2015 Update 3 and newer.
 
-When first building this project, it is recommended to build the Ref.sln solution first to ensure that all MSBuild dependencies are available for the SDK project. This is an optional step, but is recommended to ensure that builds of the SDK can be built incrementally.
-
 To build this solution, run either of the below commands from the root of the repository:
-
-```powershell
-# Build using the .NET CLI
-$ dotnet build Ref.sln
-
-# Build using MSBuild in Visual Studio
-$ msbuild Ref.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
-```
-
-Then build the SDK.sln solution in Visual Studio, or with either of the below commands:
 
 ```powershell
 # Build using the .NET CLI
@@ -68,7 +56,7 @@ $ dotnet build SDK.sln
 $ msbuild SDK.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU"
 ```
 
-The SDK.sln solution will now re-build targets from the Ref.sln solution in subsequent builds to ensure that the latest reference assemblies are available for the SDK.
+The SDK.sln solution will automatically build reference assemblies for the latest version of MTGO, even if no existing MTGO installation exists. This helps ensure that the SDK is always up-to-date with the latest versions of MTGO.
 
 ## Frequently Asked Questions
 
