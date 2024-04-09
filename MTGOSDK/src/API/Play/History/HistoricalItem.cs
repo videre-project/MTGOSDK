@@ -45,10 +45,11 @@ public abstract class HistoricalItem<I, T> : DLRWrapper<IHistoricalItem>
   /// </summary>
   public Guid Token => Cast<Guid>(Unbind(@base).EventToken);
 
-  /// <summary>
-  /// The event object (e.g. League, Tournament, Match, etc.).
-  /// </summary>
-  public T Event => Event<IPlayerEvent>.FromPlayerEvent(@base.PlayerEvent);
+  //FIXME: Historical items do not have an actual PlayerEvent
+  // /// <summary>
+  // /// The event object (e.g. League, Tournament, Match, etc.).
+  // /// </summary>
+  // public T Event => Event<IPlayerEvent>.FromPlayerEvent(@base.PlayerEvent);
 
   /// <summary>
   /// The start time of the event or match.
