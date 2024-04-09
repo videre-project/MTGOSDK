@@ -5,7 +5,7 @@
   <PropertyGroup>
     <LocalAppDir>$([MSBuild]::NormalizeDirectory($(AppData)\..\Local))</LocalAppDir>
     <MTGOAppDir>$(LocalAppDir)Apps\2.0\*.*\**\mtgo..tion_*</MTGOAppDir>
-    <MTGODataDir>$(LocalAppDir)Apps\2.0\Data\**\mtgo..tion_\Data</MTGODataDir>
+    <MTGODataDir>$(LocalAppDir)Apps\2.0\Data\**\mtgo..tion_*\Data</MTGODataDir>
   </PropertyGroup>
 
   <!-- These directories are automatically built for internal use of the SDK -->

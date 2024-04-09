@@ -64,6 +64,7 @@ public class Glob
       else
       {
         Matches = Matches
+          .Where(p => Directory.Exists(p))
           .SelectMany(basePath =>
             // Query the filesystem for files and directories in the current path.
             new DirectoryInfo(basePath)
