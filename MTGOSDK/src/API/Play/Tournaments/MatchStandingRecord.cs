@@ -42,7 +42,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// The status of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
   /// <remarks>
-  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
+  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
   /// </remarks>
   public MatchStatuses Status => Cast<MatchStatuses>(Unbind(@base).Status);
 

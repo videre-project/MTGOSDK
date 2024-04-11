@@ -27,7 +27,7 @@ public sealed class Queue(dynamic queue) : Event<IQueue>
   /// The current state of the queue (e.g. JoinRequested, Joined, Closed, etc.).
   /// </summary>
   /// <remarks>
-  /// Requires the <c>WotC.MtGO.Client.Model.Play.Enums</c> reference assembly.
+  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
   /// </remarks>
   [Default(QueueState.NotSet)]
   public QueueState CurrentState =>

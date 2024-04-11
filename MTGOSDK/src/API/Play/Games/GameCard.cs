@@ -50,7 +50,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
     /// Represents a card association (e.g. ChosenPlayer, TriggeringSource, etc.).
     /// </summary>
     /// <remarks>
-    /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
+    /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
     /// </remarks>
     public CardAssociation Association { get; init; }
 
@@ -119,7 +119,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// The card's current counters.
   /// </summary>
   /// <remarks>
-  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
+  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
   /// </remarks>
   public IEnumerable<Counter> Counters =>
     Map<Counter>(Unbind(@base).Counters,

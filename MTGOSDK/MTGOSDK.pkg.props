@@ -13,6 +13,9 @@
   <PropertyGroup>
     <PublishDir>..\publish\</PublishDir>
     <DebugType>embedded</DebugType>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <SelfContained>false</SelfContained>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 

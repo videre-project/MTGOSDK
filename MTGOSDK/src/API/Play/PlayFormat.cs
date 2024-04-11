@@ -71,7 +71,7 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// The internal enum flag value of the format game structure.
   /// </summary>
   /// <remarks>
-  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
+  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
   /// </remarks>
   internal GameStructureEnum EnumValue =>
     Cast<GameStructureEnum>(Unbind(@base).GameStructureEnum);

@@ -38,7 +38,7 @@ public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
   /// The layout type of the DuelScene (e.g. Solitare, Duel, Multiplayer).
   /// </summary>
   /// <remarks>
-  /// Requires the <c>Shiny.Core.Enums</c> reference assembly.
+  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
   /// </remarks>
   public GameViewType LayoutType =>
     Cast<GameViewType>(Unbind(@base).LayoutType);
