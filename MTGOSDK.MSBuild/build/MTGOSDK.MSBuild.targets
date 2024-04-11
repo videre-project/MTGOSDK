@@ -12,13 +12,6 @@
              TaskName="GenerateReferenceAssemblies"
              TaskFactory="TaskHostFactory" />
 
-  <!-- Ensure ILMerge is installed before building reference assemblies. -->
-  <ItemGroup Condition="!Exists('$(ILMergeConsolePath)')">
-    <PackageReference Include="ilmerge"
-                      Version="3.0.41"
-                      PrivateAssets="all" />
-  </ItemGroup>
-
   <Target Name="GenerateReferenceAssemblies"
           BeforeTargets="ResolveAssemblyReferences">
     <!--
@@ -78,7 +71,7 @@
       <Flags Include="/out=$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll" />
     </ItemGroup>
     <PropertyGroup>
-      <ILMergeAssemblies>@(ReferenceAssemblies-> '%(Filename)$(Extension)', ' ')</ILMergeAssemblies>
+      <ILMergeAssemblies>@(ReferenceAssemblies-> '%(Filename).dll', ' ')</ILMergeAssemblies>
       <ILMergeFlags>@(Flags-> '%(Identity)', ' ')</ILMergeFlags>
       <ILMergeCommand>$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)</ILMergeCommand>
     </PropertyGroup>

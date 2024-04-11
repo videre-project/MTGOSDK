@@ -35,12 +35,16 @@
                       PrivateAssets="All" />
     <!--
       We use these to build and validate the SDK's reference assemblies at
-      design/build time. Those assemblies are not included in this package.
+      design/build time. These assemblies are not included in this package.
     -->
     <PackageReference Include="JetBrains.Refasmer"
                       Version="1.0.33" />
     <PackageReference Include="Microsoft.ILVerification"
                       Version="8.0.0" />
+    <PackageReference Include="ilmerge"
+                      Version="3.0.41"
+                      PrivateAssets="all"
+                      IncludeAssets="build;buildTransitive" />
     <!--
       Import the MTGOSDK.Win32 project for the Win32 extensions and utilities.
     -->

@@ -18,7 +18,8 @@
     -->
     <ProjectReference Include="..\MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj"
                       ReferenceOutputAssembly="false"
-                      PrivateAssets="all" />
+                      PrivateAssets="all"
+                      IncludeAssets="build;buildTransitive" />
     <!--
       Include reference assemblies to compile against the current MTGO version.
 
@@ -40,9 +41,9 @@
   </ItemGroup>
 
   <!--
-    Bootstrap the MTGOSDK.Ref project to generate reference assemblies for
-    the current MTGO version. Due to the way that MSBuild works, this must
-    import the MTGOSDK.MSBuild.props file before referencing the project.
+    When building the SDK locally, we must use the full project paths to
+    explicitly reference the build/buildTransitive assets when referencing
+    the MTGOSDK.MSBuild project instead of the NuGet package.
   -->
   <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props"
           Condition="'$(UseFullSDKPaths)' == 'true'" />
