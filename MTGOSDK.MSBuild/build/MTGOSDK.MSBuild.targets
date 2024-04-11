@@ -71,7 +71,7 @@
       <Flags Include="/out=$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll" />
     </ItemGroup>
     <PropertyGroup>
-      <ILMergeAssemblies>@(ReferenceAssemblies-> '%(Filename).dll', ' ')</ILMergeAssemblies>
+      <ILMergeAssemblies>@(ReferenceAssemblies-> '%(Filename)%(Extension)', ' ')</ILMergeAssemblies>
       <ILMergeFlags>@(Flags-> '%(Identity)', ' ')</ILMergeFlags>
       <ILMergeCommand>$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)</ILMergeCommand>
     </PropertyGroup>

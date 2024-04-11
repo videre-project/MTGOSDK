@@ -31,13 +31,13 @@
       Instead, consumers of the SDK will generate their own reference assemblies
       using transitive build targets provided by the `MTGOSDK.MSBuild` project.
     -->
-    <ReferenceAssemblies Include="Core" />
-    <ReferenceAssemblies Include="FlsClient" />
-    <ReferenceAssemblies Include="MTGOEnumStruct" />
-    <ReferenceAssemblies Include="WotC.MtGO.Client.Common" />
-    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Chat" />
-    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Core" />
-    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Reference" />
+    <ReferenceAssemblies Include="Core.dll" />
+    <ReferenceAssemblies Include="FlsClient.dll" />
+    <ReferenceAssemblies Include="MTGOEnumStruct.dll" />
+    <ReferenceAssemblies Include="WotC.MtGO.Client.Common.dll" />
+    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Chat.dll" />
+    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Core.dll" />
+    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Reference.dll" />
   </ItemGroup>
 
   <!--
