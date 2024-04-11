@@ -58,7 +58,7 @@ public static class HistoryManager
   {
     // Default to the current user if no username is provided.
     if (string.IsNullOrEmpty(username))
-      username = Unbind(s_gameHistoryManager).m_session.CurrentUser.Name;
+      username = Client.CurrentUser.Name;
 
     var serializer = ObjectProvider.Get<IIsoSerializer>(bindTypes: false);
     dynamic serializationBinder = RemoteClient.CreateInstance(

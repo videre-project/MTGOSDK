@@ -22,7 +22,7 @@ using var client = new Client(
       }
 );
 
-if (!client.IsConnected)
+if (!Client.IsConnected)
 {
   DotEnv.LoadFile();
   await client.LogOn(

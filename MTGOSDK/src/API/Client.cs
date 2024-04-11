@@ -79,12 +79,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// Internal reference to the current logged in user.
   /// </summary>
-  private User? m_currentUser;
+  private static User? m_currentUser;
 
   /// <summary>
   /// Returns the current logged in user's public information.
   /// </summary>
-  public User CurrentUser
+  public static User CurrentUser
   {
     get
     {
@@ -102,17 +102,17 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// The MTGO client's user session id.
   /// </summary>
-  public Guid SessionId => new(s_flsClientSession.SessionId);
+  public static Guid SessionId => new(s_flsClientSession.SessionId);
 
   /// <summary>
   /// Whether the client is currently online and connected.
   /// </summary>
-  public bool IsConnected => s_flsClientSession.IsConnected;
+  public static bool IsConnected => s_flsClientSession.IsConnected;
 
   /// <summary>
   /// Whether the client is currently logged in.
   /// </summary>
-  public bool IsLoggedIn => s_loginManager.IsLoggedIn;
+  public static bool IsLoggedIn => s_loginManager.IsLoggedIn;
 
   //
   // Constructors and destructors

@@ -27,7 +27,7 @@ var client = new Client();
 // as they are encrypted in memory and inaccessible to ClrMD. This is intended
 // to prevent any access to sensitive information stored in the client's memory.
 //
-var user = client.CurrentUser;
+var user = Client.CurrentUser;
 
 int userId = user.Id;
 string username = user.Name;
