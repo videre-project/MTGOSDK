@@ -93,10 +93,8 @@ public class ExtractMTGOInstallation : Task
     var assemblies = manifest.GetElementsByTagName("dependentAssembly")
       .Cast<XmlElement>()
       .Where(asm => asm.Attributes["dependencyType"].Value == "install")
-      .Select(asm => asm.Attributes["codebase"].Value.Replace('\\', '/'))
-      .Where(name =>
-        ReferencePaths.Length == 0 || ReferencePaths.Contains(name))
-      .Select(name => {
+      .Select(asm => {
+        var name = asm.Attributes["codebase"].Value.Replace('\\', '/');
         var url = $"{rootUrl}/{codebase}/{name}";
         var path = Path.Combine(MTGOAppDir, name);
         return (url, path);
@@ -137,7 +135,9 @@ public class ExtractMTGOInstallation : Task
           using var fs = new FileStream(path, FileMode.Create);
           await s.CopyToAsync(fs);
 
-          Log.LogMessage(MessageImportance.High, $"--> Extracted {name}");
+          // Log the extracted file if it is a (primary) reference path.
+          if (ReferencePaths.Length == 0 || ReferencePaths.Contains(name))
+            Log.LogMessage(MessageImportance.High, $"--> Extracted {name}");
         }
         catch (Exception e)
         {
