@@ -33,6 +33,11 @@ public class ExtractMTGOInstallation : Task
   public string MTGODataDir { get; set; } = string.Empty;
 
   /// <summary>
+  /// The reference paths to extract from the manifest.
+  /// </summary>
+  public string[] ReferencePaths { get; set; } = Array.Empty<string>();
+
+  /// <summary>
   /// The assembly version of the MTGO executable.
   /// </summary>
   [Output]
@@ -69,11 +74,13 @@ public class ExtractMTGOInstallation : Task
     var codebase = manifestUri.Substring(0, manifestUri.LastIndexOf('\\'));
     var codebaseDir = $"MTGO_{codebase}";
     MTGOAppDir = Path.Combine(Path.GetTempPath(), codebaseDir);
+
     if (Directory.Exists(MTGOAppDir))
     {
       Log.LogMessage(MessageImportance.High, $"Using cached v{Version} at {MTGOAppDir}");
       return true;
     }
+
     // Otherwise, create a temporary MTGO application directory.
     Log.LogMessage(MessageImportance.High, $"Extracting MTGO v{Version} to {MTGOAppDir}");
     Directory.CreateDirectory(MTGOAppDir);
@@ -86,8 +93,10 @@ public class ExtractMTGOInstallation : Task
     var assemblies = manifest.GetElementsByTagName("dependentAssembly")
       .Cast<XmlElement>()
       .Where(asm => asm.Attributes["dependencyType"].Value == "install")
-      .Select(asm => {
-        var name = asm.Attributes["codebase"].Value.Replace('\\', '/');
+      .Select(asm => asm.Attributes["codebase"].Value.Replace('\\', '/'))
+      .Where(name =>
+        ReferencePaths.Length == 0 || ReferencePaths.Contains(name))
+      .Select(name => {
         var url = $"{rootUrl}/{codebase}/{name}";
         var path = Path.Combine(MTGOAppDir, name);
         return (url, path);

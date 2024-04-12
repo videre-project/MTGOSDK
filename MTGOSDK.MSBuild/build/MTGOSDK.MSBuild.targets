@@ -20,7 +20,8 @@
     -->
     <ExtractMTGOInstallation
         MTGOAppDir="$(MTGOAppDir)"
-        MTGODataDir="$(MTGODataDir)">
+        MTGODataDir="$(MTGODataDir)"
+        ReferencePaths="@(ReferenceAssemblies)">
       <!-- Expand the glob to the (local) MTGO install/user directories -->
       <Output TaskParameter="MTGOAppDir" PropertyName="MTGOAppDir" />
       <Output TaskParameter="MTGODataDir" PropertyName="MTGODataDir" />
@@ -79,11 +80,7 @@
           Condition="!Exists('$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll')" />
 
     <!-- Remove all other reference assemblies in the reference directory -->
-    <ItemGroup>
-      <DeletedReferenceAssemblies Include="$(_MTGOSDK_Refs)\*.*"
-                                  Exclude="$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll" />
-    </ItemGroup>
-    <Delete Files="@(DeletedReferenceAssemblies)"
+    <Delete Files="@(ReferenceAssemblies)"
             Condition="Exists('$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll')" />
 
     <!-- Include MTGOSDK.Ref in the search path of a consuming project -->
