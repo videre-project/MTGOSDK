@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- Merge the main assembly with any copied reference assemblies -->
+  <Target Name="MergeReferenceAssemblies"
+          AfterTargets="AfterBuild"
+          Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <!-- Identify the main assembly and all reference assemblies -->
+    <ItemGroup>
+      <InputAssemblies Remove="@(InputAssemblies)" />
+      <InputAssemblies Include="$(OutputPath)\$(AssemblyName).dll" />
+      <InputAssemblies Include="@(ReferenceAssemblies -> '$(OutputPath)%(Filename).dll')"
+                       Condition="Exists('$(OutputPath)%(Filename).dll')" />
+    </ItemGroup>
+
+    <Message Text="Merging @(InputAssemblies->Count()) reference assemblies into $(AssemblyName).dll..."
+             Importance="high"
+             Condition="'@(InputAssemblies->Count())' &gt; 1" />
+
+    <!-- Merge all reference assemblies into the main assembly -->
+    <ILRepack
+      LibraryPath="$(OutputPath)"
+      OutputFile="$(OutputPath)\$(AssemblyName).dll"
+      InputAssemblies="@(InputAssemblies)"
+      Parallel="true"
+      Condition="'@(InputAssemblies->Count())' &gt; 1"
+      ContinueOnError="WarnAndContinue" />
+
+    <!-- Delete all copied reference assemblies in the output directory -->
+    <Delete Files="@(InputAssemblies)"
+            Condition="'%(Filename)' != '$(AssemblyName)'" />
+
+    <Message Text="MTGOSDK.MSBuild: Finished merging MTGOSDK reference assemblies."
+             Importance="high" />
+  </Target>
+
+</Project>

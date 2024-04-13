@@ -50,6 +50,8 @@
   <!-- Import MTGOSDK reference assemblies -->
   <Import Project="MTGOSDK.ref.props"
           Condition="'$(TargetFramework)' != 'netstandard2.0'" />
+  <Import Project="ILRepack.targets"
+          Condition="$(Configuration.Contains('Debug'))" />
 
   <!-- Configures build-time resource dependencies for the main library -->
   <Target Name="CollectResourceProjects"
@@ -79,30 +81,5 @@
                         LogicalName="Resources\%(Filename)%(Extension)" />
     </ItemGroup>
 	</Target>
-
-  <!-- Merge the main assembly with any copied reference assemblies -->
-  <Target Name="MergeReferenceAssemblies"
-          AfterTargets="AfterBuild"
-          Condition="'$(TargetFramework)' != 'netstandard2.0'">
-    <ItemGroup>
-      <InputAssemblies Include="$(OutputPath)\$(AssemblyName).dll" />
-      <InputAssemblies Include="@(ReferenceAssemblies -> '$(OutputPath)%(Filename).dll')"
-                       Condition="Exists('$(OutputPath)%(Filename).dll')" />
-    </ItemGroup>
-
-    <ILRepack
-      LibraryPath="$(OutputPath)"
-      OutputFile="$(OutputPath)\$(AssemblyName).dll"
-      InputAssemblies="@(InputAssemblies)"
-      Parallel="true"
-      Condition="'@(InputAssemblies->Count())' &gt; 1" />
-
-    <!-- Delete all copied reference assemblies in the output directory -->
-    <Delete Files="@(InputAssemblies)"
-            Condition="'%(Filename)' != '$(AssemblyName)'" />
-
-    <Message Text="MTGOSDK.MSBuild: Finished merging MTGOSDK reference assemblies."
-             Importance="high" />
-  </Target>
 
 </Project>
