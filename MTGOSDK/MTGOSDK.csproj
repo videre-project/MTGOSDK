@@ -50,8 +50,6 @@
   <!-- Import MTGOSDK reference assemblies -->
   <Import Project="MTGOSDK.ref.props"
           Condition="'$(TargetFramework)' != 'netstandard2.0'" />
-  <Import Project="ILRepack.targets"
-          Condition="$(Configuration.Contains('Debug'))" />
 
   <!-- Configures build-time resource dependencies for the main library -->
   <Target Name="CollectResourceProjects"
