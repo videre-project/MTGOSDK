@@ -22,14 +22,24 @@
                       Version="4.7.0" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime"
                       Version="3.1.512801" />
-    <PackageReference Include="Meziantou.Polyfill"
-                      Version="1.0.37"
-                      Condition="'$(TargetFramework)' == 'netstandard2.0'" />
     <PackageReference Include="ImpromptuInterface"
                       Version="8.0.4" />
     <PackageReference Include="Newtonsoft.Json"
                       Version="13.0.3" />
     <ProjectReference Include="..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
+    <!-- Compatibility layers for .netstandard-2.0 -->
+    <PackageReference Include="Meziantou.Polyfill"
+                      Version="1.0.37"
+                      Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <!-- Build-time dependencies for MTGOSDK.MSBuild -->
+    <PackageReference Include="ILRepack"
+                      Version="2.0.30"
+                      PrivateAssets="all"
+                      Condition="'$(TargetFramework)' != 'netstandard2.0'" />
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task"
+                      Version="2.0.29"
+                      PrivateAssets="all"
+                      Condition="'$(TargetFramework)' != 'netstandard2.0'" />
   </ItemGroup>
 
   <!-- For builds used by the ScubaDiver assembly, exclude compiling the API -->
@@ -69,5 +79,30 @@
                         LogicalName="Resources\%(Filename)%(Extension)" />
     </ItemGroup>
 	</Target>
+
+  <!-- Merge the main assembly with any copied reference assemblies -->
+  <Target Name="MergeReferenceAssemblies"
+          AfterTargets="AfterBuild"
+          Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <ItemGroup>
+      <InputAssemblies Include="$(OutputPath)\$(AssemblyName).dll" />
+      <InputAssemblies Include="@(ReferenceAssemblies -> '$(OutputPath)%(Filename).dll')"
+                       Condition="Exists('$(OutputPath)%(Filename).dll')" />
+    </ItemGroup>
+
+    <ILRepack
+      LibraryPath="$(OutputPath)"
+      OutputFile="$(OutputPath)\$(AssemblyName).dll"
+      InputAssemblies="@(InputAssemblies)"
+      Parallel="true"
+      Condition="'@(InputAssemblies->Count())' &gt; 1" />
+
+    <!-- Delete all copied reference assemblies in the output directory -->
+    <Delete Files="@(InputAssemblies)"
+            Condition="'%(Filename)' != '$(AssemblyName)'" />
+
+    <Message Text="MTGOSDK.MSBuild: Finished merging MTGOSDK reference assemblies."
+             Importance="high" />
+  </Target>
 
 </Project>

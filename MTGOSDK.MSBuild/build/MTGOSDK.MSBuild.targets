@@ -53,53 +53,30 @@
       <Output TaskParameter="OutputPath" PropertyName="_MTGOSDK_Refs" />
     </GenerateReferenceAssemblies>
 
-    <!-- TODO: Verify the output reference assemblies w/ ILVerify -->
+    <!-- Add the reference assembly path to the assembly search paths -->
+    <PropertyGroup Condition="'$(UseRef)' == 'true'">
+      <AssemblySearchPaths>$(AssemblySearchPaths);$(_MTGOSDK_Refs)</AssemblySearchPaths>
+    </PropertyGroup>
+
+    <!-- Notify if the task has finished or skipped generating assemblies -->
     <Message Text="MTGOSDK.MSBuild: Updated reference assemblies for MTGO version $(MTGOVersion)"
              Importance="high"
              Condition="'$(HasSkipped)' != 'true'" />
     <Message Text="MTGOSDK.MSBuild: Reference assemblies are located at $(_MTGOSDK_Refs)"
              Importance="high"
              Condition="'$(HasSkipped)' != 'true'" />
+  </Target>
 
-    <!-- Merge reference assemblies into MTGOSDK.Ref -->
-    <Message Text="MTGOSDK.MSBuild: Merging reference assemblies into MTGOSDK.Ref"
-             Importance="high"
-             Condition="!Exists('$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll')" />
+  <Target Name="ResolveReferenceAssemblies"
+          AfterTargets="ResolveAssemblyReferences"
+          BeforeTargets="CoreCompile"
+          DependsOnTargets="GenerateReferenceAssemblies">
     <ItemGroup>
-      <Flags Include="/ndebug" />
-      <Flags Include="/allowDup" />
-      <Flags Include="/lib=$(_MTGOSDK_Refs)" />
-      <Flags Include="/out=$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll" />
+      <!-- Filter reference paths for those pointing to reference assemblies -->
+      <ReferenceAssemblies
+        Include="@(ReferenceCopyLocalPaths)"
+        Condition="$([System.String]::Copy(%(FullPath)).Contains($(_MTGOSDK_Refs)))" />
     </ItemGroup>
-    <PropertyGroup>
-      <ILMergeAssemblies>@(ReferenceAssemblies-> '%(Filename)%(Extension)', ' ')</ILMergeAssemblies>
-      <ILMergeFlags>@(Flags-> '%(Identity)', ' ')</ILMergeFlags>
-      <ILMergeCommand>$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)</ILMergeCommand>
-    </PropertyGroup>
-    <Exec Command="$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)"
-          Condition="!Exists('$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll')" />
-
-    <!-- Remove all other reference assemblies in the reference directory -->
-    <ItemGroup>
-      <CachedReferenceAssemblies Include="$(_MTGOSDK_Refs)\*.*"
-                                 Exclude="$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll" />
-    </ItemGroup>
-    <Delete Files="@(CachedReferenceAssemblies)"
-            Condition="Exists('$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll')" />
-
-    <!-- Include MTGOSDK.Ref in the search path of a consuming project -->
-    <ItemGroup>
-      <Reference Include="$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll"
-                 Condition="Exists('$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll')" />
-    </ItemGroup>
-
-    <!-- Notify if the task has skipped generating reference assemblies -->
-    <Message Text="MTGOSDK.MSBuild: Finished bootstrapping MTGOSDK reference assemblies."
-             Importance="high"
-             Condition="Exists('$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll')" />
-    <Message Text="MTGOSDK.MSBuild: Failed to bootstrap MTGOSDK reference assemblies."
-             Importance="high"
-             Condition="!Exists('$(_MTGOSDK_Refs)\MTGOSDK.Ref.dll')" />
   </Target>
 
 </Project>

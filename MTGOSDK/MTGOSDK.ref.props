@@ -10,7 +10,7 @@
     <UseRef>true</UseRef>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(UseRef)' == 'true'">
+  <ItemGroup>
     <!--
       Add a `ProjectReference` to ensure that the task is built before being
       called in a consuming project. This is necessary because the task assembly
@@ -25,19 +25,19 @@
 
       We optionally disable copying reference assemblies to the output directory
       when specifying `Private="false"`. This tells the compiler that the GAC
-      will provide the assemblies instead. We do this to only use the reference
-      assemblies for compilation, and not include them as part of the package.
+      will provide the assemblies instead, and to only use the reference
+      assemblies for compilation and not include them as part of the package.
 
       Instead, consumers of the SDK will generate their own reference assemblies
       using transitive build targets provided by the `MTGOSDK.MSBuild` project.
     -->
-    <ReferenceAssemblies Include="Core.dll" />
-    <ReferenceAssemblies Include="FlsClient.dll" />
-    <ReferenceAssemblies Include="MTGOEnumStruct.dll" />
-    <ReferenceAssemblies Include="WotC.MtGO.Client.Common.dll" />
-    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Chat.dll" />
-    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Core.dll" />
-    <ReferenceAssemblies Include="WotC.MtGO.Client.Model.Reference.dll" />
+    <Reference Include="Core"                             Private="$(UseRef)" />
+    <Reference Include="FlsClient"                        Private="$(UseRef)" />
+    <Reference Include="MTGOEnumStruct"                   Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Common"          Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Chat"      Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Core"      Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Reference" Private="$(UseRef)" />
   </ItemGroup>
 
   <!--

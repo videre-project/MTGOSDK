@@ -227,6 +227,18 @@
       }
     },
     "net8.0-windows7.0": {
+      "ILRepack": {
+        "type": "Direct",
+        "requested": "[2.0.30, )",
+        "resolved": "2.0.30",
+        "contentHash": "QanDNA1Y+Qd6uH9OzgRl9vRZrgd8ee2MO93fO8B35Mo5mK4Q8WaZsgHUPq/umLTFimI3nNO6wwbPgjBB6sBwiQ=="
+      },
+      "ILRepack.Lib.MSBuild.Task": {
+        "type": "Direct",
+        "requested": "[2.0.29, )",
+        "resolved": "2.0.29",
+        "contentHash": "kCrpMEA3mLfox1wOpPiAIEG0tQcWV+fNR2LBV4XklvT8xClwj16Z/H/FsyR+pqPgEfJIiINi0Oiwb5pglb8IJA=="
+      },
       "ImpromptuInterface": {
         "type": "Direct",
         "requested": "[8.0.4, )",

@@ -9,7 +9,6 @@
 
   <PropertyGroup>
     <UseFullSDKPaths>true</UseFullSDKPaths>
-    <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
 </Project>
