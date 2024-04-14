@@ -2,12 +2,11 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <PropertyGroup>
-    <!-- Disables warnings for referencing incompatible project TFMs -->
-    <NoWarn>$(NoWarn);NU1702;MSB3277;</NoWarn>
     <!-- Used for referencing WPF assemblies at runtime (w/ reflection) -->
     <UseWPF>true</UseWPF>
     <!-- Whether to include reference assemblies as part of the package. -->
     <UseRef>true</UseRef>
+    <AccelerateBuildsInVisualStudio>false</AccelerateBuildsInVisualStudio>
   </PropertyGroup>
 
   <ItemGroup>

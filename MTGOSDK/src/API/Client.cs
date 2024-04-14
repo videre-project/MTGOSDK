@@ -14,6 +14,7 @@ using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
+using MTGOSDK.Resources;
 
 using FlsClient.Interface;
 using Shiny.Core.Interfaces;
@@ -57,20 +58,24 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     ObjectProvider.Get<ILoginViewModel>();
 
   /// <summary>
+  /// The current build version of the running MTGO client.
+  /// </summary>
+  public static Version Version =>
+    new(s_shellViewModel.StatusBarVersionText);
+
+  /// <summary>
   /// The latest version of the MTGO client that this SDK is compatible with.
   /// </summary>
   /// <remarks>
   /// This version is used to verify that the SDK is compatible with the MTGO
   /// client, using the reference assembly version built into the SDK.
   /// </remarks>
-  public static Version Version =
-    new(new Proxy<ISession>().AssemblyVersion);
-
-  /// <summary>
-  /// The current build version of the running MTGO client.
-  /// </summary>
-  public static Version ClientVersion =>
-    new(s_shellViewModel.StatusBarVersionText);
+  public static Version CompatibleVersion =
+    new(
+      EmbeddedResources.GetXMLResource(@"Manifests\MTGO")
+        .GetElementsByTagName("assemblyIdentity")[0]
+        .Attributes["version"].Value
+    );
 
   //
   // Instance fields and properties

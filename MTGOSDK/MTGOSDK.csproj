@@ -8,9 +8,16 @@
     <NoWarn>$(NoWarn);
       <!-- Disables unenforcable nullable warnings - breaks static analysis -->
       CS8597;CS8600;CS8602;CS8603;CS8604;CS8625;CS8767;CS9113;IDE0065;
+      <!-- Disable warnings for incompatible TFMs required for building -->
+      NU1702;MSB3277;
       <!-- FIXME: From RemoteNET library -->
       CS8601;CS8608;CS8610;CS8618;CS8619;CS8620;CS8765;
     </NoWarn>
+  </PropertyGroup>
+
+  <!-- For builds used by the ScubaDiver assembly, exclude compiling the API -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <!-- Import MTGOSDK package properties -->
@@ -26,7 +33,7 @@
                       Version="8.0.4" />
     <PackageReference Include="Newtonsoft.Json"
                       Version="13.0.3" />
-    <ProjectReference Include="..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
+    <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- Compatibility layers for .netstandard-2.0 -->
     <PackageReference Include="Meziantou.Polyfill"
                       Version="1.0.37"
@@ -42,41 +49,39 @@
                       Condition="'$(TargetFramework)' != 'netstandard2.0'" />
   </ItemGroup>
 
-  <!-- For builds used by the ScubaDiver assembly, exclude compiling the API -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
-  </PropertyGroup>
-
   <!-- Import MTGOSDK reference assemblies -->
   <Import Project="MTGOSDK.ref.props"
           Condition="'$(TargetFramework)' != 'netstandard2.0'" />
 
   <!-- Configures build-time resource dependencies for the main library -->
-  <Target Name="CollectResourceProjects"
-          BeforeTargets="ResolveProjectReferences"
-          Condition="'$(TargetFramework)' != 'netstandard2.0'">
-    <ItemGroup>
-      <ResourceProjects Include="..\third_party\ScubaDiver\ScubaDiver.csproj" />
-      <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
-      <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
-      <ProjectReference Include="@(ResourceProjects)"
-                        ReferenceOutputAssembly="false"
-                        Private="false" />
-    </ItemGroup>
-  </Target>
+  <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <!-- Build resource projects to bundle inside the main library -->
+    <ResourceProjects Include="..\third_party\ScubaDiver\ScubaDiver.csproj" />
+    <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
+    <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
+    <!-- Indicates to MSBuild which resource projects should be built -->
+    <ProjectReference Include="@(ResourceProjects)"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+  </ItemGroup>
 
-  <!-- Bundle resource projects' build artifacts into the main library -->
+  <!-- Embed assembly resources into the main library -->
   <Target Name="EmbedResources"
-          BeforeTargets="CoreCompile"
-          AfterTargets="ResolveProjectReferences"
-          DependsOnTargets="CollectResourceProjects"
-          Condition="'@(ResourceProjects)' != ''">
-    <ItemGroup>
+          BeforeTargets="CoreCompile;AssignTargetPaths"
+          DependsOnTargets="ResolveProjectReferences">
+    <!-- Bundle resource projects' build artifacts into the main library -->
+    <ItemGroup Condition="'@(ResourceProjects)' != ''">
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.*" />
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.*" />
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
       <EmbeddedResource Include="@(ResourceFiles)"
-                        LogicalName="Resources\%(Filename)%(Extension)" />
+                        LogicalName="Resources\%(Filename)%(Extension)"
+                        Condition="'%(Extension)' == '.dll' OR '%(Extension)' == '.exe'" />
+    </ItemGroup>
+    <!-- Embed the MTGO manifest for verifying assembly compatibility -->
+    <ItemGroup Condition="'$(MTGOVersion)' != ''">
+      <EmbeddedResource Include="$(MTGOAppDir)\MTGO.manifest"
+                        LogicalName="Manifests\MTGO" />
     </ItemGroup>
 	</Target>
 

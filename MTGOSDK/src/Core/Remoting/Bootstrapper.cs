@@ -11,6 +11,9 @@ using System.Reflection;
 
 using MTGOSDK.Win32.Extensions;
 
+#if !NETSTANDARD2_0
+using MTGOSDK.Resources;
+#endif
 
 namespace MTGOSDK.Core.Remoting;
 
@@ -22,10 +25,11 @@ public static class Bootstrapper
       ExtractDir
     );
 
-  public static string ExtractDir = typeof(RemoteClient).Assembly.GetName().Name;
+  public static string ExtractDir = typeof(Bootstrapper).Assembly.GetName().Name;
 
   public static void Inject(Process target, ushort diverPort)
   {
+#if !NETSTANDARD2_0
     // Not injected yet, Injecting adapter now (which should load the Diver)
     GetInjectionToolkit(target, out string launcherPath, out string diverPath);
     string adapterExecutionArg = string.Join("*",
@@ -55,20 +59,10 @@ public static class Bootstrapper
       // Stdout must be read to prevent deadlock when injector process exits.
       _ = injectorProc.StandardOutput.ReadToEnd();
     }
+#endif
   }
 
-  public static byte[] ExtractResource(string filename)
-  {
-    Assembly asm = Assembly.GetExecutingAssembly();
-    using (Stream resource = asm.GetManifestResourceStream(filename))
-    {
-      var byteStream = new MemoryStream();
-      resource.CopyTo(byteStream);
-
-      return byteStream.ToArray();
-    }
-  }
-
+#if !NETSTANDARD2_0
   private static void GetInjectionToolkit(
     Process target,
     out string launcherPath,
@@ -79,21 +73,21 @@ public static class Bootstrapper
       remoteNetAppDataDirInfo.Create();
 
     byte[] launcherResource = target.Is64Bit()
-      ? ExtractResource(@"Resources\Launcher_x64.exe")
-      : ExtractResource(@"Resources\Launcher.exe");
+      ? EmbeddedResources.GetBinaryResource(@"Resources\Launcher_x64.exe")
+      : EmbeddedResources.GetBinaryResource(@"Resources\Launcher.exe");
     launcherPath = target.Is64Bit()
       ? Path.Combine(AppDataDir, "Launcher_x64.exe")
       : Path.Combine(AppDataDir, "Launcher.exe");
 
     byte[] adapterResource = target.Is64Bit()
-      ? ExtractResource(@"Resources\Bootstrapper_x64.dll")
-      : ExtractResource(@"Resources\Bootstrapper.dll");
+      ? EmbeddedResources.GetBinaryResource(@"Resources\Bootstrapper_x64.dll")
+      : EmbeddedResources.GetBinaryResource(@"Resources\Bootstrapper.dll");
     var adapterPath = target.Is64Bit()
       ? Path.Combine(AppDataDir, "Bootstrapper_x64.dll")
       : Path.Combine(AppDataDir, "Bootstrapper.dll");
 
     // Get the .NET diver assembly to inject into the target process
-    byte[] diverResource = ExtractResource(@"Resources\Microsoft.Diagnostics.Runtime.dll");
+    byte[] diverResource = EmbeddedResources.GetBinaryResource(@"Resources\Microsoft.Diagnostics.Runtime.dll");
     diverPath = Path.Combine(AppDataDir, "Microsoft.Diagnostics.Runtime.dll");
 
     // Check if injector or bootstrap resources differ from copies on disk
@@ -130,4 +124,5 @@ public static class Bootstrapper
       File.WriteAllBytes(filePath, data);
     }
   }
+#endif
 }

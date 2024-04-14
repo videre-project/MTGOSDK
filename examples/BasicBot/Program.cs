@@ -10,7 +10,7 @@ using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
 
 
-Console.WriteLine($"Connecting to MTGO v{Client.Version}...");
+Console.WriteLine($"Connecting to MTGO v{Client.CompatibleVersion}...");
 using var client = new Client(
   RemoteClient.HasStarted
     ? new ClientOptions()

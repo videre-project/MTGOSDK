@@ -7,8 +7,16 @@
     <DistDir>$(SolutionDir)\dist</DistDir>
   </PropertyGroup>
 
+  <!-- Internal SDK Paths -->
+  <PropertyGroup>
+    <MTGOSDKCoreTFM>netstandard2.0</MTGOSDKCoreTFM>
+    <MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(MTGOSDKCoreTFM)</MTGOSDKCorePath>
+  </PropertyGroup>
+
   <PropertyGroup>
     <UseFullSDKPaths>true</UseFullSDKPaths>
+    <RestoreLockedMode>true</RestoreLockedMode>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <!-- <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation> -->
   </PropertyGroup>
 

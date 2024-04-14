@@ -70,7 +70,8 @@
   <Target Name="ResolveReferenceAssemblies"
           AfterTargets="ResolveAssemblyReferences"
           BeforeTargets="CoreCompile"
-          DependsOnTargets="GenerateReferenceAssemblies">
+          DependsOnTargets="GenerateReferenceAssemblies"
+          Condition="'@(ReferenceCopyLocalPaths)' != ''">
     <ItemGroup>
       <!-- Filter reference paths for those pointing to reference assemblies -->
       <ReferenceAssemblies

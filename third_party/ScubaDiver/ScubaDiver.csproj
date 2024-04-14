@@ -26,13 +26,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\MTGOSDK\MTGOSDK.csproj" />
-    <ProjectReference Include="..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime"
                       Version="3.1.512801" />
+    <ProjectReference Include="..\..\MTGOSDK\MTGOSDK.csproj"
+                      AdditionalProperties="TargetFramework=netstandard2.0" />
+    <ProjectReference Include="..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- .NET Framework references and redirects -->
     <None Include="app.config" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces"
@@ -43,6 +41,16 @@
     <PackageReference Include="ilmerge"
                       Version="3.0.41" />
   </ItemGroup>
+
+  <!-- Configures build-time project dependencies for the core SDK assembly -->
+  <Target Name="ReferenceCoreSDK"
+          BeforeTargets="ResolveProjectReferences"
+          Condition="'$(UseFullSDKPaths)' == 'true'">
+    <MSBuild Projects="$(SolutionDir)MTGOSDK\MTGOSDK.csproj"
+             Targets="Build"
+             Properties="TargetFramework=$(MTGOSDKCoreTFM)"
+             Condition="!Exists('$(MTGOSDKCorePath)\MTGOSDK.dll')" />
+  </Target>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <ItemGroup>
