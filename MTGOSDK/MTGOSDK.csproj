@@ -37,6 +37,7 @@
     <!-- Compatibility layers for .netstandard-2.0 -->
     <PackageReference Include="Meziantou.Polyfill"
                       Version="1.0.37"
+                      PrivateAssets="all"
                       Condition="'$(TargetFramework)' == 'netstandard2.0'" />
     <!-- Build-time dependencies for MTGOSDK.MSBuild -->
     <PackageReference Include="ILRepack"

@@ -1,14 +1,20 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
 using System;
 using System.IO;
 
+using MTGOSDK.Win32.Utilities;
+using MTGOSDK.Win32.Utilities.FileSystem;
+
 
 namespace MTGOSDK.Win32;
 
+/// <summary>
+/// Provides global constants for the MTGO SDK.
+/// </summary>
 public static class Constants
 {
   /// <summary>
@@ -26,10 +32,16 @@ public static class Constants
   /// </summary>
   public static string ApplicationUri =
     "http://mtgo.patch.daybreakgames.com/patch/mtg/live/client/MTGO.application";
-    // + "#" + string.Join(", ", new string[] {
-    //   "MTGO.application",
-    //   "Culture=neutral",
-    //   "PublicKeyToken=dbac2845cba5280e",
-    //   "processorArchitecture=msil"
-    // });
+
+  /// <summary>
+  /// The current application directory for MTGO.
+  /// </summary>
+  public static string MTGOAppDirectory =>
+    new Glob(@$"{DeploymentUtilities.ApplicationDirectory}\mtgo..tion_*");
+
+  /// <summary>
+  /// The current data directory for MTGO's user data.
+  /// </summary>
+  public static string MTGODataDirectory =>
+    new Glob(@$"{DeploymentUtilities.ApplicationDataDirectory}\mtgo..tion_*\Data");
 }
