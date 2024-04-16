@@ -54,34 +54,43 @@
           Condition="'$(TargetFramework)' != 'netstandard2.0'" />
 
   <!-- Configures build-time resource dependencies for the main library -->
-  <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+  <Target Name="CollectResourceProjects"
+          BeforeTargets="ResolveLockFileReferences;ResolveProjectReferences"
+          Condition="'$(UseFullSDKPaths)' == 'true'">
     <!-- Build resource projects to bundle inside the main library -->
-    <ResourceProjects Include="..\third_party\ScubaDiver\ScubaDiver.csproj" />
-    <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
-    <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
+    <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+      <ResourceProjects Include="..\third_party\ScubaDiver\ScubaDiver.csproj" />
+      <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
+      <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
+    </ItemGroup>
     <!-- Indicates to MSBuild which resource projects should be built -->
-    <ProjectReference Include="@(ResourceProjects)"
-                      ReferenceOutputAssembly="false"
-                      Private="false" />
-  </ItemGroup>
+    <ItemGroup Condition="'@(ResourceProjects)' != ''">
+      <ProjectReference Include="@(ResourceProjects)"
+                        ReferenceOutputAssembly="false"
+                        Private="false" />
+    </ItemGroup>
+  </Target>
 
   <!-- Embed assembly resources into the main library -->
   <Target Name="EmbedResources"
           BeforeTargets="CoreCompile;AssignTargetPaths"
-          DependsOnTargets="ResolveProjectReferences">
+          DependsOnTargets="CollectResourceProjects">
+    <!-- Embed the MTGO manifest for verifying assembly compatibility -->
+    <ItemGroup Condition="'$(MTGOVersion)' != ''">
+      <EmbeddedResource Include="$(MTGOAppDir)\MTGO.exe.manifest"
+                        LogicalName="Manifests\MTGO" />
+    </ItemGroup>
     <!-- Bundle resource projects' build artifacts into the main library -->
-    <ItemGroup Condition="'@(ResourceProjects)' != ''">
+    <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.*" />
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.*" />
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
+    </ItemGroup>
+    <!-- Embed all resource files into the MTGOSDK assembly -->
+    <ItemGroup Condition="'@(ResourceFiles)' != ''">
       <EmbeddedResource Include="@(ResourceFiles)"
                         LogicalName="Resources\%(Filename)%(Extension)"
                         Condition="'%(Extension)' == '.dll' OR '%(Extension)' == '.exe'" />
-    </ItemGroup>
-    <!-- Embed the MTGO manifest for verifying assembly compatibility -->
-    <ItemGroup Condition="'$(MTGOVersion)' != ''">
-      <EmbeddedResource Include="$(MTGOAppDir)\MTGO.manifest"
-                        LogicalName="Manifests\MTGO" />
     </ItemGroup>
 	</Target>
 
