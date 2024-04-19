@@ -11,7 +11,7 @@ using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Task = Microsoft.Build.Utilities.Task;
 
-using MTGOSDK.Win32.Utilities.FileSystem;
+using MTGOSDK.Win32.FileSystem;
 using static MTGOSDK.Win32.Constants;
 
 

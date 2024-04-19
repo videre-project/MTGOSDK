@@ -9,7 +9,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 
 
-namespace MTGOSDK.Win32.Utilities.FileSystem;
+namespace MTGOSDK.Win32.FileSystem;
 
 public class Glob
 {

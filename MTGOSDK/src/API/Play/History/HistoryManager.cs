@@ -10,7 +10,7 @@ using System.Security.Cryptography;
 
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
-using MTGOSDK.Win32.Utilities.FileSystem;
+using MTGOSDK.Win32.FileSystem;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Core;

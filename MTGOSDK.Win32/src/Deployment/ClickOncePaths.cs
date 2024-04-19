@@ -8,13 +8,15 @@ using System.IO;
 using System.Linq;
 using Microsoft.Win32;
 
+using MTGOSDK.Win32.Utilities;
 
-namespace MTGOSDK.Win32.Utilities;
+
+namespace MTGOSDK.Win32.Deployment;
 
 /// <summary>
 /// Provides utility methods for interoping with ClickOnce deployment.
 /// </summary>
-public static class DeploymentUtilities
+public static class ClickOncePaths
 {
   /// <summary>
   /// The registry key path for the WinSxS component store.
@@ -34,7 +36,7 @@ public static class DeploymentUtilities
   public static string ApplicationDirectory = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
     @"Apps\2.0",
-    GetRegistryToken(SIDEBYSIDE_REGISTRY_KEY_PATH,
+    RegistryStore.GetRegistryToken(SIDEBYSIDE_REGISTRY_KEY_PATH,
                      "ComponentStore_RandomString")
   );
 
@@ -44,48 +46,30 @@ public static class DeploymentUtilities
   public static string ApplicationDataDirectory = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
     @"Apps\2.0\Data",
-    GetRegistryToken(SIDEBYSIDE_STATE_MANAGER_REGISTRY_KEY_PATH,
+    RegistryStore.GetRegistryToken(SIDEBYSIDE_STATE_MANAGER_REGISTRY_KEY_PATH,
                      "StateStore_RandomString")
   );
 
   /// <summary>
   /// Gets the names of all MTGO installation subpaths.
   /// </summary>
+  /// <param name="manifestName">
+  /// The filename of the ClickOnce manifest.
+  /// </param>
   /// <returns>
   /// An array of strings containing the names of all MTGO installations.
   /// </returns>
-  public static string[]? GetInstallations()
+  public static string[]? GetInstallationNames(string manifestName)
   {
+    string manifestKey = manifestName[..4] + ".." + manifestName[^4..] + "_";
     var keyPath = @$"{SIDEBYSIDE_STATE_MANAGER_REGISTRY_KEY_PATH}\Applications";
-    using (RegistryKey? key = Registry.CurrentUser.OpenSubKey(keyPath, false))
+    using (RegistryKey? key = RegistryStore.GetUserRegistryKey(keyPath))
     {
       if (key != null)
       {
         return key.GetSubKeyNames()
-          .Where(k => k.StartsWith("mtgo..tion_"))
+          .Where(k => k.StartsWith(manifestKey.ToLower()))
           .ToArray();
-      }
-    }
-
-    return null;
-  }
-
-  /// <summary>
-  /// Get the registry token from the specified key path and value name.
-  /// </summary>
-  /// <param name="keyPath">The registry key path.</param>
-  /// <param name="valueName">The registry value name.</param>
-  /// <returns>A string containing the registry token.</returns>
-  private static string? GetRegistryToken(string keyPath, string valueName)
-  {
-    using (RegistryKey? key = Registry.CurrentUser.OpenSubKey(keyPath, false))
-    {
-      if (key != null)
-      {
-        var token = (key.GetValue(valueName) as string)!;
-        key.Close();
-
-        return @$"{token[..8]}.{token[8..11]}\{token[11..19]}.{token[19..22]}";
       }
     }
 

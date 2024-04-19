@@ -6,8 +6,8 @@
 using System;
 using System.IO;
 
-using MTGOSDK.Win32.Utilities;
-using MTGOSDK.Win32.Utilities.FileSystem;
+using MTGOSDK.Win32.Deployment;
+using MTGOSDK.Win32.FileSystem;
 
 
 namespace MTGOSDK.Win32;
@@ -37,11 +37,11 @@ public static class Constants
   /// The current application directory for MTGO.
   /// </summary>
   public static string MTGOAppDirectory =>
-    new Glob(@$"{DeploymentUtilities.ApplicationDirectory}\mtgo..tion_*");
+    new Glob(@$"{ClickOncePaths.ApplicationDirectory}\mtgo..tion_*");
 
   /// <summary>
   /// The current data directory for MTGO's user data.
   /// </summary>
   public static string MTGODataDirectory =>
-    new Glob(@$"{DeploymentUtilities.ApplicationDataDirectory}\mtgo..tion_*\Data");
+    new Glob(@$"{ClickOncePaths.ApplicationDataDirectory}\mtgo..tion_*\Data");
 }
