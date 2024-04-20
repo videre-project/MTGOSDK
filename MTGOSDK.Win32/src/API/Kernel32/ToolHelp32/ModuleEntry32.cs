@@ -20,14 +20,14 @@ namespace MTGOSDK.Win32.API;
 /// </remarks>
 [DebuggerDisplay("{" + nameof(szModule) + "}")]
 [StructLayout(LayoutKind.Sequential)]
-public struct MODULEENTRY32
+public struct ModuleEntry32
 {
   /// <summary>
   /// The size of the structure, in bytes.
   /// </summary>
   /// <remarks>
   /// Before calling the <cref="Module32First"/> function, set this member to
-  /// sizeof(<cref="MODULEENTRY32"/>). If you do not initialize
+  /// sizeof(<cref="ModuleEntry32"/>). If you do not initialize
   /// <cref="dwSize"/>, <cref="Module32First"/> fails.
   /// </remarks>
   public uint dwSize;

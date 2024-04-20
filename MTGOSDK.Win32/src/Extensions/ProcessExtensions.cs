@@ -50,11 +50,11 @@ public static class ProcessExtensions
   /// </summary>
   /// <param name="process">The process to query.</param>
   /// <returns>
-  /// An enumerable collection of MODULEENTRY32 structures.
+  /// An enumerable collection of ModuleEntry32 structures.
   /// </returns>
-  public static IEnumerable<MODULEENTRY32> GetModules(this Process process)
+  public static IEnumerable<ModuleEntry32> GetModules(this Process process)
   {
-    var me32 = default(MODULEENTRY32);
+    var me32 = default(ModuleEntry32);
     var hModuleSnap = Kernel32.CreateToolhelp32Snapshot(
       SnapshotFlags.Module | SnapshotFlags.Module32,
       process.Id

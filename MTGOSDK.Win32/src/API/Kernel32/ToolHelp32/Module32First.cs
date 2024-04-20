@@ -18,7 +18,7 @@ public static partial class Kernel32
   /// buffer or FALSE otherwise.
   /// </returns>
   /// <remarks>
-  /// The calling application must set the <cref="MODULEENTRY32.dwSize"/> member
+  /// The calling application must set the <cref="ModuleEntry32.dwSize"/> member
   /// of <paramref name="lpme"/> to the size, in bytes, of the structure.
   /// </remarks>
   [DllImport("kernel32.dll")]
@@ -29,8 +29,8 @@ public static partial class Kernel32
     /// </summary>
     [In] ToolHelpHandle hSnapshot,
     /// <summary>
-    /// A pointer to a <cref="MODULEENTRY32"/> structure.
+    /// A pointer to a <cref="ModuleEntry32"/> structure.
     /// </summary>
-    [In, Out] ref MODULEENTRY32 lpme
+    [In, Out] ref ModuleEntry32 lpme
   );
 }

@@ -30,8 +30,8 @@ public static partial class Kernel32
     /// </summary>
     [In] ToolHelpHandle hSnapshot,
     /// <summary>
-    /// A pointer to a <cref="MODULEENTRY32"/> structure.
+    /// A pointer to a <cref="ModuleEntry32"/> structure.
     /// </summary>
-    [In, Out] ref MODULEENTRY32 lpme
+    [In, Out] ref ModuleEntry32 lpme
   );
 }
