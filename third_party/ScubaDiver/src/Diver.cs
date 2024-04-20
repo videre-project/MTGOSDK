@@ -19,8 +19,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Diagnostics.Runtime;
-
-using Exception = System.Exception;
+using Newtonsoft.Json;
 
 using MTGOSDK.Win32.API;
 

@@ -4,8 +4,6 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-using System;
-
 
 namespace MTGOSDK.Core.Remoting.Internal.ProxiedReflection;
 

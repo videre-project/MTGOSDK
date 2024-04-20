@@ -3,11 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Diagnostics;
-using System.Threading.Tasks;
-
-using MTGOSDK.Core.Reflection;
-
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model.Play;
 

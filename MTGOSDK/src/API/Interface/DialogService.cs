@@ -4,7 +4,6 @@
 **/
 
 using MTGOSDK.API.Interface.ViewModels;
-using MTGOSDK.Core.Reflection;
 
 using Shiny.Core.Interfaces;
 
@@ -23,7 +22,7 @@ public static class DialogService
   /// <summary>
   /// Global manager for creating and displaying dialog windows on the client.
   /// </summary>
-  private static IDialogService s_dialogService =
+  private static readonly IDialogService s_dialogService =
     ObjectProvider.Get<IDialogService>();
 
   /// <summary>

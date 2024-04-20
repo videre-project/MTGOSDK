@@ -26,7 +26,7 @@ public static class WindowUtilities
   /// <summary>
   /// Shared utilities class for manipulating WPF Window objects.
   /// </summary>
-  private static IWindowUtilities s_windowUtilities =
+  private static readonly IWindowUtilities s_windowUtilities =
     ObjectProvider.Get<IWindowUtilities>();
 
   /// <summary>

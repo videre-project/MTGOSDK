@@ -3,9 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
 using System.Security;
-using System.Security.Authentication;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Users;

@@ -4,10 +4,8 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 
 using MTGOSDK.Win32.Extensions;
 

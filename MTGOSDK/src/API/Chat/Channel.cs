@@ -7,7 +7,6 @@ using MTGOSDK.API.Users;
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Reflection;
 
-using Shiny.Chat;
 using WotC.MtGO.Client.Model.Chat;
 
 

@@ -3,12 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Generic;
-
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
-using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Enums;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 

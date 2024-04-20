@@ -3,11 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.Core;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
-using WotC.MtGO.Client.Model.Core;
 
 
 namespace MTGOSDK.API.Users;

@@ -3,7 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 

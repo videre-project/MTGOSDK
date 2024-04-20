@@ -4,9 +4,6 @@
 **/
 
 using MTGOSDK.API.Play.Tournaments;
-using MTGOSDK.Core.Reflection;
-
-using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API;

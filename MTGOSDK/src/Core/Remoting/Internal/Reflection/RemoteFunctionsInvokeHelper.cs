@@ -4,9 +4,6 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-using System;
-using System.Linq;
-
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Utils;

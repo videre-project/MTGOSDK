@@ -4,7 +4,6 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-using System;
 using System.Globalization;
 using System.Reflection;
 

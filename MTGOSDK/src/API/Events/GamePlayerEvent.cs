@@ -3,12 +3,11 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.API.Play;
+using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Reflection;
 
 
 namespace MTGOSDK.API;
-using GamePlayer = MTGOSDK.API.Play.Games.GamePlayer;
 
 /// <summary>
 /// EventHandler wrapper types used by the API.

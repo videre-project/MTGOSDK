@@ -4,18 +4,13 @@
   SPDX-License-Identifier: Apache-2.0 and MIT
 **/
 
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
-using MTGOSDK.Core.Remoting.Interop.Utils;
 using static MTGOSDK.Core.Remoting.Interop.DiverCommunicator;
 
 
@@ -27,16 +22,19 @@ namespace MTGOSDK.Core.Remoting.Interop;
 public class CallbacksListener
 {
   private HttpListener _listener = null;
-  Task _listenTask = null;
-  CancellationTokenSource _src = null;
+  private Task _listenTask = null;
+  private CancellationTokenSource _src = null;
 
   public IPAddress IP { get; set; }
   public int Port { get; set; }
-  readonly object _withErrors = NewtonsoftProxy.JsonSerializerSettingsWithErrors;
+
+  private readonly JsonSerializerSettings _withErrors = new()
+  {
+    MissingMemberHandling = MissingMemberHandling.Error,
+  };
   private readonly Dictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
   private readonly Dictionary<LocalEventCallback, int> _eventHandlersToToken = new();
-
-  DiverCommunicator _communicator;
+  private readonly DiverCommunicator _communicator;
 
   public CallbacksListener(DiverCommunicator communicator)
   {

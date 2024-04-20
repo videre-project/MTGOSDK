@@ -3,9 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Generic;
-
-using MTGOSDK.API.Play;
 using MTGOSDK.API.Users;
 
 using WotC.MtGO.Client.Model.Settings;

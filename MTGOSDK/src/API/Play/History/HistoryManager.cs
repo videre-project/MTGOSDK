@@ -3,16 +3,13 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
 using System.IO;
 using System.Text;
 using System.Security.Cryptography;
 
-using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Win32.FileSystem;
 
-using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Core;
 using WotC.MtGO.Client.Model.Settings;
 
@@ -32,7 +29,7 @@ public static class HistoryManager
   /// <summary>
   /// Global manager for the player's game history.
   /// </summary>
-  private static IGameHistoryManager s_gameHistoryManager =
+  private static readonly IGameHistoryManager s_gameHistoryManager =
     ObjectProvider.Get<ISettings>().GameHistoryManager;
 
   /// <summary>

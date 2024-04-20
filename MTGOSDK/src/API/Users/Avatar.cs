@@ -25,7 +25,7 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// <summary>
   /// The associated visual resource for the Avatar.
   /// </summary>
-  private IVisualResource Image = Bind<IVisualResource>(avatar.Image);
+  private readonly IVisualResource Image = Bind<IVisualResource>(avatar.Image);
 
   //
   // IAvatar wrapper properties

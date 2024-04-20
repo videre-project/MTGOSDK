@@ -2,10 +2,9 @@
   Copyright (c) 2023, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
-#pragma warning disable CS8597 // Thrown value may be null.
+#pragma warning disable CS8597 // TODO: Thrown value may be null.
 
 using System.Collections;
-using System.Collections.Generic;
 
 using MTGOSDK.Core.Reflection;
 

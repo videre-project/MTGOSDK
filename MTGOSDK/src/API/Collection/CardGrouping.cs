@@ -8,7 +8,6 @@ using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
-using WotC.MtGO.Client.Model.Core.Collection;
 
 
 namespace MTGOSDK.API.Collection;

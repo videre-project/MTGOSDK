@@ -5,15 +5,11 @@
 
 using System.Collections.Specialized;
 
-using MTGOSDK.API.Play;
+using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Reflection;
-
-using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API;
-using GameCard = MTGOSDK.API.Play.Games.GameCard;
-using GameZone = MTGOSDK.API.Play.Games.GameZone;
 
 /// <summary>
 /// EventHandler wrapper types used by the API.

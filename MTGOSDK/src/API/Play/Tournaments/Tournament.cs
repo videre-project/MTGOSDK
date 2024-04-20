@@ -6,7 +6,6 @@
 using MTGOSDK.Core.Reflection;
 
 using WotC.MTGO.Common;
-using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
