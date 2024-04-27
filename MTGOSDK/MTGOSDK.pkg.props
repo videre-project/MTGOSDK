@@ -9,14 +9,25 @@
     <Company>Videre Project</Company>
   </PropertyGroup>
 
+  <!-- Designate netstandard2.0 as the secondary compatibility target -->
+  <PropertyGroup Condition="'$(TargetFramework)' == '$(MTGOSDKCoreTFM)'">
+    <DefineConstants>$(DefineConstants);MTGOSDKCORE</DefineConstants>
+    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
+  </PropertyGroup>
+
   <!-- Publishing Configuration -->
-  <PropertyGroup>
-    <PublishDir>..\publish\</PublishDir>
+  <PropertyGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
     <DebugType>embedded</DebugType>
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
     <SelfContained>false</SelfContained>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <!-- Always evaluate all MTGOSDK.MSBuild targets when building the SDK. -->
+    <AccelerateBuildsInVisualStudio>false</AccelerateBuildsInVisualStudio>
   </PropertyGroup>
+
+  <!-- Bundle MTGOSDK reference assemblies -->
+  <Import Project="MTGOSDK.ref.props"
+          Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'" />
 
 </Project>

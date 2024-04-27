@@ -9,7 +9,7 @@ using System.IO;
 
 using MTGOSDK.Win32.Extensions;
 
-#if !NETSTANDARD2_0
+#if !MTGOSDKCORE
 using MTGOSDK.Resources;
 #endif
 
@@ -27,7 +27,7 @@ public static class Bootstrapper
 
   public static void Inject(Process target, ushort diverPort)
   {
-#if !NETSTANDARD2_0
+#if !MTGOSDKCORE
     // Not injected yet, Injecting adapter now (which should load the Diver)
     GetInjectionToolkit(target, out string launcherPath, out string diverPath);
     string adapterExecutionArg = string.Join("*",
@@ -60,7 +60,7 @@ public static class Bootstrapper
 #endif
   }
 
-#if !NETSTANDARD2_0
+#if !MTGOSDKCORE
   private static void GetInjectionToolkit(
     Process target,
     out string launcherPath,

@@ -28,9 +28,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime"
                       Version="3.1.512801" />
-    <ProjectReference Include="..\..\MTGOSDK\MTGOSDK.csproj"
-                      AdditionalProperties="TargetFramework=netstandard2.0" />
-    <ProjectReference Include="..\..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
+    <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj"
+                      SetTargetFramework="TargetFramework=$(MTGOSDKCoreTFM)" />
+    <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- .NET Framework references and redirects -->
     <None Include="app.config" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces"

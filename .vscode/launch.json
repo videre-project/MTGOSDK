@@ -15,16 +15,6 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "BasicInjector Demo",
-      "type": "coreclr",
-      "request": "launch",
-      "program": "${workspaceRoot}/examples/BasicInjector/bin/Release/net8.0-windows/BasicInjector.dll",
-      "args": [],
-      "cwd": "${workspaceRoot}/examples/BasicInjector",
-      "stopAtEntry": false,
-      "console": "integratedTerminal"
-    },
-    {
       "name": "GameTracker Demo",
       "type": "coreclr",
       "request": "launch",

@@ -6,8 +6,17 @@
     <UseWPF>true</UseWPF>
     <!-- Whether to include reference assemblies as part of the package. -->
     <UseRef>true</UseRef>
-    <AccelerateBuildsInVisualStudio>false</AccelerateBuildsInVisualStudio>
   </PropertyGroup>
+
+  <!-- Build-time dependencies for MTGOSDK.MSBuild -->
+  <ItemGroup>
+    <PackageReference Include="ILRepack"
+                      Version="2.0.30"
+                      PrivateAssets="all" />
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task"
+                      Version="2.0.29"
+                      PrivateAssets="all" />
+  </ItemGroup>
 
   <ItemGroup>
     <!--
@@ -15,7 +24,7 @@
       called in a consuming project. This is necessary because the task assembly
       is not referenced to be built by default, which will fail the build.
     -->
-    <ProjectReference Include="..\MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj"
+    <ProjectReference Include="$(SolutionDir)\MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj"
                       ReferenceOutputAssembly="false"
                       PrivateAssets="all"
                       IncludeAssets="build;buildTransitive" />
@@ -44,9 +53,9 @@
     explicitly reference the build/buildTransitive assets when referencing
     the MTGOSDK.MSBuild project instead of the NuGet package.
   -->
-  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props"
+  <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props"
           Condition="'$(UseFullSDKPaths)' == 'true'" />
-  <Import Project="..\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets"
+  <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets"
           Condition="'$(UseFullSDKPaths)' == 'true'" />
 
 </Project>

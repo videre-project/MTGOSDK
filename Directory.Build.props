@@ -5,19 +5,20 @@
   <PropertyGroup>
     <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
     <DistDir>$(SolutionDir)\dist</DistDir>
+    <PublishDir>$(SolutionDir)\publish</PublishDir>
   </PropertyGroup>
 
   <!-- Internal SDK Paths -->
   <PropertyGroup>
+    <UseFullSDKPaths>true</UseFullSDKPaths>
     <MTGOSDKCoreTFM>netstandard2.0</MTGOSDKCoreTFM>
     <MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(MTGOSDKCoreTFM)</MTGOSDKCorePath>
   </PropertyGroup>
 
   <PropertyGroup>
-    <UseFullSDKPaths>true</UseFullSDKPaths>
     <RestoreLockedMode>true</RestoreLockedMode>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <!-- <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation> -->
+    <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
 </Project>

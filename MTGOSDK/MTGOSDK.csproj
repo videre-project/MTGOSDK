@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0-windows;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net8.0-windows;$(MTGOSDKCoreTFM)</TargetFrameworks>
     <LangVersion>Latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -15,14 +15,8 @@
     </NoWarn>
   </PropertyGroup>
 
-  <!-- For builds used by the ScubaDiver assembly, exclude compiling the API -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
-  </PropertyGroup>
-
   <!-- Import MTGOSDK package properties -->
-  <Import Project="MTGOSDK.pkg.props"
-          Condition="'$(TargetFramework)' != 'netstandard2.0'" />
+  <Import Project="MTGOSDK.pkg.props" />
 
   <ItemGroup>
 		<PackageReference Include="Microsoft.CSharp"
@@ -34,35 +28,22 @@
     <PackageReference Include="Newtonsoft.Json"
                       Version="13.0.3" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-    <!-- Compatibility layers for .netstandard-2.0 -->
+    <!-- TFM compatibility layers for MTGOSDK.Core -->
     <PackageReference Include="Meziantou.Polyfill"
                       Version="1.0.37"
                       PrivateAssets="all"
-                      Condition="'$(TargetFramework)' == 'netstandard2.0'" />
-    <!-- Build-time dependencies for MTGOSDK.MSBuild -->
-    <PackageReference Include="ILRepack"
-                      Version="2.0.30"
-                      PrivateAssets="all"
-                      Condition="'$(TargetFramework)' != 'netstandard2.0'" />
-    <PackageReference Include="ILRepack.Lib.MSBuild.Task"
-                      Version="2.0.29"
-                      PrivateAssets="all"
-                      Condition="'$(TargetFramework)' != 'netstandard2.0'" />
+                      Condition="'$(TargetFramework)' == '$(MTGOSDKCoreTFM)'" />
   </ItemGroup>
-
-  <!-- Import MTGOSDK reference assemblies -->
-  <Import Project="MTGOSDK.ref.props"
-          Condition="'$(TargetFramework)' != 'netstandard2.0'" />
 
   <!-- Configures build-time resource dependencies for the main library -->
   <Target Name="CollectResourceProjects"
           BeforeTargets="ResolveLockFileReferences;ResolveProjectReferences"
           Condition="'$(UseFullSDKPaths)' == 'true'">
     <!-- Build resource projects to bundle inside the main library -->
-    <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
-      <ResourceProjects Include="..\third_party\ScubaDiver\ScubaDiver.csproj" />
-      <ResourceProjects Include="..\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
-      <ResourceProjects Include="..\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
+    <ItemGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
+      <ResourceProjects Include="$(SolutionDir)\third_party\ScubaDiver\ScubaDiver.csproj" />
+      <ResourceProjects Include="$(SolutionDir)\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
+      <ResourceProjects Include="$(SolutionDir)\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
     </ItemGroup>
     <!-- Indicates to MSBuild which resource projects should be built -->
     <ItemGroup Condition="'@(ResourceProjects)' != ''">
@@ -82,7 +63,7 @@
                         LogicalName="Manifests\MTGO" />
     </ItemGroup>
     <!-- Bundle resource projects' build artifacts into the main library -->
-    <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <ItemGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.*" />
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.*" />
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
