@@ -12,7 +12,9 @@
   <PropertyGroup>
     <UseFullSDKPaths>true</UseFullSDKPaths>
     <MTGOSDKCoreTFM>netstandard2.0</MTGOSDKCoreTFM>
+    <MTGOSDKCoreTarget>.NETStandard2.0</MTGOSDKCoreTarget>
     <MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(MTGOSDKCoreTFM)</MTGOSDKCorePath>
+    <PackageOutputPath>$(PublishDir)</PackageOutputPath>
   </PropertyGroup>
 
   <!-- SourceLink: Package Properties -->
@@ -34,8 +36,6 @@
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
     <EnableSourceLink>false</EnableSourceLink>
     <ResolveNugetPackages>false</ResolveNugetPackages>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(EnableSourceLink)' == 'false'">
     <SuppressImplicitGitSourceLink>true</SuppressImplicitGitSourceLink>
     <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
   </PropertyGroup>
@@ -46,7 +46,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
+    <RestoreLockedMode>true</RestoreLockedMode>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>

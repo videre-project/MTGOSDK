@@ -6,15 +6,18 @@
     <UseWPF>true</UseWPF>
     <!-- Whether to include reference assemblies as part of the package. -->
     <UseRef>true</UseRef>
+    <!-- Always evaluate all MTGOSDK.MSBuild targets when building the SDK. -->
+    <AccelerateBuildsInVisualStudio>false</AccelerateBuildsInVisualStudio>
+    <ILRepackTargetsFile>lib\ILRepack\ILRepack.targets</ILRepackTargetsFile>
   </PropertyGroup>
 
   <!-- Build-time dependencies for MTGOSDK.MSBuild -->
   <ItemGroup>
     <PackageReference Include="ILRepack"
-                      Version="2.0.30"
+                      Version="2.0.31"
                       PrivateAssets="all" />
     <PackageReference Include="ILRepack.Lib.MSBuild.Task"
-                      Version="2.0.29"
+                      Version="2.0.31"
                       PrivateAssets="all" />
   </ItemGroup>
 
@@ -53,9 +56,10 @@
     explicitly reference the build/buildTransitive assets when referencing
     the MTGOSDK.MSBuild project instead of the NuGet package.
   -->
-  <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props"
-          Condition="'$(UseFullSDKPaths)' == 'true'" />
-  <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets"
-          Condition="'$(UseFullSDKPaths)' == 'true'" />
+  <ImportGroup Condition="'$(UseFullSDKPaths)' == 'true'">
+    <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
+    <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets" />
+    <Import Project="$(ILRepackTargetsFile)" />
+  </ImportGroup>
 
 </Project>

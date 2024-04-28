@@ -4,7 +4,8 @@
     "**/.vs": true,
     "**/.user": true,
     // Exclude staging and production directories
-    "**/dist": true,
+    // "**/dist": true,
+    // "**/publish": true,
     // Excludes all C# and C++ build output folders
     "**/bin": true,
     "**/obj": true,

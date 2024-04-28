@@ -276,15 +276,15 @@
     "net8.0-windows7.0": {
       "ILRepack": {
         "type": "Direct",
-        "requested": "[2.0.30, )",
-        "resolved": "2.0.30",
-        "contentHash": "QanDNA1Y+Qd6uH9OzgRl9vRZrgd8ee2MO93fO8B35Mo5mK4Q8WaZsgHUPq/umLTFimI3nNO6wwbPgjBB6sBwiQ=="
+        "requested": "[2.0.31, )",
+        "resolved": "2.0.31",
+        "contentHash": "bw/RpdI8lgTwoRf9M1xtgjYdyATFYZfXYlsNrEdldu17WUHTOJJqIXUif8nIytY088VWn5KYgdY2vEj7IzSX0A=="
       },
       "ILRepack.Lib.MSBuild.Task": {
         "type": "Direct",
-        "requested": "[2.0.29, )",
-        "resolved": "2.0.29",
-        "contentHash": "kCrpMEA3mLfox1wOpPiAIEG0tQcWV+fNR2LBV4XklvT8xClwj16Z/H/FsyR+pqPgEfJIiINi0Oiwb5pglb8IJA=="
+        "requested": "[2.0.31, )",
+        "resolved": "2.0.31",
+        "contentHash": "qYkv/np3o/7lZZ+0mdC4yBDd3QqaP1lt9QCiAHGlBI1m6wrd9Ux7XS7iBQH9jLEi4esqYxBogX19iRblv1CfRA=="
       },
       "ImpromptuInterface": {
         "type": "Direct",

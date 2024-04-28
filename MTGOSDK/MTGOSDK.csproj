@@ -18,6 +18,10 @@
   <!-- Import MTGOSDK package properties -->
   <Import Project="MTGOSDK.pkg.props" />
 
+  <!-- Bundle MTGOSDK reference assemblies -->
+  <Import Project="MTGOSDK.ref.props"
+          Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'" />
+
   <ItemGroup>
 		<PackageReference Include="Microsoft.CSharp"
                       Version="4.7.0" />
@@ -28,52 +32,12 @@
     <PackageReference Include="Newtonsoft.Json"
                       Version="13.0.3" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-    <!-- TFM compatibility layers for MTGOSDK.Core -->
-    <PackageReference Include="Meziantou.Polyfill"
-                      Version="1.0.37"
-                      PrivateAssets="all"
-                      Condition="'$(TargetFramework)' == '$(MTGOSDKCoreTFM)'" />
   </ItemGroup>
 
-  <!-- Configures build-time resource dependencies for the main library -->
-  <Target Name="CollectResourceProjects"
-          BeforeTargets="ResolveLockFileReferences;ResolveProjectReferences"
-          Condition="'$(UseFullSDKPaths)' == 'true'">
-    <!-- Build resource projects to bundle inside the main library -->
-    <ItemGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
-      <ResourceProjects Include="$(SolutionDir)\third_party\ScubaDiver\ScubaDiver.csproj" />
-      <ResourceProjects Include="$(SolutionDir)\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
-      <ResourceProjects Include="$(SolutionDir)\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
-    </ItemGroup>
-    <!-- Indicates to MSBuild which resource projects should be built -->
-    <ItemGroup Condition="'@(ResourceProjects)' != ''">
-      <ProjectReference Include="@(ResourceProjects)"
-                        ReferenceOutputAssembly="false"
-                        Private="false" />
-    </ItemGroup>
-  </Target>
-
-  <!-- Embed assembly resources into the main library -->
-  <Target Name="EmbedResources"
-          BeforeTargets="CoreCompile;AssignTargetPaths"
-          DependsOnTargets="CollectResourceProjects">
-    <!-- Embed the MTGO manifest for verifying assembly compatibility -->
-    <ItemGroup Condition="'$(MTGOVersion)' != ''">
-      <EmbeddedResource Include="$(MTGOAppDir)\MTGO.exe.manifest"
-                        LogicalName="Manifests\MTGO" />
-    </ItemGroup>
-    <!-- Bundle resource projects' build artifacts into the main library -->
-    <ItemGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.*" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.*" />
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
-    </ItemGroup>
-    <!-- Embed all resource files into the MTGOSDK assembly -->
-    <ItemGroup Condition="'@(ResourceFiles)' != ''">
-      <EmbeddedResource Include="@(ResourceFiles)"
-                        LogicalName="Resources\%(Filename)%(Extension)"
-                        Condition="'%(Extension)' == '.dll' OR '%(Extension)' == '.exe'" />
-    </ItemGroup>
-	</Target>
+  <!-- Import MTGOSDK Resources for embedding manifest and resource files -->
+  <ImportGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
+    <Import Project="lib\MTGOSDK.Resources.props" />
+    <Import Project="lib\MTGOSDK.Resources.targets" />
+  </ImportGroup>
 
 </Project>

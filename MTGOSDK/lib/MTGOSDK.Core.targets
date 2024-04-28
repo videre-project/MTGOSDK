@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- Note: These targets must always run on the outer project build -->
+  <PropertyGroup>
+    <GenerateNuspecDependsOn>
+      $(GenerateNuspecDependsOn);
+      _ExcludeTargetFramework;
+      _ExcludeTargetFrameworkDependency
+    </GenerateNuspecDependsOn>
+  </PropertyGroup>
+
+  <!-- Removes nupkg lib/** output for the MTGOSDK.Core target -->
+  <Target Name="_ExcludeTargetFramework"
+          AfterTargets="_GetTargetFrameworksOutput"
+          BeforeTargets="_WalkEachTargetPerFramework"
+          Returns="@(_TargetFrameworks)">
+    <ItemGroup>
+      <_TargetFrameworks Remove="$(MTGOSDKCoreTFM)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Removes nuspec dependencies for the MTGOSDK.Core target -->
+  <Target Name="_ExcludeTargetFrameworkDependency"
+          AfterTargets="_WalkEachTargetPerFramework"
+          Returns="@(_FrameworksWithSuppressedDependencies)">
+    <ItemGroup>
+      <_FrameworksWithSuppressedDependencies Include="$(MTGOSDKCoreTarget)" />
+    </ItemGroup>
+  </Target>
+
+</Project>
