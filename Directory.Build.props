@@ -17,6 +17,27 @@
     <PackageOutputPath>$(PublishDir)</PackageOutputPath>
   </PropertyGroup>
 
+  <!-- Disable SourceLink for C++ projects -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
+    <EnableSourceLink>false</EnableSourceLink>
+    <!-- Override any SourceLink queries for (unsupported) C++ projects. -->
+    <SuppressImplicitGitSourceLink>true</SuppressImplicitGitSourceLink>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <!-- Disable NuGet restore as it is not supported for C++ projects. -->
+    <ResolveNugetPackages>false</ResolveNugetPackages>
+  </PropertyGroup>
+
+  <!-- SourceLink: ReproducibleBuilds SDK -->
+  <Sdk Name="DotNet.ReproducibleBuilds.Isolated"
+       Version="1.1.1"
+       Condition="'$(EnableSourceLink)' != 'false'" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.ReproducibleBuilds"
+                      Version="1.1.1"
+                      PrivateAssets="All"
+                      Condition="'$(EnableSourceLink)' != 'false'" />
+  </ItemGroup>
+
   <!-- SourceLink: Package Properties -->
   <PropertyGroup Condition="'$(EnableSourceLink)' != 'false'">
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -27,19 +48,11 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
-  <!-- Disable SourceLink for C++ projects -->
-  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
-    <EnableSourceLink>false</EnableSourceLink>
-    <ResolveNugetPackages>false</ResolveNugetPackages>
-    <SuppressImplicitGitSourceLink>true</SuppressImplicitGitSourceLink>
-    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
-  </PropertyGroup>
-
   <!-- Continuous Integration -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(ContinuousIntegrationBuild)' == 'true'">
     <!--
       Required for deterministic source paths.
       Refer to https://github.com/dotnet/roslyn/issues/55860

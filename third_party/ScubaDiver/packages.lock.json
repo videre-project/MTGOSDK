@@ -28,6 +28,15 @@
           "System.Runtime.CompilerServices.Unsafe": "6.0.0"
         }
       },
+      "Microsoft.NETFramework.ReferenceAssemblies": {
+        "type": "Direct",
+        "requested": "[1.0.2, )",
+        "resolved": "1.0.2",
+        "contentHash": "5/cSEVld+px/CuRrbohO/djfg6++eR6zGpy88MgqloXvkj//WXWpFZyu/OpkXPN0u5m+dN/EVwLNYFUxD4h2+A==",
+        "dependencies": {
+          "Microsoft.NETFramework.ReferenceAssemblies.net48": "1.0.2"
+        }
+      },
       "System.Runtime.CompilerServices.Unsafe": {
         "type": "Direct",
         "requested": "[6.0.0, )",
@@ -123,6 +132,11 @@
           "System.Memory": "4.5.1",
           "System.Runtime.CompilerServices.Unsafe": "4.5.1"
         }
+      },
+      "Microsoft.NETFramework.ReferenceAssemblies.net48": {
+        "type": "Transitive",
+        "resolved": "1.0.2",
+        "contentHash": "5auzRPELLLWdSifssw9eSL11wiIaOx/U/mJUIXilEWdYfjVx509SOn3HwDQCrZY0VKHQxvMk+enM67RXtfsrVg=="
       },
       "Microsoft.Win32.Registry": {
         "type": "Transitive",
