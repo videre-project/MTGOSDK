@@ -18,16 +18,11 @@
   </PropertyGroup>
 
   <!-- SourceLink: Package Properties -->
-  <ItemGroup Condition="'$(EnableSourceLink)' != 'false'">
-    <PackageReference Include="Microsoft.SourceLink.GitHub"
-                      Version="8.0.0"
-                      PrivateAssets="All" />
-  </ItemGroup>
   <PropertyGroup Condition="'$(EnableSourceLink)' != 'false'">
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>false</EmbedUntrackedSources>
     <!-- These properties are automatically set by the .NET 8+ SDK. -->
     <DebugType>embedded</DebugType>
-    <EmbedUntrackedSources>false</EmbedUntrackedSources>
     <IncludeSymbols>True</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
@@ -41,9 +36,17 @@
   </PropertyGroup>
 
   <!-- Continuous Integration -->
-  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
+  <ItemGroup>
+    <!--
+      Required for deterministic source paths.
+      Refer to https://github.com/dotnet/roslyn/issues/55860
+    -->
+    <SourceRoot Include="$([MSBuild]::EnsureTrailingSlash($(RepoRoot)))"
+                Condition="'$(RepoRoot)' != ''" />
+  </ItemGroup>
 
   <PropertyGroup>
     <RestoreLockedMode>true</RestoreLockedMode>
