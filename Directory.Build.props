@@ -15,8 +15,38 @@
     <MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(MTGOSDKCoreTFM)</MTGOSDKCorePath>
   </PropertyGroup>
 
+  <!-- SourceLink: Package Properties -->
+  <ItemGroup Condition="'$(EnableSourceLink)' != 'false'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub"
+                      Version="8.0.0"
+                      PrivateAssets="All" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(EnableSourceLink)' != 'false'">
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <!-- These properties are automatically set by the .NET 8+ SDK. -->
+    <DebugType>embedded</DebugType>
+    <EmbedUntrackedSources>false</EmbedUntrackedSources>
+    <IncludeSymbols>True</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Disable SourceLink for C++ projects -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
+    <EnableSourceLink>false</EnableSourceLink>
+    <ResolveNugetPackages>false</ResolveNugetPackages>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(EnableSourceLink)' == 'false'">
+    <SuppressImplicitGitSourceLink>true</SuppressImplicitGitSourceLink>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+  </PropertyGroup>
+
+  <!-- Continuous Integration -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
   <PropertyGroup>
-    <RestoreLockedMode>true</RestoreLockedMode>
+    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
