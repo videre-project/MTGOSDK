@@ -6,7 +6,11 @@
     <PackageId>MTGOSDK</PackageId>
     <Version>1.0.0</Version>
     <Authors>Cory Bennett</Authors>
-    <Company>Videre Project</Company>
+    <!-- <Company>Videre Project</Company> -->
+    <Copyright>Copyright (c) 2024 Cory Bennett</Copyright>
+    <Description>An unofficial software development kit (SDK) for inspecting and interacting with the Magic: The Gathering Online (MTGO) client.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
   <!-- Publishing Configuration -->
@@ -16,6 +20,11 @@
     <SelfContained>false</SelfContained>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(SolutionDir)\README.md" Pack="true" PackagePath="\" />
+    <None Include="$(SolutionDir)\LICENSE"   Pack="true" PackagePath="\" />
+    <None Include="$(SolutionDir)\NOTICE"    Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <!-- Internal: MTGOSDK.Core Project Properties -->
   <Import Project="lib\MTGOSDK.Core.props"
