@@ -34,6 +34,9 @@
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- .NET Framework references and redirects -->
     <None Include="app.config" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                      Version="1.0.3"
+                      PrivateAssets="all" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces"
                       Version="8.0.0" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe"

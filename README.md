@@ -44,6 +44,8 @@ This project consists of three main components:
 
 This project requires the [.NET Framework 4.8 SDK](https://dotnet.microsoft.com/download/dotnet-framework/net48) and [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) to be installed with Visual Studio 2017 or newer. These can also be installed separately with the above installers or when installing Visual Studio with the [Visual Studio Installer](https://learn.microsoft.com/en-us/visualstudio/install/install-visual-studio?view=vs-2022).
 
+Building against .NET Framework 4.8 also requires the [.NET Framework Developer Pack](https://aka.ms/msbuild/developerpacks) to be installed for building against reference assemblies. This is required for deterministic builds as the default lookup of .NET Framework SDKs through OS paths is disabled for msbuild.
+
 Building this project with [MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild?view=vs-2022) (e.g. when using the msbuild or dotnet CLI) requires [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) to be installed. These redistributables are also optionally included with Visual Studio 2015 Update 3 and newer.
 
 To build this solution, run either of the below commands from the root of the repository:
