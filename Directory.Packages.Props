@@ -11,6 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
+    <PackageVersion Include="Microsoft.SourceLink.GitHub"
+                    Version="8.0.0" />
     <PackageVersion Include="DotNet.ReproducibleBuilds"
                     Version="1.1.1" />
     <!-- MTGOSDK -->

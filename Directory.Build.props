@@ -26,22 +26,14 @@
     <ResolveNugetPackages>false</ResolveNugetPackages>
   </PropertyGroup>
 
-  <!-- SourceLink: ReproducibleBuilds SDK -->
-  <Sdk Name="DotNet.ReproducibleBuilds.Isolated"
-       Version="1.1.1"
-       Condition="'$(EnableSourceLink)' != 'false'" />
-  <ItemGroup>
-    <PackageReference Include="DotNet.ReproducibleBuilds"
-                      PrivateAssets="All"
-                      Condition="'$(EnableSourceLink)' != 'false'" />
-  </ItemGroup>
-
-  <!-- SourceLink: Package Properties -->
+  <!--
+    SourceLink: Package Properties
+    https://devblogs.microsoft.com/dotnet/producing-packages-with-source-link/
+  -->
   <PropertyGroup Condition="'$(EnableSourceLink)' != 'false'">
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>false</EmbedUntrackedSources>
-    <!-- These properties are automatically set by the .NET 8+ SDK. -->
-    <DebugType>embedded</DebugType>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <!-- Build a separate snupkg symbol package for NuGet. -->
     <IncludeSymbols>True</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
@@ -57,6 +49,19 @@
     -->
     <SourceRoot Include="$([MSBuild]::EnsureTrailingSlash($(RepoRoot)))"
                 Condition="'$(RepoRoot)' != ''" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub"
+                      PrivateAssets="All"
+                      Condition="'$(EnableSourceLink)' != 'false'" />
+  </ItemGroup>
+
+  <!-- SourceLink: ReproducibleBuilds SDK -->
+  <Sdk Name="DotNet.ReproducibleBuilds.Isolated"
+       Version="1.1.1"
+       Condition="'$(EnableSourceLink)' != 'false'" />
+  <ItemGroup>
+    <PackageReference Include="DotNet.ReproducibleBuilds"
+                      PrivateAssets="All"
+                      Condition="'$(EnableSourceLink)' != 'false'" />
   </ItemGroup>
 
 </Project>
