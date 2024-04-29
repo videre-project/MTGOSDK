@@ -35,6 +35,8 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <!-- Build a separate snupkg symbol package for NuGet. -->
     <IncludeSymbols>True</IncludeSymbols>
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>portable</DebugType>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
