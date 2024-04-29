@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="SourceLink.props" />
 
   <!-- Project Directories -->
   <PropertyGroup>
@@ -16,54 +17,17 @@
     <PackageOutputPath>$(PublishDir)</PackageOutputPath>
   </PropertyGroup>
 
-  <!-- Disable SourceLink for C++ projects -->
-  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
-    <EnableSourceLink>false</EnableSourceLink>
-    <!-- Override any SourceLink queries for (unsupported) C++ projects. -->
-    <SuppressImplicitGitSourceLink>true</SuppressImplicitGitSourceLink>
-    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
-    <!-- Disable NuGet restore as it is not supported for C++ projects. -->
-    <ResolveNugetPackages>false</ResolveNugetPackages>
+  <!-- Continuous Integration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
-  <!--
-    SourceLink: Package Properties
-    https://devblogs.microsoft.com/dotnet/producing-packages-with-source-link/
-  -->
-  <PropertyGroup Condition="'$(EnableSourceLink)' != 'false'">
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <!-- Build a separate snupkg symbol package for NuGet. -->
+  <!-- Publishing: Build a separate snupkg symbol package for NuGet. -->
+  <PropertyGroup Condition="'$(CreateSymbolPackage)' == 'true'">
     <IncludeSymbols>True</IncludeSymbols>
     <DebugSymbols>True</DebugSymbols>
     <DebugType>portable</DebugType>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
-
-  <!-- Continuous Integration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-  </PropertyGroup>
-  <ItemGroup Condition="'$(ContinuousIntegrationBuild)' == 'true'">
-    <!--
-      Required for deterministic source paths.
-      Refer to https://github.com/dotnet/roslyn/issues/55860
-    -->
-    <SourceRoot Include="$([MSBuild]::EnsureTrailingSlash($(RepoRoot)))"
-                Condition="'$(RepoRoot)' != ''" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub"
-                      PrivateAssets="All"
-                      Condition="'$(EnableSourceLink)' != 'false'" />
-  </ItemGroup>
-
-  <!-- SourceLink: ReproducibleBuilds SDK -->
-  <Sdk Name="DotNet.ReproducibleBuilds.Isolated"
-       Version="1.1.1"
-       Condition="'$(EnableSourceLink)' != 'false'" />
-  <ItemGroup>
-    <PackageReference Include="DotNet.ReproducibleBuilds"
-                      PrivateAssets="All"
-                      Condition="'$(EnableSourceLink)' != 'false'" />
-  </ItemGroup>
 
 </Project>
