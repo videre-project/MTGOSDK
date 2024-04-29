@@ -23,14 +23,10 @@
           Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'" />
 
   <ItemGroup>
-		<PackageReference Include="Microsoft.CSharp"
-                      Version="4.7.0" />
-    <PackageReference Include="Microsoft.Diagnostics.Runtime"
-                      Version="3.1.512801" />
-    <PackageReference Include="ImpromptuInterface"
-                      Version="8.0.4" />
-    <PackageReference Include="Newtonsoft.Json"
-                      Version="13.0.3" />
+		<PackageReference Include="Microsoft.CSharp" />
+    <PackageReference Include="Microsoft.Diagnostics.Runtime" />
+    <PackageReference Include="ImpromptuInterface" />
+    <PackageReference Include="Newtonsoft.Json" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>
 

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <!-- Enable central package management -->
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Enable deterministic NuGet package restore -->
+    <RestoreLockedMode>true</RestoreLockedMode>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
+  </PropertyGroup>
+
+  <ItemGroup Label="PackageVersions">
+    <PackageVersion Include="DotNet.ReproducibleBuilds"
+                    Version="1.1.1" />
+    <!-- MTGOSDK -->
+		<PackageVersion Include="Microsoft.CSharp"
+                    Version="4.7.0" />
+    <PackageVersion Include="Microsoft.Diagnostics.Runtime"
+                    Version="3.1.512801" />
+    <PackageVersion Include="ImpromptuInterface"
+                    Version="8.0.4" />
+    <PackageVersion Include="Newtonsoft.Json"
+                    Version="13.0.3" />
+    <!-- MTGOSDK: lib\MTGOSDK.core.props -->
+    <PackageVersion Include="Meziantou.Polyfill"
+                    Version="1.0.37" />
+    <!-- MTGOSDK: MTGOSDK.ref.props -->
+    <PackageVersion Include="ILRepack"
+                    Version="2.0.31" />
+    <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
+                    Version="2.0.31" />
+    <!-- MTGOSDK.MSBuild -->
+    <PackageVersion Include="Microsoft.Build.Utilities.Core"
+                    Version="17.0.0" />
+    <PackageVersion Include="JetBrains.Refasmer"
+                    Version="1.0.33" />
+    <PackageVersion Include="Microsoft.ILVerification"
+                    Version="8.0.0" />
+    <!-- MTGOSDK.Win32 -->
+    <PackageVersion Include="Microsoft.Win32.Registry"
+                    Version="5.0.0" />
+    <!-- third_party/ScubaDiver -->
+    <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies"
+                    Version="1.0.3" />
+    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces"
+                    Version="8.0.0" />
+    <PackageVersion Include="System.Runtime.CompilerServices.Unsafe"
+                    Version="6.0.0" />
+    <PackageVersion Include="ilmerge"
+                    Version="3.0.41" />
+  </ItemGroup>
+
+</Project>

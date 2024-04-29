@@ -15,19 +15,4 @@
     <_MTGOSDK_Refs>$(SolutionDir)dist\$(Configuration)\Reference\MTGO</_MTGOSDK_Refs>
   </PropertyGroup>
 
-  <!--
-    FIXME: Workaround for MSBuild not resolving transitive build dependencies.
-
-    This is needed only for full SDK builds, as the main SDK solution does not
-    use package references to reference other projects within the solution. As
-    a result, MSBuild does not resolve buildTransitive dependencies for any
-    imported packages despite requiring this behavior as per the specification.
-  -->
-  <ItemGroup Condition="'$(UseFullSDKPaths)' == 'true'">
-    <_ILMergeConsolePaths Include="$(NuGetPackageRoot)ilmerge\*\tools\net452\ilmerge.exe" />
-  </ItemGroup>
-  <PropertyGroup Condition="'$(ILMergeConsolePath)' == ''">
-    <ILMergeConsolePath>@(_ILMergeConsolePaths->'%(FullPath)')</ILMergeConsolePath>
-  </PropertyGroup>
-
 </Project>

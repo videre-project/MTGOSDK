@@ -1,4 +1,3 @@
-<!-- This file is used to provide missing properties for the msbuild cli. -->
 <Project>
 
   <!-- Project Directories -->
@@ -33,7 +32,6 @@
        Condition="'$(EnableSourceLink)' != 'false'" />
   <ItemGroup>
     <PackageReference Include="DotNet.ReproducibleBuilds"
-                      Version="1.1.1"
                       PrivateAssets="All"
                       Condition="'$(EnableSourceLink)' != 'false'" />
   </ItemGroup>
@@ -60,11 +58,5 @@
     <SourceRoot Include="$([MSBuild]::EnsureTrailingSlash($(RepoRoot)))"
                 Condition="'$(RepoRoot)' != ''" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <RestoreLockedMode>true</RestoreLockedMode>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
-  </PropertyGroup>
 
 </Project>

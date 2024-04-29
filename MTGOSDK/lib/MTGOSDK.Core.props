@@ -12,7 +12,6 @@
   <ItemGroup>
     <!-- TFM compatibility layers for MTGOSDK.Core -->
     <PackageReference Include="Meziantou.Polyfill"
-                      Version="1.0.37"
                       PrivateAssets="all" />
   </ItemGroup>
 

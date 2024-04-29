@@ -27,23 +27,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Diagnostics.Runtime"
-                      Version="3.1.512801" />
+    <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj"
                       SetTargetFramework="TargetFramework=$(MTGOSDKCoreTFM)" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- .NET Framework references and redirects -->
     <None Include="app.config" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
-                      Version="1.0.3"
                       PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces"
-                      Version="8.0.0" />
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe"
-                      Version="6.0.0" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
     <!-- Build time dependencies -->
-    <PackageReference Include="ilmerge"
-                      Version="3.0.41" />
+    <PackageReference Include="ilmerge" />
   </ItemGroup>
 
   <!-- Configures build-time project dependencies for the core SDK assembly -->
