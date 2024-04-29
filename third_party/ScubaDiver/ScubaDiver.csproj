@@ -38,7 +38,10 @@
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
     <!-- Build time dependencies -->
-    <PackageReference Include="ilmerge" />
+    <PackageReference Include="ILRepack"
+                      PrivateAssets="all" />
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task"
+                      PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Configures build-time project dependencies for the core SDK assembly -->
@@ -51,25 +54,12 @@
              Condition="!Exists('$(MTGOSDKCorePath)\MTGOSDK.dll')" />
   </Target>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <ItemGroup>
-      <ReferenceAssemblies Include="$(SolutionDir)dist\*\Reference\MTGO\*\*.dll" />
-      <Assemblies Include="$(TargetDir)*.dll"
-                  Exclude="@(ReferenceAssemblies-> '$(TargetDir)%(Filename)%(Extension)')" />
-      <Flags Include="/ndebug" />
-      <Flags Include="/allowDup" />
-      <Flags Include="/lib=$(TargetDir)" />
-      <Flags Include="/out=$(TargetDir)Microsoft.Diagnostics.Runtime.dll" />
-    </ItemGroup>
-    <PropertyGroup>
-      <ILMergeAssemblies>@(Assemblies-> '%(Filename)%(Extension)', ' ')</ILMergeAssemblies>
-      <ILMergeFlags>@(Flags-> '%(Identity)', ' ')</ILMergeFlags>
-      <ILMergeCommand>$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)</ILMergeCommand>
-    </PropertyGroup>
-
-    <Exec Command="$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)" />
-    <Copy SourceFiles="$(TargetDir)\Microsoft.Diagnostics.Runtime.dll"
-          DestinationFolder="$(SolutionDir)dist\$(ConfigurationName)" />
-  </Target>
+  <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
+  <PropertyGroup>
+    <ILRepackTargetsFile>lib\ILRepack\ILRepack.targets</ILRepackTargetsFile>
+  </PropertyGroup>
+  <ImportGroup Condition="'$(UseFullSDKPaths)' == 'true'">
+    <Import Project="$(ILRepackTargetsFile)" />
+  </ImportGroup>
 
 </Project>

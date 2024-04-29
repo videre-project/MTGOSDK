@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <Import Project="ILRepack.Config.props" />
+
+  <!-- Merge the main assembly with any project dependencies -->
+  <Target Name="MergeReferenceAssemblies"
+          AfterTargets="AfterBuild">
+    <!-- Identify the main assembly and exclude all reference assemblies -->
+    <PropertyGroup>
+      <TargetAssembly>Microsoft.Diagnostics.Runtime.dll</TargetAssembly>
+    </PropertyGroup>
+    <ItemGroup>
+      <ReferenceAssemblies Include="$(SolutionDir)dist\*\Reference\MTGO\*\*.dll" />
+      <InputAssemblies Include="$(OutputPath)*.dll"
+                       Exclude="@(ReferenceAssemblies-> '$(OutputPath)%(Filename)%(Extension)')" />
+    </ItemGroup>
+
+    <Message Text="Merging @(InputAssemblies->Count()) assemblies into $(TargetAssembly)..."
+             Importance="high" />
+
+    <!-- Merge ScubaDiver and all dependencies into the main ClrMD assembly -->
+    <ILRepack
+      Union="true"
+      LibraryPath="$(OutputPath)"
+      OutputFile="$(SolutionDir)dist\$(ConfigurationName)\$(TargetAssembly)"
+      InputAssemblies="@(InputAssemblies)"
+      NoRepackRes="true"
+      Parallel="true" />
+
+    <Message Text="MTGOSDK.MSBuild: Finished merging $(AssemblyName) assemblies."
+             Importance="high" />
+  </Target>
+
+</Project>
