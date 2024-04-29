@@ -14,7 +14,7 @@
                        Condition="Exists('$(OutputPath)%(Filename).dll')" />
     </ItemGroup>
 
-    <Message Text="Merging @(InputAssemblies->Count()) reference assemblies into $(AssemblyName).dll..."
+    <Message Text="Merging @(InputAssemblies->Count()) assemblies into $(AssemblyName).dll..."
              Importance="high" />
 
     <!-- Merge all reference assemblies into the main assembly -->

@@ -20,7 +20,8 @@
     <!-- Embed the MTGO manifest for verifying assembly compatibility -->
     <ItemGroup Condition="'$(MTGOVersion)' != ''">
       <EmbeddedResource Include="$(MTGOAppDir)\MTGO.exe.manifest"
-                        LogicalName="Manifests\MTGO" />
+                        LogicalName="Manifests\MTGO"
+                        WithCulture="false" />
     </ItemGroup>
     <!-- Bundle resource projects' build artifacts into the main library -->
     <ItemGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
@@ -32,6 +33,7 @@
     <ItemGroup Condition="'@(ResourceFiles)' != ''">
       <EmbeddedResource Include="@(ResourceFiles)"
                         LogicalName="Resources\%(Filename)%(Extension)"
+                        WithCulture="false"
                         Condition="'%(Extension)' == '.dll' OR '%(Extension)' == '.exe'" />
     </ItemGroup>
 	</Target>
