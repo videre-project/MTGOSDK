@@ -1,9 +1,9 @@
 <h1>
     <img
       align="top"
-      src="/assets/Logo.png"
+      src="/assets/icon.png"
       height="36"
-      alt="MTGOSDK logo"
+      alt="MTGOSDK icon"
     />
   MTGOSDK
 </h1>
