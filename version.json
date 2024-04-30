@@ -1,0 +1,18 @@
+{
+  "version": "0.0.0-dev",
+  "pathFilters": [
+    ":/MTGOSDK/src",
+    ":/MTGOSDK.MSBuild/src",
+    ":/MTGOSDK.Win32/src",
+    ":/third_party/ScubaDiver/src"
+  ],
+  "publicReleaseRefSpec": [
+    "^refs/heads/main$",
+    "^refs/heads/release/v\\d+(?:\\.\\d+)?$"
+  ],
+  "release": {
+    "branchName" : "release/v{version}",
+    "versionIncrement" : "patch",
+    "firstUnstableTag" : "dev"
+  }
+}

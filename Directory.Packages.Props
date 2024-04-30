@@ -20,14 +20,6 @@
                     Version="8.0.4" />
     <PackageVersion Include="Newtonsoft.Json"
                     Version="13.0.3" />
-    <!-- MTGOSDK: lib\MTGOSDK.core.props -->
-    <PackageVersion Include="Meziantou.Polyfill"
-                    Version="1.0.37" />
-    <!-- MTGOSDK: MTGOSDK.ref.props -->
-    <PackageVersion Include="ILRepack"
-                    Version="2.0.31" />
-    <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
-                    Version="2.0.31" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
                     Version="17.0.0" />
@@ -39,15 +31,42 @@
     <PackageVersion Include="Microsoft.Win32.Registry"
                     Version="5.0.0" />
     <!-- third_party/ScubaDiver -->
-    <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies"
-                    Version="1.0.3" />
     <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces"
                     Version="8.0.0" />
     <PackageVersion Include="System.Runtime.CompilerServices.Unsafe"
                     Version="6.0.0" />
-    <PackageVersion Include="ilmerge"
-                    Version="3.0.41" />
   </ItemGroup>
+
+  <!-- .NET Standard 2.0 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <!-- Use API polyfills to help write .NET 5.0+ compatible code -->
+    <GlobalPackageReference Include="Meziantou.Polyfill"
+                            Version="1.0.37"
+                            PrivateAssets="all"
+                            Condition="'$(EnablePolyfills)' != 'false'" />
+  </ItemGroup>
+
+  <!-- .NET Framework 2.0+ -->
+  <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789.`))' == 'net'">
+    <!-- Prefer reference assemblies to help produce deterministic builds -->
+    <GlobalPackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                            Version="1.0.3"
+                            PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Build-time dependencies for MTGOSDK.MSBuild -->
+  <ItemGroup Condition="'$(ILRepackTargetsFile)' != ''">
+    <GlobalPackageReference Include="ILRepack"
+                            Version="2.0.31"
+                            PrivateAssets="all" />
+    <GlobalPackageReference Include="ILRepack.Lib.MSBuild.Task"
+                            Version="2.0.31"
+                            PrivateAssets="all" />
+  </ItemGroup>
+  <ImportGroup Condition="'$(UseFullSDKPaths)' == 'true'">
+    <Import Project="$(ILRepackTargetsFile)"
+            Condition="Exists('$(ILRepackTargetsFile)')" />
+  </ImportGroup>
 
   <!--
     SourceLink: Use ReproducibleBuilds SDK for build determinism.
@@ -68,6 +87,14 @@
                 Condition="'$(RepoRoot)' != ''" />
     <GlobalPackageReference Include="Microsoft.SourceLink.GitHub"
                             Version="8.0.0"
+                            PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- Use Nerdbank.GitVersioning for package SemVer -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false' And
+                        '$(EnableSourceControlManagerQueries)' != 'false'">
+    <GlobalPackageReference Include="Nerdbank.GitVersioning"
+                            Version="3.6.133"
                             PrivateAssets="All" />
   </ItemGroup>
 

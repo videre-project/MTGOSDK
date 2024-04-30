@@ -8,10 +8,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Win32.Registry" />
-    <!-- Compatibility layers for .netstandard-2.0 -->
-    <PackageReference Include="Meziantou.Polyfill"
-                      PrivateAssets="all"
-                      Condition="'$(TargetFramework)' == 'netstandard2.0'" />
   </ItemGroup>
 
   <!-- Import MTGOSDK.Win32 package properties -->

@@ -7,12 +7,7 @@
     <!-- Only use MTGOSDK.Core for local builds; exclude from publishing -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IncludeContentInPack>false</IncludeContentInPack>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
-
-  <ItemGroup>
-    <!-- TFM compatibility layers for MTGOSDK.Core -->
-    <PackageReference Include="Meziantou.Polyfill"
-                      PrivateAssets="all" />
-  </ItemGroup>
 
 </Project>

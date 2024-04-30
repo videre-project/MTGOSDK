@@ -11,14 +11,6 @@
     <ILRepackTargetsFile>lib\ILRepack\ILRepack.targets</ILRepackTargetsFile>
   </PropertyGroup>
 
-  <!-- Build-time dependencies for MTGOSDK.MSBuild -->
-  <ItemGroup>
-    <PackageReference Include="ILRepack"
-                      PrivateAssets="all" />
-    <PackageReference Include="ILRepack.Lib.MSBuild.Task"
-                      PrivateAssets="all" />
-  </ItemGroup>
-
   <ItemGroup>
     <!--
       Add a `ProjectReference` to ensure that the task is built before being
@@ -57,7 +49,6 @@
   <ImportGroup Condition="'$(UseFullSDKPaths)' == 'true'">
     <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
     <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets" />
-    <Import Project="$(ILRepackTargetsFile)" />
   </ImportGroup>
 
 </Project>

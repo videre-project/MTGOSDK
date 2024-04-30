@@ -5,6 +5,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
 		<LangVersion>Latest</LangVersion>
     <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

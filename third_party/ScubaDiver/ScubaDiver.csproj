@@ -6,6 +6,8 @@
     <OutputType>Library</OutputType>
     <RootNamespace>ScubaDiver</RootNamespace>
     <IsPackable>false</IsPackable>
+    <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
+    <ILRepackTargetsFile>lib\ILRepack\ILRepack.targets</ILRepackTargetsFile>
   </PropertyGroup>
 
   <!-- Compiler Options -->
@@ -32,15 +34,8 @@
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- .NET Framework references and redirects -->
     <None Include="app.config" />
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
-                      PrivateAssets="all" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
-    <!-- Build time dependencies -->
-    <PackageReference Include="ILRepack"
-                      PrivateAssets="all" />
-    <PackageReference Include="ILRepack.Lib.MSBuild.Task"
-                      PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Configures build-time project dependencies for the core SDK assembly -->
@@ -52,13 +47,5 @@
              Properties="TargetFramework=$(_MTGOSDKCoreTFM)"
              Condition="!Exists('$(_MTGOSDKCorePath)\MTGOSDK.dll')" />
   </Target>
-
-  <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
-  <PropertyGroup>
-    <ILRepackTargetsFile>lib\ILRepack\ILRepack.targets</ILRepackTargetsFile>
-  </PropertyGroup>
-  <ImportGroup Condition="'$(UseFullSDKPaths)' == 'true'">
-    <Import Project="$(ILRepackTargetsFile)" />
-  </ImportGroup>
 
 </Project>
