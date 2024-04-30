@@ -14,4 +14,7 @@
                       Condition="'$(TargetFramework)' == 'netstandard2.0'" />
   </ItemGroup>
 
+  <!-- Import MTGOSDK.Win32 package properties -->
+  <Import Project="MTGOSDK.Win32.pkg.props" />
+
 </Project>

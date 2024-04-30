@@ -4,13 +4,8 @@
   <!-- Package Properties -->
   <PropertyGroup>
     <PackageId>MTGOSDK</PackageId>
-    <Version>1.0.0</Version>
-    <Authors>Cory Bennett</Authors>
-    <Copyright>Copyright (c) 2024 Cory Bennett</Copyright>
     <Description>An unofficial software development kit (SDK) for inspecting and interacting with the Magic: The Gathering Online (MTGO) client.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <PackageTags>sdk csharp runtime dotnet mtg magic-the-gathering cil dotnet-framework clrmd debugging-tool memory-dump mtgo</PackageTags>
   </PropertyGroup>
 
   <!-- Publishing Configuration -->
@@ -22,8 +17,6 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)\README.md" Pack="true" PackagePath="\" />
-    <None Include="$(SolutionDir)\LICENSE"   Pack="true" PackagePath="\" />
-    <None Include="$(SolutionDir)\NOTICE"    Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <!-- Internal: MTGOSDK.Core Project Properties -->
