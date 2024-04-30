@@ -64,6 +64,7 @@
                             PrivateAssets="all" />
   </ItemGroup>
   <ImportGroup Condition="'$(UseFullSDKPaths)' == 'true'">
+    <!-- FIXME: Workaround to override ILRepack targets file. -->
     <Import Project="$(ILRepackTargetsFile)"
             Condition="Exists('$(ILRepackTargetsFile)')" />
   </ImportGroup>

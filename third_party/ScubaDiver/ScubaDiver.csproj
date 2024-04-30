@@ -7,7 +7,9 @@
     <RootNamespace>ScubaDiver</RootNamespace>
     <IsPackable>false</IsPackable>
     <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
-    <ILRepackTargetsFile>lib\ILRepack\ILRepack.targets</ILRepackTargetsFile>
+    <ILRepackTargetsFile>
+      $(MSBuildThisFileDirectory)lib\ILRepack\ILRepack.targets
+    </ILRepackTargetsFile>
   </PropertyGroup>
 
   <!-- Compiler Options -->

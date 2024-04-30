@@ -6,9 +6,11 @@
     <UseWPF>true</UseWPF>
     <!-- Whether to include reference assemblies as part of the package. -->
     <UseRef>true</UseRef>
+    <ILRepackTargetsFile>
+      $(MSBuildThisFileDirectory)lib\ILRepack\ILRepack.targets
+    </ILRepackTargetsFile>
     <!-- Always evaluate all MTGOSDK.MSBuild targets when building the SDK. -->
     <AccelerateBuildsInVisualStudio>false</AccelerateBuildsInVisualStudio>
-    <ILRepackTargetsFile>lib\ILRepack\ILRepack.targets</ILRepackTargetsFile>
   </PropertyGroup>
 
   <ItemGroup>
