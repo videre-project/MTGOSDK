@@ -24,7 +24,6 @@ env:
     **/obj
     **/Win32
     **/x64
-  MSBUILD_DEFAULTS: /m:2 /v:m /p:Configuration=Release /p:Platform="Any CPU"
   NUGET_CACHES: |
     ~/.nuget/packages
   NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -UseLockFile
@@ -76,7 +75,7 @@ jobs:
 
       # Build the SDK
       - name: Build SDK Solution
-        run: msbuild SDK.sln /t:Build ${{ env.MSBUILD_DEFAULTS }}
+        run: msbuild SDK.sln /t:Build
 
       # Evict expired cache entries
       - name: Purge expired cache entries
