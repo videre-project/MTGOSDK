@@ -11,15 +11,9 @@
   <!-- Internal SDK Paths -->
   <PropertyGroup>
     <UseFullSDKPaths>true</UseFullSDKPaths>
-    <MTGOSDKCoreTFM>netstandard2.0</MTGOSDKCoreTFM>
-    <MTGOSDKCoreTarget>.NETStandard2.0</MTGOSDKCoreTarget>
-    <MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(MTGOSDKCoreTFM)</MTGOSDKCorePath>
-    <PackageOutputPath>$(PublishDir)</PackageOutputPath>
-  </PropertyGroup>
-
-  <!-- Continuous Integration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <_MTGOSDKCoreTFM>netstandard2.0</_MTGOSDKCoreTFM>
+    <_MTGOSDKCoreTarget>.NETStandard2.0</_MTGOSDKCoreTarget>
+    <_MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
   </PropertyGroup>
 
   <!-- Publishing: Package Properties -->
@@ -43,6 +37,12 @@
     <DebugSymbols>True</DebugSymbols>
     <DebugType>portable</DebugType>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Continuous Integration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <PackageOutputPath>$(PublishDir)</PackageOutputPath>
   </PropertyGroup>
 
 </Project>

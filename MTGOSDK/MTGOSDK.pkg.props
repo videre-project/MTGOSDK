@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <!-- Publishing Configuration -->
-  <PropertyGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
+  <PropertyGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
     <SelfContained>false</SelfContained>
@@ -21,7 +21,7 @@
 
   <!-- Internal: MTGOSDK.Core Project Properties -->
   <Import Project="lib\MTGOSDK.Core.props"
-          Condition="'$(TargetFramework)' == '$(MTGOSDKCoreTFM)'" />
+          Condition="'$(TargetFramework)' == '$(_MTGOSDKCoreTFM)'" />
   <Import Project="lib\MTGOSDK.Core.targets" />
 
 </Project>

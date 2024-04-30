@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0-windows;$(MTGOSDKCoreTFM)</TargetFrameworks>
+    <TargetFrameworks>net8.0-windows;$(_MTGOSDKCoreTFM)</TargetFrameworks>
     <LangVersion>Latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -20,7 +20,7 @@
 
   <!-- Bundle MTGOSDK reference assemblies -->
   <Import Project="MTGOSDK.ref.props"
-          Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'" />
+          Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'" />
 
   <ItemGroup>
 		<PackageReference Include="Microsoft.CSharp" />
@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <!-- Import MTGOSDK Resources for embedding manifest and resource files -->
-  <ImportGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
+  <ImportGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
     <Import Project="lib\MTGOSDK.Resources.props" />
     <Import Project="lib\MTGOSDK.Resources.targets" />
   </ImportGroup>

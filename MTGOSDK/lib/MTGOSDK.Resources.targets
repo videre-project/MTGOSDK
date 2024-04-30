@@ -24,7 +24,7 @@
                         WithCulture="false" />
     </ItemGroup>
     <!-- Bundle resource projects' build artifacts into the main library -->
-    <ItemGroup Condition="'$(TargetFramework)' != '$(MTGOSDKCoreTFM)'">
+    <ItemGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\Win32\*.*" />
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\x64\*.*" />
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />

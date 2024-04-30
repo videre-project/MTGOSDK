@@ -16,7 +16,7 @@
           BeforeTargets="_WalkEachTargetPerFramework"
           Returns="@(_TargetFrameworks)">
     <ItemGroup>
-      <_TargetFrameworks Remove="$(MTGOSDKCoreTFM)" />
+      <_TargetFrameworks Remove="$(_MTGOSDKCoreTFM)" />
     </ItemGroup>
   </Target>
 
@@ -25,7 +25,7 @@
           AfterTargets="_WalkEachTargetPerFramework"
           Returns="@(_FrameworksWithSuppressedDependencies)">
     <ItemGroup>
-      <_FrameworksWithSuppressedDependencies Include="$(MTGOSDKCoreTarget)" />
+      <_FrameworksWithSuppressedDependencies Include="$(_MTGOSDKCoreTarget)" />
     </ItemGroup>
   </Target>
 

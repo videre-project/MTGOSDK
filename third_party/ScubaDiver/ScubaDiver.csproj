@@ -29,7 +29,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj"
-                      SetTargetFramework="TargetFramework=$(MTGOSDKCoreTFM)" />
+                      SetTargetFramework="TargetFramework=$(_MTGOSDKCoreTFM)" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- .NET Framework references and redirects -->
     <None Include="app.config" />
@@ -50,8 +50,8 @@
           Condition="'$(UseFullSDKPaths)' == 'true'">
     <MSBuild Projects="$(SolutionDir)MTGOSDK\MTGOSDK.csproj"
              Targets="Build"
-             Properties="TargetFramework=$(MTGOSDKCoreTFM)"
-             Condition="!Exists('$(MTGOSDKCorePath)\MTGOSDK.dll')" />
+             Properties="TargetFramework=$(_MTGOSDKCoreTFM)"
+             Condition="!Exists('$(_MTGOSDKCorePath)\MTGOSDK.dll')" />
   </Target>
 
   <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
