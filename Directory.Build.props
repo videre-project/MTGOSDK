@@ -1,11 +1,11 @@
 <Project>
-  <Import Project="SourceLink.props" />
 
   <!-- Project Directories -->
   <PropertyGroup>
     <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
     <DistDir>$(SolutionDir)\dist</DistDir>
     <PublishDir>$(SolutionDir)\publish</PublishDir>
+    <PackageOutputPath>$(PublishDir)</PackageOutputPath>
   </PropertyGroup>
 
   <!-- Internal SDK Paths -->
@@ -16,32 +16,13 @@
     <_MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
   </PropertyGroup>
 
-  <!-- Publishing: Package Properties -->
-  <PropertyGroup>
-    <Authors>Cory Bennett</Authors>
-    <Copyright>Copyright (c) 2024 Cory Bennett</Copyright>
-    <PackageIcon>icon.png</PackageIcon>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <PackageTags>sdk csharp runtime dotnet mtg magic-the-gathering cil dotnet-framework clrmd debugging-tool memory-dump mtgo</PackageTags>
-  </PropertyGroup>
-  <ItemGroup>
-    <None Include="$(SolutionDir)\assets\icon.png" Pack="true" PackagePath="" />
-    <None Include="$(SolutionDir)\LICENSE"         Pack="true" PackagePath="" />
-    <None Include="$(SolutionDir)\NOTICE"          Pack="true" PackagePath="" />
-  </ItemGroup>
-
-  <!-- Publishing: Build a separate snupkg symbol package for NuGet. -->
-  <PropertyGroup Condition="'$(CreateSymbolPackage)' == 'true'">
-    <IncludeSymbols>True</IncludeSymbols>
-    <DebugSymbols>True</DebugSymbols>
-    <DebugType>portable</DebugType>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-  </PropertyGroup>
-
   <!-- Continuous Integration -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-    <PackageOutputPath>$(PublishDir)</PackageOutputPath>
+    <!-- <EnablePackageValidation>true</EnablePackageValidation> -->
   </PropertyGroup>
+
+  <!-- NuGet Package Properties -->
+  <Import Project="NuGet.pkg.props" />
 
 </Project>
