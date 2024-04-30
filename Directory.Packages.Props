@@ -11,10 +11,6 @@
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
-    <PackageVersion Include="Microsoft.SourceLink.GitHub"
-                    Version="8.0.0" />
-    <PackageVersion Include="DotNet.ReproducibleBuilds"
-                    Version="1.1.1" />
     <!-- MTGOSDK -->
 		<PackageVersion Include="Microsoft.CSharp"
                     Version="4.7.0" />
@@ -51,6 +47,28 @@
                     Version="6.0.0" />
     <PackageVersion Include="ilmerge"
                     Version="3.0.41" />
+  </ItemGroup>
+
+  <!--
+    SourceLink: Use ReproducibleBuilds SDK for build determinism.
+    - https://github.com/dotnet/reproducible-builds
+  -->
+  <Sdk Name="DotNet.ReproducibleBuilds.Isolated"
+       Version="1.1.1"
+       Condition="'$(EnableSourceLink)' != 'false'" />
+  <ItemGroup Condition="'$(EnableSourceLink)' != 'false'">
+    <GlobalPackageReference Include="DotNet.ReproducibleBuilds"
+                            Version="1.1.1"
+                            PrivateAssets="All" />
+    <!--
+      Required for deterministic source paths.
+      - https://github.com/dotnet/roslyn/issues/55860
+    -->
+    <SourceRoot Include="$([MSBuild]::EnsureTrailingSlash($(RepoRoot)))"
+                Condition="'$(RepoRoot)' != ''" />
+    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub"
+                            Version="8.0.0"
+                            PrivateAssets="All" />
   </ItemGroup>
 
 </Project>

@@ -7,26 +7,6 @@
   </PropertyGroup>
 
   <!--
-    SourceLink: Use ReproducibleBuilds SDK for build determinism.
-    - https://github.com/dotnet/reproducible-builds
-  -->
-  <Sdk Name="DotNet.ReproducibleBuilds.Isolated"
-       Version="1.1.1"
-       Condition="'$(EnableSourceLink)' != 'false'" />
-  <ItemGroup Condition="'$(EnableSourceLink)' != 'false'">
-    <PackageReference Include="DotNet.ReproducibleBuilds"
-                      PrivateAssets="All" />
-    <!--
-      Required for deterministic source paths.
-      - https://github.com/dotnet/roslyn/issues/55860
-    -->
-    <SourceRoot Include="$([MSBuild]::EnsureTrailingSlash($(RepoRoot)))"
-                Condition="'$(RepoRoot)' != ''" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub"
-                      PrivateAssets="All" />
-  </ItemGroup>
-
-  <!--
     SourceLink: Package Properties.
     - https://devblogs.microsoft.com/dotnet/producing-packages-with-source-link/
   -->

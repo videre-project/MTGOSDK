@@ -6,7 +6,6 @@
     <OutputType>Library</OutputType>
     <RootNamespace>ScubaDiver</RootNamespace>
     <IsPackable>false</IsPackable>
-    <EnableSourceLink>false</EnableSourceLink>
   </PropertyGroup>
 
   <!-- Compiler Options -->
