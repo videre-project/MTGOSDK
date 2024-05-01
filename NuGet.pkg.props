@@ -1,0 +1,31 @@
+<Project>
+  <Import Project="SourceLink.props" />
+
+  <!-- Publishing: Package Properties -->
+  <PropertyGroup>
+    <Title>$(AssemblyName)</Title>
+    <Authors>Cory Bennett</Authors>
+    <Owners>Videre Project</Owners>
+    <Copyright>Copyright (c) $([System.DateTime]::UtcNow.ToString(yyyy)) $(Authors)</Copyright>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(SolutionDir)\assets\icon.png" Pack="true" PackagePath="" />
+    <None Include="$(SolutionDir)\NOTICE"          Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <!-- Publishing: Include PDB files in the package `lib/**` folder -->
+  <PropertyGroup Condition="'$(IncludeSymbolsInPackage)' != 'false'">
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>portable</DebugType>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+  </PropertyGroup>
+
+  <!-- Publishing: Build a separate snupkg symbol package for NuGet. -->
+  <PropertyGroup Condition="'$(CreateSymbolPackage)' != 'false'">
+    <IncludeSymbols>True</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+</Project>

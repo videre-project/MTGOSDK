@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- Package Properties -->
+  <PropertyGroup>
+    <PackageId>MTGOSDK.Win32</PackageId>
+    <Summary>A library containing Win32 API definitions used by the SDK.</Summary>
+    <Description>Contains Win32 API definitions and helper functions used by MTGOSDK. This package provide a more idiomatic C# API for Win32 functions and ensures consistent API behavior across different versions of Windows.</Description>
+    <PackageTags></PackageTags>
+  </PropertyGroup>
+
+  <!-- Publishing Configuration -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+</Project>

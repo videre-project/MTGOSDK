@@ -1,4 +1,3 @@
-<!-- This file is used to provide missing properties for the msbuild cli. -->
 <Project>
 
   <!-- Project Directories -->
@@ -6,19 +5,24 @@
     <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
     <DistDir>$(SolutionDir)\dist</DistDir>
     <PublishDir>$(SolutionDir)\publish</PublishDir>
+    <PackageOutputPath>$(PublishDir)</PackageOutputPath>
   </PropertyGroup>
 
   <!-- Internal SDK Paths -->
   <PropertyGroup>
     <UseFullSDKPaths>true</UseFullSDKPaths>
-    <MTGOSDKCoreTFM>netstandard2.0</MTGOSDKCoreTFM>
-    <MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(MTGOSDKCoreTFM)</MTGOSDKCorePath>
+    <_MTGOSDKCoreTFM>netstandard2.0</_MTGOSDKCoreTFM>
+    <_MTGOSDKCoreTarget>.NETStandard2.0</_MTGOSDKCoreTarget>
+    <_MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <RestoreLockedMode>true</RestoreLockedMode>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
+  <!-- Continuous Integration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <!-- <EnablePackageValidation>true</EnablePackageValidation> -->
   </PropertyGroup>
+
+  <!-- NuGet Package Properties -->
+  <Import Project="NuGet.pkg.props" />
 
 </Project>

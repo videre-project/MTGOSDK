@@ -1,0 +1,35 @@
+<Project>
+
+  <!-- Disables (NuGet) SourceLink for C++ projects. -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
+    <EnableSourceLink>false</EnableSourceLink>
+    <ResolveNugetPackages>false</ResolveNugetPackages>
+  </PropertyGroup>
+
+  <!--
+    SourceLink: Package Properties.
+    - https://devblogs.microsoft.com/dotnet/producing-packages-with-source-link/
+  -->
+  <PropertyGroup Condition="'$(EnableSourceLink)' != 'false'">
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <!-- SourceLink: Disable Git queries for disabled / incompatible projects. -->
+  <PropertyGroup Condition="'$(EnableSourceLink)' == 'false'">
+    <!--
+      Disables `Microsoft.NET.Sdk.SourceLink.targets` from the .NET 8 SDK:
+      - https://github.com/dotnet/sdk/blob/b9a2752/src/Tasks/Microsoft.NET.Build.Tasks/targets/Microsoft.NET.Sdk.CrossTargeting.targets#L15
+    -->
+    <SuppressImplicitGitSourceLink>true</SuppressImplicitGitSourceLink>
+    <!--
+      Disables the `_InitializeSourceControlInformationFromSourceControlManager`
+      and `_SetEmbeddedFilesFromSourceControlManagerUntrackedFiles` targets from
+      the SourceLink.Common SDK, disallowing Git queries on disabled projects:
+      - https://github.com/dotnet/sourcelink/blob/14a0a42/src/SourceLink.Common/build/InitializeSourceControlInformation.targets#L26
+      - https://github.com/dotnet/sourcelink/blob/14a0a42/src/SourceLink.Common/build/Microsoft.SourceLink.Common.targets#L24
+    -->
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+  </PropertyGroup>
+
+</Project>

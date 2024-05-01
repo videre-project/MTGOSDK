@@ -8,6 +8,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>CS8602;CS8603</NoWarn>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <IsPackable>false</IsPackable>
+    <!-- Disables .NET Standard polyfills as it is not directly consumable. -->
+    <EnablePolyfills>false</EnablePolyfills>
   </PropertyGroup>
 
   <ItemGroup Label="Package">
@@ -30,21 +33,14 @@
       include them in the package.
     -->
     <PackageReference Include="Microsoft.Build.Utilities.Core"
-                      Version="17.0.0"
                       ExcludeAssets="runtime"
                       PrivateAssets="All" />
     <!--
       We use these to build and validate the SDK's reference assemblies at
       design/build time. These assemblies are not included in this package.
     -->
-    <PackageReference Include="JetBrains.Refasmer"
-                      Version="1.0.33" />
-    <PackageReference Include="Microsoft.ILVerification"
-                      Version="8.0.0" />
-    <PackageReference Include="ilmerge"
-                      Version="3.0.41"
-                      PrivateAssets="all"
-                      IncludeAssets="build;buildTransitive" />
+    <PackageReference Include="JetBrains.Refasmer" />
+    <PackageReference Include="Microsoft.ILVerification" />
     <!--
       Import the MTGOSDK.Win32 project for the Win32 extensions and utilities.
     -->

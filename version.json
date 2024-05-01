@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/Nerdbank.GitVersioning/main/src/NerdBank.GitVersioning/version.schema.json",
+  "version": "0.0-dev",
+  "assemblyVersion": {
+    "precision": "revision"
+  },
+  "gitCommitIdShortAutoMinimum": 7,
+  "nugetPackageVersion": {
+    "semVer": 2
+  },
+  "pathFilters": [
+    ":!/.config",
+    ":!/.github",
+    ":!/.vscode",
+    ":!/assets",
+    ":!/docs",
+    ":!/examples",
+    ":!/third_party",
+    "!.editorconfig",
+    "!.gitattributes",
+    "!.gitignore",
+    "!Directory.Build.props",
+    "!Directory.Build.rsp",
+    "!Directory.Build.targets",
+    "!Directory.Packages.props",
+    "!LICENSE",
+    "!NOTICE",
+    "!README.md"
+  ],
+  "publicReleaseRefSpec": [
+    "^refs/heads/main$",
+    "^refs/heads/release/v\\d+(?:\\.\\d+)?$"
+  ],
+  "cloudBuild": {
+    "setVersionVariables": false
+  },
+  "release": {
+    "branchName" : "release/v{version}",
+    "firstUnstableTag" : "dev"
+  }
+}

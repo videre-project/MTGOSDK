@@ -6,7 +6,11 @@
     <OutputType>Library</OutputType>
     <RootNamespace>ScubaDiver</RootNamespace>
     <IsPackable>false</IsPackable>
-	</PropertyGroup>
+    <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
+    <ILRepackTargetsFile>
+      $(MSBuildThisFileDirectory)lib\ILRepack\ILRepack.targets
+    </ILRepackTargetsFile>
+  </PropertyGroup>
 
   <!-- Compiler Options -->
   <PropertyGroup>
@@ -26,20 +30,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Diagnostics.Runtime"
-                      Version="3.1.512801" />
+    <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj"
-                      SetTargetFramework="TargetFramework=$(MTGOSDKCoreTFM)" />
+                      SetTargetFramework="TargetFramework=$(_MTGOSDKCoreTFM)" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- .NET Framework references and redirects -->
     <None Include="app.config" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces"
-                      Version="8.0.0" />
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe"
-                      Version="6.0.0" />
-    <!-- Build time dependencies -->
-    <PackageReference Include="ilmerge"
-                      Version="3.0.41" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
   </ItemGroup>
 
   <!-- Configures build-time project dependencies for the core SDK assembly -->
@@ -48,29 +46,8 @@
           Condition="'$(UseFullSDKPaths)' == 'true'">
     <MSBuild Projects="$(SolutionDir)MTGOSDK\MTGOSDK.csproj"
              Targets="Build"
-             Properties="TargetFramework=$(MTGOSDKCoreTFM)"
-             Condition="!Exists('$(MTGOSDKCorePath)\MTGOSDK.dll')" />
-  </Target>
-
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <ItemGroup>
-      <ReferenceAssemblies Include="$(SolutionDir)dist\*\Reference\MTGO\*\*.dll" />
-      <Assemblies Include="$(TargetDir)*.dll"
-                  Exclude="@(ReferenceAssemblies-> '$(TargetDir)%(Filename)%(Extension)')" />
-      <Flags Include="/ndebug" />
-      <Flags Include="/allowDup" />
-      <Flags Include="/lib=$(TargetDir)" />
-      <Flags Include="/out=$(TargetDir)Microsoft.Diagnostics.Runtime.dll" />
-    </ItemGroup>
-    <PropertyGroup>
-      <ILMergeAssemblies>@(Assemblies-> '%(Filename)%(Extension)', ' ')</ILMergeAssemblies>
-      <ILMergeFlags>@(Flags-> '%(Identity)', ' ')</ILMergeFlags>
-      <ILMergeCommand>$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)</ILMergeCommand>
-    </PropertyGroup>
-
-    <Exec Command="$(ILMergeConsolePath) $(ILMergeAssemblies) $(ILMergeFlags)" />
-    <Copy SourceFiles="$(TargetDir)\Microsoft.Diagnostics.Runtime.dll"
-          DestinationFolder="$(SolutionDir)dist\$(ConfigurationName)" />
+             Properties="TargetFramework=$(_MTGOSDKCoreTFM)"
+             Condition="!Exists('$(_MTGOSDKCorePath)\MTGOSDK.dll')" />
   </Target>
 
 </Project>

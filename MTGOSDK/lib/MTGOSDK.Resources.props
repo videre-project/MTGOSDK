@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- Build resource projects to bundle inside the main library -->
+  <ItemGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
+    <ResourceProjects Include="$(SolutionDir)\third_party\ScubaDiver\ScubaDiver.csproj" />
+    <ResourceProjects Include="$(SolutionDir)\third_party\SharpNeedle\src\Bootstrapper\*.vcxproj" />
+    <ResourceProjects Include="$(SolutionDir)\third_party\SharpNeedle\src\Launcher\*.vcxproj" />
+  </ItemGroup>
+
+</Project>

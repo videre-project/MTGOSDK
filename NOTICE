@@ -1,6 +1,6 @@
 MTGOSDK
 
-Copyright (c) 2023, Cory Bennett. All rights reserved.
+Copyright (c) 2024, Cory Bennett. All rights reserved.
 
 Source code in this repository is variously licensed under the Apache License
 Version 2.0, or an Apache-compatible license. Please see
@@ -20,6 +20,9 @@ Certain files in this code base have been modified and/or copied,
 either partially or wholely, from source code from the RemoteNET
 library, which is licensed under the open-source MIT License with
 the following copyright information.
+
+The original RemoteNET library can be found at the following URL:
+https://github.com/theXappy/RemoteNET/tree/57dc377d8fc665c4da6b9b07a541e4d4c8440f58
 
 MIT License
 ========================================================================
