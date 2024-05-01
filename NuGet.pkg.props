@@ -15,11 +15,16 @@
     <None Include="$(SolutionDir)\NOTICE"          Pack="true" PackagePath="" />
   </ItemGroup>
 
+  <!-- Publishing: By default, include PDB files in the package lib/* folder -->
+  <PropertyGroup Condition="'$(CreateSymbolPackage)' != 'true'">
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>portable</DebugType>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+  </PropertyGroup>
+
   <!-- Publishing: Build a separate snupkg symbol package for NuGet. -->
   <PropertyGroup Condition="'$(CreateSymbolPackage)' == 'true'">
     <IncludeSymbols>True</IncludeSymbols>
-    <DebugSymbols>True</DebugSymbols>
-    <DebugType>portable</DebugType>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
