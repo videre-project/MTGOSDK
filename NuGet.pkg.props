@@ -6,13 +6,12 @@
     <Title>$(AssemblyName)</Title>
     <Authors>Cory Bennett</Authors>
     <Owners>Videre Project</Owners>
-    <Copyright>Copyright (c) 2024 $(Authors)</Copyright>
+    <Copyright>Copyright (c) $([System.DateTime]::UtcNow.ToString(yyyy)) $(Authors)</Copyright>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)\assets\icon.png" Pack="true" PackagePath="" />
-    <None Include="$(SolutionDir)\LICENSE"         Pack="true" PackagePath="" />
     <None Include="$(SolutionDir)\NOTICE"          Pack="true" PackagePath="" />
   </ItemGroup>
 
