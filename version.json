@@ -1,10 +1,10 @@
 {
   "version": "0.0.0-dev",
   "pathFilters": [
-    ":/MTGOSDK/src",
-    ":/MTGOSDK.MSBuild/src",
-    ":/MTGOSDK.Win32/src",
-    ":/third_party/ScubaDiver/src"
+    ":/MTGOSDK",
+    ":/MTGOSDK.MSBuild",
+    ":/MTGOSDK.Win32",
+    ":/third_party/ScubaDiver"
   ],
   "publicReleaseRefSpec": [
     "^refs/heads/main$",
