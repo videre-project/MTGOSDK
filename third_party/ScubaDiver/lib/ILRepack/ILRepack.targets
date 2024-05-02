@@ -26,6 +26,7 @@
       OutputFile="$(SolutionDir)dist\$(ConfigurationName)\$(TargetAssembly)"
       InputAssemblies="@(InputAssemblies)"
       NoRepackRes="true"
+      DebugInfo="false"
       Parallel="true" />
 
     <Message Text="MTGOSDK.MSBuild: Finished merging $(AssemblyName) assemblies."

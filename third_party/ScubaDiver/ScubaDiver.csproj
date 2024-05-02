@@ -35,9 +35,14 @@
                       SetTargetFramework="TargetFramework=$(_MTGOSDKCoreTFM)" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- .NET Framework references and redirects -->
-    <None Include="app.config" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
+  </ItemGroup>
+
+  <!-- Remove runtime bindings/redirects from the final output -->
+  <ItemGroup>
+    <None Remove="app.config" />
+    <Resource Include="app.config" CopyToOutputDirectory="Never" />
   </ItemGroup>
 
   <!-- Configures build-time project dependencies for the core SDK assembly -->
