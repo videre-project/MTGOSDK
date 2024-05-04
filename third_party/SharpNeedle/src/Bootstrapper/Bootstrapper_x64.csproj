@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Properties for MSVCFindCompilerPaths -->
+  <PropertyGroup>
+    <MSVCPlatform>x64</MSVCPlatform>
+  </PropertyGroup>
+
+  <Import Project="Bootstrapper.props" />
+
+</Project>

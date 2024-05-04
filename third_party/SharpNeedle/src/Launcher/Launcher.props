@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <MSVCOutputType>Exe</MSVCOutputType>
+    <IsPackable>false</IsPackable>
+    <EnableSourceLink>false</EnableSourceLink>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerArgs Include="/FS /GS /sdl" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSVCToolchain"
+                      PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>

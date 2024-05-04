@@ -70,19 +70,15 @@ public static class Bootstrapper
     if (!remoteNetAppDataDirInfo.Exists)
       remoteNetAppDataDirInfo.Create();
 
-    byte[] launcherResource = target.Is64Bit()
-      ? EmbeddedResources.GetBinaryResource(@"Resources\Launcher_x64.exe")
-      : EmbeddedResources.GetBinaryResource(@"Resources\Launcher.exe");
-    launcherPath = target.Is64Bit()
-      ? Path.Combine(AppDataDir, "Launcher_x64.exe")
-      : Path.Combine(AppDataDir, "Launcher.exe");
+    string bitness = target.Is64Bit() ? "x64" : "x86";
 
-    byte[] adapterResource = target.Is64Bit()
-      ? EmbeddedResources.GetBinaryResource(@"Resources\Bootstrapper_x64.dll")
-      : EmbeddedResources.GetBinaryResource(@"Resources\Bootstrapper.dll");
-    var adapterPath = target.Is64Bit()
-      ? Path.Combine(AppDataDir, "Bootstrapper_x64.dll")
-      : Path.Combine(AppDataDir, "Bootstrapper.dll");
+    byte[] launcherResource =
+      EmbeddedResources.GetBinaryResource(@$"Resources\Launcher_{bitness}.exe");
+    launcherPath = Path.Combine(AppDataDir, $"Launcher_{bitness}.exe");
+
+    byte[] bootstrapperResource =
+      EmbeddedResources.GetBinaryResource(@$"Resources\Bootstrapper_{bitness}.dll");
+    var bootstrapperPath = Path.Combine(AppDataDir, $"Bootstrapper_{bitness}.dll");
 
     // Get the .NET diver assembly to inject into the target process
     byte[] diverResource = EmbeddedResources.GetBinaryResource(@"Resources\Microsoft.Diagnostics.Runtime.dll");
@@ -90,7 +86,7 @@ public static class Bootstrapper
 
     // Check if injector or bootstrap resources differ from copies on disk
     OverrideFileIfChanged(launcherPath, launcherResource);
-    OverrideFileIfChanged(adapterPath, adapterResource);
+    OverrideFileIfChanged(bootstrapperPath, bootstrapperResource);
     OverrideFileIfChanged(diverPath, diverResource);
   }
 

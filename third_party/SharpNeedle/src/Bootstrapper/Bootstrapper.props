@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <MSVCOutputType>Dll</MSVCOutputType>
+    <IsPackable>false</IsPackable>
+    <EnableSourceLink>false</EnableSourceLink>
+  </PropertyGroup>
+
+  <!--
+    Reference the Microsoft .NET Framework (NETFX) SDK
+    This is needed for building against Windows SDK 10.0.15063.0 and later.
+  -->
+  <PropertyGroup>
+    <SDK40Version>4.8</SDK40Version>
+    <!-- Get the .NET Framework SDK Kits path from registry -->
+    <SDK40KitsPath>$([MSBuild]::GetRegistryValueFromView(
+      'HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\NETFXSDK\$(SDK40Version)',
+      'KitsInstallationFolder',
+      null,
+      RegistryView.Registry32
+    ))</SDK40KitsPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerArgs Include="/FS" />
+    <PreprocessorDefines Include="/D WIN32"
+                         Condition="'$(MSVCPlatform)' == 'x86'" />
+    <!-- Include metahost.h and mscoree.lib from the .NET Framework SDK -->
+    <IncludePaths Include="$(SDK40KitsPath)Include\um" />
+    <LibPaths Include="$(SDK40KitsPath)Lib\um\$(MSVCPlatform)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSVCToolchain"
+                      PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>

@@ -1,11 +1,5 @@
 <Project>
 
-  <!-- Disables (NuGet) SourceLink for C++ projects. -->
-  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
-    <EnableSourceLink>false</EnableSourceLink>
-    <ResolveNugetPackages>false</ResolveNugetPackages>
-  </PropertyGroup>
-
   <!--
     SourceLink: Package Properties.
     - https://devblogs.microsoft.com/dotnet/producing-packages-with-source-link/

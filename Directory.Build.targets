@@ -13,4 +13,12 @@
     <RemoveDir Directories="@(FoldersToClean)" />
   </Target>
 
+  <Target Name="CopyNativeOutputFiles"
+          AfterTargets="BuildMSVCProject"
+          BeforeTargets="CoreCompile"
+          Condition="'$(OutputPlatform)' != '' And '$(OutputFilePath)' != ''">
+    <Copy SourceFiles="$(OutputFilePath)"
+          DestinationFolder="$(SolutionDir)\dist\$(Configuration)\$(OutputPlatform)" />
+  </Target>
+
 </Project>

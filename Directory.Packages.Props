@@ -35,6 +35,9 @@
                     Version="8.0.0" />
     <PackageVersion Include="System.Runtime.CompilerServices.Unsafe"
                     Version="6.0.0" />
+    <!-- third_party/SharpNeedle -->
+    <PackageVersion Include="MSVCToolchain"
+                    Version="1.0.1" />
   </ItemGroup>
 
   <!-- .NET Standard 2.0 -->
