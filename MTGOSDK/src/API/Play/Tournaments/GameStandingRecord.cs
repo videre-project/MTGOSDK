@@ -32,7 +32,7 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// The game's current completion (i.e. "NotStarted", "Started", "Finished")
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
   /// </remarks>
   public GameState GameState =>
     Cast<GameState>(Unbind(@base).GameState);

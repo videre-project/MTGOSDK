@@ -39,7 +39,7 @@ public sealed class DeckRegion(dynamic deckregion)
   /// The enum flag value of the DeckRegion object.
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
   /// </remarks>
   public DeckRegionEnum EnumValue =>
     Cast<DeckRegionEnum>(Unbind(@base).EnumValue);

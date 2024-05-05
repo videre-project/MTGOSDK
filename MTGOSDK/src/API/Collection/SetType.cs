@@ -38,7 +38,7 @@ public sealed class SetType(dynamic cardSetType) : DLRWrapper<CardSetType>
   /// The enum flag value of the SetType object.
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
   /// </remarks>
   public CardSetTypeEnum EnumValue =>
     Cast<CardSetTypeEnum>(Unbind(@base).EnumValue);

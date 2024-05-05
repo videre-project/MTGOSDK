@@ -47,7 +47,7 @@ public sealed class Tournament(dynamic tournament) : Event<ITournament>
   /// The completion status of the tournament (i.e. "WaitingToStart", "RoundInProgress", etc.)
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
   /// </remarks>
   public TournamentStateEnum State =>
     Try(() => Cast<TournamentStateEnum>(Unbind(@base).State.EnumValue),

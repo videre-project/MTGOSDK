@@ -75,7 +75,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// The game phase of the current turn (e.g. Untap, Upkeep, Draw, etc.).
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
   /// </remarks>
   [Default(GamePhase.Invalid)]
   public GamePhase CurrentPhase =>

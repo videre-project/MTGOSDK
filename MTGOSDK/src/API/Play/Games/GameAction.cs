@@ -30,7 +30,7 @@ public sealed class GameAction(dynamic gameAction) : DLRWrapper<IGameAction>
   /// The type of game action (e.g. ChooseOption, OrderTargets, PayMana, etc.).
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
   /// </remarks>
   public ActionType Type =>
     Cast<ActionType>(Unbind(@base).ActionType);
@@ -44,7 +44,7 @@ public sealed class GameAction(dynamic gameAction) : DLRWrapper<IGameAction>
   /// The available modifiers for yielding priority (e.g. YieldThroughTurn, etc.).
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
   /// </remarks>
   public ActionModifiers AvailableModifiers =>
     Cast<ActionModifiers>(Unbind(@base).AvailableModifiers);
@@ -53,7 +53,7 @@ public sealed class GameAction(dynamic gameAction) : DLRWrapper<IGameAction>
   /// The selected priority modifiers applied to the game action.
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
   /// </remarks>
   public ActionModifiers SelectedModifiers =>
     Cast<ActionModifiers>(Unbind(@base).SelectedModifiers);

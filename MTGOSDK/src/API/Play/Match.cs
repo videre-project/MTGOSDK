@@ -39,7 +39,7 @@ public sealed class Match(dynamic match) : Event<IMatch>
   /// The status of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MtGO.Client.Model.Play.Enums</c> reference assembly.
   /// </remarks>
   internal MatchStatuses Status => Cast<MatchStatuses>(Unbind(@base).Status);
 

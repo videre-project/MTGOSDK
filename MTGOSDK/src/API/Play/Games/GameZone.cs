@@ -36,7 +36,7 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// The enum value of the zone.
   /// </summary>
   /// <remarks>
-  /// Requires the <c>MTGOSDK.Ref.dll</c> reference assembly.
+  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
   /// </remarks>
   public CardZone Zone => Cast<CardZone>(Unbind(@base).CardZone);
 
