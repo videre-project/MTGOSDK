@@ -45,7 +45,7 @@ public class UnifiedAppDomain
           .Cast<AppDomain>().ToArray();
         // Logger.Debug("[Diver][UnifiedAppDomain] All assemblies were retrieved from all AppDomains.");
       }
-      catch (Exception ex)
+      catch// (Exception ex)
       {
         // Logger.Debug("[Diver][UnifiedAppDomain] Failed to search heap for runtime assemblies. Error: " + ex.Message);
       }

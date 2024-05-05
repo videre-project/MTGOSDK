@@ -5,6 +5,8 @@
 
 using System.Collections.Concurrent;
 
+using MTGOSDK.Core.Remoting;
+
 
 namespace MTGOSDK.Core.Reflection;
 using static Attributes;
