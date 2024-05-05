@@ -40,10 +40,21 @@ public static class DotEnv
   /// </exception>
   public static void LoadFile([CallerFilePath] string filepath = null)
   {
+    // If the caller path begins with '/_/', it is a relative file path.
+    if (filepath.StartsWith("/_/"))
+      filepath = Path.Combine(Directory.GetCurrentDirectory(), filepath[3..]);
+
     // Recursively search for the .env file within each parent directory.
     while (!(File.Exists(filepath) && Path.GetFileName(filepath) == ".env"))
     {
-      filepath = Path.Combine(Path.GetDirectoryName(filepath), @"..\.env");
+      // If the filepath does not point to an .env file (caller path),
+      // search for the .env file in the current directory.
+      if (Path.GetFileName(filepath) != ".env")
+        filepath = Path.Combine(Path.GetDirectoryName(filepath), @".env");
+      // Otherwise, keep searching for the .env file in the parent directory.
+      else
+        filepath = Path.Combine(Path.GetDirectoryName(filepath), @"..\.env");
+
       if (Path.GetDirectoryName(filepath) == Path.GetPathRoot(filepath))
         throw new FileNotFoundException("Could not find .env file.");
     }
