@@ -7,12 +7,11 @@
 using System.Diagnostics;
 using System.IO;
 
+using MTGOSDK.Core.Remoting.Internal;
+using MTGOSDK.Core.Remoting.Internal.Reflection;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Utils;
-
-using MTGOSDK.Core.Remoting.Internal;
-using MTGOSDK.Core.Remoting.Internal.Reflection;
 
 using MTGOSDK.Resources;
 

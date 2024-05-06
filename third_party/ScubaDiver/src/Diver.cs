@@ -24,7 +24,6 @@ using Newtonsoft.Json;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Snapshot;
 using MTGOSDK.Core.Reflection.Emit;
-
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Extensions;
 using MTGOSDK.Core.Remoting.Interop.Interactions;

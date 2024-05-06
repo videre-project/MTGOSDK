@@ -13,12 +13,12 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.Diagnostics.Runtime;
 
-using MTGOSDK.Win32.API;
-
 using MTGOSDK.Core.Reflection.Emit;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Utils;
+
+using MTGOSDK.Win32.API;
 
 
 namespace MTGOSDK.Core.Reflection.Snapshot;
