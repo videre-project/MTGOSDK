@@ -87,7 +87,7 @@ public class FrozenObjectsCollection
     }
   }
 
-  public bool TryGetPinnedObject(ulong addr, out object o)
+  public bool TryGetPinnedObject(ulong addr, out object? o)
   {
     lock (_lock)
     {
@@ -118,12 +118,13 @@ public class FrozenObjectsCollection
         .Select(kvp => kvp.Key)
         .ToArray();
 
-      // Making sure that adress was even in the dictionary.
+      // Making sure that address was even in the dictionary.
       // Otherwise, we don't need to re-pin all objects.
       // Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Unpinning another object. New Num Pinned: {objs.Length}");
       if (objs.Length == _frozenObjects.Count)
         return false;
 
+      // Re-pin all objects
       PinInternal(objs);
 
       // Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Unpinned another object. Final Num Pinned: {_frozenObjects.Count}");

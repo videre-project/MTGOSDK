@@ -52,6 +52,18 @@ public class UnifiedAppDomain
     }
   }
 
+  public Assembly GetAssembly(string name)
+  {
+    return _domains.SelectMany(domain => domain.GetAssemblies())
+      .Where(asm => asm.GetName().Name == name)
+      .SingleOrDefault();
+  }
+
+  public Assembly[] GetAssemblies() =>
+    _domains
+      .SelectMany(domain => domain.GetAssemblies())
+      .ToArray();
+
   public Type ResolveType(string typeFullName, string assemblyName = null)
   {
     // TODO: Nullable gets a special case but in general we should switch to a

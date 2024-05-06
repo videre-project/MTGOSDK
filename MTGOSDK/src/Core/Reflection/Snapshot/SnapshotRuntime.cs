@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -28,7 +29,8 @@ namespace MTGOSDK.Core.Reflection.Snapshot;
 /// </summary>
 public class SnapshotRuntime : IDisposable
 {
-  private static readonly object _clrMdLock = new();
+  internal static readonly object _clrMdLock = new();          // static
+  public virtual object clrLock => SnapshotRuntime._clrMdLock; // non-static
   private DataTarget _dt;
   private ClrRuntime _runtime;
 
@@ -47,11 +49,108 @@ public class SnapshotRuntime : IDisposable
   /// </summary>
   private readonly FrozenObjectsCollection _freezer = new();
 
-  public SnapshotRuntime()
+  public SnapshotRuntime(bool useDomainSearch = false)
   {
-    // _unifiedAppDomain = new UnifiedAppDomain(this);
     this.CreateRuntime();
+    _unifiedAppDomain = new UnifiedAppDomain(useDomainSearch ? this : null);
   }
+
+  //
+  // UnifiedAppDomain wrapper methods
+  //
+
+  public Assembly ResolveAssembly(string assemblyName)
+  {
+    lock (_clrMdLock)
+    {
+      return _unifiedAppDomain.GetAssembly(assemblyName);
+    }
+  }
+
+  public Type ResolveType(string typeFullName, string assemblyName = null)
+  {
+    lock (_clrMdLock)
+    {
+      return _unifiedAppDomain.ResolveType(typeFullName, assemblyName);
+    }
+  }
+
+  public TypesDump ResolveTypes(string assemblyName)
+  {
+    lock (_clrMdLock)
+    {
+      return _unifiedAppDomain.ResolveTypes(assemblyName);
+    }
+  }
+
+  /// <summary>
+  /// Returns an object based on an encoded object for a remote object address.
+  /// </summary>
+  /// <param name="param">The object or remote address.</param>
+  /// <returns>The object instance.</returns>
+  public object ParseParameterObject(ObjectOrRemoteAddress param)
+  {
+    switch (param)
+    {
+      case { IsNull: true }:
+        return null;
+      case { IsType: true }:
+        return ResolveType(param.Type, param.Assembly);
+      case { IsRemoteAddress: false }:
+        return PrimitivesEncoder.Decode(param.EncodedObject, param.Type);
+      case { IsRemoteAddress: true }:
+        if (TryGetPinnedObject(param.RemoteAddress, out object pinnedObj))
+        {
+          return pinnedObj;
+        }
+        break;
+    }
+
+    throw new NotImplementedException(
+      $"Unable to parse the given address into an object of type `{param.Type}`");
+  }
+
+  //
+  // PinnedObjectCollection wrapper methods
+  //
+
+  public bool TryGetPinnedObject(ulong objAddress, out object instance) =>
+    _freezer.TryGetPinnedObject(objAddress, out instance);
+
+  public ulong PinObject(object instance)
+  {
+    // Check if the object was pinned, otherwise ignore.
+    if (!_freezer.TryGetPinningAddress(instance, out ulong objAddress))
+    {
+      // Pin and mark for unpinning later
+      objAddress = _freezer.Pin(instance);
+    }
+
+    return objAddress;
+  }
+
+  public bool UnpinObject(ulong objAddress)
+  {
+    // Ignore if the object is not found in the pinned object pool.
+    if (!_freezer.TryGetPinnedObject(objAddress, out _))
+      return false;
+
+    return _freezer.Unpin(objAddress);
+  }
+
+  //
+  // IL.Emit runtime converter methods
+  //
+
+  public object DereferenceObject(IntPtr pObj, IntPtr expectedMethodTable) =>
+    _converter.ConvertFromIntPtr(pObj, expectedMethodTable);
+
+  public object DereferenceObject(ulong pObj, ulong expectedMethodTable) =>
+    _converter.ConvertFromIntPtr(pObj, expectedMethodTable);
+
+  //
+  // ClrMD runtime and data target lifecycle methods
+  //
 
   /// <summary>
   /// Creates the ClrMD runtime and data target (snapshot process).
@@ -184,31 +283,30 @@ public class SnapshotRuntime : IDisposable
     }
   }
 
-  /// <summary>
-  /// Returns an object based on an encoded object for a remote object address.
-  /// </summary>
-  /// <param name="param">The object or remote address.</param>
-  /// <returns>The object instance.</returns>
-  public object ParseParameterObject(ObjectOrRemoteAddress param)
+  public void Dispose()
   {
-    switch (param)
-    {
-      case { IsNull: true }:
-        return null;
-      case { IsType: true }:
-        return _unifiedAppDomain.ResolveType(param.Type, param.Assembly);
-      case { IsRemoteAddress: false }:
-        return PrimitivesEncoder.Decode(param.EncodedObject, param.Type);
-      case { IsRemoteAddress: true }:
-        if (_freezer.TryGetPinnedObject(param.RemoteAddress, out object pinnedObj))
-        {
-          return pinnedObj;
-        }
-        break;
-    }
+    DisposeRuntime();
+    _freezer.UnpinAll();
+  }
 
-    throw new NotImplementedException(
-      $"Unable to parse the given address into an object of type `{param.Type}`");
+  //
+  // ClrMD object methods
+  //
+
+  public ClrObject GetClrObject(ulong objAddr)
+  {
+    lock (_clrMdLock)
+    {
+      return _runtime.Heap.GetObject(objAddr);
+    }
+  }
+
+  public ImmutableArray<ClrAppDomain> GetClrAppDomains()
+  {
+    lock (_clrMdLock)
+    {
+      return _runtime.AppDomains;
+    }
   }
 
   /// <summary>
@@ -240,7 +338,7 @@ public class SnapshotRuntime : IDisposable
     bool hashCodeFallback = hashcode.HasValue;
 
     // Check if we have this object in our pinned pool
-    if (_freezer.TryGetPinnedObject(objAddr, out object pinnedObj))
+    if (TryGetPinnedObject(objAddr, out object pinnedObj))
     {
       return (pinnedObj, objAddr);
     }
@@ -316,7 +414,7 @@ public class SnapshotRuntime : IDisposable
     object instance;
     try
     {
-      instance = _converter.ConvertFromIntPtr(finalObjAddress, methodTable);
+      instance = DereferenceObject(finalObjAddress, methodTable);
     }
     catch (ArgumentException)
     {
@@ -351,7 +449,7 @@ public class SnapshotRuntime : IDisposable
     ulong pinnedAddress = 0;
     if (pinningRequested)
     {
-      pinnedAddress = _freezer.Pin(instance);
+      pinnedAddress = PinObject(instance);
     }
 
     return (instance, pinnedAddress);
@@ -407,7 +505,7 @@ public class SnapshotRuntime : IDisposable
               object instance = null;
               try
               {
-                instance = _converter.ConvertFromIntPtr(clrObj.Address, mt);
+                instance = DereferenceObject(clrObj.Address, mt);
               }
               catch (Exception)
               {
@@ -459,10 +557,5 @@ public class SnapshotRuntime : IDisposable
       objects.Clear();
     }
     return (anyErrors, objects);
-  }
-
-  public void Dispose()
-  {
-    DisposeRuntime();
   }
 }

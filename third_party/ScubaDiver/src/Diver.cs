@@ -21,7 +21,9 @@ using System.Threading.Tasks;
 using Microsoft.Diagnostics.Runtime;
 using Newtonsoft.Json;
 
-using MTGOSDK.Win32.API;
+using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Reflection.Snapshot;
+using MTGOSDK.Core.Reflection.Emit;
 
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Extensions;
@@ -32,7 +34,7 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 using MTGOSDK.Core.Remoting.Interop.Utils;
 
-using ScubaDiver.Utils;
+using MTGOSDK.Win32.API;
 
 
 namespace ScubaDiver;
@@ -40,11 +42,7 @@ namespace ScubaDiver;
 public class Diver : IDisposable
 {
   // Runtime analysis and exploration fields
-  private readonly object _clrMdLock = new();
-  private DataTarget _dt = null;
-  private ClrRuntime _runtime = null;
-  // Address to Object converter
-  private readonly Converter<object> _converter = new();
+  private SnapshotRuntime _runtime;
 
   // Clients Tracking
   public object _registeredPidsLock = new();
@@ -56,11 +54,7 @@ public class Diver : IDisposable
   // Callbacks Endpoint of the Controller process
   private bool _monitorEndpoints = true;
   private int _nextAvailableCallbackToken;
-  private readonly UnifiedAppDomain _unifiedAppDomain;
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
-
-  // Object freezing (pinning)
-  private readonly FrozenObjectsCollection _freezer = new();
 
   private readonly ManualResetEvent _stayAlive = new(true);
 
@@ -90,13 +84,14 @@ public class Diver : IDisposable
       {"/get_item", MakeArrayItemResponse},
     };
     _remoteEventHandler = new ConcurrentDictionary<int, RegisteredEventHandlerInfo>();
-    _unifiedAppDomain = new UnifiedAppDomain(this);
   }
 
   public void Start(ushort listenPort)
   {
+    // Start the ClrMD runtime
+    _runtime = new SnapshotRuntime();
+
     // Start session
-    RefreshRuntime();
     HttpListener listener = new();
     string listeningUrl = $"http://127.0.0.1:{listenPort}/";
     listener.Prefixes.Add(listeningUrl);
@@ -116,10 +111,8 @@ public class Diver : IDisposable
     listener.Stop();
     listener.Close();
     Logger.Debug("[Diver] Closing ClrMD runtime and snapshot");
-    DisposeRuntime();
 
     Logger.Debug("[Diver] Unpinning objects");
-    _freezer.UnpinAll();
     Logger.Debug("[Diver] Unpinning finished");
 
     Logger.Debug("[Diver] Dispatcher returned, Start is complete.");
@@ -325,9 +318,9 @@ public class Diver : IDisposable
   private string MakeDomainsResponse(HttpListenerRequest req)
   {
     List<DomainsDump.AvailableDomain> available = new();
-    lock (_clrMdLock)
+    lock (_runtime.clrLock)
     {
-      foreach (ClrAppDomain clrAppDomain in _runtime.AppDomains)
+      foreach (ClrAppDomain clrAppDomain in _runtime.GetClrAppDomains())
       {
         var modules = clrAppDomain.Modules
           .Select(m => Path.GetFileNameWithoutExtension(m.Name))
@@ -354,7 +347,7 @@ public class Diver : IDisposable
   private string MakeTypesResponse(HttpListenerRequest req)
   {
     string assembly = req.QueryString.Get("assembly");
-    Assembly matchingAssembly = _unifiedAppDomain.GetAssembly(assembly);
+    Assembly matchingAssembly = _runtime.ResolveAssembly(assembly);
     if (matchingAssembly == null)
       return QuickError($"No assemblies found matching the query '{assembly}'");
 
@@ -382,11 +375,7 @@ public class Diver : IDisposable
     {
       //Logger.Debug($"[Diver] Trying to dump Type: {type}, WITH Assembly: {assembly}");
     }
-    Type resolvedType = null;
-    lock (_clrMdLock)
-    {
-      resolvedType = _unifiedAppDomain.ResolveType(type, assembly);
-    }
+    Type resolvedType = _runtime.ResolveType(type, assembly);
 
     if (resolvedType != null)
     {
@@ -428,7 +417,10 @@ public class Diver : IDisposable
                // Default filter - no filter. Just return everything.
     Predicate<string> matchesFilter = Filter.CreatePredicate(filter);
 
-    (bool anyErrors, List<HeapDump.HeapObject> objects) = GetHeapObjects(matchesFilter, dumpHashcodes);
+    (bool anyErrors, List<HeapDump.HeapObject> objects) = _runtime.GetHeapObjects(
+      matchesFilter,
+      dumpHashcodes
+    );
     if (anyErrors)
     {
       return "{\"error\":\"All dumping trials failed because at least 1 " +
@@ -477,7 +469,7 @@ public class Diver : IDisposable
     Logger.Debug($"[Diver][Debug](RegisterEventHandler) objAddrStr={objAddr:X16}");
 
     // Check if we have this objects in our pinned pool
-    if (!_freezer.TryGetPinnedObject(objAddr, out object target))
+    if (!_runtime.TryGetPinnedObject(objAddr, out object target))
     {
       // Object not pinned, try get it the hard way
       return QuickError("Object at given address wasn't pinned (context: RegisterEventHandler)");
@@ -570,13 +562,7 @@ public class Diver : IDisposable
       }
       else
       {
-        // Check if the object was pinned
-        if (!_freezer.TryGetPinningAddress(parameter, out ulong addr))
-        {
-          // Pin and mark for unpinning later
-          addr = _freezer.Pin(parameter);
-        }
-
+        ulong addr = _runtime.PinObject(parameter);
         remoteParams[i] = ObjectOrRemoteAddress.FromToken(addr, parameter.GetType().FullName);
       }
     }
@@ -629,7 +615,12 @@ public class Diver : IDisposable
     {
       try
       {
-        (object instance, ulong pinnedAddress) = GetObject(objAddr, pinningRequested, typeName, hashCodeFallback ? userHashcode : null);
+        (object instance, ulong pinnedAddress) = _runtime.GetHeapObject(
+          objAddr,
+          pinningRequested,
+          typeName,
+          hashCodeFallback ? userHashcode : null
+        );
         od = ObjectDumpFactory.Create(instance, objAddr, pinnedAddress);
         break;
       }
@@ -667,11 +658,7 @@ public class Diver : IDisposable
     }
 
 
-    Type t = null;
-    lock (_clrMdLock)
-    {
-      t = _unifiedAppDomain.ResolveType(request.TypeFullName);
-    }
+    Type t = _runtime.ResolveType(request.TypeFullName);
     if (t == null)
     {
       return QuickError("Failed to resolve type");
@@ -681,7 +668,7 @@ public class Diver : IDisposable
     if (request.Parameters.Any())
     {
       Logger.Debug($"[Diver] Ctor'ing with parameters. Count: {request.Parameters.Count}");
-      paramsList = request.Parameters.Select(ParseParameterObject).ToList();
+      paramsList = request.Parameters.Select(_runtime.ParseParameterObject).ToList();
     }
     else
     {
@@ -719,10 +706,9 @@ public class Diver : IDisposable
     else
     {
       // Pinning results
-      pinAddr = _freezer.Pin(createdObject);
+      pinAddr = _runtime.PinObject(createdObject);
       res = ObjectOrRemoteAddress.FromToken(pinAddr, createdObject.GetType().FullName);
     }
-
 
     InvocationResults invoRes = new()
     {
@@ -764,10 +750,7 @@ public class Diver : IDisposable
       // Null target - static call
       //
 
-      lock (_clrMdLock)
-      {
-        dumpedObjType = _unifiedAppDomain.ResolveType(request.TypeFullName);
-      }
+      dumpedObjType = _runtime.ResolveType(request.TypeFullName);
     }
     else
     {
@@ -776,7 +759,7 @@ public class Diver : IDisposable
       //
 
       // Check if we have this objects in our pinned pool
-      if (_freezer.TryGetPinnedObject(request.ObjAddress, out instance))
+      if (_runtime.TryGetPinnedObject(request.ObjAddress, out instance))
       {
         // Found pinned object!
         dumpedObjType = instance.GetType();
@@ -784,21 +767,18 @@ public class Diver : IDisposable
       else
       {
         // Object not pinned, try get it the hard way
-        ClrObject clrObj;
-        lock (_clrMdLock)
+        ClrObject clrObj = default;
+        lock (_runtime.clrLock)
         {
-          clrObj = _runtime.Heap.GetObject(request.ObjAddress);
-        }
-        if (clrObj.Type == null)
-        {
-          return QuickError("'address' points at an invalid address");
-        }
+          clrObj = _runtime.GetClrObject(request.ObjAddress);
+          if (clrObj.Type == null)
+          {
+            return QuickError("'address' points at an invalid address");
+          }
 
-        // Make sure it's still in place
-        RefreshRuntime();
-        lock (_clrMdLock)
-        {
-          clrObj = _runtime.Heap.GetObject(request.ObjAddress);
+          // Make sure it's still in place
+          _runtime.RefreshRuntime();
+          clrObj = _runtime.GetClrObject(request.ObjAddress);
         }
         if (clrObj.Type == null)
         {
@@ -807,10 +787,10 @@ public class Diver : IDisposable
         }
 
         ulong mt = clrObj.Type.MethodTable;
-        dumpedObjType = _unifiedAppDomain.ResolveType(clrObj.Type.Name);
+        dumpedObjType = _runtime.ResolveType(clrObj.Type.Name);
         try
         {
-          instance = _converter.ConvertFromIntPtr(clrObj.Address, mt);
+          instance = _runtime.DereferenceObject(clrObj.Address, mt);
         }
         catch (Exception)
         {
@@ -820,7 +800,6 @@ public class Diver : IDisposable
       }
     }
 
-
     //
     // We have our target and it's type. No look for a matching overload for the
     // function to invoke.
@@ -829,7 +808,7 @@ public class Diver : IDisposable
     if (request.Parameters.Any())
     {
       Logger.Debug($"[Diver] Invoking with parameters. Count: {request.Parameters.Count}");
-      paramsList = request.Parameters.Select(ParseParameterObject).ToList();
+      paramsList = request.Parameters.Select(_runtime.ParseParameterObject).ToList();
     }
     else
     {
@@ -842,7 +821,7 @@ public class Diver : IDisposable
     Type[] argumentTypes = paramsList.Select(p => p?.GetType() ?? new WildCardType()).ToArray();
 
     // Get types of generic arguments <T1,T2, ...>
-    Type[] genericArgumentTypes = request.GenericArgsTypeFullNames.Select(typeFullName => _unifiedAppDomain.ResolveType(typeFullName)).ToArray();
+    Type[] genericArgumentTypes = request.GenericArgsTypeFullNames.Select(typeFullName => _runtime.ResolveType(typeFullName)).ToArray();
 
     // Search the method with the matching signature
     var method = dumpedObjType.GetMethodRecursive(request.MethodName, genericArgumentTypes, argumentTypes);
@@ -899,7 +878,7 @@ public class Diver : IDisposable
         else
         {
           // Pinning results
-          ulong resultsAddress = _freezer.Pin(results);
+          ulong resultsAddress = _runtime.PinObject(results);
           Type resultsType = results.GetType();
           returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name);
         }
@@ -942,10 +921,7 @@ public class Diver : IDisposable
     if (request.ObjAddress == 0)
     {
       // Null Target -- Getting a Static field
-      lock (_clrMdLock)
-      {
-        dumpedObjType = _unifiedAppDomain.ResolveType(request.TypeFullName);
-      }
+      dumpedObjType = _runtime.ResolveType(request.TypeFullName);
       FieldInfo staticFieldInfo = dumpedObjType.GetField(request.FieldName);
       if (!staticFieldInfo.IsStatic)
       {
@@ -958,7 +934,7 @@ public class Diver : IDisposable
     {
       object instance;
       // Check if we have this objects in our pinned pool
-      if (_freezer.TryGetPinnedObject(request.ObjAddress, out instance))
+      if (_runtime.TryGetPinnedObject(request.ObjAddress, out instance))
       {
         // Found pinned object!
         dumpedObjType = instance.GetType();
@@ -1001,7 +977,7 @@ public class Diver : IDisposable
       else
       {
         // Pinning results
-        ulong resultsAddress = _freezer.Pin(results);
+        ulong resultsAddress = _runtime.PinObject(results);
         Type resultsType = results.GetType();
         returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name);
       }
@@ -1046,7 +1022,7 @@ public class Diver : IDisposable
     // In case of a static call the target instance stays null.
     object instance;
     // Check if we have this objects in our pinned pool
-    if (_freezer.TryGetPinnedObject(request.ObjAddress, out instance))
+    if (_runtime.TryGetPinnedObject(request.ObjAddress, out instance))
     {
       // Found pinned object!
       dumpedObjType = instance.GetType();
@@ -1055,17 +1031,17 @@ public class Diver : IDisposable
     {
       // Object not pinned, try get it the hard way
       ClrObject clrObj = default;
-      lock (_clrMdLock)
+      lock (_runtime.clrLock)
       {
-        clrObj = _runtime.Heap.GetObject(request.ObjAddress);
+        clrObj = _runtime.GetClrObject(request.ObjAddress);
         if (clrObj.Type == null)
         {
           return QuickError("'address' points at an invalid address");
         }
 
         // Make sure it's still in place
-        RefreshRuntime();
-        clrObj = _runtime.Heap.GetObject(request.ObjAddress);
+        _runtime.RefreshRuntime();
+        clrObj = _runtime.GetClrObject(request.ObjAddress);
       }
       if (clrObj.Type == null)
       {
@@ -1074,10 +1050,10 @@ public class Diver : IDisposable
       }
 
       ulong mt = clrObj.Type.MethodTable;
-      dumpedObjType = _unifiedAppDomain.ResolveType(clrObj.Type.Name);
+      dumpedObjType = _runtime.ResolveType(clrObj.Type.Name);
       try
       {
-        instance = _converter.ConvertFromIntPtr(clrObj.Address, mt);
+        instance = _runtime.DereferenceObject(clrObj.Address, mt);
       }
       catch (Exception)
       {
@@ -1099,7 +1075,7 @@ public class Diver : IDisposable
     object results = null;
     try
     {
-      object value = ParseParameterObject(request.Value);
+      object value = _runtime.ParseParameterObject(request.Value);
       fieldInfo.SetValue(instance, value);
       // Reading back value to return to caller. This is expected C# behaviour:
       // int x = this.field_y = 3; // Makes both x and field_y equal 3.
@@ -1122,7 +1098,7 @@ public class Diver : IDisposable
       else
       {
         // Pinning results
-        ulong resultsAddress = _freezer.Pin(results);
+        ulong resultsAddress = _runtime.PinObject(results);
         Type resultsType = results.GetType();
         returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name);
       }
@@ -1151,11 +1127,11 @@ public class Diver : IDisposable
       return QuickError("Failed to deserialize body");
 
     ulong objAddr = request.CollectionAddress;
-    object index = ParseParameterObject(request.Index);
+    object index = _runtime.ParseParameterObject(request.Index);
     bool pinningRequested = request.PinRequest;
 
     // Check if we have this objects in our pinned pool
-    if (!_freezer.TryGetPinnedObject(objAddr, out object pinnedObj))
+    if (!_runtime.TryGetPinnedObject(objAddr, out object pinnedObj))
     {
       // Object not pinned, try get it the hard way
       return QuickError("Object at given address wasn't pinned (context: ArrayItemAccess)");
@@ -1233,11 +1209,7 @@ public class Diver : IDisposable
     {
       // Non-primitive results must be pinned before returning their remote address
       // TODO: If a RemoteObject is not created for this object later and the item is not automaticlly unfreezed it might leak.
-      if (!_freezer.TryGetPinningAddress(item, out ulong addr))
-      {
-        // Item not pinned yet, let's do it.
-        addr = _freezer.Pin(item);
-      }
+      ulong addr = _runtime.PinObject(item);
 
       res = ObjectOrRemoteAddress.FromToken(addr, item.GetType().FullName);
     }
@@ -1263,8 +1235,7 @@ public class Diver : IDisposable
     Logger.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
 
     // Remove if we have this object in our pinned pool, otherwise ignore.
-    if (_freezer.TryGetPinnedObject(objAddr, out _))
-      _freezer.Unpin(objAddr);
+    _runtime.UnpinObject(objAddr);
 
     return "{\"status\":\"OK\"}";
   }
@@ -1290,6 +1261,6 @@ public class Diver : IDisposable
   // IDisposable
   public void Dispose()
   {
-    DisposeRuntime();
+    _runtime?.Dispose();
   }
 }
