@@ -169,4 +169,40 @@ public class TypeDump
   public List<TypeField> Fields { get; set; }
   public List<TypeEvent> Events { get; set; }
   public List<TypeProperty> Properties { get; set; }
+
+  public static TypeDump ParseType(Type typeObj)
+    {
+      if (typeObj == null) return null;
+
+      var ctors = typeObj.GetConstructors((BindingFlags)0xffff).Select(ci => new TypeDump.TypeMethod(ci))
+        .ToList();
+      var methods = typeObj.GetRuntimeMethods().Select(mi => new TypeDump.TypeMethod(mi))
+        .ToList();
+      var fields = typeObj.GetRuntimeFields().Select(fi => new TypeDump.TypeField(fi))
+        .ToList();
+      var events = typeObj.GetRuntimeEvents().Select(ei => new TypeDump.TypeEvent(ei))
+        .ToList();
+      var props = typeObj.GetRuntimeProperties().Select(pi => new TypeDump.TypeProperty(pi))
+        .ToList();
+
+      TypeDump td = new()
+      {
+        Type = typeObj.FullName,
+        Assembly = typeObj.Assembly.GetName().Name,
+        Methods = methods,
+        Constructors = ctors,
+        Fields = fields,
+        Events = events,
+        Properties = props,
+        IsArray = typeObj.IsArray,
+      };
+      if (typeObj.BaseType != null)
+      {
+        // Has parent. Add its identifier
+        td.ParentFullTypeName = typeObj.BaseType.FullName;
+        td.ParentAssembly = typeObj.BaseType.Assembly.GetName().Name;
+      }
+
+      return td;
+    }
 }

@@ -8,9 +8,9 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 
-using MTGOSDK.Win32.Extensions;
-
 using MTGOSDK.Core.Remoting.Interop;
+
+using MTGOSDK.Win32.Extensions;
 
 
 namespace MTGOSDK.Core.Remoting.Internal;

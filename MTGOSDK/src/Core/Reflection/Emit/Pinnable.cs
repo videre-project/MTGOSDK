@@ -7,7 +7,7 @@
 using System.Runtime.InteropServices;
 
 
-namespace ScubaDiver;
+namespace MTGOSDK.Core.Reflection.Emit;
 
 /// <summary>
 /// This class is used to make arbitrary objects "Pinnable" in the .NET

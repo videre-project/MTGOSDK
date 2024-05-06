@@ -9,6 +9,8 @@ using System.Reflection;
 
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Exceptions;
+using MTGOSDK.Resources;
+
 using MTGOSDK.Win32.API;
 using MTGOSDK.Win32.Utilities;
 

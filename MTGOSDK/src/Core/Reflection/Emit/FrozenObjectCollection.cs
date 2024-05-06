@@ -10,7 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace ScubaDiver;
+namespace MTGOSDK.Core.Reflection.Emit;
 
 public class FrozenObjectsCollection
 {
@@ -81,13 +81,13 @@ public class FrozenObjectsCollection
       object[] objs = _frozenObjects.Keys.Concat(new object[] { o }).ToArray();
       PinInternal(objs);
 
-      Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Pinned another object. Num Pinned: {_frozenObjects.Count}");
+      // Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Pinned another object. Num Pinned: {_frozenObjects.Count}");
 
       return _frozenObjects[o];
     }
   }
 
-  public bool TryGetPinnedObject(ulong addr, out object o)
+  public bool TryGetPinnedObject(ulong addr, out object? o)
   {
     lock (_lock)
     {
@@ -118,15 +118,16 @@ public class FrozenObjectsCollection
         .Select(kvp => kvp.Key)
         .ToArray();
 
-      // Making sure that adress was even in the dictionary.
+      // Making sure that address was even in the dictionary.
       // Otherwise, we don't need to re-pin all objects.
-      Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Unpinning another object. New Num Pinned: {objs.Length}");
+      // Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Unpinning another object. New Num Pinned: {objs.Length}");
       if (objs.Length == _frozenObjects.Count)
         return false;
 
+      // Re-pin all objects
       PinInternal(objs);
 
-      Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Unpinned another object. Final Num Pinned: {_frozenObjects.Count}");
+      // Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Unpinned another object. Final Num Pinned: {_frozenObjects.Count}");
       return true;
     }
   }
