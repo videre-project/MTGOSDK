@@ -14,6 +14,8 @@ using MTGOSDK.Core.Remoting.Interop.Utils;
 using MTGOSDK.Core.Remoting.Internal;
 using MTGOSDK.Core.Remoting.Internal.Reflection;
 
+using MTGOSDK.Resources;
+
 
 namespace MTGOSDK.Core.Remoting;
 

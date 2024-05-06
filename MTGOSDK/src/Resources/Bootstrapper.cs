@@ -1,7 +1,6 @@
 /** @file
-  Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0 and MIT
+  SPDX-License-Identifier: Apache-2.0
 **/
 
 using System.Diagnostics;
@@ -9,11 +8,8 @@ using System.IO;
 
 using MTGOSDK.Win32.Extensions;
 
-#if !MTGOSDKCORE
-using MTGOSDK.Resources;
-#endif
 
-namespace MTGOSDK.Core.Remoting;
+namespace MTGOSDK.Resources;
 
 public static class Bootstrapper
 {
@@ -44,7 +40,7 @@ public static class Bootstrapper
           RedirectStandardOutput = true
         });
 
-    if (injectorProc != null && injectorProc.WaitForExit(5000))
+    if (injectorProc.WaitForExit(500)) // Delay exit to prevent deadlock
     {
       // Injector finished early, there's probably an error.
       if (injectorProc.ExitCode != 0)
