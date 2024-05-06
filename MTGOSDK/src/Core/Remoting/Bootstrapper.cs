@@ -43,6 +43,7 @@ public static class Bootstrapper
           UseShellExecute = false,
           RedirectStandardOutput = true
         });
+
     if (injectorProc != null && injectorProc.WaitForExit(5000))
     {
       // Injector finished early, there's probably an error.
@@ -52,11 +53,13 @@ public static class Bootstrapper
         throw new Exception("Injector returned error: " + stderr);
       }
     }
-    else
-    {
-      // Stdout must be read to prevent deadlock when injector process exits.
-      _ = injectorProc.StandardOutput.ReadToEnd();
-    }
+    // #if !DEBUG // ScubaDiver provides its own console output in debug builds.
+    // else
+    // {
+    //   // Stdout must be read to prevent deadlock when injector process exits.
+    //   _ = injectorProc.StandardOutput.ReadToEnd();
+    // }
+    // #endif
 #endif
   }
 

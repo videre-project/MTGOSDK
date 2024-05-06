@@ -229,23 +229,23 @@ public class Diver : IDisposable
       {
         if (asyncOperation.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(100)))
         {
-          // Async operation started! We can mov on to next request
+          // Async operation started! We can move on to next request
           break;
         }
         else
         {
-          // Async event still awaiting new HTTP requests... It's a good time to check
-          // if we were signaled to die
+          // Async event still awaiting new HTTP requests.
+          // It's a good time to check if we were signaled to die
           if (!_stayAlive.WaitOne(TimeSpan.FromMilliseconds(100)))
           {
             // Time to die.
-            // Leaving the inner loop will get us to the outter loop where _stayAlive is checked (again)
+            // Leaving the inner loop will get us to the outer loop where _stayAlive is checked (again)
             // and then it that loop will stop as well.
             break;
           }
           else
           {
-            // No singal of die command. We can continue waiting
+            // No signal of die command. We can continue waiting
             continue;
           }
         }
@@ -715,8 +715,8 @@ public class Diver : IDisposable
       ReturnedObjectOrAddress = res,
       VoidReturnType = false
     };
-    return JsonConvert.SerializeObject(invoRes);
 
+    return JsonConvert.SerializeObject(invoRes);
   }
 
   private string MakeInvokeResponse(HttpListenerRequest arg)

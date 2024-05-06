@@ -39,7 +39,6 @@ public class DllEntry
       ushort port = ushort.Parse((string)pwzArgument);
       _instance.Start(port);
 
-      // Diver killed (politely)
       Logger.Debug("[DiverHost] Diver finished gracefully.");
     }
     catch (Exception e)
@@ -64,14 +63,17 @@ public class DllEntry
       return 1;
     }
 
-    // The Bootstrapper needs to call a C# function with exactly this signature,
-    // so we use it to just create a diver, and run the Start func (blocking)
+    // The bootstrapper is expecting to call a C# function with this signature,
+    // so we use it to start a new thread to host the diver in it's own thread.
     ParameterizedThreadStart func = DiverHost;
-    Logger.Debug($"[EntryPoint] Starting ScubaDiver with argument: {pwzArgument}");
     Thread diverHostThread = new(func);
     diverHostThread.Start(pwzArgument);
 
-    Logger.Debug("[EntryPoint] Returning");
+    // Block the thread until the diver has exited.
+    // This may cause a deadlock if the diver crashes in a non-recoverable way,
+    // so we handle that case in the <see cref="DiverHost"/> function.
+    diverHostThread.Join();
+
     return 0;
   }
 }
