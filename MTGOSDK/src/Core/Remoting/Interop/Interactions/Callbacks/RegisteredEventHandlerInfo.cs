@@ -9,7 +9,7 @@ using System.Net;
 using System.Reflection;
 
 
-namespace ScubaDiver;
+namespace MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 public class RegisteredEventHandlerInfo
 {
