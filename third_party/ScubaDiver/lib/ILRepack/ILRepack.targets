@@ -25,6 +25,7 @@
       LibraryPath="$(OutputPath)"
       OutputFile="$(SolutionDir)dist\$(ConfigurationName)\$(TargetAssembly)"
       InputAssemblies="@(InputAssemblies)"
+      Internalize="true"
       NoRepackRes="true"
       DebugInfo="false"
       Parallel="true" />
