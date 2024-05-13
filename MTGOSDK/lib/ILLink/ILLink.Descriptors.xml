@@ -1,0 +1,8 @@
+<linker>
+  <assembly fullname="FlsClient">
+    <type fullname="FlsClient.Interface.IFlsClientSessionUser">
+      <property name="Id" />
+      <property name="Name" />
+    </type>
+  </assembly>
+</linker>
