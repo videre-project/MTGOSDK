@@ -21,7 +21,6 @@
       LibraryPath="$(OutputPath)"
       OutputFile="$(OutputPath)$(AssemblyName).dll"
       InputAssemblies="@(InputAssemblies)"
-      InternalizeAssembly="@(ReferenceAssemblies -> '%(Filename)')"
       NoRepackRes="true"
       DebugInfo="false"
       Parallel="true" />
