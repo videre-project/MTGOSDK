@@ -91,12 +91,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   {
     get
     {
-      // TODO: We cannot bind an interface type as structs are not yet supported.
-      var UserInfo_t = Unbind(s_flsClientSession.LoggedInUser);
-
       // Only fetch and update the current user if the user Id has changed.
-      if (UserInfo_t.Id != m_currentUser?.Id)
-        m_currentUser = new User(UserInfo_t.Id, UserInfo_t.Name);
+      int userId = s_flsClientSession.LoggedInUser.Id;
+      if (userId != m_currentUser?.Id) {
+        string username = s_flsClientSession.LoggedInUser.Name;
+        m_currentUser = new User(userId, username);
+      }
 
       return m_currentUser;
     }
