@@ -44,6 +44,15 @@
   </ItemGroup>
 
   <!--
+    Trim reference assemblies bundled with the MTGO package when publishing.
+    This is necessary to ensure that the reference assemblies are properly
+    internalized in the final package, and can again be trimmed by ILLink
+    when the package is used by a self-contained application.
+  -->
+  <Import Project="lib\ILLink\ILLink.targets"
+          Condition="'$(PublishTrimmed)' == 'true' And '$(UseRef)' == 'true'" />
+
+  <!--
     When building the SDK locally, we must use the full project paths to
     explicitly reference the build/buildTransitive assets when referencing
     the MTGOSDK.MSBuild project instead of the NuGet package.

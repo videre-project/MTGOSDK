@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="ILLink.props" />
+
+  <Target Name="ComputeILLinkProps">
+    <PropertyGroup>
+      <ILLinkOutputDir>$(IntermediateOutputPath)illink\</ILLinkOutputDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_LinkInputAssemblies Include="@(IntermediateAssembly)" />
+      <_LinkInputAssemblies Include="%(ReferenceCopyLocalPaths.Identity)"
+                            Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == ''" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="TrimReferenceAssemblies"
+          AfterTargets="CoreCompile"
+          BeforeTargets="MergeReferenceAssemblies"
+          DependsOnTargets="ComputeILLinkProps">
+
+    <Delete Files="$(ILLinkOutputDir)**\*" />
+
+    <ILLink AssemblyPaths="@(_LinkInputAssemblies)"
+            ReferenceAssemblyPaths="@(ReferencePath)"
+            RootAssemblyNames="$(AssemblyName)"
+            OutputDirectory="$(ILLinkOutputDir)"
+            ExtraArgs="$(ILLinkArgs)"
+            ToolExe="$(_DotNetHostFileName)"
+            ToolPath="$(_DotNetHostDirectory)"
+            NoWarn="$(NoWarn)"
+            ContinueOnError="ErrorAndContinue" />
+
+    <Delete Files="$(OutputPath)*.pdb;
+                   $(OutputPath)*.dll" />
+    <Copy SourceFiles="$(MergeReferenceAssemblies)"
+          DestinationFolder="$(OutputPath)" />
+
+  </Target>
+
+  <Target Name="UpdateILLinkOutput"
+          AfterTargets="TrimReferenceAssemblies"
+          BeforeTargets="MergeReferenceAssemblies">
+    <ItemGroup>
+      <_LinkOutputAssemblies Include="$(ILLinkOutputDir)**\*" />
+      <_LinkOutputIntermediaryAssembly Include="@(IntermediateAssembly->'$(ILLinkOutputDir)%(Filename)%(Extension)')" />
+      <_LinkOutputAssemblies Remove="@(_LinkOutputIntermediaryAssembly)" />
+      <IntermediateAssembly Remove="@(IntermediateAssembly)" />
+      <IntermediateAssembly Include="@(_LinkOutputIntermediaryAssembly)" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" />
+      <ReferenceCopyLocalPaths Include="@(_LinkOutputAssemblies)" />
+    </ItemGroup>
+    <ItemGroup>
+      <FileWrites Include="@(_LinkOutputAssemblies);@(_LinkOutputIntermediaryAssembly)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

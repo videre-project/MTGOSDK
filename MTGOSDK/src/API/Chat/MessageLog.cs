@@ -39,7 +39,6 @@ public sealed class MessageLog(dynamic chatMessageLog)
   // IList<Message> wrapper properties
   //
 
-
   /// <summary>
   /// The number of messages in the channel's message history.
   /// </summary>

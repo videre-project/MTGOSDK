@@ -1,0 +1,120 @@
+<linker>
+  <assembly fullname="Core">
+    <namespace fullname="Shiny.Chat">
+      <type fullname="IChatSessionViewModel">
+        <property name="Name" />
+        <property name="Channel" />
+        <method name="Activate" />
+        <method name="Close" />
+        <method name="Send" />
+      </type>
+    </namespace>
+    <namespace fullname="Shiny.Core.Interfaces">
+      <type fullname="IDialogService">
+        <method name="ShowModal" />
+      </type>
+    </namespace>
+  </assembly>
+  <assembly fullname="WotC.MtGO.Client.Model.Reference">
+    <namespace fullname="WotC.MtGO.Client.Model">
+      <type fullname="ISession">
+        <method name="LogOff" />
+        <method name="LogOn" />
+      </type>
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Chat">
+      <type name="IChannel">
+        <property name="Id" />
+        <property name="Name" />
+        <property name="ParentId" />
+        <property name="IsJoined" />
+        <property name="IsJoinedForGame" />
+        <property name="MessageLog" />
+        <property name="Users" />
+        <property name="UserCount" />
+        <property name="SubChannels" />
+      </type>
+      <type name="IChatChannel">
+        <property name="Title" />
+        <property name="CanSendMessage" />
+        <property name="Messages" />
+      </type>
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Collection">
+      <type fullname="IPlayFormat">
+        <property name="Name" />
+        <property name="Code" />
+        <property name="MinimumDeckSize" />
+        <property name="MaximumDeckSize" />
+        <property name="MaximumCopiesOfACardPerDeck" />
+        <property name="MaximumSideboardSize" />
+        <property name="LegalSetsByCode" />
+        <property name="BasicLandsForDeckbuilding" />
+        <property name="GameStructureEnum" />
+        <method name="IsLegal" />
+        <method name="IsCardRestricted" />
+        <method name="IsCardBanned" />
+        <method name="CheckDeckLegality" />
+        <method name="SetDeckLegality" />
+      </type>
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play">
+      <type fullname="IPlayerEvent">
+        <property name="EventId" />
+        <property name="EventToken" />
+        <property name="IsCompleted" />
+        <property name="WasEventRemovedFromSystem" />
+        <property name="PlayFormat" />
+        <property name="MinutesPerPlayer" />
+        <property name="MinimumPlayers" />
+        <property name="MaximumPlayers" />
+        <property name="IsLocalUserJoined" />
+        <property name="IsLocalUserParticipant" />
+        <property name="IsLocalUserEliminated" />
+        <property name="Description" />
+        <property name="JoinedUsers" />
+        <property name="DeckUsedToJoin" />
+      </type>
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play.Events">
+      <type fullname="GameEventArgs">
+        <property name="Game" />
+      </type>
+      <type fullname="MatchStatusEventArgs">
+        <property name="Match" />
+        <property name="OldStatus" />
+        <property name="NewStatus" />
+      </type>
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play.Filters">
+      <type fullname="IFilterablePlayEvent">
+        <property name="PlayerEvent" />
+        <property name="EventId" />
+        <property name="EventToken" />
+        <property name="StartTime" />
+      </type>
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play.ReplayGameEvent">
+      <type fullname="IReplayGameEvent">
+        <property name="ReplayState" />
+        <property name="HostGshServerId" />
+      </type>
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play.Tournaments">
+      <type fullname="IGameStandingRecord">
+        <property name="Id" />
+        <property name="GameState" />
+        <property name="CompletedDuration" />
+        <property name="WinnerIds" />
+      </type>
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Settings">
+      <type fullname="IHistoricalMatch">
+        <property name="Opponents" />
+        <property name="GameWins" />
+        <property name="GameLosses" />
+        <property name="GameIds" />
+      </type>
+    </namespace>
+  </assembly>
+</linker>
