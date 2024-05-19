@@ -45,12 +45,13 @@ jobs:
 
       # Setup the .NET environment
       - name: Install .NET Core
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
+      - run: dotnet --version
       - name: Restore .NET tools
         run: dotnet tool restore
       # Setup MSBuild environment
       - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v1.3.1
+        uses: microsoft/setup-msbuild@v2
       - name: Restore Build Cache
         id: msbuild-cache
         uses: actions/cache@v3
