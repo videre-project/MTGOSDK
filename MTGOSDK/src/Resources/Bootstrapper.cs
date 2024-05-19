@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 
 using MTGOSDK.Win32.Extensions;
+using MTGOSDK.Win32.Injection;
 
 
 namespace MTGOSDK.Resources;
@@ -24,69 +25,20 @@ public static class Bootstrapper
   public static void Inject(Process target, ushort diverPort)
   {
 #if !MTGOSDKCORE
-    // Not injected yet, Injecting adapter now (which should load the Diver)
-    GetInjectionToolkit(target, out string launcherPath, out string diverPath);
-    string adapterExecutionArg = string.Join("*",
-        diverPath,
-        "ScubaDiver.DllEntry",
-        "EntryPoint",
-        diverPort.ToString());
-
-    var injectorProc = Process.Start(new ProcessStartInfo(launcherPath,
-      $"{target.Id} {adapterExecutionArg}")
-        {
-          WorkingDirectory = AppDataDir,
-          UseShellExecute = false,
-          RedirectStandardOutput = true
-        });
-
-    if (injectorProc.WaitForExit(500)) // Delay exit to prevent deadlock
-    {
-      // Injector finished early, there's probably an error.
-      if (injectorProc.ExitCode != 0)
-      {
-        var stderr = injectorProc.StandardError.ReadToEnd();
-        throw new Exception("Injector returned error: " + stderr);
-      }
-    }
-    // #if !DEBUG // ScubaDiver provides its own console output in debug builds.
-    // else
-    // {
-    //   // Stdout must be read to prevent deadlock when injector process exits.
-    //   _ = injectorProc.StandardOutput.ReadToEnd();
-    // }
-    // #endif
-#endif
-  }
-
-#if !MTGOSDKCORE
-  private static void GetInjectionToolkit(
-    Process target,
-    out string launcherPath,
-    out string diverPath)
-  {
-    DirectoryInfo remoteNetAppDataDirInfo = new DirectoryInfo(AppDataDir);
-    if (!remoteNetAppDataDirInfo.Exists)
-      remoteNetAppDataDirInfo.Create();
-
-    string bitness = target.Is64Bit() ? "x64" : "x86";
-
-    byte[] launcherResource =
-      EmbeddedResources.GetBinaryResource(@$"Resources\Launcher_{bitness}.exe");
-    launcherPath = Path.Combine(AppDataDir, $"Launcher_{bitness}.exe");
-
-    byte[] bootstrapperResource =
-      EmbeddedResources.GetBinaryResource(@$"Resources\Bootstrapper_{bitness}.dll");
-    var bootstrapperPath = Path.Combine(AppDataDir, $"Bootstrapper_{bitness}.dll");
+    // Create the extraction directory if it doesn't exist
+    DirectoryInfo AppDataDirInfo = new DirectoryInfo(AppDataDir);
+    if (!AppDataDirInfo.Exists) AppDataDirInfo.Create();
 
     // Get the .NET diver assembly to inject into the target process
     byte[] diverResource = EmbeddedResources.GetBinaryResource(@"Resources\Microsoft.Diagnostics.Runtime.dll");
-    diverPath = Path.Combine(AppDataDir, "Microsoft.Diagnostics.Runtime.dll");
+    string diverPath = Path.Combine(AppDataDir, "Microsoft.Diagnostics.Runtime.dll");
 
     // Check if injector or bootstrap resources differ from copies on disk
-    OverrideFileIfChanged(launcherPath, launcherResource);
-    OverrideFileIfChanged(bootstrapperPath, bootstrapperResource);
     OverrideFileIfChanged(diverPath, diverResource);
+
+    var injector = new InjectorBase();
+    injector.Inject(target, diverPath, "ScubaDiver.DllEntry", "EntryPoint");
+#endif
   }
 
   private static void OverrideFileIfChanged(string filePath, byte[] data)
@@ -117,5 +69,4 @@ public static class Bootstrapper
       File.WriteAllBytes(filePath, data);
     }
   }
-#endif
 }

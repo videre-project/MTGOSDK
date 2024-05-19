@@ -5,9 +5,8 @@
 **/
 
 using System;
-using System.Threading;
 using System.Diagnostics;
-using System.Linq;
+using System.Threading;
 
 using MTGOSDK.Win32.API;
 
@@ -16,27 +15,16 @@ namespace ScubaDiver;
 
 public class DllEntry
 {
-  private static bool UnloadBootstrapper()
-  {
-    foreach(ProcessModule module in Process.GetCurrentProcess().Modules)
-    {
-      if (new string[] {
-          "Bootstrapper.dll",
-          "Bootstrapper_x64.dll"
-        }.Any(s => module.ModuleName == s))
-      {
-        return Kernel32.FreeLibrary(module.BaseAddress);
-      }
-    }
-    return false;
-  }
-
   private static void DiverHost(object pwzArgument)
   {
     try
     {
+      // The port is the process ID by default, but can be overridden by
+      // the bootstrap with the first argument given to the entry point.
+      if (!ushort.TryParse((string)pwzArgument, out ushort port))
+        port = (ushort)Process.GetCurrentProcess().Id;
+
       Diver _instance = new();
-      ushort port = ushort.Parse((string)pwzArgument);
       _instance.Start(port);
 
       Logger.Debug("[DiverHost] Diver finished gracefully.");
@@ -55,13 +43,6 @@ public class DllEntry
     // If we need to log and a debugger isn't attached to the target process
     // then we need to allocate a console and redirect STDOUT to it.
     Logger.RedirectConsole();
-
-    // Unload the native bootstrapper DLL to free up the file handle.
-    if (!UnloadBootstrapper())
-    {
-      Logger.Debug("[EntryPoint] Failed to unload Bootstrapper.");
-      return 1;
-    }
 
     // The bootstrapper is expecting to call a C# function with this signature,
     // so we use it to start a new thread to host the diver in it's own thread.
