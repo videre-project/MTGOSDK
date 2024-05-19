@@ -21,6 +21,11 @@ either partially or wholely, from source code from the RemoteNET
 library, which is licensed under the open-source MIT License with
 the following copyright information.
 
+The below filepaths are derived from these original components of RemoteNET:
+RemoteNET:      MTGOSDK\src\Core\Remoting
+ScubaDiver.API: MTGOSDK\src\Core\Remoting\Interop
+ScubaDiver:     MTGOSDK\lib\ScubaDiver
+
 The original RemoteNET library can be found at the following URL:
 https://github.com/theXappy/RemoteNET/tree/57dc377d8fc665c4da6b9b07a541e4d4c8440f58
 

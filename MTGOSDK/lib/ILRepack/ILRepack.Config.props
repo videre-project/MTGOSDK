@@ -2,6 +2,8 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <PropertyGroup>
+    <ILRepackTarget Condition="'$(ILRepackTarget)' == ''">$(AssemblyName)</ILRepackTarget>
+    <ILRepackUnion Condition="'$(ILRepackUnion)' == ''">false</ILRepackUnion>
     <!-- <KeyFile>$(ProjectDir)$(TargetName).snk</KeyFile> -->
   </PropertyGroup>
 

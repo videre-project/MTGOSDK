@@ -16,10 +16,16 @@
     <PublishTrimmed>true</PublishTrimmed>
     <SelfContained>false</SelfContained>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <MergeNugetDependencies>false</MergeNugetDependencies>
   </PropertyGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <!-- Exclude vendored library files from default item includes -->
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);lib\**</DefaultItemExcludes>
+  </PropertyGroup>
 
   <!-- Internal: MTGOSDK.Core Project Properties -->
   <Import Project="lib\MTGOSDK.Core.props"

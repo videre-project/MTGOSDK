@@ -6,10 +6,15 @@
     <OutputType>Library</OutputType>
     <RootNamespace>ScubaDiver</RootNamespace>
     <IsPackable>false</IsPackable>
-    <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
+  </PropertyGroup>
+
+  <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
+  <PropertyGroup>
     <ILRepackTargetsFile>
-      $(MSBuildThisFileDirectory)lib\ILRepack\ILRepack.targets
+      $(MSBuildThisFileDirectory)..\ILRepack\ILRepack.targets
     </ILRepackTargetsFile>
+    <ILRepackTarget>Microsoft.Diagnostics.Runtime</ILRepackTarget>
+    <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).dll</ILRepackOutput>
   </PropertyGroup>
 
   <!-- Compiler Options -->

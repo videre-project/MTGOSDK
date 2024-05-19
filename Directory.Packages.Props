@@ -22,6 +22,14 @@
                     Version="8.0.4" />
     <PackageVersion Include="Newtonsoft.Json"
                     Version="13.0.3" />
+    <!-- MTGOSDK/lib/ILRepack -->
+    <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
+                    Version="2.0.32" />
+    <!-- MTGOSDK/lib/ScubaDiver -->
+    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces"
+                    Version="8.0.0" />
+    <PackageVersion Include="System.Runtime.CompilerServices.Unsafe"
+                    Version="6.0.0" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
                     Version="17.0.0" />
@@ -34,11 +42,6 @@
                     Version="5.0.0" />
     <PackageVersion Include="Iced"
                     Version="1.21.0" />
-    <!-- third_party/ScubaDiver -->
-    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces"
-                    Version="8.0.0" />
-    <PackageVersion Include="System.Runtime.CompilerServices.Unsafe"
-                    Version="6.0.0" />
   </ItemGroup>
 
   <!-- .NET Standard 2.0 -->
@@ -60,12 +63,8 @@
 
   <!-- Build-time dependencies for MTGOSDK.MSBuild -->
   <ItemGroup Condition="'$(ILRepackTargetsFile)' != ''">
-    <GlobalPackageReference Include="ILRepack"
-                            Version="2.0.31"
-                            PrivateAssets="all" />
-    <GlobalPackageReference Include="ILRepack.Lib.MSBuild.Task"
-                            Version="2.0.31"
-                            PrivateAssets="all" />
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task"
+                      PrivateAssets="all" />
   </ItemGroup>
 
   <!--

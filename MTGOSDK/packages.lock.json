@@ -344,17 +344,11 @@
           "Microsoft.SourceLink.GitLab": "1.1.1"
         }
       },
-      "ILRepack": {
-        "type": "Direct",
-        "requested": "[2.0.31, )",
-        "resolved": "2.0.31",
-        "contentHash": "bw/RpdI8lgTwoRf9M1xtgjYdyATFYZfXYlsNrEdldu17WUHTOJJqIXUif8nIytY088VWn5KYgdY2vEj7IzSX0A=="
-      },
       "ILRepack.Lib.MSBuild.Task": {
         "type": "Direct",
-        "requested": "[2.0.31, )",
-        "resolved": "2.0.31",
-        "contentHash": "qYkv/np3o/7lZZ+0mdC4yBDd3QqaP1lt9QCiAHGlBI1m6wrd9Ux7XS7iBQH9jLEi4esqYxBogX19iRblv1CfRA=="
+        "requested": "[2.0.32, )",
+        "resolved": "2.0.32",
+        "contentHash": "onGGuckD8EVky6UYiSiZf62HkPSHuX1AQuo0XMw6exlUI5hB3pcDG4OcBknMPAg94OkqwmZp4sZRjIdndVgYcA=="
       },
       "ImpromptuInterface": {
         "type": "Direct",

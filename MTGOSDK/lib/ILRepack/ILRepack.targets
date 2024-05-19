@@ -5,21 +5,26 @@
   <!-- Merge the main assembly with any copied reference assemblies -->
   <Target Name="MergeReferenceAssemblies"
           AfterTargets="AfterBuild">
-    <!-- Identify the main assembly and all reference assemblies -->
+    <!-- Identify the main assembly and all referenced assemblies -->
     <ItemGroup>
       <InputAssemblies Remove="@(InputAssemblies)" />
-      <InputAssemblies Include="$(OutputPath)$(AssemblyName).dll" />
-      <InputAssemblies Include="@(ReferenceAssemblies -> '$(OutputPath)%(Filename).dll')"
-                       Condition="Exists('$(OutputPath)%(Filename).dll')" />
+      <InputAssemblies Include="$(OutputPath)$(AssemblyName).dll"
+                       Condition="'$(MergeNugetDependencies)' == 'false'" />
+      <InputAssemblies Include="$(OutputPath)*.dll"
+                       Condition="'$(MergeNugetDependencies)' != 'false'" />
+      <InputAssemblies Include="@(ReferenceAssemblies->'$(OutputPath)%(Filename).dll')"
+                       Condition="Exists('$(OutputPath)%(Filename).dll') And
+                                  '$(ExcludeReferenceAssemblies)' != 'true'" />
     </ItemGroup>
-
-    <Message Text="Merging @(InputAssemblies->Count()) assemblies into $(AssemblyName).dll..."
-             Importance="high" />
+    <PropertyGroup Condition="'$(ILRepackOutput)' == ''">
+      <ILRepackOutput>$(OutputPath)$(ILRepackTarget).dll</ILRepackOutput>
+    </PropertyGroup>
 
     <!-- Merge all reference assemblies into the main assembly -->
     <ILRepack
+      Union="true"
       LibraryPath="$(OutputPath)"
-      OutputFile="$(OutputPath)$(AssemblyName).dll"
+      OutputFile="$(ILRepackOutput)"
       InputAssemblies="@(InputAssemblies)"
       NoRepackRes="true"
       DebugInfo="false"
@@ -27,9 +32,9 @@
 
     <!-- Delete all copied reference assemblies in the output directory -->
     <Delete Files="@(InputAssemblies)"
-            Condition="'%(Filename)' != '$(AssemblyName)'" />
+            Condition="'%(Filename)' != '$(ILRepackTarget)'" />
 
-    <Message Text="MTGOSDK.MSBuild: Finished merging MTGOSDK reference assemblies."
+    <Message Text="MTGOSDK.MSBuild: Finished merging $(AssemblyName) assemblies."
              Importance="high" />
   </Target>
 
