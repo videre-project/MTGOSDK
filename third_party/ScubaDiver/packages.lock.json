@@ -254,8 +254,15 @@
       "mtgosdk.win32": {
         "type": "Project",
         "dependencies": {
+          "Iced": "[1.21.0, )",
           "Microsoft.Win32.Registry": "[5.0.0, )"
         }
+      },
+      "Iced": {
+        "type": "CentralTransitive",
+        "requested": "[1.21.0, )",
+        "resolved": "1.21.0",
+        "contentHash": "dv5+81Q1TBQvVMSOOOmRcjJmvWcX3BZPZsIq31+RLc5cNft0IHAyNlkdb7ZarOWG913PyBoFDsDXoCIlKmLclg=="
       },
       "ImpromptuInterface": {
         "type": "CentralTransitive",

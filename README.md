@@ -38,8 +38,6 @@ This project requires the [.NET Framework 4.8 SDK](https://dotnet.microsoft.com/
 > [!NOTE]
 > Building against .NET Framework 4.8 also requires the [.NET Framework Developer Pack](https://aka.ms/msbuild/developerpacks) to be installed for building against reference assemblies. This is required for deterministic builds as the default lookup of .NET Framework SDKs through OS paths is disabled for msbuild.
 
-Building this project with [MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild?view=vs-2022) (e.g. when using the msbuild or dotnet CLI) requires [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) to be installed. These redistributables are also optionally included with Visual Studio 2015 Update 3 and newer.
-
 To build this project, run either of the below commands from the root of the repository:
 
 ```powershell
