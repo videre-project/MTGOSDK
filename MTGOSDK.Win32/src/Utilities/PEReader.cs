@@ -1,13 +1,18 @@
+/** @file
+  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 using System;
 using System.Collections.Generic;
 
 
-namespace MTGOSDK.Win32.Injection;
+namespace MTGOSDK.Win32.Utilities;
 
 /// <summary>
 /// Utility class for reading information from a PE file.
 /// </summary>
-public static class PEReaderUtilities
+public static class PEReader
 {
   /// <summary>
   /// Represents the IMAGE_EXPORT_DIRECTORY structure in a PE file.
@@ -69,7 +74,7 @@ public static class PEReaderUtilities
     var c = new CReader(hProc, hMod);
     var dic = new Dictionary<string, int>();
 
-    int hdr = c.ReadInt(0x3C); //PE signature offset from DOS header
+    int hdr = c.ReadInt(0x3C); // PE signature offset from DOS header
     int exportTableRva = c.ReadInt(hdr + (x86 ? 0x78 : 0x88));
     var exportTable = c.ReadStruct<ImageExportDirectory>(exportTableRva);
 

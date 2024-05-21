@@ -12,6 +12,7 @@ using Iced.Intel;
 
 using MTGOSDK.Win32.API;
 using MTGOSDK.Win32.Extensions;
+using MTGOSDK.Win32.Utilities;
 
 
 namespace MTGOSDK.Win32.Injection;
@@ -93,7 +94,7 @@ public class InjectorBase
       throw new Exception("Couldn't find mscoree.dll, possible arch mismatch?");
 
     // Retrieve the export address of the CorBindToRuntimeEx function.
-    int fnAddr = PEReaderUtilities.GetExportAddress(
+    int fnAddr = PEReader.GetExportAddress(
       hProc,
       module.modBaseAddr,
       "CorBindToRuntimeEx",

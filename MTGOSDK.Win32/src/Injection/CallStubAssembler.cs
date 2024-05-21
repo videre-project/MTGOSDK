@@ -22,7 +22,6 @@ internal static class CallStubAssembler
   private static readonly Guid IID_ICLRRuntimeHost =
     new Guid(0x90F1A06C, 0x7712, 0x4762, 0x86, 0xB5, 0x7A, 0x5E, 0xBA, 0x6B, 0xDB, 0x02);
 
-
   /// <summary>
   /// Adds a call stub to the assembler code.
   /// </summary>

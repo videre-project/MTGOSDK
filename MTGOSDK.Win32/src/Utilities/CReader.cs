@@ -12,10 +12,10 @@ using System.Text;
 using MTGOSDK.Win32.API;
 
 
-namespace MTGOSDK.Win32.Injection;
+namespace MTGOSDK.Win32.Utilities;
 
 /// <summary>
-/// Marshaller for reading native data types from a remote process.
+/// Marshaller for reading native data types from a given process.
 /// </summary>
 public class CReader(IntPtr hProc, IntPtr hMod)
 {
