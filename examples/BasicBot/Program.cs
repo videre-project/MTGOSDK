@@ -23,7 +23,7 @@ while (!await ServerStatus.IsOnline())
 // Initialize the client instance.
 Console.WriteLine($"Connecting to MTGO v{Client.CompatibleVersion}...");
 using var client = new Client(
-  !restart && RemoteClient.HasStarted
+  !restart && Client.HasStarted
     ? new ClientOptions()
     : new ClientOptions
       {

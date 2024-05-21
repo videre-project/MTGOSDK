@@ -108,6 +108,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   public static Guid SessionId => new(s_flsClientSession.SessionId);
 
   /// <summary>
+  /// Whether the client has started and is currently running.
+  /// </summary>
+  public static bool HasStarted => RemoteClient.HasStarted;
+
+  /// <summary>
   /// Whether the client is currently online and connected.
   /// </summary>
   public static bool IsConnected => s_flsClientSession.IsConnected;
