@@ -65,6 +65,7 @@ BenchmarkDotNet.Artifacts/
 StyleCopReport.xml
 
 # Files built by Visual Studio
+logs/
 *_i.c
 *_p.c
 *_h.h

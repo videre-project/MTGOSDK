@@ -16,3 +16,4 @@
 /clp:Summary;ForceNoAlign
 /p:Configuration=Release
 /p:Platform="Any CPU"
+/bl:logs/msbuild.binlog
