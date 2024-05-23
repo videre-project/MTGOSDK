@@ -149,16 +149,24 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     //
     // Check for ClickOnce installation or updates and wait for it to finish.
     //
-    // Note: This is a crude method of gauging the progress of the ClickOnce
-    //       deployment without adding significant delay to normal startup.
+    // This will wait up to 5 seconds for the ClickOnce process to start, then
+    // fallback and wait up to 5 seconds for ClickOnce to begin updating.
     //
-    if ((await WaitUntil(() => IsStarting, retries: 4    /* ~ 1 sec */ )) ||
-        (await WaitUntil(() => IsUpdating, retries: 8    /* ~ 2 sec */ )) &&
-       !(await WaitUntil(() => HasStarted, retries: 1200 /* ~ 5 min */ )))
+    // If the MTGO process hasn't started after the first check or 5 minutes
+    // after updating, the process is considered to have failed startup.
+    //
+    if ((await WaitUntil(() => IsStarting, delay:  250, retries: 20 )) ||
+        (await WaitUntil(() => IsUpdating, delay:  250, retries: 20 )) &&
+       !(await WaitUntil(() => HasStarted, delay: 5000, retries: 60 )))
     {
       throw new SetupFailedException("The MTGO installation has failed.");
     }
-    else if (!(await WaitUntil(() => HasStarted)) && (IsStarting || IsUpdating))
+
+    //
+    // Here we perform another check to verify that the process has stalled
+    // during installation or updating to better inform the user.
+    //
+    if (!(await WaitUntil(() => HasStarted)) && (IsStarting || IsUpdating))
     {
       throw new SetupFailedException(
           "The MTGO installation stalled and did not finish.");
@@ -221,9 +229,11 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   internal static void Dispose()
   {
     @client.Dispose();
+    IsDisposed = true;
     if (RemoteClient.DestroyOnExit)
       @process.Kill();
   }
+  internal static bool IsDisposed = false;
 
   ~RemoteClient() => Dispose();
 

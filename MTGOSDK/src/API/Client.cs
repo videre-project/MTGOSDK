@@ -238,13 +238,13 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </exception>
   public async Task<Guid> LogOn(string username, SecureString password)
   {
+    if (IsLoggedIn)
+      throw new InvalidOperationException("Cannot log on while logged in.");
+
     // Initializes the login manager if it has not already been initialized.
     dynamic LoginVM = Unbind(s_loginManager);
     if (!LoginVM.IsLoginEnabled)
       LoginVM.Initialize();
-
-    if (IsLoggedIn)
-      throw new InvalidOperationException("Cannot log on while logged in.");
 
     // Passes the user's credentials to the MTGO client for authentication.
     LoginVM.ScreenName = username;
@@ -257,6 +257,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (!(await WaitForClientReady()))
       throw new TimeoutException(
           "Failed to connect and initialize the client.");
+
+    // Explicitly update state for a non-interactive session.
+    LoginVM.IsLoggedIn = true;
+    LoginVM.IsLoginEnabled = false;
 
     return SessionId;
   }
@@ -272,14 +276,20 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </exception>
   public async Task LogOff()
   {
-    if (!IsLoggedIn)
-      throw new InvalidOperationException("Cannot log off while logged out.");
+    if (!(IsLoggedIn || IsConnected))
+      throw new InvalidOperationException("Cannot log off while disconnected.");
+
+    dynamic LoginVM = Unbind(s_loginManager);
+    if (LoginVM.IsLoginEnabled == true)
+      throw new InvalidOperationException("Cannot log off an interactive session.");
 
     // Invokes logoff command and disconnects the MTGO client.
     s_session.LogOff();
-    if (!(await WaitUntil(() => !IsConnected)))
+    Try(() => LoginVM.IsLoginEnabled = true);
+    if (!(await WaitUntil(() => !IsConnected || RemoteClient.IsDisposed ))) {
       throw new TimeoutException(
           "Failed to log off and disconnect the client.");
+    }
   }
 
   //

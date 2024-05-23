@@ -47,9 +47,11 @@ if (!Client.IsConnected)
 // Teardown the bot when the MTGO client disconnects.
 client.IsConnectedChanged += delegate(object? sender)
 {
-  Console.WriteLine("The MTGO client has been disconnected. Stopping...");
+  Console.WriteLine("The MTGO client has been disconnected.");
   client.Dispose();
-  Environment.Exit(-1);
 };
 
 Console.WriteLine("Finished loading.");
+
+await client.LogOff();
+Console.WriteLine("Stopped the bot.");
