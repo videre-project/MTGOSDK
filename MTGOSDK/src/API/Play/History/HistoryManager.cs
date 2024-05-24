@@ -165,7 +165,7 @@ public static class HistoryManager
       default:
         throw new NotImplementedException($"Unsupported type: {type}");
     }
-    Log.Trace("Creating new {Type} object for '{HistoricalObject}'", historicalObject.GetType(), historicalObject);
+    Log.Trace("Creating new {Type} object for item id #{HistoricalObject}", historicalObject.GetType(), historicalObject.Id);
 
     return historicalObject;
   }
