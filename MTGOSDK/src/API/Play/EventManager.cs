@@ -1,10 +1,9 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
 using MTGOSDK.Core.Reflection;
-using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -25,17 +24,8 @@ public static class EventManager
   /// <summary>
   /// Global manager for all player events, including game joins and replays.
   /// </summary>
-  private static readonly dynamic s_playService =
-    //
-    // We must call the internal GetInstance() method to retrieve PropertyInfo
-    // data from the remote type as the local proxy type or ObjectProvider will
-    // restrict access to internal or private members.
-    //
-    // This is a limitation of the current implementation of the Proxy<T> type
-    // since any MemberInfo data is cached by the runtime and will conflict
-    // with RemoteNET's internal type reflection methods.
-    //
-    RemoteClient.GetInstance("WotC.MtGO.Client.Model.Play.PlayService");
+  private static readonly IPlay s_playService =
+    ObjectProvider.Get<IPlay>();
 
   //
   // IPlayerEvent wrapper methods
@@ -44,8 +34,8 @@ public static class EventManager
   /// <summary>
   /// A dictionary of all events by their event ID.
   /// </summary>
-  private static dynamic eventsById =>
-    s_playService.m_matchesAndTournamentsAndQueuesById;
+  public static dynamic eventsById =>
+    Unbind(s_playService).m_matchesAndTournamentsAndQueuesById;
 
   /// <summary>
   /// A dictionary of all events by their event token.
@@ -75,7 +65,7 @@ public static class EventManager
   /// </exception>
   public static dynamic GetJoinableEvent(int id) =>
     FromPlayerEvent((
-      s_playService.GetFilterablePlayerEventById(id)
+      Unbind(s_playService).GetFilterablePlayerEventById(id)
         ?? throw new KeyNotFoundException($"Event #{id} could not be found.")
     ).PlayerEvent);
 

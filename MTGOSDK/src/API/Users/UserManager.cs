@@ -1,5 +1,5 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
@@ -7,7 +7,6 @@ using System.Collections.Concurrent;
 using System.Reflection;
 
 using MTGOSDK.Core.Reflection;
-using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Chat;
@@ -32,17 +31,8 @@ public static class UserManager
   /// <summary>
   /// This class manages the client's caching and updating of user information.
   /// </summary>
-  private static readonly dynamic s_userManager =
-    //
-    // We must call the internal GetInstance() method to retrieve PropertyInfo
-    // data from the remote type as the local proxy type or ObjectProvider will
-    // restrict access to internal or private members.
-    //
-    // This is a limitation of the current implementation of the Proxy<T> type
-    // since any MemberInfo data is cached by the runtime and will conflict
-    // with RemoteNET's internal type reflection methods.
-    //
-    RemoteClient.GetInstance("WotC.MtGO.Client.Model.Core.UserManager");
+  private static readonly IUserManager s_userManager =
+    ObjectProvider.Get<IUserManager>();
 
   /// <summary>
   /// Retrieves a user object from the client's UserManager.
@@ -59,7 +49,7 @@ public static class UserManager
     {
       Users[id] = user = new User(
         // This is a private method that is not exposed by the IUserManager type.
-        s_userManager.CreateNewUser(id, name)
+        Unbind(s_userManager).CreateNewUser(id, name)
           ?? throw new ArgumentException($"User '{name}' (#{id}) does not exist.")
       );
     }
