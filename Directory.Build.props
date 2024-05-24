@@ -24,8 +24,15 @@
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
 
+  <!-- Enable building on non-Windows platforms -->
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsNonDeterministic>true</IsNonDeterministic>
+  </PropertyGroup>
+
   <!-- Continuous Integration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' And
+                            '$(IsNonDeterministic)' != 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <!-- <EnablePackageValidation>true</EnablePackageValidation> -->
   </PropertyGroup>
