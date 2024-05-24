@@ -1,5 +1,5 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Resources;
@@ -36,7 +37,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// The directory path to extract runtime injector and diver assemblies to.
   /// </summary>
   public static string ExtractDir =
-    Path.Combine(/* %appdata%\..\Local\ */ "MTGOSDK", "MTGOInjector", "bin");
+    Path.Combine(/* %LocalAppData%\ */ "MTGOSDK", "bin");
 
   /// <summary>
   /// Whether to destroy the MTGO process when disposing of the Remote Client.
@@ -183,7 +184,10 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   public static bool MinimizeWindow()
   {
     var handle = MTGOProcess().MainWindowHandle;
-    return User32.ShowWindow(handle, ShowWindowFlags.SW_MINIMIZE);
+    bool hr = User32.ShowWindow(handle, ShowWindowFlags.SW_MINIMIZE);
+    Log.Debug("Minimized MTGO window");
+
+    return hr;
   }
 
   //
@@ -208,17 +212,19 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <returns>A RemoteNET client handle.</returns>
   private RemoteHandle GetClientHandle()
   {
-    // Connect to the target process
-    var port = RemoteClient.Port ??= (ushort)_clientProcess.Id;
-    var client = RemoteHandle.Connect(_clientProcess, port);
+    // Connect to the MTGO process
+    ushort port = RemoteClient.Port ??= (ushort)_clientProcess.Id;
+    Log.Debug("Connecting to MTGO process on port {Port}", port);
+    RemoteHandle client = RemoteHandle.Connect(_clientProcess, port);
 
-    // Teardown on exception.
+    // Teardown on fatal exception.
     AppDomain.CurrentDomain.UnhandledException += (s, e) => Dispose();
 
     // Verify that the injected assembly is loaded and reponding
     if (client.Communicator.CheckAliveness() is false)
-      throw new TimeoutException(
-          "RemoteNET Diver is not responding to requests.");
+      throw new TimeoutException("Diver is not responding to requests.");
+    else
+      Log.Debug("Established a connection to the MTGO process.");
 
     return client;
   }
@@ -230,6 +236,8 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   {
     @client.Dispose();
     IsDisposed = true;
+    Log.Debug("RemoteClient disposed.");
+
     if (RemoteClient.DestroyOnExit)
       @process.Kill();
   }

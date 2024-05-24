@@ -1,14 +1,16 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
 using System.Security;
+using Microsoft.Extensions.Logging;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Users;
 using MTGOSDK.API.Interface;
 using MTGOSDK.Core.Exceptions;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
@@ -144,17 +146,22 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <exception cref="VerificationException">
   /// Thrown when the current user session is invalid.
   /// </exception>
-  public Client(ClientOptions options = default) : base(
+  public Client(
+    ClientOptions options = default,
+    ILoggerFactory? loggerFactory = null
+  ) : base(
     //
     // This factory delegate will setup the RemoteClient instance before it
     // can be started and connect to the MTGO client in the main constructor.
     //
     factory: async delegate
     {
+      // Configures the client's logging options.
+      if (loggerFactory != null) Log.SetFactoryInstance(loggerFactory);
+
       // Starts a new MTGO client process.
       if (options.CreateProcess && !(await RemoteClient.StartProcess()))
-        throw new SetupFailedException(
-            "Failed to start the MTGO client process.");
+        throw new SetupFailedException("Failed to start the MTGO process.");
 
       // Sets the client's disposal policy.
       if(options.DestroyOnExit)
@@ -173,6 +180,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // remote objects.
     //
     Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
+    Log.Information("Initialized the MTGO client API.");
 
     // Minimize the MTGO window after startup.
     if (options.StartMinimized)
@@ -199,7 +207,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// Disposes of the remote client handle.
   /// </summary>
-  public void Dispose() => RemoteClient.Dispose();
+  public void Dispose()
+  {
+    ClearCaches();
+    RemoteClient.Dispose();
+  }
 
   //
   // ISession wrapper methods

@@ -1,8 +1,10 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Diagnostics;
+using System.Reflection;
 using System.Collections.Concurrent;
 
 using MTGOSDK.Core.Remoting;
@@ -369,14 +371,22 @@ public class DLRWrapper<I>() where I : class
   //
 
   /// <summary>
+  /// Gets the parent type of the caller.
+  /// </summary>
+  /// <param name="depth">The stack frame depth.</param>
+  /// <returns>The type of the caller.</returns>
+  public static Type GetCallerType(int depth = 4) =>
+    new StackFrame(depth).GetMethod().ReflectedType;
+
+  /// <summary>
   /// Gets the stack frame depth of the (outer) DLRWrapper caller.
   /// </summary>
   /// <param name="depth">The starting stack frame depth.</param>
   /// <returns>The caller's stack frame depth.</returns>
-  private int GetCallerDepth(int depth = 3)
+  private static int GetCallerDepth(int depth = 3)
   {
     Type wrapperType = GetCallerType(depth);
-    while(GetCallerType(depth).Name == wrapperType.Name) depth++;
+    while(GetCallerType(depth).Name == wrapperType.Name && depth < 50) depth++;
 
     return depth;
   }
@@ -386,7 +396,7 @@ public class DLRWrapper<I>() where I : class
   /// </summary>
   /// <param name="attribute">The default attribute (if present).</param>
   /// <returns>True if the default attribute was found.</returns>
-  private bool TryGetDefaultAttribute(out DefaultAttribute? attribute)
+  private static bool TryGetDefaultAttribute(out DefaultAttribute? attribute)
   {
     attribute = GetCallerAttribute<DefaultAttribute>(depth: GetCallerDepth());
     return attribute != null;
