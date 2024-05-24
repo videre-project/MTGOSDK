@@ -36,7 +36,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// Manages the client's connection and user session information.
   /// </summary>
-  internal static readonly ISession s_session =
+  private static readonly ISession s_session =
     Defer(ObjectProvider.Get<ISession>);
 
   /// <summary>
@@ -132,6 +132,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// Creates a new instance of the MTGO client API.
   /// </summary>
   /// <param name="options">The client's configuration options.</param>
+  /// <param name="loggerFactory">The logger factory to use for logging.</param>
   /// <remarks>
   /// This class is used to manage the client's connection and user session,
   /// and should be instantiated once per application instance and prior to

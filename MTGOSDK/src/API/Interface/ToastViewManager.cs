@@ -1,5 +1,5 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
@@ -8,6 +8,7 @@ using MTGOSDK.Core.Reflection;
 
 using Shiny.Core;
 using Shiny.Core.Interfaces;
+using WotC.MtGO.Client.Model;
 
 
 namespace MTGOSDK.API.Interface;
@@ -56,5 +57,5 @@ public static class ToastViewManager
   //
 
   public static EventProxy<ToastEventArgs> ToastRequested =
-    new(/* ISession */ Client.s_session, nameof(ToastRequested));
+    new(/* ISession */ ObjectProvider.Get<ISession>(), nameof(ToastRequested));
 }
