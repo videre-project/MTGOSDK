@@ -1,7 +1,9 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
+
+using MTGOSDK.Core.Logging;
 
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model.Play;
@@ -48,6 +50,7 @@ public static class ReplayManager
   public static async Task<bool> RequestReplay(int gameId)
   {
     // Request for the replay to be started.
+    Log.Debug("Requesting replay for game {Id}.", gameId);
     if (!s_gameReplayService.RequestReplay(gameId))
       return false;
 

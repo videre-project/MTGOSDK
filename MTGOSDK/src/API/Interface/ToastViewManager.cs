@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.API.Interface.ViewModels;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 
 using Shiny.Core;
@@ -43,6 +44,7 @@ public static class ToastViewManager
   /// <param name="uri">The URI to open when the toast notification is clicked (optional).</param>
   public static void ShowToast(string title, string text, Uri? uri=null)
   {
+    Log.Information("Showing toast notification: {Title} - {Text}", title, text);
     var relatedView = MainRelatedView;
     // if (uri is not null)
     //   RemoteClient.CreateInstance(/* IRelayCommand */, () =>

@@ -1,5 +1,5 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
@@ -7,6 +7,7 @@ using System.IO;
 using System.Text;
 using System.Security.Cryptography;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Win32.FileSystem;
 
@@ -56,6 +57,7 @@ public static class HistoryManager
     // Default to the current user if no username is provided.
     if (string.IsNullOrEmpty(username))
       username = Client.CurrentUser.Name;
+    Log.Information("Reading game history for {Username}.", username);
 
     var serializer = ObjectProvider.Get<IIsoSerializer>(bindTypes: false);
     dynamic serializationBinder = RemoteClient.CreateInstance(
@@ -66,6 +68,7 @@ public static class HistoryManager
       username,
       serializationBinder
     );
+    Log.Debug("Read {Count} items from game history.", gameHistory.Count);
 
     return Map<dynamic>(
       gameHistory,
@@ -85,6 +88,7 @@ public static class HistoryManager
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
       @"Apps\2.0\Data\**\mtgo..tion_*\**\AppFiles"
     ));
+    Log.Trace("Found MTGO data directory: {CurrentDataDir}", currentDataDir);
 
     //
     // Use a reserved username to mark a temporary user directory.
@@ -110,6 +114,7 @@ public static class HistoryManager
     Directory.Delete(temporaryDataDir, recursive: true);
 
     // Merge the new game history with the current game history collection.
+    Log.Information("Merging game history with current collection.");
     var itemIds = new HashSet<int>(Items.Select(item => (int)item.Id));
     foreach (var item in gameHistory)
     {
@@ -144,17 +149,24 @@ public static class HistoryManager
   /// </exception>
   private static dynamic CastHistoricalItem(dynamic item)
   {
+    dynamic historicalObject;
     var type = item.GetType().Name;
     switch (type)
     {
       case "HistoricalItem":
-        return new HistoricalItem<IHistoricalItem, dynamic>.Default(item);
+        historicalObject = new HistoricalItem<IHistoricalItem, dynamic>.Default(item);
+        break;
       case "HistoricalMatch":
-        return new HistoricalMatch(item);
+        historicalObject = new HistoricalMatch(item);
+        break;
       case "HistoricalTournament":
-        return new HistoricalTournament(item);
+        historicalObject = new HistoricalTournament(item);
+        break;
       default:
         throw new NotImplementedException($"Unsupported type: {type}");
     }
+    Log.Trace("Creating new {Type} object for '{HistoricalObject}'", historicalObject.GetType(), historicalObject);
+
+    return historicalObject;
   }
 }

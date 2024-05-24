@@ -1,8 +1,9 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Reflection;
 
@@ -28,6 +29,7 @@ public static class ObjectProvider
   public static dynamic Get(string queryPath)
   {
     // Get the RemoteType from the type's query path
+    Log.Trace("Retrieving instance type {Type}", queryPath);
     Type genericType = RemoteClient.GetInstanceType(queryPath);
 
     // Invoke the Get<T>() method on the client's ObjectProvider class

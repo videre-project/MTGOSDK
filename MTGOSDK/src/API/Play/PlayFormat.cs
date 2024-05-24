@@ -112,12 +112,12 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   public bool IsDeckLegal(Deck deck) =>
     @base.CheckDeckLegality(/* IDeck */ deck.@base, /* ignoreErrors */ false);
 
-  /// <summary>
-  /// Sets the format legality of a deck to match this format.
-  /// </summary>
-  /// <param name="deck">The deck object to set legality on.</param>
-  public void SetDeckLegality(Deck deck) =>
-    @base.SetDeckLegality(/* IDeck */ deck.@base);
+  // /// <summary>
+  // /// Sets the format legality of a deck to match this format.
+  // /// </summary>
+  // /// <param name="deck">The deck object to set legality on.</param>
+  // public void SetDeckLegality(Deck deck) =>
+  //   @base.SetDeckLegality(/* IDeck */ deck.@base);
 
   public override string ToString() => this.Name;
 }

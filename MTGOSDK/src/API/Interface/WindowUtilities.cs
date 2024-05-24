@@ -1,10 +1,13 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
 using System.Windows;
 
+using MTGOSDK.API;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
@@ -68,6 +71,10 @@ public static class WindowUtilities
   /// </remarks>
   public static void CloseDialogs()
   {
+    if (Client.IsInteractive == true)
+      throw new InvalidOperationException("Cannot close dialogs in an interactive session.");
+
+    Log.Information("Closing all dialog windows.");
     foreach(var window in GetWindows())
     {
       //

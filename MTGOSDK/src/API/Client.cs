@@ -124,6 +124,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </summary>
   public static bool IsLoggedIn => s_loginManager.IsLoggedIn;
 
+  /// <summary>
+  /// Whether the client is currently in an interactive session with a user.
+  /// </summary>
+  public static bool IsInteractive =>
+    Unbind(s_loginManager).IsLoginEnabled == (IsLoggedIn || IsConnected);
+
   //
   // Constructors and destructors
   //
@@ -159,6 +165,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     {
       // Configures the client's logging options.
       if (loggerFactory != null) Log.SetFactoryInstance(loggerFactory);
+      Log.Trace("Running the MTGO client API factory.");
 
       // Starts a new MTGO client process.
       if (options.CreateProcess && !(await RemoteClient.StartProcess()))
@@ -180,6 +187,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // static fields in this class that depend on the initialization of any
     // remote objects.
     //
+    Log.Trace("Constructing deferred static fields for {Type}.", typeof(Client));
     Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
     Log.Information("Initialized the MTGO client API.");
 
@@ -201,6 +209,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </summary>
   public void ClearCaches()
   {
+    Log.Debug("Disposing all pinned remote objects registered with the client.");
     UserManager.Users.Clear();
     CollectionManager.Cards.Clear();
   }
@@ -292,13 +301,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (!(IsLoggedIn || IsConnected))
       throw new InvalidOperationException("Cannot log off while disconnected.");
 
-    dynamic LoginVM = Unbind(s_loginManager);
-    if (LoginVM.IsLoginEnabled == true)
+    if (IsInteractive == true)
       throw new InvalidOperationException("Cannot log off an interactive session.");
 
     // Invokes logoff command and disconnects the MTGO client.
     s_session.LogOff();
-    Try(() => LoginVM.IsLoginEnabled = true);
+    Try(() => Unbind(s_loginManager).IsLoginEnabled = true);
     if (!(await WaitUntil(() => !IsConnected || RemoteClient.IsDisposed ))) {
       throw new TimeoutException(
           "Failed to log off and disconnect the client.");

@@ -1,5 +1,5 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
@@ -7,6 +7,7 @@ using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.API.Users;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
@@ -131,19 +132,28 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
 
   public static dynamic FromPlayerEvent(dynamic playerEvent)
   {
+    dynamic eventObject;
     switch (playerEvent.GetType().Name)
     {
       case "FilterableLeague" or "League":
-        return new League(playerEvent);
+        eventObject = new League(playerEvent);
+        break;
       case "FilterableMatch" or "Match":
-        return new Match(playerEvent);
+        eventObject = new Match(playerEvent);
+        break;
       case "FilterableTournament" or "Tournament":
-        return new Tournament(playerEvent);
+        eventObject = new Tournament(playerEvent);
+        break;
       case "FilterableQueue" or "Queue":
-        return new Queue(playerEvent);
+        eventObject = new Queue(playerEvent);
+        break;
       default:
-        return new Event<IPlayerEvent>.Default(playerEvent);
+        eventObject = new Event<IPlayerEvent>.Default(playerEvent);
+        break;
     }
+    Log.Trace("Creating new {Type} object for '{EventObject}'", eventObject.GetType(), eventObject);
+
+    return eventObject;
   }
 
   public override string ToString() => $"{Description} #{Id}";

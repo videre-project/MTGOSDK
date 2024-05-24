@@ -1,9 +1,10 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
 using MTGOSDK.API.Interface.ViewModels;
+using MTGOSDK.Core.Logging;
 
 using Shiny.Core.Interfaces;
 
@@ -39,6 +40,7 @@ public static class DialogService
     string? okButton="Ok",
     string? cancelButton="Cancel")
   {
+    Log.Information("Showing dialog window: {Title} - {Text}", title, text);
     using var viewModel = new GenericDialogViewModel(
       title,
       text,

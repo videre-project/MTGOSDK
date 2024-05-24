@@ -1,8 +1,9 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API;
 using MTGOSDK.API.Chat;
 using MTGOSDK.Core.Reflection;
 
@@ -41,19 +42,28 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   /// <summary>
   /// Activates the channel's view model.
   /// </summary>
-  public void Activate() => @base.Activate();
+  public void Activate()
+  {
+    if (!Client.IsInteractive) @base.Activate();
+  }
 
   /// <summary>
   /// Closes the channel's view model.
   /// </summary>
   /// <param name="leaveChannel">Whether to leave the channel.</param>
-  public void Close(bool leaveChannel) => @base.Close(leaveChannel);
+  public void Close(bool leaveChannel)
+  {
+    if (!Client.IsInteractive) @base.Close(leaveChannel);
+  }
 
   /// <summary>
   /// Sends a message to the channel.
   /// </summary>
   /// <param name="message">The message to send.</param>
-  public void Send(string message) => @base.SendCommand.Execute(message);
+  public void Send(string message)
+  {
+    if (!Client.IsInteractive) @base.SendCommand.Execute(message);
+  }
 
   //
   // IChatSessionViewModel wrapper events

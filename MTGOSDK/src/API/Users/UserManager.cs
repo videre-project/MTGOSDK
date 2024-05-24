@@ -6,6 +6,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
@@ -47,6 +48,7 @@ public static class UserManager
   {
     if (!Users.TryGetValue(id, out var user))
     {
+      Log.Trace("Creating new User object for {Name} (#{Id})", name, id);
       Users[id] = user = new User(
         // This is a private method that is not exposed by the IUserManager type.
         Unbind(s_userManager).CreateNewUser(id, name)
