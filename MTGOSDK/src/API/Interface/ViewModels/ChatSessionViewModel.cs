@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
+
 using MTGOSDK.API;
 using MTGOSDK.API.Chat;
 using MTGOSDK.Core.Reflection;
@@ -44,7 +46,10 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   /// </summary>
   public void Activate()
   {
-    if (!Client.IsInteractive) @base.Activate();
+    if (Client.IsInteractive)
+      throw new InvalidOperationException("Cannot activate channels in interactive mode.");
+
+    @base.Activate();
   }
 
   /// <summary>
@@ -53,7 +58,10 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   /// <param name="leaveChannel">Whether to leave the channel.</param>
   public void Close(bool leaveChannel)
   {
-    if (!Client.IsInteractive) @base.Close(leaveChannel);
+    if (Client.IsInteractive)
+      throw new InvalidOperationException("Cannot close channels in interactive mode.");
+
+    @base.Close(leaveChannel);
   }
 
   /// <summary>
@@ -62,7 +70,10 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   /// <param name="message">The message to send.</param>
   public void Send(string message)
   {
-    if (!Client.IsInteractive) @base.SendCommand.Execute(message);
+    if (Client.IsInteractive)
+      throw new InvalidOperationException("Cannot send messages in interactive mode.");
+
+    @base.SendCommand.Execute(message);
   }
 
   //
