@@ -71,7 +71,7 @@ public static class WindowUtilities
   /// </remarks>
   public static void CloseDialogs()
   {
-    if (Client.IsInteractive == true)
+    if (Client.IsConnected && Client.IsInteractive)
       throw new InvalidOperationException("Cannot close dialogs in an interactive session.");
 
     Log.Information("Closing all dialog windows.");

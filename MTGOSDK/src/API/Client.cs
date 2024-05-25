@@ -301,7 +301,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (!(IsLoggedIn || IsConnected))
       throw new InvalidOperationException("Cannot log off while disconnected.");
 
-    if (IsInteractive == true)
+    if (IsInteractive)
       throw new InvalidOperationException("Cannot log off an interactive session.");
 
     // Invokes logoff command and disconnects the MTGO client.
