@@ -165,7 +165,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     {
       // Configures the client's logging options.
       if (loggerFactory != null) Log.SetFactoryInstance(loggerFactory);
-      Log.Trace("Running the MTGO client API factory.");
+      Log.Debug("Running the MTGO client API factory.");
 
       // Starts a new MTGO client process.
       if (options.CreateProcess && !(await RemoteClient.StartProcess()))

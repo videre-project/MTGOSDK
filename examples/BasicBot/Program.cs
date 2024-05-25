@@ -5,8 +5,10 @@
 
 using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 using MTGOSDK.API;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
 
@@ -20,18 +22,27 @@ while (!await ServerStatus.IsOnline())
   restart |= true; // Restart after downtime.
 }
 
+ILoggerFactory factory = LoggerFactory.Create(builder =>
+{
+  builder.AddConsole();
+  builder.SetMinimumLevel(LogLevel.Debug);
+  // Add additional logging configuration here.
+});
+
 // Initialize the client instance.
-Console.WriteLine($"Connecting to MTGO v{Client.CompatibleVersion}...");
+bool isAlreadyRunning = !restart && Client.HasStarted;
 using var client = new Client(
-  !restart && Client.HasStarted
+  isAlreadyRunning
     ? new ClientOptions()
     : new ClientOptions
       {
         CreateProcess = true,
         DestroyOnExit = true,
         AcceptEULAPrompt = true
-      }
+      },
+  loggerFactory: factory
 );
+Log.Information("Connected to MTGO v{Version}.", Client.CompatibleVersion);
 
 if (!Client.IsConnected)
 {
@@ -41,17 +52,20 @@ if (!Client.IsConnected)
     username: DotEnv.Get("USERNAME"), // String value
     password: DotEnv.Get("PASSWORD")  // SecureString value
   );
-  Console.WriteLine($"Connected as {Client.CurrentUser.Name}.");
+  Log.Information("Connected as {Username}.", Client.CurrentUser.Name);
 }
 
 // Teardown the bot when the MTGO client disconnects.
 client.IsConnectedChanged += delegate(object? sender)
 {
-  Console.WriteLine("The MTGO client has been disconnected.");
-  client.Dispose();
+  Log.Information("The MTGO client has been disconnected.");
+  // Optional teardown logic here.
 };
 
-Console.WriteLine("Finished loading.");
+Log.Information("Finished loading.");
 
-await client.LogOff();
-Console.WriteLine("Stopped the bot.");
+if (!isAlreadyRunning)
+{
+  await client.LogOff();
+  Log.Information("Stopped the bot.");
+}
