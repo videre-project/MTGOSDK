@@ -24,4 +24,12 @@
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>
 
+  <Import Project="..\ILLink\ILLink.targets" />
+  <ItemGroup>
+    <!-- For the .NET Standard TFM, we must provide the ILLink.Tasks package -->
+    <PackageReference Include="Microsoft.NET.ILLink.Tasks"
+                      VersionOverride="8.0.0"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
 </Project>
