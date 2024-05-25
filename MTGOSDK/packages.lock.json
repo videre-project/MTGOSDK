@@ -357,9 +357,9 @@
       },
       "ILRepack.Lib.MSBuild.Task": {
         "type": "Direct",
-        "requested": "[2.0.32, )",
-        "resolved": "2.0.32",
-        "contentHash": "onGGuckD8EVky6UYiSiZf62HkPSHuX1AQuo0XMw6exlUI5hB3pcDG4OcBknMPAg94OkqwmZp4sZRjIdndVgYcA=="
+        "requested": "[2.0.33, )",
+        "resolved": "2.0.33",
+        "contentHash": "mbWjnc+7Z9qdJTNWubqCbU8pWgUxkgIJOny3lnejF7RVdZVWZyH9FhFoz+p9qJ9Z7tim5kE2um/NCGUdKBNSfA=="
       },
       "ImpromptuInterface": {
         "type": "Direct",
