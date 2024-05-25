@@ -3,9 +3,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
-using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 using MTGOSDK.Core.Remoting;
 
@@ -365,6 +366,18 @@ public class DLRWrapper<I>() where I : class
   {
     public object Value { get; set; } = value;
   }
+
+  /// <summary>
+  /// Determines whether the type is compiler-generated.
+  /// </summary>
+  public static bool IsCompilerGenerated(Type t)
+  {
+    if (t == null) return false;
+
+    return t.IsDefined(typeof(CompilerGeneratedAttribute), false)
+      || IsCompilerGenerated(t.DeclaringType);
+  }
+
 
   //
   // Attribute wrapper helpers.

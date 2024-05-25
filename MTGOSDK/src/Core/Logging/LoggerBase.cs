@@ -16,7 +16,7 @@ namespace MTGOSDK.Core.Logging;
 /// <summary>
 /// Wraps an ILogger instance to provide custom logging functionality.
 /// </summary>
-public class LoggerBase : ILogger
+public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
 {
   /// <summary>
   /// Represents a type used to configure the logging system and create
@@ -31,6 +31,11 @@ public class LoggerBase : ILogger
   private static readonly ConcurrentDictionary<Type, ILogger> s_loggers = new();
 
   /// <summary>
+  /// A concurrent dictionary of caller types mapped to their base types.
+  /// </summary>
+  private static readonly ConcurrentDictionary<Type, Type> s_callerTypes = new();
+
+  /// <summary>
   /// Represents a type used to perform logging.
   /// </summary>
   /// <remarks>Aggregates most logging patterns to a single method.</remarks>
@@ -38,7 +43,21 @@ public class LoggerBase : ILogger
   {
     get
     {
-      Type callerType = DLRWrapper<LoggerBase>.GetCallerType(3);
+      Type callerType = GetCallerType(3);
+
+      // Fetch the base type if the caller is a compiler-generated type.
+      if (IsCompilerGenerated(callerType))
+      {
+        if (!s_callerTypes.TryGetValue(callerType, out Type? baseType))
+        {
+          string fullName = callerType.FullName;
+          string baseName = fullName.Substring(0, fullName.IndexOf("+<"));
+          baseType = callerType.DeclaringType.Assembly.GetType(baseName);
+          s_callerTypes.TryAdd(callerType, baseType);
+        }
+        callerType = baseType;
+      }
+
       return s_loggers.GetOrAdd(callerType, s_factory.CreateLogger(callerType));
     }
   }
