@@ -6,15 +6,9 @@
     // Exclude staging and production directories
     // "**/dist": true,
     // "**/publish": true,
-    // Excludes all C# and C++ build output folders
-    "**/bin": true,
-    "**/obj": true,
-    "**/Win32": true,
-    "**/x64": true,
-  },
-  "var": {
-    "configuration" : "Release",
-    "buildProperties" : "/m /v:m /clp:NoSummary /p:GenerateFullPaths=True"
+    // Excludes all C# build output folders
+    // "**/bin": true,
+    // "**/obj": true,
   },
   "dotnet.defaultSolution": "SDK.sln"
 }
