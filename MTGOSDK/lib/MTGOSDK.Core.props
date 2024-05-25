@@ -10,4 +10,12 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!-- Compatibility layers for MTGOSDK.Core on non-netstandard platforms -->
+  <ItemGroup>
+    <PackageReference Include="System.Reflection.Emit.ILGeneration"
+                      PrivateAssets="All" />
+    <PackageReference Include="System.Reflection.Emit.Lightweight"
+                      PrivateAssets="All" />
+  </ItemGroup>
+
 </Project>

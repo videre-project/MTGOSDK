@@ -33,10 +33,7 @@ This SDK provides common APIs for accessing the **Magic: The Gathering Online (M
 
 ## Building this Project
 
-This project requires the [.NET Framework 4.8 SDK](https://dotnet.microsoft.com/download/dotnet-framework/net48) and [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) to be installed with Visual Studio 2017 or newer. These can also be installed separately with the above installers or when installing Visual Studio with the [Visual Studio Installer](https://learn.microsoft.com/en-us/visualstudio/install/install-visual-studio?view=vs-2022).
-
-> [!NOTE]
-> Building against .NET Framework 4.8 also requires the [.NET Framework Developer Pack](https://aka.ms/msbuild/developerpacks) to be installed for building against reference assemblies. This is required for deterministic builds as the default lookup of .NET Framework SDKs through OS paths is disabled for msbuild.
+This project requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) to be installed with Visual Studio 2017 or newer. This also be installed separately with the above installers or when installing Visual Studio with the [Visual Studio Installer](https://learn.microsoft.com/en-us/visualstudio/install/install-visual-studio?view=vs-2022).
 
 To build this project, run either of the below commands from the root of the repository:
 

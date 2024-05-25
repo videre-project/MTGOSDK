@@ -8,8 +8,6 @@
     <NoWarn>$(NoWarn);
       <!-- Disables unenforcable nullable warnings - breaks static analysis -->
       CS8597;CS8600;CS8602;CS8603;CS8604;CS8625;CS8629;CS8767;CS9113;IDE0065;
-      <!-- Disable warnings for incompatible TFMs required for building -->
-      NU1702;MSB3277;
       <!-- FIXME: From RemoteNET library -->
       CS8601;CS8605;CS8608;CS8610;CS8618;CS8619;CS8620;CS8765;
     </NoWarn>
@@ -25,7 +23,6 @@
           Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'" />
 
   <ItemGroup>
-    <PackageReference Include="System.Reflection.Emit.Lightweight" />
     <PackageReference Include="Microsoft.CSharp" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
