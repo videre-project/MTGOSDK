@@ -45,8 +45,9 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
     {
       Type callerType = GetCallerType(3);
 
-      // Fetch the base type if the caller is a compiler-generated type.
-      if (IsCompilerGenerated(callerType))
+      // Fetch the base type if the caller is a compiler-generated type
+      // (e.g. lambda expressions, async state machines, etc.).
+      if (!s_loggers.ContainsKey(callerType) && IsCompilerGenerated(callerType))
       {
         if (!s_callerTypes.TryGetValue(callerType, out Type? baseType))
         {
