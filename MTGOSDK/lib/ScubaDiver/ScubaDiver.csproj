@@ -3,8 +3,9 @@
 	<PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>Latest</LangVersion>
-    <OutputType>Library</OutputType>
-    <RootNamespace>ScubaDiver</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -17,39 +18,10 @@
     <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).dll</ILRepackOutput>
   </PropertyGroup>
 
-  <!-- Compiler Options -->
-  <PropertyGroup>
-    <Deterministic>true</Deterministic>
-    <FileAlignment>512</FileAlignment>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <ResolveAssemblyReferencesSilent>true</ResolveAssemblyReferencesSilent>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-  </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
-    <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj"
-                      SetTargetFramework="TargetFramework=$(_MTGOSDKCoreTFM)" />
+    <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-    <!-- .NET Framework references and redirects -->
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
   </ItemGroup>
-
-  <!-- Remove runtime bindings/redirects from the final output -->
-  <ItemGroup>
-    <None Remove="app.config" />
-    <Resource Include="app.config" CopyToOutputDirectory="Never" />
-  </ItemGroup>
-
-  <!-- Configures build-time project dependencies for the core SDK assembly -->
-  <Target Name="ReferenceCoreSDK"
-          BeforeTargets="ResolveProjectReferences"
-          Condition="'$(UseFullSDKPaths)' == 'true'">
-    <MSBuild Projects="$(SolutionDir)MTGOSDK\MTGOSDK.csproj"
-             Targets="Build"
-             Properties="TargetFramework=$(_MTGOSDKCoreTFM)"
-             Condition="!Exists('$(_MTGOSDKCorePath)\MTGOSDK.dll')" />
-  </Target>
 
 </Project>
