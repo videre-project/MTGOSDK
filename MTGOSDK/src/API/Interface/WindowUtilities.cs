@@ -46,6 +46,7 @@ public static class WindowUtilities
     _ = s_windowUtilities.AllWindows;
 
     // Attempt to retrieve the updated window collection from client memory.
+    Log.Trace("Getting window collection from client memory.");
     for (var retries = 5; retries > 0; retries--)
     {
       try
