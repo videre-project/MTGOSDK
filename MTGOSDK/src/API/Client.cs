@@ -266,7 +266,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Initializes the login manager if it has not already been initialized.
     dynamic LoginVM = Unbind(s_loginManager);
     if (!LoginVM.IsLoginEnabled)
+    {
+      Log.Trace("Initializing the login manager.");
       LoginVM.Initialize();
+    }
 
     // Passes the user's credentials to the MTGO client for authentication.
     LoginVM.ScreenName = username;
@@ -275,6 +278,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       throw new ArgumentException("Missing one or more user credentials.");
 
     // Executes the login command and creates a new task to connect the client.
+    Log.Debug("Logging in as {Username}.", username);
     LoginVM.LogOnExecute();
     if (!(await WaitForClientReady()))
       throw new TimeoutException(
@@ -305,11 +309,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       throw new InvalidOperationException("Cannot log off an interactive session.");
 
     // Invokes logoff command and disconnects the MTGO client.
+    Log.Debug("Logging off and disconnecting the client.");
     s_session.LogOff();
     Try(() => Unbind(s_loginManager).IsLoginEnabled = true);
     if (!(await WaitUntil(() => !IsConnected || RemoteClient.IsDisposed ))) {
-      throw new TimeoutException(
-          "Failed to log off and disconnect the client.");
+      throw new TimeoutException("Failed to log off and disconnect the client.");
     }
   }
 
