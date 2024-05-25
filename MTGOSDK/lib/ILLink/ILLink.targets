@@ -2,6 +2,11 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="ILLink.props" />
 
+  <UsingTask TaskName="ILLink"
+             AssemblyFile="$(ILLinkTasksAssembly)"
+             TaskFactory="TaskHostFactory"
+             Condition="'$(ILLinkTasksAssembly)' != ''" />
+
   <Target Name="ComputeILLinkProps">
     <PropertyGroup>
       <ILLinkOutputDir>$(IntermediateOutputPath)illink\</ILLinkOutputDir>
@@ -9,7 +14,8 @@
     <ItemGroup>
       <_LinkInputAssemblies Include="@(IntermediateAssembly)" />
       <_LinkInputAssemblies Include="%(ReferenceCopyLocalPaths.Identity)"
-                            Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == ''" />
+                            Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == '' Or
+                                        $(CopyLocalLockFileAssemblies) == 'true'" />
     </ItemGroup>
   </Target>
 

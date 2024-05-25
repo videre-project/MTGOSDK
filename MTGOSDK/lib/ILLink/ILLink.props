@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
+  <!-- Forces the .NET SDK to calculate the ILLinkTasksAssembly path -->
+  <PropertyGroup>
+    <_RequiresLiveILLink>true</_RequiresLiveILLink>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- Link all assemblies -->
     <ILLinkArgs>$(ILLinkArgs) --action link</ILLinkArgs>
     <!-- Specify types and members to preserve -->
-    <ILLinkArgs>$(ILLinkArgs) -x $(MSBuildThisFileDirectory)ILLink.Descriptors.xml</ILLinkArgs>
+    <ILLinkArgs>$(ILLinkArgs) -x $(MSBuildProjectDirectory)\ILLink.Descriptors.xml</ILLinkArgs>
     <!-- Ignore all unresolved types and members -->
     <ILLinkArgs>$(ILLinkArgs) --skip-unresolved true</ILLinkArgs>
   </PropertyGroup>
