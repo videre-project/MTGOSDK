@@ -1,8 +1,4 @@
-# Architecture
-
-This document provides an overview of the architecture of the MTGOSDK and its components. It describes the high-level design of the SDK, its components, and how they interact with each other.
-
-## Overview
+# Overview
 
 This project consists of three main components:
 
