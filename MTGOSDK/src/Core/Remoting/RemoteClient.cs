@@ -113,6 +113,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     try { using var p = MTGOProcess(); p.Kill(); p.WaitForExit(); } catch { }
 
     // Start MTGO using the ClickOnce application manifest uri.
+    Log.Debug("Starting MTGO process as the current desktop user.");
     try
     {
       //
@@ -124,7 +125,6 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
       // account running this process. Refer to the below resource for more info:
       // https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/replace-a-process-level-token
       //
-      // using var process = ProcessHandler.CreateProcessAsUser(
       using var process = ProcessUtilities.RunAsDesktopUser(
         "rundll32.exe",
         $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}"
