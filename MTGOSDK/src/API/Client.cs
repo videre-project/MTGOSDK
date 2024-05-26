@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Diagnostics;
+using System.IO;
 using System.Security;
 using Microsoft.Extensions.Logging;
 
@@ -15,6 +17,7 @@ using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
 using MTGOSDK.Resources;
+using static MTGOSDK.Win32.Constants;
 
 using FlsClient.Interface;
 using Shiny.Core.Interfaces;
@@ -61,7 +64,9 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// The current build version of the running MTGO client.
   /// </summary>
   public static Version Version =>
-    new(s_shellViewModel.StatusBarVersionText);
+    new(FileVersionInfo.GetVersionInfo(
+      Path.Join(MTGOAppDirectory, "MTGO.exe")
+    ).FileVersion);
 
   /// <summary>
   /// The latest version of the MTGO client that this SDK is compatible with.
@@ -178,6 +183,14 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       // Configure the remote client connection.
       if(options.Port != null)
         RemoteClient.Port = Cast<ushort>(options.Port);
+
+      // Verifies the client's compatibility with the SDK version.
+      if (Version < CompatibleVersion)
+        Log.Warning("The MTGO version {Version} does not match the SDK's compatible version {CompatibleVersion} and may no longer function correctly.",
+          Version, CompatibleVersion);
+      else if (Version > CompatibleVersion)
+        Log.Warning("The MTGO version {Version} is newer than the SDK's compatible version {CompatibleVersion} and may not function correctly.",
+          Version, CompatibleVersion);
     })
   {
     //
