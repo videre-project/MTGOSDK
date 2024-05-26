@@ -22,11 +22,13 @@ launchSettings.json
 mono_crash.*
 
 # Build results
+.nuget/[Pp]ackages/
 [Dd]ist/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+[Pp]ublish/
 x64/
 x86/
 [Aa][Rr][Mm]/
@@ -171,9 +173,6 @@ DocProject/Help/*.hhk
 DocProject/Help/*.hhp
 DocProject/Help/Html2
 DocProject/Help/html
-
-# Click-Once directory
-publish/
 
 # Publish Web Output
 *.[Pp]ublish.xml

@@ -13,4 +13,14 @@
     <RemoveDir Directories="@(FoldersToClean)" />
   </Target>
 
+  <Target Name="UpdateFeed"
+          AfterTargets="Pack"
+          Condition="'$(Configuration)' == 'Release'">
+    <!-- Clean the local feed -->
+    <Delete Files="@(FeedOutputPath)"/>
+    <RemoveDir Directories="@(FeedOutputPath)" />
+    <!-- Add the built packages to the local feed -->
+    <Exec Command="$(NuGetExePath) init $(PackageOutputPath) $(FeedOutputPath)" />
+  </Target>
+
 </Project>
