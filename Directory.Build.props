@@ -6,7 +6,7 @@
     <DistDir>$(SolutionDir)\dist</DistDir>
     <PublishDir>$(SolutionDir)\publish</PublishDir>
     <PackageOutputPath>$(PublishDir)</PackageOutputPath>
-    <FeedOutputPath>$(SolutionDir)\.nuget\packages</FeedOutputPath>
+    <FeedOutputPath>$(SolutionDir)\packages</FeedOutputPath>
   </PropertyGroup>
 
   <!-- Internal SDK Paths -->
@@ -15,7 +15,7 @@
     <_MTGOSDKCoreTFM>netstandard2.0</_MTGOSDKCoreTFM>
     <_MTGOSDKCoreTarget>.NETStandard2.0</_MTGOSDKCoreTarget>
     <_MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
-    <NuGetExePath>$(SolutionDir)\.nuget\NuGet.exe</NuGetExePath>
+    <NuGetExePath>$(SolutionDir)\NuGet.exe</NuGetExePath>
   </PropertyGroup>
 
   <!-- Debugging Options -->

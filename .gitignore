@@ -22,12 +22,12 @@ launchSettings.json
 mono_crash.*
 
 # Build results
-.nuget/[Pp]ackages/
 [Dd]ist/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+[Pp]ackages/
 [Pp]ublish/
 x64/
 x86/
