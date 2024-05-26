@@ -42,7 +42,7 @@ using var client = new Client(
       },
   loggerFactory: factory
 );
-Log.Information("Connected to MTGO v{Version}.", Client.CompatibleVersion);
+Log.Information("Connected to MTGO v{Version}.", Client.Version);
 
 if (!Client.IsConnected)
 {
