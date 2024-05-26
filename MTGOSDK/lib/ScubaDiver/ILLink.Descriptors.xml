@@ -1,6 +1,8 @@
 <linker>
   <assembly fullname="MTGOSDK">
-    <type fullname="MTGOSDK.Core.Reflection.*"  preserve="all" />
-    <type fullname="MTGOSDK.Core.Remoting.*"    preserve="all" />
+    <type fullname="MTGOSDK.Core.Reflection*" required="false" preserve="all" />
+    <type fullname="MTGOSDK.Core.Reflection.Emit.*"            preserve="all" />
+    <type fullname="MTGOSDK.Core.Reflection.Snapshot.*"        preserve="all" />
+    <type fullname="MTGOSDK.Core.Remoting*"                    preserve="all" />
   </assembly>
 </linker>
