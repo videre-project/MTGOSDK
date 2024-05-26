@@ -13,6 +13,8 @@
   <PropertyGroup Condition="'$(UseLocalFeed)' == 'true'">
     <IsPackable>false</IsPackable>
     <RestoreLockedMode>false</RestoreLockedMode>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <RestoreUseStaticGraphEvaluation>false</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
