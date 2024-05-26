@@ -4,11 +4,10 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <LangVersion>Latest</LangVersion>
-    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\MTGOSDK\MTGOSDK.csproj" />
+    <PackageReference Include="MTGOSDK" VersionOverride="*-dev*" />
   </ItemGroup>
 
 </Project>

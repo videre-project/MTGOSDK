@@ -49,6 +49,20 @@
           "Microsoft.SourceLink.Common": "8.0.0"
         }
       },
+      "MTGOSDK": {
+        "type": "Direct",
+        "requested": "[*-dev*, )",
+        "resolved": "0.0.0-dev",
+        "contentHash": "DmzDxAFYT9KCrykCEj2NyYGFM6YLFY7qR2V7Fh6IAr78G0mj0EOLeBvLWMqyAhm3CWBRtxZEISMu/sUOZMf4+w==",
+        "dependencies": {
+          "ImpromptuInterface": "8.0.4",
+          "MTGOSDK.Win32": "0.0.0-dev",
+          "Microsoft.CSharp": "4.7.0",
+          "Microsoft.Diagnostics.Runtime": "3.1.512801",
+          "Microsoft.Extensions.Logging": "8.0.0",
+          "Newtonsoft.Json": "13.0.3"
+        }
+      },
       "Dynamitey": {
         "type": "Transitive",
         "resolved": "3.0.3",
@@ -206,6 +220,15 @@
           "Microsoft.SourceLink.Common": "1.1.1"
         }
       },
+      "MTGOSDK.Win32": {
+        "type": "Transitive",
+        "resolved": "0.0.0-dev",
+        "contentHash": "2y/6eZTQSs5PV9ZXZLk8EOhv11r7x5vflw6KbxxEeVTJd4C8nlB8RBb5bURNzs1w98t5DgcgAUr/ZKE4VL+BQQ==",
+        "dependencies": {
+          "Iced": "1.21.0",
+          "Microsoft.Win32.Registry": "5.0.0"
+        }
+      },
       "System.ComponentModel": {
         "type": "Transitive",
         "resolved": "4.3.0",
@@ -253,24 +276,6 @@
         "contentHash": "OdrZO2WjkiEG6ajEFRABTRCi/wuXQPxeV6g8xvUJqdxMvvuCCEk86zPla8UiIQJz3durtUEbNyY/3lIhS0yZvQ==",
         "dependencies": {
           "System.Text.Encodings.Web": "8.0.0"
-        }
-      },
-      "mtgosdk": {
-        "type": "Project",
-        "dependencies": {
-          "ImpromptuInterface": "[8.0.4, )",
-          "MTGOSDK.Win32": "[1.0.0, )",
-          "Microsoft.CSharp": "[4.7.0, )",
-          "Microsoft.Diagnostics.Runtime": "[3.1.512801, )",
-          "Microsoft.Extensions.Logging": "[8.0.0, )",
-          "Newtonsoft.Json": "[13.0.3, )"
-        }
-      },
-      "mtgosdk.win32": {
-        "type": "Project",
-        "dependencies": {
-          "Iced": "[1.21.0, )",
-          "Microsoft.Win32.Registry": "[5.0.0, )"
         }
       },
       "Iced": {

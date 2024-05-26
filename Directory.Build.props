@@ -3,10 +3,15 @@
   <!-- Project Directories -->
   <PropertyGroup>
     <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
-    <DistDir>$(SolutionDir)\dist</DistDir>
-    <PublishDir>$(SolutionDir)\publish</PublishDir>
+    <DistDir>$(SolutionDir)dist</DistDir>
+    <ExampleDir>$(SolutionDir)examples</ExampleDir>
+    <PublishDir>$(SolutionDir)publish</PublishDir>
     <PackageOutputPath>$(PublishDir)</PackageOutputPath>
-    <FeedOutputPath>$(SolutionDir)\packages</FeedOutputPath>
+    <FeedOutputPath>$(SolutionDir)packages</FeedOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.StartsWith('$(ExampleDir)\'))">
+    <UseLocalFeed>true</UseLocalFeed>
   </PropertyGroup>
 
   <!-- Internal SDK Paths -->

@@ -10,6 +10,11 @@
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(UseLocalFeed)' == 'true'">
+    <IsPackable>false</IsPackable>
+    <RestoreLockedMode>false</RestoreLockedMode>
+  </PropertyGroup>
+
   <ItemGroup Label="PackageVersions">
     <!-- MTGOSDK -->
 		<PackageVersion Include="Microsoft.CSharp"

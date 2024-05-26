@@ -39,10 +39,10 @@ To build this project, run either of the below commands from the root of the rep
 
 ```powershell
 # Build using the .NET CLI
-$ dotnet build
+$ dotnet build -c Release
 
 # Build using MSBuild in Visual Studio
-$ msbuild /t:Build
+$ msbuild /t:Build /p:Configuration=Release
 ```
 
 The MTGOSDK project will automatically build reference assemblies for the latest version of MTGO, even if no existing MTGO installation exists. No further action is required. This helps ensure that the SDK is always up-to-date with the latest versions of MTGO.

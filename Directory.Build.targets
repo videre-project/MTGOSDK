@@ -14,8 +14,7 @@
   </Target>
 
   <Target Name="UpdateFeed"
-          AfterTargets="Pack"
-          Condition="'$(Configuration)' == 'Release'">
+          AfterTargets="Pack">
     <!-- Clean the local feed -->
     <Delete Files="@(FeedOutputPath)"/>
     <RemoveDir Directories="@(FeedOutputPath)" />

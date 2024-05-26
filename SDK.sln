@@ -2,10 +2,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BasicBot", "examples\BasicBot\BasicBot.csproj", "{55881B74-5ADF-4633-B46D-01F0C60FE877}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GameTracker", "examples\GameTracker\GameTracker.csproj", "{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MTGOSDK", "MTGOSDK\MTGOSDK.csproj", "{ABBC9015-9107-45AE-BBA3-7F73F62674D4}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MTGOSDK.MSBuild", "MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj", "{44F6A719-BFA6-4529-9675-D98FAF6132F5}"
@@ -13,8 +9,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MTGOSDK.Win32", "MTGOSDK.Win32\MTGOSDK.Win32.csproj", "{0DE6081F-5E88-4B34-8CAB-4035DCAA30EB}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ScubaDiver", "MTGOSDK\lib\ScubaDiver\ScubaDiver.csproj", "{8DF5D538-941D-44E8-803E-9E135926EBE8}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{1B98C787-C0E6-479D-B577-5EAD610B1DFA}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "third_party", "third_party", "{EF3E9033-3E13-44FE-851E-418B0CF61FE4}"
 EndProject
@@ -26,22 +20,6 @@ Global
 		Release|Mixed = Release|Mixed
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Debug|Mixed.ActiveCfg = Debug|Any CPU
-		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Debug|Mixed.Build.0 = Debug|Any CPU
-		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Release|Any CPU.Build.0 = Release|Any CPU
-		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Release|Mixed.ActiveCfg = Release|Any CPU
-		{55881B74-5ADF-4633-B46D-01F0C60FE877}.Release|Mixed.Build.0 = Release|Any CPU
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Debug|Mixed.ActiveCfg = Debug|Any CPU
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Debug|Mixed.Build.0 = Debug|Any CPU
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Release|Any CPU.Build.0 = Release|Any CPU
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Release|Mixed.ActiveCfg = Release|Any CPU
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0}.Release|Mixed.Build.0 = Release|Any CPU
 		{ABBC9015-9107-45AE-BBA3-7F73F62674D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{ABBC9015-9107-45AE-BBA3-7F73F62674D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ABBC9015-9107-45AE-BBA3-7F73F62674D4}.Debug|Mixed.ActiveCfg = Debug|Any CPU
@@ -79,8 +57,6 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{55881B74-5ADF-4633-B46D-01F0C60FE877} = {1B98C787-C0E6-479D-B577-5EAD610B1DFA}
-		{566C0ACC-27A7-4398-9E82-CB1E7594B1E0} = {1B98C787-C0E6-479D-B577-5EAD610B1DFA}
 		{8DF5D538-941D-44E8-803E-9E135926EBE8} = {EF3E9033-3E13-44FE-851E-418B0CF61FE4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
