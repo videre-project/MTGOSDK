@@ -1,23 +1,27 @@
 <Project>
 
   <Target Name="CleanProject"
-          BeforeTargets="Clean"
-          Condition="Exists($(DistDir))">
-
+          BeforeTargets="Clean">
     <ItemGroup>
-      <FilesToClean Include="$(DistDir)\**\*.*" />
-      <FoldersToClean Include="$([System.IO.Directory]::GetDirectories(&quot;$(DistDir)&quot;))" />
+      <FoldersToClean Include="$(DistDir)" />
+      <FoldersToClean Include="$(FeedOutputPath)"
+                      Condition="'$(UseLocalFeed)' != 'true'" />
+      <FoldersToClean Include="$(PackageOutputPath)"
+                      Condition="'$(UseLocalFeed)' != 'true'" />
+      <FoldersToClean Include="$(MSBuildProjectDirectory)\bin" />
+      <FoldersToClean Include="$(MSBuildProjectDirectory)\obj" />
     </ItemGroup>
-
-    <Delete Files="@(FilesToClean)"/>
     <RemoveDir Directories="@(FoldersToClean)" />
   </Target>
 
   <Target Name="UpdateFeed"
           AfterTargets="Pack">
     <!-- Clean the local feed -->
-    <Delete Files="@(FeedOutputPath)"/>
-    <RemoveDir Directories="@(FeedOutputPath)" />
+    <PropertyGroup>
+      <FeedPackagePath>$(FeedOutputPath)\$(MSBuildProjectName.ToLower())</FeedPackagePath>
+    </PropertyGroup>
+    <RemoveDir Directories="$(FeedPackagePath)"
+               Condition="Exists($(FeedPackagePath))" />
     <!-- Add the built packages to the local feed -->
     <Exec Command="$(NuGetExePath) init $(PackageOutputPath) $(FeedOutputPath)" />
   </Target>
