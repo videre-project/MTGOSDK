@@ -106,7 +106,7 @@ public static class ProcessExtensions
     if (!Environment.Is64BitOperatingSystem)
       return false;
 
-    if (!MTGOSDK.Win32.API.Kernel32.IsWow64Process(process.Handle, out bool isWow64))
+    if (!Kernel32.IsWow64Process(process.Handle, out bool isWow64))
       throw new Win32Exception(
           "Failed to determine whether the process is running under WOW64.");
 
