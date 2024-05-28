@@ -171,6 +171,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       // Configures the client's logging options.
       if (loggerFactory != null) Log.SetFactoryInstance(loggerFactory);
       Log.Debug("Running the MTGO client API factory.");
+      ValidateVersion(assert: false); // Ensure reference types are compatible.
 
       // Starts a new MTGO client process.
       if (options.CreateProcess && !(await RemoteClient.StartProcess()))
@@ -183,14 +184,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       // Configure the remote client connection.
       if(options.Port != null)
         RemoteClient.Port = Cast<ushort>(options.Port);
-
-      // Verifies the client's compatibility with the SDK version.
-      if (Version < CompatibleVersion)
-        Log.Warning("The MTGO version {Version} does not match the SDK's compatible version {CompatibleVersion} and may no longer function correctly.",
-          Version, CompatibleVersion);
-      else if (Version > CompatibleVersion)
-        Log.Warning("The MTGO version {Version} is newer than the SDK's compatible version {CompatibleVersion} and may not function correctly.",
-          Version, CompatibleVersion);
     })
   {
     //
@@ -215,6 +208,31 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Closes any blocking dialogs preventing the client from logging in.
     if (options.AcceptEULAPrompt && !IsConnected)
       WindowUtilities.CloseDialogs();
+  }
+
+  /// <summary>
+  /// Verifies the client's compatibility with the SDK version.
+  /// </summary>
+  /// <param name="assert">Whether to throw an exception on failure.</param>
+  /// <returns>Whether the client version is compatible.</returns>
+  /// <exception cref="VerificationException">
+  /// Thrown when the client version is not compatible with the SDK.
+  /// </exception>
+  public static bool ValidateVersion(bool assert = false)
+  {
+    if (Version < CompatibleVersion)
+      Log.Warning("The MTGO version {Version} does not match the SDK's compatible version {CompatibleVersion} and may no longer function correctly.",
+        Version, CompatibleVersion);
+    else if (Version > CompatibleVersion)
+      Log.Warning("The MTGO version {Version} is newer than the SDK's compatible version {CompatibleVersion} and may not function correctly.",
+        Version, CompatibleVersion);
+    else return true;
+
+    if (assert)
+      throw new VerificationException(
+        "The MTGO client version is not compatible with the SDK.");
+
+    return false;
   }
 
   /// <summary>
