@@ -14,13 +14,28 @@
     <RemoveDir Directories="@(FoldersToClean)" />
   </Target>
 
+  <Target Name="GetSDKPackagePaths"
+          BeforeTargets="UpdateFeed">
+    <ItemGroup>
+      <_SDKPackagePaths Include="$(FeedOutputPath)\**\*.nupkg" />
+      <_SDKPackagePaths>
+        <VersionPath>$([System.IO.Path]::GetDirectoryName('%(Identity)').Replace('$(FeedOutputPath)\', ''))</VersionPath>
+      </_SDKPackagePaths>
+      <_SDKPackagePaths>
+        <Version>$([System.IO.Path]::GetFileName('%(VersionPath)'))</Version>
+      </_SDKPackagePaths>
+    </ItemGroup>
+  </Target>
+
   <Target Name="UpdateFeed"
           AfterTargets="Pack">
     <!-- Clean the local feed -->
     <PropertyGroup>
       <FeedPackagePath>$(FeedOutputPath)\$(MSBuildProjectName.ToLower())</FeedPackagePath>
+      <SDKPackageVersion>%(_SDKPackagePaths.Version)</SDKPackageVersion>
     </PropertyGroup>
-    <RemoveDir Directories="$(FeedPackagePath)"
+    <RemoveDir Directories="@(_SDKPackagePaths->'$(FeedOutputPath)\%(VersionPath)');
+                            @(_SDKPackagePaths->'$(NuGetPackageRoot)\%(VersionPath)')"
                Condition="Exists($(FeedPackagePath))" />
     <!-- Add the built packages to the local feed -->
     <Exec Command="$(NuGetExePath) init $(PackageOutputPath) $(FeedOutputPath)" />
