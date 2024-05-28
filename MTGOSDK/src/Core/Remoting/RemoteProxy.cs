@@ -48,13 +48,8 @@ public sealed class RemoteProxy<I>(Func<I> c) : DLRWrapper<I>() where I : class
   {
     lock (refLock)
     {
-      // Extract the remote object handle from the lazy object.
-      var dro = Unbind(obj.Value);
-
-      // Copy the remote object handle to the reference object.
-      refObj.__ra   ??= dro.__ra;
-      refObj.__ro   ??= dro.__ro;
-      refObj.__type ??= dro.__type;
+      if (refObj.__ra is null)
+        Swap(ref refObj, obj.Value);
     }
   }
 

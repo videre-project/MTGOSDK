@@ -162,6 +162,29 @@ public class DLRWrapper<I>() where I : class
     return proxy;
   }
 
+  /// <summary>
+  /// Swaps the dynamic remote object handle with another instance.
+  /// </summary>
+  /// <param name="refObj">The reference object to swap.</param>
+  /// <param name="obj">The object to swap with.</param>
+  /// <param name="bindTypes">Whether to bind reference types (optional).</param>
+  /// <returns>The reference object with the swapped remote object handle.</returns>
+  public static dynamic Swap(
+    ref dynamic refObj,
+    dynamic obj,
+    bool bindTypes = false)
+  {
+    // Extract the remote object handle from the source object.
+    var objDro = bindTypes ? obj : Unbind(obj);
+
+    // Copy the remote object handle to the reference object.
+    refObj.__ra   = objDro.__ra;
+    refObj.__ro   = objDro.__ro;
+    refObj.__type = objDro.__type;
+
+    return refObj;
+  }
+
   //
   // Wrapper methods for type casting and dynamic dispatching.
   //
