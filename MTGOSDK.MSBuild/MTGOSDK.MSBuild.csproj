@@ -3,48 +3,41 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>Latest</LangVersion>
-    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NoWarn>CS8602;CS8603</NoWarn>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <IsPackable>false</IsPackable>
-    <!-- Disables .NET Standard polyfills as it is not directly consumable. -->
-    <EnablePolyfills>false</EnablePolyfills>
   </PropertyGroup>
 
-  <ItemGroup Label="Package">
-		<!--
-      These lines pack the build props/targets files to the `build` and
-      `buildTransitive` folders in the generated package. By convention, the
-      .NET SDK will look for build\<packageId>.props and build\<packageId>.targets
-      for automatic inclusion in the build.
-
-      The `build` folder is for the props/targets files that are directly
-      imported by the consuming project. The `buildTransitive` folder is for
-      the props/targets files that are imported by any upstream consumers.
-    -->
-		<None Include="build\**" Pack="true" PackagePath="build;buildTransitive" />
-	</ItemGroup>
-
   <ItemGroup Label="Dependencies">
+    <PackageReference Include="Microsoft.ILVerification" />
+    <PackageReference Include="JetBrains.Refasmer" />
+    <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!--
       These dependencies are provided by MSBuild at runtime, so we don't need to
       include them in the package.
     -->
     <PackageReference Include="Microsoft.Build.Utilities.Core"
-                      ExcludeAssets="runtime"
                       PrivateAssets="All" />
-    <!--
-      We use these to build and validate the SDK's reference assemblies at
-      design/build time. These assemblies are not included in this package.
-    -->
-    <PackageReference Include="JetBrains.Refasmer" />
-    <PackageReference Include="Microsoft.ILVerification" />
-    <!--
-      Import the MTGOSDK.Win32 project for the Win32 extensions and utilities.
-    -->
-    <ProjectReference Include="..\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>
+
+  <!-- Import MTGOSDK.MSBuild package properties -->
+  <Import Project="MTGOSDK.MSBuild.pkg.props" />
+
+  <Target Name="PackTaskDependencies" BeforeTargets="GenerateNuspec">
+    <!--
+      Pack all assemblies in the lib/ directory of the package for distribution.
+      See https://github.com/NuGet/Home/issues/4704.
+    -->
+    <ItemGroup>
+      <_PackageFiles Include="bin\$(Configuration)\$(TargetFramework)\**\*"
+                     Condition="'%(Filename)' != 'MTGOSDK.MSBuild'">
+        <PackagePath>lib\$(TargetFramework)\%(RecursiveDir)</PackagePath>
+        <Visible>false</Visible>
+        <BuildAction>Content</BuildAction>
+      </_PackageFiles>
+    </ItemGroup>
+    <PropertyGroup>
+      <NoWarn>$(NoWarn);NU5118</NoWarn>
+    </PropertyGroup>
+  </Target>
 
 </Project>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- Package Properties -->
+  <PropertyGroup>
+    <PackageId>MTGOSDK.MSBuild</PackageId>
+    <Summary>A MSBuild library for design/compile-time code generation of the SDK.</Summary>
+    <Description>An MSBuild library that manages the code-generation of the SDK. This builds reference assemblies containing only the public types and members of internal classes from the MTGO client and does not handle or contain any implementation details or private code.</Description>
+    <PackageTags></PackageTags>
+  </PropertyGroup>
+
+  <!-- Publishing Configuration -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <MergeNugetDependencies>true</MergeNugetDependencies>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Disables .NET Standard polyfills as it is not directly consumable. -->
+    <EnablePolyfills>false</EnablePolyfills>
+  </PropertyGroup>
+
+  <ItemGroup>
+		<!--
+      These lines pack the build props/targets files to the `build` and
+      `buildTransitive` folders in the generated package. By convention, the
+      .NET SDK will look for build\<packageId>.props and build\<packageId>.targets
+      for automatic inclusion in the build.
+
+      The `build` folder is for the props/targets files that are directly
+      imported by the consuming project. The `buildTransitive` folder is for
+      the props/targets files that are imported by any upstream consumers.
+    -->
+		<None Include="build\**" Pack="true" PackagePath="build;buildTransitive" />
+	</ItemGroup>
+
+</Project>

@@ -54,7 +54,7 @@
     </GenerateReferenceAssemblies>
 
     <!-- Add the reference assembly path to the assembly search paths -->
-    <PropertyGroup Condition="'$(UseRef)' == 'true'">
+    <PropertyGroup Condition="'$(UseRef)' != 'false'">
       <AssemblySearchPaths>$(AssemblySearchPaths);$(_MTGOSDK_Refs)</AssemblySearchPaths>
     </PropertyGroup>
 

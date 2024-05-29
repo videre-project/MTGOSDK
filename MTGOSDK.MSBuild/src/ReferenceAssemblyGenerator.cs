@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.IO;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 

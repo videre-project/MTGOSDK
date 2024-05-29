@@ -3,18 +3,22 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
-using Task = Microsoft.Build.Utilities.Task;
+using MSBuildTask = Microsoft.Build.Utilities.Task;
+
 using JetBrains.Refasmer.Filters;
 
 
 namespace MTGOSDK.MSBuild.Tasks;
 
-public class GenerateReferenceAssemblies : Task
+public class GenerateReferenceAssemblies : MSBuildTask
 {
   /// <summary>
   /// The path to the MTGO application directory.
