@@ -14,8 +14,9 @@
     <RemoveDir Directories="@(FoldersToClean)" />
   </Target>
 
-  <Target Name="GetSDKPackagePaths"
-          BeforeTargets="UpdateFeed">
+  <Target Name="UpdateFeed"
+          AfterTargets="Pack">
+    <!-- Query all existing package versions in the feed -->
     <ItemGroup>
       <_SDKPackagePaths Include="$(FeedOutputPath)\**\*.nupkg" />
       <_SDKPackagePaths>
@@ -25,20 +26,25 @@
         <Version>$([System.IO.Path]::GetFileName('%(VersionPath)'))</Version>
       </_SDKPackagePaths>
     </ItemGroup>
-  </Target>
 
-  <Target Name="UpdateFeed"
-          AfterTargets="Pack">
-    <!-- Clean the local feed -->
+    <!-- Clean the local feed of old package versions -->
     <PropertyGroup>
       <FeedPackagePath>$(FeedOutputPath)\$(MSBuildProjectName.ToLower())</FeedPackagePath>
-      <SDKPackageVersion>%(_SDKPackagePaths.Version)</SDKPackageVersion>
     </PropertyGroup>
     <RemoveDir Directories="@(_SDKPackagePaths->'$(FeedOutputPath)\%(VersionPath)');
                             @(_SDKPackagePaths->'$(NuGetPackageRoot)\%(VersionPath)')"
                Condition="Exists($(FeedPackagePath))" />
-    <!-- Add the built packages to the local feed -->
-    <Exec Command="$(NuGetExePath) init $(PackageOutputPath) $(FeedOutputPath)" />
+
+    <!-- Add the built package to the local feed -->
+    <ItemGroup>
+      <_SDKPackageSources Include="$(PackageOutputPath)\$(MSBuildProjectName).*.nupkg" />
+    </ItemGroup>
+    <PropertyGroup>
+      <SDKPackageVersion>%(_SDKPackagePaths.Version)</SDKPackageVersion>
+      <PackagePath>$(PackageOutputPath)\$(MSBuildProjectName).$(SDKPackageVersion).nupkg</PackagePath>
+      <PackagePath Condition="!Exists($(PackagePath))">%(_SDKPackageSources.Identity)</PackagePath>
+    </PropertyGroup>
+    <Exec Command="$(NuGetExePath) add $(PackagePath) -Source $(FeedOutputPath)" />
   </Target>
 
 </Project>
