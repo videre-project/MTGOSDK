@@ -187,6 +187,13 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     })
   {
     //
+    // If the RemoteClient was previously disposed (another Client instance was
+    // created and disposed), then we need to refresh all remote objects created
+    // through the ObjectProvider to ensure that references are still valid.
+    //
+    if (ObjectProvider.RequiresRefresh) ObjectProvider.Refresh();
+
+    //
     // Ensure all deferred static fields in the queue are initialized.
     //
     // This will initialize the connection to the MTGO client and load all
@@ -241,7 +248,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <param name="disconnect">Whether to disconnect the client.</param>
   public void ClearCaches(bool disconnect = false)
   {
-    if (disconnect) RemoteClient.Dispose();
+    if (disconnect)
+    {
+      RemoteClient.Dispose();
+      ObjectProvider.RequiresRefresh = true;
+    }
+    m_currentUser = null;
 
     Log.Debug("Disposing all pinned remote objects registered with the client.");
     UserManager.Users.Clear();

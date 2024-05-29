@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
 
@@ -126,13 +127,16 @@ public class DLRWrapper<I>() where I : class
   /// constructor, triggering the lazy initialization of any deferred static
   /// fields for immediate use.
   /// </param>
+  /// <param name="raise">
+  /// Whether to raise an exception if the queue is empty (optional).
+  /// </param>
   /// <exception cref="InvalidOperationException">
   /// Thrown when the queue is empty and no deferred objects are available.
   /// </exception>
-  public static void Construct(dynamic? _ref = null)
+  public static void Construct(dynamic? _ref = null, bool raise = false)
   {
     // Use any dereferenced object to lazy initialize and check the queue.
-    if (_ref is not null && DeferedQueue.IsEmpty)
+    if (_ref is not null && (raise && DeferedQueue.IsEmpty))
       throw new InvalidOperationException(
           $"{nameof(DLRWrapper<I>)}.Construct() called with no deferred objects.");
 

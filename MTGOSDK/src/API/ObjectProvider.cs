@@ -31,6 +31,11 @@ public static class ObjectProvider
   private static readonly ConcurrentDictionary<string, dynamic> s_instances = new();
 
   /// <summary>
+  /// Whether the ObjectProvider cache requires a refresh.
+  /// </summary>
+  internal static bool RequiresRefresh = false;
+
+  /// <summary>
   /// Returns an instance of the given type from the client's ObjectProvider.
   /// </summary>
   /// <param name="queryPath">The query path of the registered type.</param>
@@ -52,6 +57,7 @@ public static class ObjectProvider
     // If the client is disposed, return an empty instance to defer construction
     if (RemoteClient.IsDisposed)
     {
+      Log.Trace("Client is disposed. Returning empty instance of type {Type}", queryPath);
       instance = new DynamicRemoteObject();
     }
     // Query using the ObjectProvider.Get<T>() method on the client
@@ -128,11 +134,16 @@ public static class ObjectProvider
   /// </remarks>
   public static void Refresh()
   {
+    // Ensure that a connection to the MTGO client has been established
+    RemoteClient.EnsureInitialize();
+
+    Log.Debug("Refreshing ObjectProvider cache.");
     foreach (var kvp in s_instances)
     {
-      dynamic refObj = s_instances[kvp.Key];
+      s_instances.TryGetValue(kvp.Key, out dynamic refObj);
       dynamic obj = Get(kvp.Key, useCache: false);
       Swap(ref refObj, obj, bindTypes: true);
     }
+    RequiresRefresh = false;
   }
 }
