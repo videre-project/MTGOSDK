@@ -99,6 +99,7 @@ internal static class RemoteFunctionsInvokeHelper
 
     bool hasResults;
     ObjectOrRemoteAddress oora;
+    // Invoke static method (where the first parameter of Invoke() is null).
     if (obj == null)
     {
       if (app == null)
@@ -110,13 +111,19 @@ internal static class RemoteFunctionsInvokeHelper
           $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
       }
 
-      InvocationResults invokeRes = app.Communicator
-        .InvokeStaticMethod(declaringType.FullName, funcName, genericArgsFullNames, remoteParams);
+      InvocationResults invokeRes = app.Communicator.InvokeStaticMethod(
+        declaringType.FullName,
+        funcName,
+        genericArgsFullNames,
+        remoteParams
+      );
+
       if (invokeRes.VoidReturnType)
       {
         hasResults = false;
         oora = null;
       }
+      // Invoke non-static method.
       else
       {
         hasResults = true;

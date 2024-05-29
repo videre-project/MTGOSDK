@@ -28,7 +28,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   // Singleton instance and static accessors
   //
 
-  private static readonly Lazy<RemoteClient> s_instance = new(() => new RemoteClient());
+  private static Lazy<RemoteClient> s_instance = new(() => new RemoteClient());
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
   public static Process @process => @this._clientProcess;
@@ -44,12 +44,26 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// </summary>
   public static bool DestroyOnExit = false;
 
+  /// <summary>
+  /// The port to manage the connection to the MTGO client process.
+  /// </summary>
   public static ushort? Port = null;
 
   private RemoteClient()
   {
     Bootstrapper.ExtractDir = ExtractDir;
     _clientHandle = GetClientHandle();
+    IsDisposed = false;
+  }
+
+  /// <summary>
+  /// Ensures that the RemoteClient singleton is initialized.
+  /// </summary>
+  public static void EnsureInitialize()
+  {
+    // Manually initialize the singleton instance if not already created
+    if (!s_instance.IsValueCreated)
+      _ = s_instance.Value;
   }
 
   //
@@ -218,7 +232,14 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     RemoteHandle client = RemoteHandle.Connect(_clientProcess, port);
 
     // Teardown on fatal exception.
-    AppDomain.CurrentDomain.UnhandledException += (s, e) => Dispose();
+    AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+    {
+      if (!IsDisposed)
+      {
+        Log.Critical("Encountered a fatal exception. Cleaning up RemoteClient.");
+        Dispose();
+      }
+    };
 
     // Verify that the injected assembly is loaded and reponding
     if (client.Communicator.CheckAliveness() is false)
@@ -234,16 +255,22 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// </summary>
   internal static void Dispose()
   {
-    @client.Dispose();
+    // Prevent multiple calls to Dispose
+    if (IsDisposed) return;
     IsDisposed = true;
-    Log.Debug("RemoteClient disposed.");
+    Log.Debug("Disposing RemoteClient.");
 
+    @client.Dispose();
     if (RemoteClient.DestroyOnExit)
       @process.Kill();
-  }
-  internal static bool IsDisposed = false;
 
-  ~RemoteClient() => Dispose();
+    // Reset the singleton instance to allow lazy reinitialization
+    s_instance = new Lazy<RemoteClient>(() => new RemoteClient());
+    Log.Debug("RemoteClient disposed.");
+  }
+  internal static bool IsDisposed { get; private set; } = false;
+
+  // ~RemoteClient() => Dispose();
 
   //
   // RemoteHandle wrapper methods

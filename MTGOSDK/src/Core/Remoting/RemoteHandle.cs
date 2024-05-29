@@ -43,8 +43,8 @@ public class RemoteHandle : IDisposable
       TypeDump td;
       try
       {
-        od = _app._communicator.DumpObject(remoteAddress, typeName, true, hashCode);
-        td = _app._communicator.DumpType(od.Type);
+        od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
+        td = _app.Communicator.DumpType(od.Type);
       }
       catch (Exception e)
       {
@@ -52,7 +52,7 @@ public class RemoteHandle : IDisposable
       }
 
       var remoteObject = new RemoteObject(
-          new RemoteObjectRef(od, td, _app._communicator), _app);
+          new RemoteObjectRef(od, td, _app.Communicator), _app);
 
       return remoteObject;
     }
@@ -107,13 +107,13 @@ public class RemoteHandle : IDisposable
   }
 
   private Process _procWithDiver;
-  private DiverCommunicator _communicator;
   private DomainsDump _domains;
   private readonly RemoteObjectsCollection _remoteObjects;
 
   public Process Process => _procWithDiver;
   public RemoteActivator Activator { get; private set; }
 
+  private static DiverCommunicator _communicator;
   public DiverCommunicator Communicator => _communicator;
   public static bool IsReconnected = false;
 
@@ -182,7 +182,7 @@ public class RemoteHandle : IDisposable
   {
     Predicate<string> matchesFilter = Filter.CreatePredicate(typeFullNameFilter);
 
-    _domains ??= _communicator.DumpDomains();
+    _domains ??= Communicator.DumpDomains();
     foreach (DomainsDump.AvailableDomain domain in _domains.AvailableDomains)
     {
       foreach (string assembly in domain.AvailableModules)
@@ -190,7 +190,7 @@ public class RemoteHandle : IDisposable
         List<TypesDump.TypeIdentifiers> typeIdentifiers;
         try
         {
-          typeIdentifiers = _communicator.DumpTypes(assembly).Types;
+          typeIdentifiers = Communicator.DumpTypes(assembly).Types;
         }
         catch
         {
@@ -221,7 +221,7 @@ public class RemoteHandle : IDisposable
   /// </param>
   public IEnumerable<CandidateObject> QueryInstances(string typeFullNameFilter, bool dumpHashcodes = true)
   {
-    return _communicator.DumpHeap(typeFullNameFilter, dumpHashcodes).Objects
+    return Communicator.DumpHeap(typeFullNameFilter, dumpHashcodes).Objects
       .Select(heapObj =>
         new CandidateObject(heapObj.Address, heapObj.Type, heapObj.HashCode));
   }
@@ -258,15 +258,17 @@ public class RemoteHandle : IDisposable
         // Maybe this should move somewhere else...
         resolver.RegisterType(res);
       }
+
       return res;
     }
 
     // Harder case: Dump the remote type. This takes much more time (includes
     // dumping of dependent types) and should be avoided as much as possible.
-    RemoteTypesFactory rtf = new RemoteTypesFactory(resolver, _communicator);
-    var dumpedType = _communicator.DumpType(typeFullName, assembly);
+    RemoteTypesFactory rtf = new RemoteTypesFactory(resolver, Communicator);
+    var dumpedType = Communicator.DumpType(typeFullName, assembly);
     return rtf.Create(this, dumpedType);
   }
+
   /// <summary>
   /// Returns a handle to a remote type based on a given local type.
   /// </summary>
@@ -307,5 +309,8 @@ public class RemoteHandle : IDisposable
     Communicator?.KillDiver();
     _communicator = null;
     _procWithDiver = null;
+
+    // Clear global type cache
+    TypesResolver.Instance._cache.Clear();
   }
 }

@@ -19,7 +19,7 @@ public class TypesResolver()
   // whole class a singleton
   public static TypesResolver Instance = new TypesResolver();
 
-  private readonly Dictionary<Tuple<string, string>, Type> _cache = new();
+  internal readonly Dictionary<Tuple<string, string>, Type> _cache = new();
 
   public void RegisterType(Type type)
     => RegisterType(type.Assembly.GetName().Name, type.FullName, type);
