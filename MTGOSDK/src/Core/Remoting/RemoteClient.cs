@@ -258,7 +258,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     // Prevent multiple calls to Dispose
     if (IsDisposed) return;
     IsDisposed = true;
-    Log.Debug("Disposing RemoteClient.");
+    Log.Trace("Disposing RemoteClient.");
 
     @client.Dispose();
     if (RemoteClient.DestroyOnExit)
