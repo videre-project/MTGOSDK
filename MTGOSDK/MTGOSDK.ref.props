@@ -50,7 +50,8 @@
     when the package is used by a self-contained application.
   -->
   <Import Project="lib\ILLink\ILLink.targets"
-          Condition="'$(PublishTrimmed)' == 'true' And '$(UseRef)' == 'true'" />
+          Condition="'$(PublishTrimmed)' == 'true' And
+                     '$(UseILLinkTrim)' == 'true'" />
 
   <!--
     When building the SDK locally, we must use the full project paths to

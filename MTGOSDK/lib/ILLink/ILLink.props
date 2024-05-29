@@ -4,15 +4,18 @@
   <!-- Forces the .NET SDK to calculate the ILLinkTasksAssembly path -->
   <PropertyGroup>
     <_RequiresLiveILLink>true</_RequiresLiveILLink>
+    <ILLinkDescriptorsFile>$(MSBuildProjectDirectory)\ILLink.Descriptors.xml</ILLinkDescriptorsFile>
   </PropertyGroup>
 
   <PropertyGroup>
     <!-- Link all assemblies -->
     <ILLinkArgs>$(ILLinkArgs) --action link</ILLinkArgs>
-    <!-- Specify types and members to preserve -->
-    <ILLinkArgs>$(ILLinkArgs) -x $(MSBuildProjectDirectory)\ILLink.Descriptors.xml</ILLinkArgs>
     <!-- Ignore all unresolved types and members -->
     <ILLinkArgs>$(ILLinkArgs) --skip-unresolved true</ILLinkArgs>
+  </PropertyGroup>
+  <PropertyGroup Condition="Exists('$(ILLinkDescriptorsFile)')">
+    <!-- Specify types and members to preserve -->
+    <ILLinkArgs>$(ILLinkArgs) -x $(ILLinkDescriptorsFile)</ILLinkArgs>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(SuppressTrimAnalysisWarnings)' == ''">

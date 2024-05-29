@@ -10,26 +10,20 @@
   </PropertyGroup>
 
   <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
+  <Import Project="..\ILLink\ILLink.targets" />
   <PropertyGroup>
     <ILRepackTargetsFile>
       $(MSBuildThisFileDirectory)..\ILRepack\ILRepack.targets
     </ILRepackTargetsFile>
     <ILRepackTarget>Microsoft.Diagnostics.Runtime</ILRepackTarget>
     <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).dll</ILRepackOutput>
+    <UseILLinkTrim>true</UseILLinkTrim>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-  </ItemGroup>
-
-  <Import Project="..\ILLink\ILLink.targets" />
-  <ItemGroup>
-    <!-- For the .NET Standard TFM, we must provide the ILLink.Tasks package -->
-    <PackageReference Include="Microsoft.NET.ILLink.Tasks"
-                      VersionOverride="8.0.0"
-                      PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

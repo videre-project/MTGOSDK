@@ -5,7 +5,7 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <RestoreLockedMode>true</RestoreLockedMode>
+    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
@@ -60,6 +60,11 @@
                             Version="1.0.37"
                             PrivateAssets="all"
                             Condition="'$(EnablePolyfills)' != 'false'" />
+    <!-- For the .NET Standard TFM, we must provide the ILLink.Tasks package -->
+    <PackageReference Include="Microsoft.NET.ILLink.Tasks"
+                      VersionOverride="8.0.0"
+                      PrivateAssets="all"
+                      Condition="'$(UseILLinkTrim)' == 'true'" />
   </ItemGroup>
 
   <!-- Build-time dependencies for MTGOSDK.MSBuild -->

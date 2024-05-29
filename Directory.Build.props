@@ -10,10 +10,6 @@
     <FeedOutputPath>$(SolutionDir)packages</FeedOutputPath>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$(MSBuildProjectDirectory.StartsWith('$(ExampleDir)\'))">
-    <UseLocalFeed>true</UseLocalFeed>
-  </PropertyGroup>
-
   <!-- Internal SDK Paths -->
   <PropertyGroup>
     <UseFullSDKPaths>true</UseFullSDKPaths>
@@ -21,6 +17,11 @@
     <_MTGOSDKCoreTarget>.NETStandard2.0</_MTGOSDKCoreTarget>
     <_MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
     <NuGetExePath>$(SolutionDir)\NuGet.exe</NuGetExePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.StartsWith('$(ExampleDir)\'))">
+    <UseLocalFeed>true</UseLocalFeed>
+    <UseFullSDKPaths>false</UseFullSDKPaths>
   </PropertyGroup>
 
   <!-- Debugging Options -->
