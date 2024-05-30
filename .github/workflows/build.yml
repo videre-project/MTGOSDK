@@ -8,9 +8,7 @@ on:
       - '.github/workflows/build.yml'
       - '**/*.cs'
       - '**/*.sln'
-      - '**/*.proj'
       - '**/*.csproj'
-      - '**/*.vcxproj'
       - '**/*.props'
       - '**/*.targets'
       - '**/packages.lock.json'
@@ -20,10 +18,9 @@ concurrency:
   cancel-in-progress: true
 env:
   MSBUILD_CACHES: |
+    **/dist/**/Reference
     **/bin
     **/obj
-    **/Win32
-    **/x64
   NUGET_CACHES: |
     ~/.nuget/packages
   NUGET_DEFAULTS: -Verbosity quiet -NonInteractive -UseLockFile
@@ -50,8 +47,6 @@ jobs:
       - name: Restore .NET tools
         run: dotnet tool restore
       # Setup MSBuild environment
-      - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v2
       - name: Restore Build Cache
         id: msbuild-cache
         uses: actions/cache@v3
@@ -79,7 +74,7 @@ jobs:
 
       # Build the SDK
       - name: Build SDK Solution
-        run: msbuild SDK.sln /t:Build
+        run: dotnet build -c Release
 
       # Evict expired cache entries
       - name: Purge expired cache entries
