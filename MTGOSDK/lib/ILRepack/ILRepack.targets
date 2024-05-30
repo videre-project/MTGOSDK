@@ -4,7 +4,8 @@
 
   <!-- Merge the main assembly with any copied reference assemblies -->
   <Target Name="MergeReferenceAssemblies"
-          AfterTargets="AfterBuild">
+          AfterTargets="AfterBuild"
+          Condition="'$(OutputFilesModified)' == 'True'">
     <!-- Identify the main assembly and all referenced assemblies -->
     <ItemGroup>
       <InputAssemblies Remove="@(InputAssemblies)" />

@@ -14,8 +14,78 @@
     <RemoveDir Directories="@(FoldersToClean)" />
   </Target>
 
+  <Target Name="PreBuildTimestamp"
+          BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <BaseProjectOutputPath>$(MSBuildProjectDirectory)\$(IntermediateOutputPath)</BaseProjectOutputPath>
+    </PropertyGroup>
+    <ItemGroup>
+      <ProjectOutputFiles Include="$(BaseProjectOutputPath)$(MSBuildProjectName).exe;
+                                   $(BaseProjectOutputPath)$(MSBuildProjectName).dll;
+                                   $(BaseProjectOutputPath)$(MSBuildProjectName).pdb;" />
+      <ProjectOutputFiles Remove="@(_ProjectOutputFiles)"
+                          Condition="!Exists('%(Identity)')" />
+
+      <ProjectUp2DateFile Include="$(BaseProjectOutputPath)$(MSBuildProjectName).csproj.Up2Date;
+                                   $(BaseProjectOutputPath)$(MSBuildProjectName).Version.cs.new" />
+      <ProjectUp2DateFile Remove="@(ProjectUp2DateFile)"
+                          Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+    <PropertyGroup>
+      <OutputTimeStampBeforeBuild>%(ProjectOutputFiles.ModifiedTime)</OutputTimeStampBeforeBuild>
+      <HasBuildRegenerated Condition="@(ProjectOutputFiles -> Count()) == 0">True</HasBuildRegenerated>
+    </PropertyGroup>
+  </Target>
+
+  <UsingTask
+    TaskName="CompareDates"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <FirstDate  ParameterType="System.DateTime" Required="true" />
+      <SecondDate ParameterType="System.DateTime" Required="true" />
+      <Difference ParameterType="System.Double"   Required="true" />
+      <Result     ParameterType="System.Boolean"  Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System"/>
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+          double ToSeconds(DateTime date) => TimeSpan.FromTicks(date.Ticks).TotalSeconds;
+          if (ToSeconds(FirstDate) <= ToSeconds(SecondDate) && Difference != 0.0)
+            Result = false;
+          else
+            Result = (ToSeconds(FirstDate) - ToSeconds(SecondDate)) > Difference;
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="PostBuildTimestamp"
+          AfterTargets="CoreCompile">
+    <!-- Compare timestamps of the output files before and after build -->
+    <PropertyGroup>
+      <OutputTimeStampAfterBuild>%(ProjectOutputFiles.ModifiedTime)</OutputTimeStampAfterBuild>
+    </PropertyGroup>
+    <CompareDates FirstDate="$(OutputTimeStampAfterBuild)"
+                  SecondDate="$(OutputTimeStampBeforeBuild)"
+                  Difference="1.00"
+                  Condition="'$(OutputTimeStampBeforeBuild)' != ''">
+      <Output TaskParameter="Result" PropertyName="HasTimestampUpdated" />
+    </CompareDates>
+    <PropertyGroup Condition="'$(HasTimestampUpdated)' == ''">
+      <HasTimestampUpdated>True</HasTimestampUpdated>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <OutputFilesModified>False</OutputFilesModified>
+      <OutputFilesModified Condition="'$(HasTimestampUpdated)' == 'True'">True</OutputFilesModified>
+    </PropertyGroup>
+  </Target>
+
   <Target Name="UpdateFeed"
-          AfterTargets="Pack">
+          AfterTargets="Pack"
+          Condition="'$(OutputFilesModified)' == 'True'">
     <!-- Query all existing package versions in the feed -->
     <ItemGroup>
       <_SDKPackagePaths Include="$(FeedOutputPath)\**\*.nupkg" />

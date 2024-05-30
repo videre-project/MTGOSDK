@@ -7,7 +7,12 @@
              TaskFactory="TaskHostFactory"
              Condition="'$(ILLinkTasksAssembly)' != ''" />
 
-  <Target Name="ComputeILLinkProps">
+  <Target Name="RunILLinkTask"
+          AfterTargets="PostBuildTimestamp"
+          BeforeTargets="MergeReferenceAssemblies"
+          Condition="'$(OutputFilesModified)' == 'True'">
+
+    <!-- Compute ILLink properties -->
     <PropertyGroup>
       <ILLinkOutputDir>$(IntermediateOutputPath)illink\</ILLinkOutputDir>
     </PropertyGroup>
@@ -17,15 +22,9 @@
                             Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == '' Or
                                         $(CopyLocalLockFileAssemblies) == 'true'" />
     </ItemGroup>
-  </Target>
 
-  <Target Name="TrimReferenceAssemblies"
-          AfterTargets="CoreCompile"
-          BeforeTargets="MergeReferenceAssemblies"
-          DependsOnTargets="ComputeILLinkProps">
-
+    <!-- Run ILLink task on the input assemblies -->
     <Delete Files="$(ILLinkOutputDir)**\*" />
-
     <ILLink AssemblyPaths="@(_LinkInputAssemblies)"
             ReferenceAssemblyPaths="@(ReferencePath)"
             RootAssemblyNames="$(AssemblyName)"
@@ -35,17 +34,12 @@
             ToolPath="$(_DotNetHostDirectory)"
             NoWarn="$(NoWarn)"
             ContinueOnError="ErrorAndContinue" />
-
     <Delete Files="$(OutputPath)*.pdb;
                    $(OutputPath)*.dll" />
     <Copy SourceFiles="$(MergeReferenceAssemblies)"
           DestinationFolder="$(OutputPath)" />
 
-  </Target>
-
-  <Target Name="UpdateILLinkOutput"
-          AfterTargets="TrimReferenceAssemblies"
-          BeforeTargets="MergeReferenceAssemblies">
+    <!-- Update the list of output assemblies from ILLink -->
     <ItemGroup>
       <_LinkOutputAssemblies Include="$(ILLinkOutputDir)**\*" />
       <_LinkOutputIntermediaryAssembly Include="@(IntermediateAssembly->'$(ILLinkOutputDir)%(Filename)%(Extension)')" />
@@ -58,6 +52,7 @@
     <ItemGroup>
       <FileWrites Include="@(_LinkOutputAssemblies);@(_LinkOutputIntermediaryAssembly)" />
     </ItemGroup>
+
   </Target>
 
 </Project>
