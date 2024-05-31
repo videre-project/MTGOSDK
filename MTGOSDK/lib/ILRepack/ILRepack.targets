@@ -5,7 +5,7 @@
   <!-- Merge the main assembly with any copied reference assemblies -->
   <Target Name="MergeReferenceAssemblies"
           AfterTargets="AfterBuild"
-          Condition="'$(OutputFilesModified)' == 'True'">
+          Condition="'$(OutputFilesModified)' == 'true'">
     <!-- Identify the main assembly and all referenced assemblies -->
     <ItemGroup>
       <InputAssemblies Remove="@(InputAssemblies)" />
@@ -15,7 +15,7 @@
                        Condition="'$(MergeNugetDependencies)' != 'false'" />
       <InputAssemblies Include="@(ReferenceAssemblies->'$(OutputPath)%(Filename).dll')"
                        Condition="Exists('$(OutputPath)%(Filename).dll') And
-                                  '$(ExcludeReferenceAssemblies)' != 'true'" />
+                                  '$(UseReferenceAssemblies)' == 'true'" />
     </ItemGroup>
     <PropertyGroup Condition="'$(ILRepackOutput)' == ''">
       <ILRepackOutput>$(OutputPath)$(ILRepackTarget).dll</ILRepackOutput>
@@ -35,8 +35,23 @@
     <Delete Files="@(InputAssemblies)"
             Condition="'%(Filename)' != '$(ILRepackTarget)'" />
 
-    <Message Text="MTGOSDK.MSBuild: Finished merging $(AssemblyName) assemblies."
+    <Message Text="ILRepack: Finished merging $(AssemblyName) assemblies."
              Importance="high" />
+  </Target>
+
+  <!-- If ILRepack is not run, delete all duplicate references from rebuilds -->
+  <Target Name="CleanReferenceAssemblies"
+          AfterTargets="MergeReferenceAssemblies"
+          Condition="'$(OutputFilesModified)' == 'false' And
+                     '$(UseReferenceAssemblies)' == 'true'">
+    <ItemGroup>
+      <InputAssemblies Remove="@(InputAssemblies)" />
+      <InputAssemblies Include="@(ReferenceAssemblies->'$(OutputPath)%(Filename).dll')"
+                       Condition="Exists('$(OutputPath)%(Filename).dll')" />
+    </ItemGroup>
+    <Delete Files="@(InputAssemblies)"
+            Condition="'%(Filename)' != '$(AssemblyName)' Or
+                       '%(Filename)' != '$(ILRepackTarget)'" />
   </Target>
 
 </Project>

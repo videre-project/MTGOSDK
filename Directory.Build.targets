@@ -78,43 +78,40 @@
     </PropertyGroup>
 
     <PropertyGroup>
-      <OutputFilesModified>False</OutputFilesModified>
-      <OutputFilesModified Condition="'$(HasTimestampUpdated)' == 'True'">True</OutputFilesModified>
+      <OutputFilesModified>false</OutputFilesModified>
+      <OutputFilesModified Condition="'$(HasTimestampUpdated)' == 'True'">true</OutputFilesModified>
     </PropertyGroup>
   </Target>
 
   <Target Name="UpdateFeed"
-          AfterTargets="Pack"
-          Condition="'$(OutputFilesModified)' == 'True'">
+          AfterTargets="Pack">
     <!-- Query all existing package versions in the feed -->
+    <PropertyGroup>
+      <FeedPackagePath>$(FeedOutputPath)\$(MSBuildProjectName.ToLower())</FeedPackagePath>
+    </PropertyGroup>
     <ItemGroup>
-      <_SDKPackagePaths Include="$(FeedOutputPath)\**\*.nupkg" />
+      <_SDKPackagePaths Include="$(FeedPackagePath)\**\*.nupkg" />
       <_SDKPackagePaths>
         <VersionPath>$([System.IO.Path]::GetDirectoryName('%(Identity)').Replace('$(FeedOutputPath)\', ''))</VersionPath>
       </_SDKPackagePaths>
       <_SDKPackagePaths>
+        <File>$([System.IO.Path]::Combine('%(VersionPath)', 'nupkg').Replace('\', '.'))</File>
         <Version>$([System.IO.Path]::GetFileName('%(VersionPath)'))</Version>
       </_SDKPackagePaths>
     </ItemGroup>
 
     <!-- Clean the local feed of old package versions -->
-    <PropertyGroup>
-      <FeedPackagePath>$(FeedOutputPath)\$(MSBuildProjectName.ToLower())</FeedPackagePath>
-    </PropertyGroup>
     <RemoveDir Directories="@(_SDKPackagePaths->'$(FeedOutputPath)\%(VersionPath)');
                             @(_SDKPackagePaths->'$(NuGetPackageRoot)\%(VersionPath)')"
                Condition="Exists($(FeedPackagePath))" />
 
     <!-- Add the built package to the local feed -->
-    <ItemGroup>
-      <_SDKPackageSources Include="$(PackageOutputPath)\$(MSBuildProjectName).*.nupkg" />
-    </ItemGroup>
     <PropertyGroup>
-      <SDKPackageVersion>%(_SDKPackagePaths.Version)</SDKPackageVersion>
-      <PackagePath>$(PackageOutputPath)\$(MSBuildProjectName).$(SDKPackageVersion).nupkg</PackagePath>
-      <PackagePath Condition="!Exists($(PackagePath))">%(_SDKPackageSources.Identity)</PackagePath>
+      <PackagePath>$(PackageOutputPath)\$(MSBuildProjectName).$(PackageVersion).nupkg</PackagePath>
     </PropertyGroup>
-    <Exec Command="$(NuGetExePath) add $(PackagePath) -Source $(FeedOutputPath)" />
+    <Exec Command="$(NuGetExePath) add $(PackagePath) ^
+                    -Source $(FeedOutputPath) ^
+                    -Verbosity quiet" />
   </Target>
 
 </Project>

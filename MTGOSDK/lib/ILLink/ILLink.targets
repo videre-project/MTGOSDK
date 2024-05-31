@@ -10,7 +10,7 @@
   <Target Name="RunILLinkTask"
           AfterTargets="PostBuildTimestamp"
           BeforeTargets="MergeReferenceAssemblies"
-          Condition="'$(OutputFilesModified)' == 'True'">
+          Condition="'$(OutputFilesModified)' == 'true'">
 
     <!-- Compute ILLink properties -->
     <PropertyGroup>
