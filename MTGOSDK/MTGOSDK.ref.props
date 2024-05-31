@@ -21,8 +21,7 @@
     -->
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj"
                       ReferenceOutputAssembly="false"
-                      PrivateAssets="all"
-                      IncludeAssets="build;buildTransitive" />
+                      PrivateAssets="all" />
     <!--
       Include reference assemblies to compile against the current MTGO version.
 

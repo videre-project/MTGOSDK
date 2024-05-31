@@ -13,7 +13,8 @@
              TaskFactory="TaskHostFactory" />
 
   <Target Name="GenerateReferenceAssemblies"
-          BeforeTargets="ResolveAssemblyReferences">
+          BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(BuildProjectReferences)' != 'false'">
     <!--
       Extract the MTGO installation directory paths, or create a temporary
       extraction directory if no existing MTGO installation could be found.
@@ -54,7 +55,7 @@
     </GenerateReferenceAssemblies>
 
     <!-- Add the reference assembly path to the assembly search paths -->
-    <PropertyGroup Condition="'$(UseRef)' != 'false'">
+    <PropertyGroup Condition="'$(UseReferenceAssemblies)' != 'false'">
       <AssemblySearchPaths>$(AssemblySearchPaths);$(_MTGOSDK_Refs)</AssemblySearchPaths>
     </PropertyGroup>
 
