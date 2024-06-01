@@ -21,8 +21,7 @@
     </PropertyGroup>
     <ItemGroup>
       <ProjectOutputFiles Include="$(BaseProjectOutputPath)$(MSBuildProjectName).exe;
-                                   $(BaseProjectOutputPath)$(MSBuildProjectName).dll;
-                                   $(BaseProjectOutputPath)$(MSBuildProjectName).pdb;" />
+                                   $(BaseProjectOutputPath)$(MSBuildProjectName).dll" />
       <ProjectOutputFiles Remove="@(_ProjectOutputFiles)"
                           Condition="!Exists('%(Identity)')" />
 
@@ -81,6 +80,35 @@
       <OutputFilesModified>false</OutputFilesModified>
       <OutputFilesModified Condition="'$(HasTimestampUpdated)' == 'True'">true</OutputFilesModified>
     </PropertyGroup>
+  </Target>
+
+  <Target Name="SkipPostCompile"
+          BeforeTargets="CopyFilesToOutputDirectory"
+          AfterTargets="GenerateDependencyFile"
+          Condition="'$(OutputFilesModified)' == 'false'">
+    <ItemGroup>
+      <ProjectFileWrites Include="@(FileWrites)"
+                         Condition="'%(Extension)' == '.exe' Or
+                                    '%(Extension)' == '.dll' Or
+                                    '%(Extension)' == '.pdb'" />
+    </ItemGroup>
+    <PropertyGroup Condition="@(ProjectFileWrites -> Count()) > 0">
+      <SkipCopyBuildProduct>true</SkipCopyBuildProduct>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="OverrideIncrementalClean"
+          BeforeTargets="IncrementalClean"
+          AfterTargets="_CleanGetCurrentAndPriorFileWrites"
+          Condition="'$(OutputFilesModified)' == 'false' And
+                     '$(SkipCopyBuildProduct)' == 'true'">
+    <ItemGroup>
+      <ProjectFileWrites Include="$(OutputPath)$(MSBuildProjectName).exe;
+                                  $(OutputPath)$(MSBuildProjectName).dll;
+                                  $(OutputPath)$(MSBuildProjectName).pdb" />
+      <_CleanPriorFileWrites Remove="@(ProjectFileWrites -> '$(MSBuildProjectDirectory)\%(RelativeDir)%(Filename)%(Extension)')"
+                             Condition="Exists('%(FullPath)')" />
+    </ItemGroup>
   </Target>
 
   <Target Name="UpdateFeed"
