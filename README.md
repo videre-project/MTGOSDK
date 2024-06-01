@@ -45,7 +45,16 @@ $ dotnet build -c Release
 $ msbuild /t:Build /p:Configuration=Release
 ```
 
-The MTGOSDK project will automatically build reference assemblies for the latest version of MTGO, even if no existing MTGO installation exists. No further action is required. This helps ensure that the SDK is always up-to-date with the latest versions of MTGO.
+The MTGOSDK project will automatically build reference assemblies for the latest version of MTGO, even if no existing MTGO installation exists. This helps ensure that the SDK is always up-to-date with the latest versions of MTGO.
+
+To build the project in watch-mode, you can use the `dotnet watch` command with the **MTGOSDK** project instead of the solution file:
+
+```powershell
+# Automatically rebuild MTGOSDK when file changes are detected
+$ dotnet watch --project MTGOSDK/MTGOSDK.csproj build -c Release
+```
+
+This will pick up changes to dependent **MTGOSDK.MSBuild** and **MTGOSDK.Win32** projects as well. As build evaluation is rooted from the MTGOSDK .csproj file, all logs from the build will be stored under the `MTGOSDK/logs` directory.
 
 ## License
 
