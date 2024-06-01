@@ -31,6 +31,11 @@ public static class ObjectProvider
   private static readonly ConcurrentDictionary<string, dynamic> s_instances = new();
 
   /// <summary>
+  /// Store of all instances' setters for retrieved LazyRemoteObjects.
+  /// </summary>
+  private static readonly ConcurrentDictionary<string, Func<Func<dynamic>, dynamic>> s_resetters = new();
+
+  /// <summary>
   /// Whether the ObjectProvider cache requires a refresh.
   /// </summary>
   internal static bool RequiresRefresh = false;
@@ -41,27 +46,50 @@ public static class ObjectProvider
   /// <param name="queryPath">The query path of the registered type.</param>
   /// <param name="useCache">Whether to use the cached instance.</param>
   /// <param name="useHeap">Whether to query the client's object heap.</param>
+  /// <param name="useLazy">Whether to lazy-load the returned instance.</param>
   /// <returns>A remote instance of the given type.</returns>
   public static dynamic Get(
     string queryPath,
     bool useCache = true,
-    bool useHeap = false)
+    bool useHeap = false,
+    bool useLazy = true)
   {
     // Check if the instance is already cached
     if (useCache && s_instances.TryGetValue(queryPath, out dynamic instance))
     {
       Log.Trace("Retrieved cached instance type {Type}", queryPath);
+
+      if (RequiresRefresh)
+        Log.Warning("Retrieved type is stale and requires a refresh from ObjectProvider.");
+
       return instance;
     }
 
+    //
+    // Create a LazyRemoteObject instance and store its resetter for future use.
+    //
+    // If the instance is never referenced, then the ObjectProvider will never
+    // query the client for the instance type and create no overhead.
+    //
+    if (useLazy)
+    {
+      Log.Trace("Creating lazy instance of type {Type}", queryPath);
+      instance = new LazyRemoteObject();
+      var resetter = instance.Set(new Func<dynamic>(() =>
+          Get(queryPath, useCache, useHeap, useLazy: false)));
+      s_resetters.TryAdd(queryPath, resetter);
+
+      return instance;
+    }
     // If the client is disposed, return an empty instance to defer construction
-    if (RemoteClient.IsDisposed)
+    else if (RemoteClient.IsDisposed)
     {
       Log.Trace("Client is disposed. Returning empty instance of type {Type}", queryPath);
-      instance = new DynamicRemoteObject();
+      return Get(queryPath, useCache, useHeap, useLazy: true);
     }
+
     // Query using the ObjectProvider.Get<T>() method on the client
-    else if (!useHeap)
+    if (!useHeap)
     {
       // Get the RemoteType from the type's query path
       Log.Trace("Retrieving instance type {Type}", queryPath);
@@ -140,9 +168,9 @@ public static class ObjectProvider
     Log.Debug("Refreshing ObjectProvider cache.");
     foreach (var kvp in s_instances)
     {
-      s_instances.TryGetValue(kvp.Key, out dynamic refObj);
-      dynamic obj = Get(kvp.Key, useCache: false);
-      Swap(ref refObj, obj, bindTypes: true);
+      Log.Trace("Refreshing instance type {Type}", kvp.Key);
+      s_resetters.TryGetValue(kvp.Key, out var s_reset);
+      s_reset(new Func<dynamic>(() => Get(kvp.Key, useCache: false, useLazy: false)));
     }
     RequiresRefresh = false;
   }

@@ -164,14 +164,19 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       this[t1, t2, t3, t4][t5];
   }
 
-  public RemoteHandle __ra;
-  public RemoteObject __ro;
-  public RemoteType __type;
+  public virtual RemoteHandle __ra { get => m_ra; set => m_ra = value; }
+  private RemoteHandle m_ra = null!;
+
+  public virtual RemoteObject __ro { get => m_ro; set => m_ro = value; }
+  private RemoteObject m_ro = null!;
+
+  public virtual RemoteType __type { get => m_type; set => m_type = value; }
+  private RemoteType m_type = null!;
 
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
   private List<MemberInfo> __membersInner = null;
-  public IEnumerable<MemberInfo> __members => MindFuck();
+  public IEnumerable<MemberInfo> __members => GetMembers();
 
   public DynamicRemoteObject(RemoteHandle ra, RemoteObject ro)
   {
@@ -184,12 +189,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     }
   }
 
-  public DynamicRemoteObject() // For avoiding overriding reference type
-  {
-    __ra = null;
-    __ro = null;
-    __type = null;
-  }
+  public DynamicRemoteObject() { } // For avoiding overriding reference type
 
   /// <summary>
   /// Gets the type of the proxied remote object, in the remote app. (This does not reutrn `typeof(DynamicRemoteMethod)`)
@@ -229,7 +229,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     while (nextType != null && lastType != typeof(object));
   }
 
-  private IEnumerable<MemberInfo> MindFuck()
+  private IEnumerable<MemberInfo> GetMembers()
   {
     if (__membersInner != null && __ongoingMembersDumper == null)
     {
