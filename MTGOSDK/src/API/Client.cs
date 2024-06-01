@@ -245,17 +245,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// Cleans up any cached remote objects pinning objects in client memory.
   /// </summary>
-  /// <param name="disconnect">Whether to disconnect the client.</param>
-  public void ClearCaches(bool disconnect = false)
+  public void ClearCaches()
   {
-    if (disconnect)
-    {
-      RemoteClient.Dispose();
-      ObjectProvider.RequiresRefresh = true;
-    }
-    m_currentUser = null;
-
     Log.Debug("Disposing all pinned remote objects registered with the client.");
+    m_currentUser = null;
     UserManager.Users.Clear();
     CollectionManager.Cards.Clear();
   }
@@ -265,7 +258,9 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </summary>
   public void Dispose()
   {
-    ClearCaches(disconnect: true);
+    ClearCaches();
+    RemoteClient.Dispose();
+    ObjectProvider.RequiresRefresh = true;
   }
 
   //
