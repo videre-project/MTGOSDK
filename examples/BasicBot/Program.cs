@@ -15,7 +15,7 @@ using MTGOSDK.Core.Security;
 
 // Wait until the main MTGO server is online.
 bool restart = false;
-while (!await ServerStatus.IsOnline())
+while (!await Client.IsOnline())
 {
   Console.WriteLine("MTGO servers are currently offline. Waiting...");
   await Task.Delay(TimeSpan.FromMinutes(30));
