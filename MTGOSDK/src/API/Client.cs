@@ -5,8 +5,11 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Security;
+
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Users;
@@ -156,8 +159,14 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       ValidateVersion(assert: false); // Ensure reference types are compatible.
 
       // Starts a new MTGO client process.
-      if (options.CreateProcess && !(await RemoteClient.StartProcess()))
-        throw new SetupFailedException("Failed to start the MTGO process.");
+      if (options.CreateProcess)
+      {
+        if (!await IsOnline())
+          throw new ExternalErrorException("MTGO servers are currently offline.");
+
+        if (!await RemoteClient.StartProcess())
+          throw new SetupFailedException("Failed to start the MTGO process.");
+      }
 
       // Sets the client's disposal policy.
       if(options.DestroyOnExit)
@@ -183,6 +192,32 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Closes any blocking dialogs preventing the client from logging in.
     if (options.AcceptEULAPrompt && !IsConnected)
       WindowUtilities.CloseDialogs();
+  }
+
+  /// <summary>
+  /// Checks if the MTGO servers are online.
+  /// </summary>
+  public static async Task<bool> IsOnline()
+  {
+    using (HttpClient client = new HttpClient())
+    {
+      string url = "https://census.daybreakgames.com/s:dgc/get/global/game_server_status?game_code=mtgo&c:limit=1000";
+      using var response = await client.GetAsync(url);
+
+      if (!response.IsSuccessStatusCode)
+        throw new HttpRequestException("Failed to fetch server status");
+
+      using var content = response.Content;
+      var json = JObject.Parse(await content.ReadAsStringAsync());
+
+      if (json["returned"].ToObject<int>() == 0)
+        throw new ExternalErrorException("No MTGO servers were found");
+
+      // Check if any servers are online.
+      string[] statuses = [ "high", "medium", "low" ];
+      return json["game_server_status_list"].Any(s =>
+          statuses.Contains(s["last_reported_state"].ToObject<string>()));
+    }
   }
 
   /// <summary>
