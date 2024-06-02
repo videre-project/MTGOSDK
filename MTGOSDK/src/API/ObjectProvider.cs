@@ -8,8 +8,8 @@ using System.Collections.Concurrent;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
-using MTGOSDK.Core.Remoting.Internal;
 using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Remoting.LazyRemoteObject;
 
 
 namespace MTGOSDK.API;
@@ -33,12 +33,12 @@ public static class ObjectProvider
   /// <summary>
   /// Store of all instances' setters for retrieved LazyRemoteObjects.
   /// </summary>
-  private static readonly ConcurrentDictionary<string, Func<Func<dynamic>, dynamic>> s_resetters = new();
+  private static readonly ConcurrentDictionary<string, TResetter> s_resetters = new();
 
   /// <summary>
-  /// Whether the ObjectProvider cache requires a refresh.
+  /// Whether the ObjectProvider cache requires a reset.
   /// </summary>
-  internal static bool RequiresRefresh = false;
+  public static bool RequiresReset = false;
 
   /// <summary>
   /// Returns an instance of the given type from the client's ObjectProvider.
@@ -59,7 +59,7 @@ public static class ObjectProvider
     {
       Log.Trace("Retrieved cached instance type {Type}", queryPath);
 
-      if (RequiresRefresh)
+      if (RequiresReset)
         Log.Warning("Retrieved type is stale and requires a refresh from ObjectProvider.");
 
       return instance;
@@ -71,18 +71,27 @@ public static class ObjectProvider
     // If the instance is never referenced, then the ObjectProvider will never
     // query the client for the instance type and create no overhead.
     //
-    if (useLazy)
+    if (useLazy || RequiresReset)
     {
       Log.Trace("Creating lazy instance of type {Type}", queryPath);
       instance = new LazyRemoteObject();
       var resetter = instance.Set(new Func<dynamic>(() =>
           Get(queryPath, useCache, useHeap, useLazy: false)));
-      s_resetters.TryAdd(queryPath, resetter);
 
+      // Store the resetter callback to reset the lazy instance when
+      // the RemoteClient is disposed or the ObjectProvider cache is reset.
+      s_resetters.AddOrUpdate(queryPath, resetter,
+        // If a callback already exists, combine the two callbacks.
+        new Func<string, TResetter, TResetter>((_, oldResetter) =>
+          (TResetter)Delegate.Combine(oldResetter, resetter)
+        ));
+
+      // Return the lazy instance directly, as the later call to ObjectProvider
+      // will add the created instance to the cache.
       return instance;
     }
     // If the client is disposed, return an empty instance to defer construction
-    else if (RemoteClient.IsDisposed)
+    else if (!RemoteClient.IsInitialized && !s_resetters.ContainsKey(queryPath))
     {
       Log.Trace("Client is disposed. Returning empty instance of type {Type}", queryPath);
       return Get(queryPath, useCache, useHeap, useLazy: true);
@@ -107,6 +116,11 @@ public static class ObjectProvider
 
     // Cache the instance for future use
     s_instances.TryAdd(queryPath, instance);
+    RemoteClient.Disposed += (s, e) =>
+    {
+      s_instances.TryRemove(queryPath, out _);
+      Reset(queryPath, new Func<dynamic>(() => Get(queryPath, useCache, useHeap, useLazy)));
+    };
 
     return instance;
   }
@@ -153,25 +167,31 @@ public static class ObjectProvider
   /// <returns>A remote instance of the given type.</returns>
   public static T Get<T>() where T : class => Get<T>(bindTypes: true);
 
+  private static void Reset(string key, Func<dynamic> callback)
+  {
+    // Clear RemoteClient callback (if another instance was created)
+    RemoteClient.Disposed -= (s, e) => Reset(key, callback);
+
+    if (s_resetters.TryGetValue(key, out var s_reset))
+    {
+      Log.Trace("Resetting instance type {Type}", key);
+      RequiresReset = true;
+      s_reset(callback);
+      RequiresReset = false;
+    }
+  }
+
   /// <summary>
-  /// Refreshes all instances in the ObjectProvider cache.
+  /// Resets all instances in the ObjectProvider cache.
   /// </summary>
   /// <remarks>
   /// This method is useful for updating all instances in the cache after
   /// connecting to a new MTGO instance or changing the client's context.
   /// </remarks>
-  public static void Refresh()
+  public static void ResetCache()
   {
-    // Ensure that a connection to the MTGO client has been established
-    RemoteClient.EnsureInitialize();
-
-    Log.Debug("Refreshing ObjectProvider cache.");
+    Log.Debug("Resetting ObjectProvider cache.");
     foreach (var kvp in s_instances)
-    {
-      Log.Trace("Refreshing instance type {Type}", kvp.Key);
-      s_resetters.TryGetValue(kvp.Key, out var s_reset);
-      s_reset(new Func<dynamic>(() => Get(kvp.Key, useCache: false, useLazy: false)));
-    }
-    RequiresRefresh = false;
+      Reset(kvp.Key, new Func<dynamic>(() => Get(kvp.Key, useLazy: false)));
   }
 }

@@ -6,6 +6,7 @@
 using System.Collections.Concurrent;
 
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
@@ -60,6 +61,8 @@ public static class CollectionManager
         ?? throw new KeyNotFoundException(
             $"No card found with catalog id #{id}.")
       );
+      // Set callback to remove user from cache when the client is disposed.
+      RemoteClient.Disposed += (s, e) => Cards.TryRemove(id, out _);
     }
 
     return card;

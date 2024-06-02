@@ -40,25 +40,25 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// Manages the client's connection and user session information.
   /// </summary>
   private static readonly ISession s_session =
-    Defer(ObjectProvider.Get<ISession>);
+    ObjectProvider.Get<ISession>();
 
   /// <summary>
   /// Provides basic information about the current user and client session.
   /// </summary>
   private static readonly IFlsClientSession s_flsClientSession =
-    Defer(ObjectProvider.Get<IFlsClientSession>);
-
-  /// <summary>
-  /// View model for the client's main window and scenes.
-  /// </summary>
-  private static dynamic s_shellViewModel =>
-    ObjectProvider.Get<IShellViewModel>(bindTypes: false);
+    ObjectProvider.Get<IFlsClientSession>();
 
   /// <summary>
   /// View model for the client's login and authentication process.
   /// </summary>
-  private static ILoginViewModel s_loginManager =>
+  private static readonly ILoginViewModel s_loginManager =
     ObjectProvider.Get<ILoginViewModel>();
+
+  /// <summary>
+  /// View model for the client's main window and scenes.
+  /// </summary>
+  private static readonly dynamic s_shellViewModel =
+    ObjectProvider.Get<IShellViewModel>(bindTypes: false);
 
   /// <summary>
   /// The current build version of the running MTGO client.
@@ -87,27 +87,9 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   //
 
   /// <summary>
-  /// Internal reference to the current logged in user.
-  /// </summary>
-  private static User? m_currentUser;
-
-  /// <summary>
   /// Returns the current logged in user's public information.
   /// </summary>
-  public static User CurrentUser
-  {
-    get
-    {
-      // Only fetch and update the current user if the user Id has changed.
-      int userId = s_flsClientSession.LoggedInUser.Id;
-      if (userId != m_currentUser?.Id) {
-        string username = s_flsClientSession.LoggedInUser.Name;
-        m_currentUser = new User(userId, username);
-      }
-
-      return m_currentUser;
-    }
-  }
+  public static User CurrentUser => new(s_flsClientSession.LoggedInUser.Id);
 
   /// <summary>
   /// The MTGO client's user session id.
@@ -186,22 +168,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         RemoteClient.Port = Cast<ushort>(options.Port);
     })
   {
-    //
-    // If the RemoteClient was previously disposed (another Client instance was
-    // created and disposed), then we need to refresh all remote objects created
-    // through the ObjectProvider to ensure that references are still valid.
-    //
-    if (ObjectProvider.RequiresRefresh) ObjectProvider.Refresh();
-
-    //
-    // Ensure all deferred static fields in the queue are initialized.
-    //
-    // This will initialize the connection to the MTGO client and load all
-    // static fields in this class that depend on the initialization of any
-    // remote objects.
-    //
-    Log.Trace("Constructing deferred static fields for {Type}.", typeof(Client));
-    Construct(_ref: s_flsClientSession /* Can be any deferred instance */);
+    // Initializes the client connection and starts the MTGO client API.
+    RemoteClient.EnsureInitialize();
     Log.Information("Initialized the MTGO client API.");
 
     // Minimize the MTGO window after startup.
@@ -248,20 +216,15 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   public void ClearCaches()
   {
     Log.Debug("Disposing all pinned remote objects registered with the client.");
-    m_currentUser = null;
     UserManager.Users.Clear();
     CollectionManager.Cards.Clear();
+    ObjectProvider.ResetCache();
   }
 
   /// <summary>
   /// Disposes of the remote client handle.
   /// </summary>
-  public void Dispose()
-  {
-    ClearCaches();
-    RemoteClient.Dispose();
-    ObjectProvider.RequiresRefresh = true;
-  }
+  public void Dispose() => RemoteClient.Dispose();
 
   //
   // ISession wrapper methods
@@ -352,7 +315,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     Log.Debug("Logging off and disconnecting the client.");
     s_session.LogOff();
     Try(() => Unbind(s_loginManager).IsLoginEnabled = true);
-    if (!(await WaitUntil(() => !IsConnected || RemoteClient.IsDisposed ))) {
+    if (!(await WaitUntil(() => !IsConnected || !RemoteClient.IsInitialized ))) {
       throw new TimeoutException("Failed to log off and disconnect the client.");
     }
   }

@@ -7,9 +7,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 
+using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
-using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Resources;
 
 using MTGOSDK.Win32.API;
@@ -34,6 +34,11 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   public static Process @process => @this._clientProcess;
 
   /// <summary>
+  /// Whether the RemoteClient singleton has been initialized.
+  /// </summary>
+  public static bool IsInitialized => s_instance.IsValueCreated;
+
+  /// <summary>
   /// The directory path to extract runtime injector and diver assemblies to.
   /// </summary>
   public static string ExtractDir =
@@ -53,7 +58,6 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   {
     Bootstrapper.ExtractDir = ExtractDir;
     _clientHandle = GetClientHandle();
-    IsDisposed = false;
   }
 
   /// <summary>
@@ -62,8 +66,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   public static void EnsureInitialize()
   {
     // Manually initialize the singleton instance if not already created
-    if (!s_instance.IsValueCreated)
-      _ = s_instance.Value;
+    if (!IsInitialized) _ = s_instance.Value;
   }
 
   //
@@ -81,7 +84,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <summary>
   /// Fetches the MTGO client process.
   /// </summary>
-  private static Process? MTGOProcess() =>
+  private static Process MTGOProcess() =>
     Process.GetProcessesByName("MTGO")
       .OrderBy(x => x.StartTime)
       .FirstOrDefault();
@@ -227,14 +230,14 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   private RemoteHandle GetClientHandle()
   {
     // Connect to the MTGO process
-    ushort port = RemoteClient.Port ??= (ushort)_clientProcess.Id;
-    Log.Debug("Connecting to MTGO process on port {Port}", port);
+    ushort port = Port ??= Cast<ushort>(_clientProcess.Id);
+    Log.Trace("Connecting to MTGO process on port {Port}", port);
     RemoteHandle client = RemoteHandle.Connect(_clientProcess, port);
 
     // Teardown on fatal exception.
     AppDomain.CurrentDomain.UnhandledException += (s, e) =>
     {
-      if (!IsDisposed)
+      if (!IsInitialized)
       {
         Log.Critical("Encountered a fatal exception. Cleaning up RemoteClient.");
         Dispose();
@@ -256,19 +259,33 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   internal static void Dispose()
   {
     // Prevent multiple calls to Dispose
-    if (IsDisposed) return;
-    IsDisposed = true;
-    Log.Trace("Disposing RemoteClient.");
+    if (!IsInitialized) return;
 
+    // Call all event subscribers first before disposing
+    Log.Debug("Disposing RemoteClient.");
+    Disposed?.Invoke(null, EventArgs.Empty);
+    Disposed = null;
+
+    // Cleanup all resources and dispose of the client handle
     @client.Dispose();
-    if (RemoteClient.DestroyOnExit)
+    Port = null;
+
+    // Kill the MTGO process if DestroyOnExit is set
+    if (DestroyOnExit)
+    {
       @process.Kill();
+      DestroyOnExit = false;
+    }
 
     // Reset the singleton instance to allow lazy reinitialization
     s_instance = new Lazy<RemoteClient>(() => new RemoteClient());
-    Log.Debug("RemoteClient disposed.");
+    Log.Trace("RemoteClient disposed.");
   }
-  internal static bool IsDisposed { get; private set; } = false;
+
+  /// <summary>
+  /// Event handler for when the RemoteClient is disposed.
+  /// </summary>
+  public static event EventHandler? Disposed;
 
   // ~RemoteClient() => Dispose();
 

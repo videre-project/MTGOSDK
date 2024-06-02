@@ -8,6 +8,7 @@ using System.Reflection;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Chat;
@@ -21,7 +22,7 @@ using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 public static class UserManager
 {
   /// <summary>
-  /// A dictionary of cached user objects.
+  /// A dictionary of cached user objects by their Login ID.
   /// </summary>
   public static ConcurrentDictionary<int, User> Users { get; } = new();
 
@@ -54,6 +55,8 @@ public static class UserManager
         Unbind(s_userManager).CreateNewUser(id, name)
           ?? throw new ArgumentException($"User '{name}' (#{id}) does not exist.")
       );
+      // Set callback to remove user from cache when the client is disposed.
+      RemoteClient.Disposed += (s, e) => Users.TryRemove(id, out _);
     }
 
     return user;
@@ -83,11 +86,13 @@ public static class UserManager
   /// Thrown if the user does not exist.
   /// </exception>
   public static User GetUser(int id) =>
-    GetUser(
-      id,
-      GetUserName(id)
-        ?? throw new ArgumentException($"User #{id} does not exist.")
-    );
+    Users.TryGetValue(id, out var user)
+      ? user
+      : GetUser(
+          id,
+          GetUserName(id)
+            ?? throw new ArgumentException($"User #{id} does not exist.")
+        );
 
   /// <summary>
   /// Retrieves the username of a user by their Login ID.
