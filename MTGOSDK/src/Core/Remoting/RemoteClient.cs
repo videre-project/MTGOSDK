@@ -283,11 +283,9 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   }
 
   /// <summary>
-  /// Event handler for when the RemoteClient is disposed.
+  /// Event raised when the RemoteClient is disposed.
   /// </summary>
   public static event EventHandler? Disposed;
-
-  // ~RemoteClient() => Dispose();
 
   //
   // RemoteHandle wrapper methods
