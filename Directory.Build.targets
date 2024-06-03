@@ -111,6 +111,20 @@
     </ItemGroup>
   </Target>
 
+  <!-- Override MTGOSDK package versions to use the local package feed -->
+  <Target Name="UseLocalFeedPackageVersions"
+          BeforeTargets="CollectPackageReferences"
+          Condition="'$(UseLocalFeed)' == 'true'">
+    <ItemGroup>
+      <PackageReference Update="MTGOSDK"
+                        VersionOverride="*-dev*" />
+      <PackageReference Update="MTGOSDK.MSBuild"
+                        VersionOverride="*-dev*" />
+      <PackageReference Update="MTGOSDK.Win32"
+                        VersionOverride="*-dev*" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="UpdateFeed"
           AfterTargets="Pack">
     <!-- Query all existing package versions in the feed -->

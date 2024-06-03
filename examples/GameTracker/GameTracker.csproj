@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MTGOSDK" VersionOverride="*-dev*" />
+    <PackageReference Include="MTGOSDK" />
   </ItemGroup>
 
 </Project>
