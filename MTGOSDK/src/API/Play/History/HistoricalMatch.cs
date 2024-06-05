@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Users;
 
 using WotC.MtGO.Client.Model.Settings;
@@ -33,7 +35,7 @@ public sealed class HistoricalMatch(dynamic historicalMatch)
   /// <summary>
   /// The game IDs for the match.
   /// </summary>
-  public IList<int> GameIds => @base.GameIds;
+  public IList<int> GameIds => Map<IList, int>(@base.GameIds);
 
   /// <summary>
   /// The number of games won by the player.

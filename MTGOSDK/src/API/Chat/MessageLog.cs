@@ -24,7 +24,8 @@ public sealed class MessageLog(dynamic chatMessageLog)
   /// <summary>
   /// Internal reference to the message log.
   /// </summary>
-  private readonly IList<Message> m_chatLog = Unbind(chatMessageLog).m_chatLog;
+  private readonly IList<Message> m_chatLog =
+    Map<IList, Message>(Unbind(chatMessageLog).m_chatLog);
 
   //
   // IChatMessageLog wrapper properties

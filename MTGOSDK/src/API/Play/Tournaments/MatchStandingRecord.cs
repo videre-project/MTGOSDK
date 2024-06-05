@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
@@ -63,36 +65,16 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinningPlayerIds // FIXME: .NET 8 DLR regression
-  {
-    get
-    {
-      IList<int> winningPlayerIds = new List<int>();
-      foreach(var playerId in @base.WinningPlayerIds)
-        winningPlayerIds.Add(playerId);
-
-      return winningPlayerIds;
-    }
-  }
+  public IList<int> WinningPlayerIds => Map<IList, int>(@base.WinningPlayerIds);
 
   /// <summary>
   /// The IDs of the losing player(s).
   /// </summary>
-  public IList<int> LosingPlayerIds // FIXME: .NET 8 DLR regression
-  {
-    get
-    {
-      IList<int> losingPlayerIds = new List<int>();
-      foreach(var playerId in @base.LosingPlayerIds)
-        losingPlayerIds.Add(playerId);
-
-      return losingPlayerIds;
-    }
-  }
+  public IList<int> LosingPlayerIds => Map<IList, int>(@base.LosingPlayerIds);
 
   /// <summary>
   /// The results of each game in the match.
   /// </summary>
-  public IEnumerable<GameStandingRecord> GameStandingRecords =>
-    Map<GameStandingRecord>(@base.GameStandingRecords);
+  public IList<GameStandingRecord> GameStandingRecords =>
+    Map<IList, GameStandingRecord>(@base.GameStandingRecords);
 }

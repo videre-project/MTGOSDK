@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
@@ -168,6 +169,20 @@ public class DLRWrapper<I>() where I : class
   }
 
   /// <summary>
+  /// Provides a default type mapper based on the given reference type.
+  /// </summary>
+  private static void UseTypeMapper<T>(ref Func<dynamic, T> func)
+  {
+    func ??= new Func<dynamic, T>((item) =>
+      // Handle items based on an explicit constructor or fallback to casting.
+      typeof(T).GetConstructors().Length == 0
+        ? (T)item
+        : Cast<T>(Try(
+          () => InstanceFactory.CreateInstance(typeof(T), item),
+          () => item)));
+  }
+
+  /// <summary>
   /// Attempts to cast the given object to the given type with various fallbacks.
   /// </summary>
   /// <typeparam name="T">The type to cast to.</typeparam>
@@ -210,17 +225,61 @@ public class DLRWrapper<I>() where I : class
   }
 
   /// <summary>
-  /// Iterates over an object and runs a callback or type constructor on each item.
+  /// Iterates over an iterator and runs a callback or constructor on each item.
   /// </summary>
-  /// <typeparam name="T">The type to cast to.</typeparam>
+
+  /// <typeparam name="T1">The element type to cast from.</typeparam>
+  /// <typeparam name="T2">The element type to cast to.</typeparam>
+  /// <param name="obj">The object or enumerable to iterate over.</param>
+  /// <param name="func">The function to run for each item.</param>
+  /// <returns>An enumerable of the function's output.</returns>
+  public static IEnumerable<T2> Map<E, T1, T2>(dynamic obj, Func<T1, T2> func)
+    where E : IEnumerable
+  {
+    foreach (var item in Cast<E>(obj))
+      yield return func(item);
+  }
+
+  /// <summary>
+  /// Iterates over an iterator and runs a callback or constructor on each item.
+  /// </summary>
+  /// <typeparam name="T">The element type to cast to.</typeparam>
   /// <param name="obj">The object or enumerable to iterate over.</param>
   /// <param name="func">The function to run for each item (optional).</param>
   /// <returns>An enumerable of the function's output.</returns>
   public static IEnumerable<T> Map<T>(dynamic obj, Func<dynamic, T>? func = null)
   {
-    func ??= new Func<dynamic, T>((item) =>
-        Cast<T>(InstanceFactory.CreateInstance(typeof(T), item)));
-    foreach (var item in obj) yield return func(item);
+    UseTypeMapper(ref func);
+    return Map<IEnumerable, dynamic, T>(obj, func);
+  }
+
+  /// <summary>
+  /// Iterates over a list and runs a callback or constructor on each item.
+  /// </summary>
+  /// <typeparam name="L">The list type to cast to.</typeparam>
+  /// <typeparam name="T">The item type to cast to.</typeparam>
+  /// <param name="obj">The object or enumerable to iterate over.</param>
+  /// <param name="func">The function to run for each item (optional).</param>
+  /// <returns>A list of the function's output.</returns>
+  public static IList<T> Map<L, T>(dynamic obj, Func<dynamic, T>? func = null)
+    where L : IList
+  {
+    IList<T> newList = Try(
+      // Attempt to create a new instance of the 'L' list type.
+      () => InstanceFactory.CreateInstance(typeof(L)),
+      // Otherwise fallback to a generic list implementation
+      // (i.e. when the provided type is abstract or has no constructor).
+      () => new List<T>());
+
+    IList innerList = Try(
+      // Attempt to cast the object to a list type.
+      () => Cast<IList>(obj),
+      // Otherwise fallback to a generic list implementation or interface,
+      () => Cast<IList>(Unbind(obj)));
+
+    UseTypeMapper(ref func);
+    foreach (var item in Map<T>(innerList ?? obj)) newList.Add(func(item));
+    return newList;
   }
 
   //

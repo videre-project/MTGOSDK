@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
 using System.Collections.Concurrent;
 
 using MTGOSDK.Core.Reflection;
@@ -42,7 +43,8 @@ public static class CollectionManager
   /// <param name="cardName">The name of the card to query.</param>
   /// <returns>A list of catalog ids.</returns>
   public static IList<int> GetCardIds(string cardName) =>
-    s_cardDataManager.GetCatalogIdsForNameInPreferentialOrder(cardName, true);
+    Map<IList, int>(
+      s_cardDataManager.GetCatalogIdsForNameInPreferentialOrder(cardName, true));
 
   /// <summary>
   /// Returns a card object by the given catalog id.
@@ -88,11 +90,8 @@ public static class CollectionManager
   /// </summary>
   /// <param name="cardName">The name of the card to query.</param>
   /// <returns>A list of card objects.</returns>
-  public static IEnumerable<Card> GetCards(string cardName)
-  {
-    foreach (var id in GetCardIds(cardName))
-      yield return GetCard(id);
-  }
+  public static IEnumerable<Card> GetCards(string cardName) =>
+    Map<IEnumerable, int, Card>(GetCardIds(cardName), GetCard);
 
   //
   // ICardSet wrapper methods

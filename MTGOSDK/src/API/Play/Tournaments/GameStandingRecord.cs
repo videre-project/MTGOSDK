@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
@@ -46,18 +48,6 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinnerIds // FIXME: .NET 8 DLR regression
-  {
-    get
-    {
-      var winnerIds = new List<int>();
-      foreach(var winnerId in Try(() => @base.WinnerIds, Enumerable.Empty<int>()))
-      {
-        winnerIds.Add(winnerId);
-      }
-
-      return winnerIds;
-    }
-  }
-  // public IEnumerable<int> WinnerIds => @base.WinnerIds;
+  public IList<int> WinnerIds =>
+    Map<IList, int>(Try(() => @base.WinnerIds, Enumerable.Empty<int>()));
 }

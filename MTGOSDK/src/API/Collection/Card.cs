@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using WotC.MtGO.Client.Model;
 
 
@@ -50,7 +52,7 @@ public sealed class Card(dynamic card) : CollectionItem<ICardDefinition>
   /// <summary>
   /// A list of the card's subtypes.
   /// </summary>
-  public IList<string> Subtypes => @base.Subtypes;
+  public IList<string> Subtypes => Map<IList, string>(@base.Subtypes);
 
   /// <summary>
   /// The name of the card's artist.
