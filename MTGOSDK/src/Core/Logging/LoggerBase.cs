@@ -27,12 +27,17 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   /// <summary>
   /// A concurrent dictionary of ILogger<T> instances mapped to their type.
   /// </summary>
-  /// <remarks>Used to cache ILogger instances for performance.</remarks>
+  /// <remarks>
+  /// Used to cache ILogger instances for performance.
+  /// </remarks>
   private static readonly ConcurrentDictionary<Type, ILogger> s_loggers = new();
 
   /// <summary>
   /// A concurrent dictionary of caller types mapped to their base types.
   /// </summary>
+  /// <remarks>
+  /// Used to map compiler-generated types within a class to their base types.
+  /// </remarks>
   private static readonly ConcurrentDictionary<Type, Type> s_callerTypes = new();
 
   /// <summary>
