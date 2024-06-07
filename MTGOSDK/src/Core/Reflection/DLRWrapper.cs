@@ -169,20 +169,6 @@ public class DLRWrapper<I>() where I : class
   }
 
   /// <summary>
-  /// Provides a default type mapper based on the given reference type.
-  /// </summary>
-  private static void UseTypeMapper<T>(ref Func<dynamic, T> func)
-  {
-    func ??= new Func<dynamic, T>((item) =>
-      // Handle items based on an explicit constructor or fallback to casting.
-      typeof(T).GetConstructors().Length == 0
-        ? (T)item
-        : Cast<T>(Try(
-          () => InstanceFactory.CreateInstance(typeof(T), item),
-          () => item)));
-  }
-
-  /// <summary>
   /// Attempts to cast the given object to the given type with various fallbacks.
   /// </summary>
   /// <typeparam name="T">The type to cast to.</typeparam>
@@ -225,19 +211,37 @@ public class DLRWrapper<I>() where I : class
   }
 
   /// <summary>
+  /// Provides a default type mapper based on the given reference type.
+  /// </summary>
+  private static dynamic UseTypeMapper<T1, T2>()
+    where T1 : notnull
+    where T2 : notnull
+  {
+    return new Func<dynamic, T2>((item) =>
+      // Handle items based on an explicit constructor or fallback to casting.
+      typeof(T2).GetConstructors().Length == 0
+        ? (T2)item
+        : Cast<T2>(Try(
+          () => InstanceFactory.CreateInstance(typeof(T2), item),
+          () => item)));
+  }
+
+  /// <summary>
   /// Iterates over an iterator and runs a callback or constructor on each item.
   /// </summary>
-
+  /// <typeparam name="E">The enumerable type to cast to.</typeparam>
   /// <typeparam name="T1">The element type to cast from.</typeparam>
   /// <typeparam name="T2">The element type to cast to.</typeparam>
   /// <param name="obj">The object or enumerable to iterate over.</param>
   /// <param name="func">The function to run for each item.</param>
   /// <returns>An enumerable of the function's output.</returns>
-  public static IEnumerable<T2> Map<E, T1, T2>(dynamic obj, Func<T1, T2> func)
+  public static IEnumerable<T2> Map<E, T1, T2>(dynamic obj, Func<T1, T2>? func)
     where E : IEnumerable
+    where T1 : notnull
+    where T2 : notnull
   {
-    foreach (var item in Cast<E>(obj))
-      yield return func(item);
+    dynamic mapper = func as dynamic ?? UseTypeMapper<T1, T2>();
+    foreach (var item in Cast<E>(obj)) yield return mapper(item);
   }
 
   /// <summary>
@@ -248,8 +252,8 @@ public class DLRWrapper<I>() where I : class
   /// <param name="func">The function to run for each item (optional).</param>
   /// <returns>An enumerable of the function's output.</returns>
   public static IEnumerable<T> Map<T>(dynamic obj, Func<dynamic, T>? func = null)
+    where T : notnull
   {
-    UseTypeMapper(ref func);
     return Map<IEnumerable, dynamic, T>(obj, func);
   }
 
@@ -263,6 +267,7 @@ public class DLRWrapper<I>() where I : class
   /// <returns>A list of the function's output.</returns>
   public static IList<T> Map<L, T>(dynamic obj, Func<dynamic, T>? func = null)
     where L : IList
+    where T : notnull
   {
     IList<T> newList = Try(
       // Attempt to create a new instance of the 'L' list type.
@@ -271,14 +276,14 @@ public class DLRWrapper<I>() where I : class
       // (i.e. when the provided type is abstract or has no constructor).
       () => new List<T>());
 
-    IList innerList = Try(
+    dynamic innerList = Try(
       // Attempt to cast the object to a list type.
       () => Cast<IList>(obj),
-      // Otherwise fallback to a generic list implementation or interface,
-      () => Cast<IList>(Unbind(obj)));
+      () => Cast<IList>(Unbind(obj)),
+      // Otherwise fallback to a dynamic list implementation.
+      () => obj as dynamic);
 
-    UseTypeMapper(ref func);
-    foreach (var item in Map<T>(innerList ?? obj)) newList.Add(func(item));
+    foreach (var item in Map<T>(innerList, func)) newList.Add(item);
     return newList;
   }
 
@@ -287,26 +292,27 @@ public class DLRWrapper<I>() where I : class
   //
 
   /// <summary>
-  /// Safely executes a lambda function and returns the result or a fallback.
+  /// Safely executes each lambda function until one succeeds.
   /// </summary>
-  /// <param name="lambda">The function to execute.</param>
-  /// <param name="fallback">The fallback value to return (optional).</param>
+  /// <param name="lambdas">The functions to execute in order.</param>
   /// <returns>The result of the function or the fallback value.</returns>
-  public static dynamic Try(Func<dynamic> lambda, dynamic fallback = null)
+  public static dynamic Try(params Func<dynamic>[] lambdas)
   {
-    try { return lambda(); } catch { return fallback; }
+    foreach (var lambda in lambdas)
+    {
+      try { return lambda(); } catch { }
+    }
+    return null;
   }
 
   /// <summary>
   /// Safely executes a lambda function and returns the result or a fallback.
   /// </summary>
   /// <param name="lambda">The function to execute.</param>
-  /// <param name="fallback">The fallback function to execute.</param>
+  /// <param name="fallback">The fallback value to return (optional).</param>
   /// <returns>The result of the function or the fallback value.</returns>
-  public static dynamic Try(Func<dynamic> lambda, Func<dynamic> fallback)
-  {
-    try { return lambda(); } catch { return Try(fallback); }
-  }
+  public static dynamic Try(Func<dynamic> lambda, dynamic fallback = null) =>
+    Try(lambda, () => fallback);
 
   /// <summary>
   /// Safely executes a lambda function and returns the result or a fallback.
