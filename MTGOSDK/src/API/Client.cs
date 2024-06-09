@@ -145,6 +145,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </exception>
   public Client(
     ClientOptions options = default,
+    ILoggerProvider? loggerProvider = null,
     ILoggerFactory? loggerFactory = null
   ) : base(
     //
@@ -154,6 +155,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     factory: async delegate
     {
       // Configures the client's logging options.
+      if (loggerProvider != null) Log.SetProviderInstance(loggerProvider);
       if (loggerFactory != null) Log.SetFactoryInstance(loggerFactory);
       Log.Debug("Running the MTGO client API factory.");
       ValidateVersion(assert: false); // Ensure reference types are compatible.

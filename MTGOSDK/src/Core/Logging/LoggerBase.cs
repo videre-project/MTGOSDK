@@ -22,6 +22,12 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   /// Represents a type used to configure the logging system and create
   /// instances of <see cref="ILogger"/>.
   /// </summary>
+  private static ILoggerProvider s_provider = NullLoggerProvider.Instance;
+
+  /// <summary>
+  /// Represents a type used to configure the logging system and create
+  /// instances of <see cref="ILogger"/>.
+  /// </summary>
   private static ILoggerFactory s_factory = NullLoggerFactory.Instance;
 
   /// <summary>
@@ -64,8 +70,32 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
         callerType = baseType;
       }
 
-      return s_loggers.GetOrAdd(callerType, s_factory.CreateLogger(callerType));
+      return s_loggers.GetOrAdd(callerType, CreateLogger(callerType));
     }
+  }
+
+  /// <summary>
+  /// Creates a logger instance for the given caller type.
+  /// </summary>
+  private static ILogger CreateLogger(Type callerType)
+  {
+    if (s_provider != null)
+      return s_provider.CreateLogger(callerType.FullName);
+    if (s_factory != null)
+      return s_factory.CreateLogger(callerType);
+
+    throw new InvalidOperationException(
+        "No logger provider or factory has been set.");
+  }
+
+  /// <summary>
+  /// Sets the logger provider instance to be used.
+  /// </summary>
+  public static void SetProviderInstance(ILoggerProvider provider)
+  {
+    if (provider != s_provider)
+      s_loggers.Clear();
+    s_provider = provider;
   }
 
   /// <summary>
