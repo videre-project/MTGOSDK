@@ -33,6 +33,7 @@ public static class ObjectProvider
   /// Event raised when the ObjectProvider cache is reset.
   /// </summary>
   public static event EventHandler? OnReset;
+  private static object s_lock = new();
 
   /// <summary>
   /// Registers a callback to reset the instance of the given type.
@@ -53,12 +54,12 @@ public static class ObjectProvider
   /// </summary>
   /// <param name="key">The query path of the registered type.</param>
   /// <param name="callback">The callback used to reset the instance.</param>
-  private static void ClearCallback(string key, Func<dynamic> callback)
+  private static void ClearCallback(string key, Func<dynamic>? callback = null)
   {
-    if (!s_callbacks.TryRemove(key, out var oldCallback) ||
-        oldCallback != callback)
+    if (!s_callbacks.TryRemove(key, out var oldCallback))
       throw new InvalidOperationException("The callback was not registered.");
 
+    callback ??= oldCallback;
     OnReset -= (s, e) => Reset(key, callback);
     RemoteClient.Disposed -= (s, e) => Reset(key, callback);
   }
@@ -70,13 +71,16 @@ public static class ObjectProvider
   /// <param name="callback">The callback used to reset the instance.</param>
   private static void Reset(string key, Func<dynamic> callback)
   {
-    // Skip if no instance exists for the given key.
-    if (!s_instances.TryRemove(key, out _) ||
-        !s_resetters.TryGetValue(key, out var s_reset)) return;
+    lock (s_lock)
+    {
+      // Skip if no instance exists for the given key.
+      if (!s_instances.TryRemove(key, out _) ||
+          !s_resetters.TryGetValue(key, out var s_reset)) return;
 
-    Log.Trace("Resetting instance type {Type}", key);
-    s_reset(callback);
-    ClearCallback(key, callback);
+      Log.Trace("Resetting instance type {Type}", key);
+      s_reset(callback);
+      ClearCallback(key, callback);
+    }
   }
 
   /// <summary>
