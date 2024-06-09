@@ -11,11 +11,11 @@ namespace MTGOSDK.Core.Exceptions;
 /// </summary>
 public class ExternalErrorException : Exception
 {
-    public ExternalErrorException() { }
+  public ExternalErrorException() { }
 
-    public ExternalErrorException(string message)
-        : base(message) { }
+  public ExternalErrorException(string message)
+    : base(message) { }
 
-    public ExternalErrorException(string message, Exception inner)
-        : base(message, inner) { }
+  public ExternalErrorException(string message, Exception inner)
+    : base(message, inner) { }
 }

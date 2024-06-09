@@ -11,11 +11,11 @@ namespace MTGOSDK.Core.Exceptions;
 /// </summary>
 public class SetupFailedException : Exception
 {
-    public SetupFailedException() { }
+  public SetupFailedException() { }
 
-    public SetupFailedException(string message)
-        : base(message) { }
+  public SetupFailedException(string message)
+    : base(message) { }
 
-    public SetupFailedException(string message, Exception inner)
-        : base(message, inner) { }
+  public SetupFailedException(string message, Exception inner)
+    : base(message, inner) { }
 }
