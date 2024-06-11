@@ -130,7 +130,9 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
   // IPlayerEvent wrapper methods
   //
 
-  public static dynamic FromPlayerEvent(dynamic playerEvent)
+  internal static Func<dynamic, dynamic> PlayerEventFactory = new(FromPlayerEvent);
+
+  internal static dynamic FromPlayerEvent(dynamic playerEvent)
   {
     dynamic eventObject;
     switch (playerEvent.GetType().Name)

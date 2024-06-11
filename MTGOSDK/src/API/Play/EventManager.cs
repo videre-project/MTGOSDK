@@ -34,7 +34,7 @@ public static class EventManager
   /// <summary>
   /// A dictionary of all events by their event ID.
   /// </summary>
-  public static dynamic eventsById =>
+  private static dynamic eventsById =>
     Unbind(s_playService).m_matchesAndTournamentsAndQueuesById;
 
   /// <summary>
@@ -46,14 +46,8 @@ public static class EventManager
   /// <summary>
   /// All currently queryable events with GetEvent().
   /// </summary>
-  public static IEnumerable<dynamic> Events
-  {
-    get
-    {
-      foreach (var playerEvent in eventsByToken.Values)
-        yield return FromPlayerEvent(playerEvent);
-    }
-  }
+  public static IEnumerable<dynamic> Events =>
+    Map<dynamic>(eventsById.Values, PlayerEventFactory);
 
   /// <summary>
   /// Retrieves a joinable event by it's event ID.

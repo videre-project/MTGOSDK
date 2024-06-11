@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
 
@@ -43,13 +44,7 @@ public sealed partial class Events
     /// <summary>
     /// The PlayerEvent instances that triggered the event.
     /// </summary>
-    public IEnumerable<dynamic> Events
-    {
-      get
-      {
-        foreach (var playerEvent in @base.Events)
-          yield return FromPlayerEvent(playerEvent);
-      }
-    }
+    public IEnumerable<dynamic> Events =>
+      Map<dynamic>(@base.Events, PlayerEventFactory);
   }
 }
