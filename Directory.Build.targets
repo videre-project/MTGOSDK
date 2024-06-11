@@ -111,6 +111,17 @@
     </ItemGroup>
   </Target>
 
+  <Target Name="EnsureReferencePath"
+          AfterTargets="AfterBuild"
+          Condition="'$(TargetRefPath)' != '' And !Exists('$(TargetRefPath)')">
+    <PropertyGroup>
+      <TargetRefExt>$([System.IO.Path]::GetExtension($(TargetRefPath)))</TargetRefExt>
+      <TargetRefDir>$([System.IO.Path]::GetDirectoryName($(TargetRefPath)))</TargetRefDir>
+    </PropertyGroup>
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\$(IntermediateOutputPath)$(MSBuildProjectName)$(TargetRefExt)"
+          DestinationFolder="$(TargetRefDir)" />
+  </Target>
+
   <!-- Override MTGOSDK package versions to use the local package feed -->
   <Target Name="UseLocalFeedPackageVersions"
           BeforeTargets="CollectPackageReferences"
