@@ -74,7 +74,7 @@ jobs:
 
       # Build the SDK
       - name: Build SDK Solution
-        run: dotnet build -c Release
+        run: dotnet build SDK.sln -c Release
 
       # Evict expired cache entries
       - name: Purge expired cache entries
