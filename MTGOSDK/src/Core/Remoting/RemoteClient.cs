@@ -402,14 +402,22 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     string methodName,
     Type[]? genericTypes=null)
   {
-    var remoteType = GetInstanceType(queryPath);
-    var remoteMethod = remoteType.GetMethod(methodName);
+    try
+    {
+      var remoteType = GetInstanceType(queryPath);
+      var remoteMethod = remoteType.GetMethod(methodName);
 
-    // Fills in a generic method if generic types are specified
-    if (genericTypes is not null)
-      return remoteMethod!.MakeGenericMethod(genericTypes);
+      // Fills in a generic method if generic types are specified
+      if (genericTypes is not null)
+        return remoteMethod!.MakeGenericMethod(genericTypes);
 
-    return remoteMethod;
+      return remoteMethod;
+    }
+    catch (InvalidOperationException)
+    {
+      throw new MissingMethodException(
+          $"Method '{methodName}' not found on remote type '{queryPath}'.");
+    }
   }
 
   /// <summary>
