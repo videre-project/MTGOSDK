@@ -9,7 +9,6 @@ using System.Linq;
 using System.Text;
 
 using Microsoft.Extensions.Logging;
-using NUnit.Framework;
 
 
 namespace MTGOSDK.NUnit.Logging;

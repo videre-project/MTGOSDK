@@ -15,6 +15,13 @@
       </type>
     </namespace>
   </assembly>
+  <assembly fullname="WotC.MtGO.Client.Common">
+    <namespace fullname="WotC.MtGO.Client.Common.ServiceLocation">
+      <type fullname="ObjectProvider">
+        <method name="Get" />
+      </type>
+    </namespace>
+  </assembly>
   <assembly fullname="WotC.MtGO.Client.Model.Reference">
     <namespace fullname="WotC.MtGO.Client.Model">
       <type fullname="ISession">

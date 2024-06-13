@@ -6,7 +6,6 @@
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
-using NUnit.Framework;
 
 using MTGOSDK.API;
 using MTGOSDK.Core.Security;

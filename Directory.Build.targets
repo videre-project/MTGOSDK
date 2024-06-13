@@ -9,6 +9,7 @@
       <FoldersToClean Include="$(PackageOutputPath)"
                       Condition="'$(UseLocalFeed)' != 'true'" />
       <FoldersToClean Include="$(MSBuildProjectDirectory)\bin" />
+      <FoldersToClean Include="$(MSBuildProjectDirectory)\logs" />
       <FoldersToClean Include="$(MSBuildProjectDirectory)\obj" />
     </ItemGroup>
     <RemoveDir Directories="@(FoldersToClean)" />
@@ -30,7 +31,7 @@
       <ProjectUp2DateFile Remove="@(ProjectUp2DateFile)"
                           Condition="!Exists('%(Identity)')" />
     </ItemGroup>
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(IsBuildRunningInVSTest)' == 'false'">
       <OutputTimeStampBeforeBuild>%(ProjectOutputFiles.ModifiedTime)</OutputTimeStampBeforeBuild>
       <HasBuildRegenerated Condition="@(ProjectOutputFiles -> Count()) == 0">True</HasBuildRegenerated>
     </PropertyGroup>

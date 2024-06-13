@@ -5,7 +5,8 @@
   <!-- Merge the main assembly with any copied reference assemblies -->
   <Target Name="MergeReferenceAssemblies"
           AfterTargets="AfterBuild"
-          Condition="'$(OutputFilesModified)' == 'true'">
+          Condition="'$(OutputFilesModified)' == 'true' And
+                     '$(UseILRepack)' == 'true'">
     <!-- Identify the main assembly and all referenced assemblies -->
     <ItemGroup>
       <InputAssemblies Remove="@(InputAssemblies)" />
@@ -43,7 +44,8 @@
   <Target Name="CleanReferenceAssemblies"
           AfterTargets="MergeReferenceAssemblies"
           Condition="'$(OutputFilesModified)' == 'false' And
-                     '$(UseReferenceAssemblies)' == 'true'">
+                     '$(UseReferenceAssemblies)' == 'true' And
+                     '$(UseILRepack)' == 'true'">
     <ItemGroup>
       <InputAssemblies Remove="@(InputAssemblies)" />
       <InputAssemblies Include="@(ReferenceAssemblies->'$(OutputPath)%(Filename).dll')"

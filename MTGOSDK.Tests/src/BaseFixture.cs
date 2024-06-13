@@ -5,8 +5,6 @@
 
 using System.Threading.Tasks;
 
-using NUnit.Framework;
-
 
 namespace MTGOSDK.Tests;
 

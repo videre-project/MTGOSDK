@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <!-- Internal SDK Paths -->
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(UseFullSDKPaths)' != 'false'">
     <UseFullSDKPaths>true</UseFullSDKPaths>
     <_MTGOSDKCoreTFM>netstandard2.0</_MTGOSDKCoreTFM>
     <_MTGOSDKCoreTarget>.NETStandard2.0</_MTGOSDKCoreTarget>
@@ -20,8 +20,7 @@
     <NuGetExePath>$(SolutionDir)\NuGet.exe</NuGetExePath>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$(MSBuildProjectDirectory.StartsWith('$(ExampleDir)\')) Or
-                            $(MSBuildProjectDirectory.StartsWith('$(TestDir)'))">
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.StartsWith('$(ExampleDir)\'))">
     <UseLocalFeed>true</UseLocalFeed>
     <UseFullSDKPaths>false</UseFullSDKPaths>
   </PropertyGroup>
@@ -45,6 +44,11 @@
                             '$(IsNonDeterministic)' != 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <!-- <EnablePackageValidation>true</EnablePackageValidation> -->
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(VSTestArtifactsProcessingMode)' == 'collect' Or
+                            '$(VSTestSessionCorrelationId)' != ''">
+    <IsBuildRunningInVSTest>true</IsBuildRunningInVSTest>
   </PropertyGroup>
 
   <!-- NuGet Package Properties -->

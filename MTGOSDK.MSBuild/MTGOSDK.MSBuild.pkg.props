@@ -20,6 +20,10 @@
     <EnablePolyfills>false</EnablePolyfills>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(IsBuildRunningInVSTest)' == 'true'">
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
   <ItemGroup>
 		<!--
       These lines pack the build props/targets files to the `build` and

@@ -12,6 +12,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ScubaDiver", "MTGOSDK\lib\S
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "third_party", "third_party", "{EF3E9033-3E13-44FE-851E-418B0CF61FE4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MTGOSDK.Tests", "MTGOSDK.Tests\MTGOSDK.Tests.csproj", "{AF919DDC-443B-478A-9D98-D5E7DB7B8777}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -52,6 +54,14 @@ Global
 		{8DF5D538-941D-44E8-803E-9E135926EBE8}.Release|Any CPU.Build.0 = Release|Any CPU
 		{8DF5D538-941D-44E8-803E-9E135926EBE8}.Release|Mixed.ActiveCfg = Release|Any CPU
 		{8DF5D538-941D-44E8-803E-9E135926EBE8}.Release|Mixed.Build.0 = Release|Any CPU
+		{AF919DDC-443B-478A-9D98-D5E7DB7B8777}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF919DDC-443B-478A-9D98-D5E7DB7B8777}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF919DDC-443B-478A-9D98-D5E7DB7B8777}.Debug|Mixed.ActiveCfg = Debug|Any CPU
+		{AF919DDC-443B-478A-9D98-D5E7DB7B8777}.Debug|Mixed.Build.0 = Debug|Any CPU
+		{AF919DDC-443B-478A-9D98-D5E7DB7B8777}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF919DDC-443B-478A-9D98-D5E7DB7B8777}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF919DDC-443B-478A-9D98-D5E7DB7B8777}.Release|Mixed.ActiveCfg = Release|Any CPU
+		{AF919DDC-443B-478A-9D98-D5E7DB7B8777}.Release|Mixed.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

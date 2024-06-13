@@ -23,6 +23,12 @@
     <None Include="$(SolutionDir)\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(IsBuildRunningInVSTest)' == 'true'">
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <!-- Disable ILRepack merging when building for VSTest -->
+    <UseILRepack>false</UseILRepack>
+  </PropertyGroup>
+
   <!-- Exclude vendored library files from default item includes -->
   <PropertyGroup>
     <DefaultItemExcludes>$(DefaultItemExcludes);lib\**</DefaultItemExcludes>

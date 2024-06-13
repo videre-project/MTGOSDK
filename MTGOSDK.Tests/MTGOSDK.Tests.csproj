@@ -7,18 +7,47 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="$(SolutionDir)MTGOSDK\MTGOSDK.csproj" />
+    <!-- NUnit Dependencies -->
     <PackageReference Include="Microsoft.Extensions.Logging" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="MTGOSDK" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit.Analyzers" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <!-- Code Coverage -->
+    <PackageReference Include="coverlet.msbuild" />
+    <PackageReference Include="ReportGenerator" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <IncludeTestAssembly>false</IncludeTestAssembly>
+    <!-- <Threshold>80</Threshold> -->
+  </PropertyGroup>
+
+  <Target Name="GenerateHtmlCoverageReport"
+          AfterTargets="GenerateCoverageResultAfterTest">
+    <ReportGenerator
+      ReportFiles="@(CoverletReport)"
+      FileFilters="-*.g.cs;
+                   -*.Version.cs"
+      ClassFilters="-MTGOSDK.Core.Exceptions.*;
+                    -MTGOSDK.Core.Reflection.Emit.*;
+                    -MTGOSDK.Core.Reflection.Snapshot.*;
+                    -MTGOSDK.Core.Remoting.Internal.*;
+                    -MTGOSDK.Core.Remoting.Interop.*;
+                    -MTGOSDK.Resources.*;
+                    -MTGOSDK.Win32.API.*;
+                    -MTGOSDK.Win32.Extensions.*;
+                    -MTGOSDK.Win32.Injection.*;
+                    -MTGOSDK.Win32.Utilities.*"
+      TargetDirectory="$(MSBuildThisFileDirectory)html-coverage-report" />
+  </Target>
+
   <ItemGroup>
-    <PackageReference Include="NUnit" />
-    <PackageReference Include="NUnit.Analyzers"
-                      PrivateAssets="all" />
-    <PackageReference Include="NUnit3TestAdapter" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <Using Include="NUnit.Framework" />
+    <Using Include="MTGOSDK.NUnit" />
   </ItemGroup>
 
 </Project>

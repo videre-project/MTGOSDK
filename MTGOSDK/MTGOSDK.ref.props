@@ -9,8 +9,6 @@
     <ILRepackTargetsFile>
       $(MSBuildThisFileDirectory)lib\ILRepack\ILRepack.targets
     </ILRepackTargetsFile>
-    <!-- Always evaluate all MTGOSDK.MSBuild targets when building the SDK. -->
-    <AccelerateBuildsInVisualStudio>false</AccelerateBuildsInVisualStudio>
   </PropertyGroup>
 
   <ItemGroup>
@@ -51,6 +49,11 @@
   <Import Project="lib\ILLink\ILLink.targets"
           Condition="'$(PublishTrimmed)' == 'true' And
                      '$(UseILLinkTrim)' == 'true'" />
+
+  <PropertyGroup Condition="'$(UseILRepack)' == 'true'">
+    <!-- Always evaluate all MTGOSDK.MSBuild targets when building the SDK. -->
+    <AccelerateBuildsInVisualStudio>false</AccelerateBuildsInVisualStudio>
+  </PropertyGroup>
 
   <!--
     When building the SDK locally, we must use the full project paths to
