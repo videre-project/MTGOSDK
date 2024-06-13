@@ -11,8 +11,13 @@ using WotC.MtGO.Client.Model.Collection;
 namespace MTGOSDK.API.Collection;
 using static MTGOSDK.API.Events;
 
-public sealed class Binder(dynamic binder) : CardGrouping<IBinder>
+public sealed class Binder(dynamic binder) : CardGrouping<Binder>
 {
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  internal override Type type => typeof(IBinder);
+
   /// <summary>
   /// Stores an internal reference to the IBinder object.
   /// </summary>

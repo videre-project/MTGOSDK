@@ -12,8 +12,13 @@ using WotC.MtGO.Client.Model.Play;
 namespace MTGOSDK.API.Play.Leagues;
 using static MTGOSDK.API.Events;
 
-public sealed class League(dynamic league) : Event<ILeague>
+public sealed class League(dynamic league) : Event<League>
 {
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  internal override Type type => typeof(ILeague);
+
   /// <summary>
   /// Stores an internal reference to the ILeague object.
   /// </summary>

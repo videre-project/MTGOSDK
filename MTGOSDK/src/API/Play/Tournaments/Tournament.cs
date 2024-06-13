@@ -12,8 +12,13 @@ using WotC.MtGO.Client.Model.Play.Tournaments;
 namespace MTGOSDK.API.Play.Tournaments;
 using static MTGOSDK.API.Events;
 
-public sealed class Tournament(dynamic tournament) : Event<ITournament>
+public sealed class Tournament(dynamic tournament) : Event<Tournament>
 {
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  internal override Type type => typeof(ITournament);
+
   /// <summary>
   /// Stores an internal reference to the ITournament object.
   /// </summary>

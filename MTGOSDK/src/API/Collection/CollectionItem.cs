@@ -12,11 +12,6 @@ namespace MTGOSDK.API.Collection;
 
 public abstract class CollectionItem<T> : DLRWrapper<IMagicEntityDefinition>
 {
-  /// <summary>
-  /// The internal reference for the binding type for the wrapped object.
-  /// </summary>
-  internal override Type type => typeof(T);
-
   //
   // MagicEntityDefinition properties
   //

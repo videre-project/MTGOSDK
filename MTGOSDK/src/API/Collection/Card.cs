@@ -10,8 +10,13 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API.Collection;
 
-public sealed class Card(dynamic card) : CollectionItem<ICardDefinition>
+public sealed class Card(dynamic card) : CollectionItem<Card>
 {
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  internal override Type type => typeof(ICardDefinition);
+
   /// <summary>
   /// Stores an internal reference to the ICardDefinition object.
   /// </summary>

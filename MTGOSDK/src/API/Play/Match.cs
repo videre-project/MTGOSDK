@@ -14,8 +14,13 @@ using WotC.MtGO.Client.Model.Play.Enums;
 namespace MTGOSDK.API.Play;
 using static MTGOSDK.API.Events;
 
-public sealed class Match(dynamic match) : Event<IMatch>
+public sealed class Match(dynamic match) : Event<Match>
 {
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  internal override Type type => typeof(IMatch);
+
   /// <summary>
   /// Stores an internal reference to the IMatch object.
   /// </summary>

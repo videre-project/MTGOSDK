@@ -12,8 +12,13 @@ namespace MTGOSDK.API.Collection;
 using static MTGOSDK.API.Events;
 
 public sealed class Collection(ICollectionGrouping collection)
-    : CardGrouping<ICollectionGrouping>
+    : CardGrouping<Collection>
 {
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  internal override Type type => typeof(ICollectionGrouping);
+
   /// <summary>
   /// Stores an internal reference to the ICollectionGrouping object.
   /// </summary>

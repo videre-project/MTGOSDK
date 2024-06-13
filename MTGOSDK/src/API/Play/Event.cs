@@ -19,12 +19,7 @@ using static MTGOSDK.API.Events;
 
 public abstract class Event<I> : DLRWrapper<IPlayerEvent>
 {
-  /// <summary>
-  /// The internal reference for the binding type for the wrapped object.
-  /// </summary>
-  internal override Type type => typeof(I);
-
-  public sealed class Default(dynamic playerEvent) : Event<IPlayerEvent>
+  public sealed class Default(dynamic playerEvent) : Event<dynamic>
   {
     /// <summary>
     /// Stores an internal reference to the IPlayerEvent object.
@@ -150,7 +145,7 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
         eventObject = new Queue(playerEvent);
         break;
       default:
-        eventObject = new Event<IPlayerEvent>.Default(playerEvent);
+        eventObject = new Event<dynamic>.Default(playerEvent);
         break;
     }
     Log.Trace("Creating new {Type} object for '{EventObject}'", eventObject.GetType(), eventObject);

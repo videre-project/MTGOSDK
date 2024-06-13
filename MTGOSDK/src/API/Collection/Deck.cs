@@ -11,8 +11,13 @@ using WotC.MtGO.Client.Model;
 namespace MTGOSDK.API.Collection;
 using static MTGOSDK.API.Events;
 
-public sealed class Deck(dynamic deck) : CardGrouping<IDeck>
+public sealed class Deck(dynamic deck) : CardGrouping<Deck>
 {
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  internal override Type type => typeof(IDeck);
+
   /// <summary>
   /// Stores an internal reference to the IDeck object.
   /// </summary>
