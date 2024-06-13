@@ -54,7 +54,7 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// <summary>
   /// The Uri of the Avatar resource.
   /// </summary>
-  public Uri View => Cast<Uri>(Image.View);
+  public Uri View => Cast<Uri>(Unbind(Image).View);
 
   //
   // IVisualResource wrapper events

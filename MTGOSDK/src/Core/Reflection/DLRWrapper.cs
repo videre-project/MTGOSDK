@@ -204,6 +204,8 @@ public class DLRWrapper<I>() where I : class
     // Fallback to creating a new instance assuming a DLRWrapper type.
     try { return (T)(InstanceFactory.CreateInstance(typeof(T), obj)); }
     catch { }
+    try { return (T)(InstanceFactory.CreateInstance(typeof(T), obj.ToString())); }
+    catch { }
 
     // Throw an exception if the object cannot be cast to the given type.
     throw new InvalidOperationException(

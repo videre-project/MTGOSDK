@@ -122,7 +122,7 @@ public static class UserManager
   /// Retrieves a list of the current user's buddy users.
   /// </summary>
   public static IEnumerable<User> GetBuddyUsers() =>
-    Map<User>(/* IEnumerable<IUser */ s_buddyUsersList);
+    Map<User>(/* IEnumerable<IUser> */ s_buddyUsersList);
 
   //
   // IBuddyUsersList wrapper events
