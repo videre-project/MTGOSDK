@@ -398,6 +398,23 @@ public class DLRWrapper<I>() where I : class
   //
 
   /// <summary>
+  /// Extracts the base type from a compiler-generated type.
+  /// </summary>
+  /// <param name="callerType">The type to extract the base type from.</param>
+  /// <returns>The base type of the given type.</returns>
+  public static Type GetBaseType(Type callerType)
+  {
+    if (!IsCompilerGenerated(callerType))
+      return callerType;
+
+    string fullName = callerType.FullName;
+    string baseName = fullName.Substring(0, fullName.IndexOf("+<"));
+    Type baseType = callerType.DeclaringType.Assembly.GetType(baseName);
+
+    return baseType;
+  }
+
+  /// <summary>
   /// Gets the parent type of the caller.
   /// </summary>
   /// <param name="depth">The stack frame depth.</param>

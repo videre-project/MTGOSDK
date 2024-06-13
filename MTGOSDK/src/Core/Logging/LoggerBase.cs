@@ -29,6 +29,7 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   /// instances of <see cref="ILogger"/>.
   /// </summary>
   private static ILoggerFactory s_factory = NullLoggerFactory.Instance;
+  private static ILogger s_nulllogger = s_factory.CreateLogger("NullLogger");
 
   /// <summary>
   /// A concurrent dictionary of ILogger<T> instances mapped to their type.
@@ -47,6 +48,11 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   private static readonly ConcurrentDictionary<Type, Type> s_callerTypes = new();
 
   /// <summary>
+  /// A concurrent bag of caller types that have been suppressed from logging.
+  /// </summary>
+  internal static readonly ConcurrentDictionary<Type, LogLevel> s_suppressedCallerTypes = new();
+
+  /// <summary>
   /// Represents a type used to perform logging.
   /// </summary>
   /// <remarks>Aggregates most logging patterns to a single method.</remarks>
@@ -54,6 +60,11 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   {
     get
     {
+      // If logging is suppressed and the caller type is a suppressed type,
+      // return a null logger to prevent logging from suppressed sources.
+      if (IsSuppressedCallerType()) return s_nulllogger;
+
+      // Get the caller type of the calling method or class.
       Type callerType = GetCallerType(3);
 
       // Fetch the base type if the caller is a compiler-generated type
@@ -61,17 +72,34 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
       if (!s_loggers.ContainsKey(callerType) && IsCompilerGenerated(callerType))
       {
         if (!s_callerTypes.TryGetValue(callerType, out Type? baseType))
-        {
-          string fullName = callerType.FullName;
-          string baseName = fullName.Substring(0, fullName.IndexOf("+<"));
-          baseType = callerType.DeclaringType.Assembly.GetType(baseName);
-          s_callerTypes.TryAdd(callerType, baseType);
-        }
+          baseType = GetBaseType(callerType);
+
         callerType = baseType;
       }
 
       return s_loggers.GetOrAdd(callerType, CreateLogger(callerType));
     }
+  }
+
+  public static bool IsSuppressedCallerType(int depth = 3)
+  {
+    if (s_suppressedCallerTypes.Count == 0)
+      return false;
+
+    // Search the entire call stack for a suppressed caller type.
+    try
+    {
+      for (int i = depth; i < 50; i++)
+      {
+        Type callerType = GetCallerType(i);
+        Type baseType = GetBaseType(callerType);
+        if (s_suppressedCallerTypes.ContainsKey(callerType))
+          return true;
+      }
+    }
+    catch { /* Have fetched past the current depth of the call stack. */ }
+
+    return false;
   }
 
   /// <summary>
