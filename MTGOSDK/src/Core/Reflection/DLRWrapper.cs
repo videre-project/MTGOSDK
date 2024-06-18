@@ -91,13 +91,19 @@ public class DLRWrapper<I>() where I : class
   {
     get
     {
-      var baseObj = obj is DLRWrapper<I> ? obj.obj : obj
-        ?? throw new ArgumentException(
-            $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+      // Attempt to extract the base object from the derived class.
+      var baseObj = Try(() => obj is DLRWrapper<I> ? obj.obj : obj);
 
       // Return a ProxyObject wrapper with a default value, if present.
       if (TryGetDefaultAttribute(out var defaultAttribute))
+      {
         return new ProxyObject(baseObj, @default: defaultAttribute.Value);
+      }
+      else if (baseObj is null)
+      {
+        throw new ArgumentException(
+            $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+      }
 
       return baseObj;
     }

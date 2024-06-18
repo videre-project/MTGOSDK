@@ -66,7 +66,7 @@ public class ProxyObject(
       }
     }
     // If the base object does not support dynamic binding, use fallback value.
-    catch(NullReferenceException)
+    catch
     {
       result = fallback ?? @default;
     }
