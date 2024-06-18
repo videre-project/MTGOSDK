@@ -8,7 +8,6 @@ using System.Collections;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
-using WotC.MtGO.Client.Model.Play.Enums;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
@@ -38,12 +37,10 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   public int Round => @base.Round;
 
   /// <summary>
-  /// The status of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
+  /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
-  /// <remarks>
-  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
-  /// </remarks>
-  public MatchStatuses Status => Cast<MatchStatuses>(Unbind(@base).Status);
+  [Default(MatchState.Invalid)]
+  public MatchState State => Cast<MatchState>(Unbind(@base).Status);
 
   /// <summary>
   /// Whether the player has been assigned a bye.
@@ -53,14 +50,9 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The user objects of both players.
   /// </summary>
-  public IEnumerable<User> Players
-  {
-    get
-    {
-      foreach(var player in @base.Users)
-        yield return new User(player.Name);
-    }
-  }
+  public IList<User> Players =>
+    Map<IList, User>(@base.Users,
+        new Func<dynamic, User>(player => new User(player.Name)));
 
   /// <summary>
   /// The IDs of the winning player(s).
@@ -75,6 +67,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The results of each game in the match.
   /// </summary>
+  [Default(null)]
   public IList<GameStandingRecord> GameStandingRecords =>
-    Map<IList, GameStandingRecord>(@base.GameStandingRecords);
+    Map<IList, GameStandingRecord?>(@base.GameStandingRecords);
 }

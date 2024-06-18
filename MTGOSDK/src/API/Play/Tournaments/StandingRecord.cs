@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
@@ -56,6 +58,6 @@ public sealed class StandingRecord(dynamic standingRecord)
   /// <summary>
   /// The match history of the player.
   /// </summary>
-  public IEnumerable<MatchStandingRecord> PreviousMatches =>
-    Map<MatchStandingRecord>(@base.PreviousMatches);
+  public IList<MatchStandingRecord> PreviousMatches =>
+    Map<IList, MatchStandingRecord>(@base.PreviousMatches);
 }

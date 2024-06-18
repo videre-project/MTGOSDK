@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Reflection;
 
@@ -66,8 +68,8 @@ public sealed class League(dynamic league) : Event<League>
   /// <summary>
   /// The league's current leaderboard entries.
   /// </summary>
-  public IEnumerable<LeaderboardEntry> Leaderboard =>
-    Map<LeaderboardEntry>(@base.Leaderboard);
+  public IList<LeaderboardEntry> Leaderboard =>
+    Map<IList, LeaderboardEntry>(@base.Leaderboard);
 
   /// <summary>
   /// The total number of matches playable in the league.
@@ -91,13 +93,13 @@ public sealed class League(dynamic league) : Event<League>
   /// <summary>
   /// The user's chosen deck for the current league.
   /// </summary>
-  public Deck ActiveDeck => new(LeagueUser.ActiveDeck);
+  public Deck? ActiveDeck => Optional<Deck>(LeagueUser.ActiveDeck);
 
   /// <summary>
   /// The game history of the current league.
   /// </summary>
-  public IEnumerable<GameResult> GameHistory =>
-    Map<GameResult>(@base.GameHistory);
+  public IList<GameResult> GameHistory =>
+    Map<IList, GameResult>(LeagueUser.GameHistory);
 
   /// <summary>
   /// The current match number within the current league.
@@ -133,6 +135,12 @@ public sealed class League(dynamic league) : Event<League>
   /// Whether the user is currently in a match.
   /// </summary>
   public bool IsMatchInProgress => LeagueUser.IsMatchInProgress;
+
+  //
+  // ILeague wrapper methods
+  //
+
+  public override string ToString() => $"{Name} #{Id}";
 
   //
   // ILeague wrapper events

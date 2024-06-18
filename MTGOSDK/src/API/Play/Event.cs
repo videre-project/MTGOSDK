@@ -69,7 +69,7 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The total number of players registered for the event.
   /// </summary>
-  public int TotalPlayers => Enumerable.Count<IUser>(@base.JoinedUsers);
+  public int TotalPlayers => @base.JoinedUsers.Count;
 
   /// <summary>
   /// The current players registered for the event.
@@ -79,7 +79,8 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The user's registered deck for the event.
   /// </summary>
-  public Deck RegisteredDeck => new(@base.DeckUsedToJoin);
+  public Deck RegisteredDeck => new(@base.DeckUsedToJoin
+    ?? throw new InvalidOperationException("No deck registered."));
 
   /// <summary>
   /// The number of minutes each player has in each match.
@@ -129,26 +130,33 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
 
   internal static dynamic FromPlayerEvent(dynamic playerEvent)
   {
-    dynamic eventObject;
-    switch (playerEvent.GetType().Name)
+    // If an event is provided as a FilterableEvent, extract the actual event.
+    string eventType = playerEvent.GetType().Name;
+    dynamic eventObject = eventType.StartsWith("Filterable")
+      ? playerEvent.PlayerEvent
+      : playerEvent;
+
+    // Map each event type to its corresponding wrapper class.
+    switch (eventType)
     {
       case "FilterableLeague" or "League":
-        eventObject = new League(playerEvent);
+        eventObject = new League(eventObject);
         break;
       case "FilterableMatch" or "Match":
-        eventObject = new Match(playerEvent);
+        eventObject = new Match(eventObject);
         break;
       case "FilterableTournament" or "Tournament":
-        eventObject = new Tournament(playerEvent);
+        eventObject = new Tournament(eventObject);
         break;
       case "FilterableQueue" or "Queue":
-        eventObject = new Queue(playerEvent);
+        eventObject = new Queue(eventObject);
         break;
       default:
-        eventObject = new Event<dynamic>.Default(playerEvent);
+        eventObject = new Default(eventObject);
         break;
     }
-    Log.Trace("Creating new {Type} object for '{EventObject}'", eventObject.GetType(), eventObject);
+    Log.Trace("Created new {Type} object for '{EventObject}'.",
+        eventObject.GetType().Name, eventObject);
 
     return eventObject;
   }

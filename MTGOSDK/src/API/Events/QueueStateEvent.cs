@@ -6,8 +6,6 @@
 using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
-using WotC.MtGO.Client.Model.Play.Enums;
-
 
 namespace MTGOSDK.API;
 

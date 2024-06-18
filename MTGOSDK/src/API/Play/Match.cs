@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
@@ -38,25 +40,22 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The match's session token.
   /// </summary>
-  public Guid MatchToken => Cast<Guid>(@base.MatchToken);
+  public Guid MatchToken => Cast<Guid>(Unbind(@base).MatchToken);
 
   /// <summary>
-  /// The status of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
+  /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
-  /// <remarks>
-  /// Requires the <c>WotC.MtGO.Client.Model.Play.Enums</c> reference assembly.
-  /// </remarks>
-  internal MatchStatuses Status => Cast<MatchStatuses>(Unbind(@base).Status);
+  public MatchState State => Cast<MatchState>(Unbind(@base).Status);
 
   /// <summary>
   /// The user who created the match.
   /// </summary>
-  public User Creator => new(@base.Creator);
+  public User? Creator => Optional<User>(@base.Creator);
 
   /// <summary>
   /// The user being challenged to the match.
   /// </summary>
-  public User ChallengeReceiver => new(@base.ChallengeReceiver);
+  public User? ChallengeReceiver => Optional<User>(@base.ChallengeReceiver);
 
   /// <summary>
   /// The challenge text sent to the challenge receiver.
@@ -66,7 +65,7 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The games played in this match.
   /// </summary>
-  public IEnumerable<Game> Games => Map<Game>(@base.Games);
+  public IList<Game> Games => Map<IList, Game>(@base.Games);
 
   /// <summary>
   /// The current game being played.
@@ -93,12 +92,12 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The player(s) who won the match.
   /// </summary>
-  public IEnumerable<User> WinningPlayers => Map<User>(@base.WinningPlayers);
+  public IList<User> WinningPlayers => Map<IList, User>(@base.WinningPlayers);
 
   /// <summary>
   /// The player(s) who lost the match.
   /// </summary>
-  public IEnumerable<User> LosingPlayers => Map<User>(@base.LosingPlayers);
+  public IList<User> LosingPlayers => Map<IList, User>(@base.LosingPlayers);
 
   //
   // IMatch wrapper events

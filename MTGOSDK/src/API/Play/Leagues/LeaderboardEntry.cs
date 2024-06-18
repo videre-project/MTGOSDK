@@ -23,11 +23,6 @@ public sealed class LeaderboardEntry(dynamic leagueLeaderboardEntry)
   //
 
   /// <summary>
-  /// The last date the player earned a trophy in the league.
-  /// </summary>
-  public DateTime LastTrophyEarnedDate => @base.LastTrophyEarnedDate;
-
-  /// <summary>
   /// The player's username.
   /// </summary>
   public string Name => @base.Name;
@@ -36,4 +31,9 @@ public sealed class LeaderboardEntry(dynamic leagueLeaderboardEntry)
   /// The number of trophies the player has earned in the league.
   /// </summary>
   public int TrophyCount => @base.TrophyCount;
+
+  /// <summary>
+  /// The last date the player earned a trophy in the league.
+  /// </summary>
+  public DateTime LastTrophyEarnedDate => @base.LastTrophyEarnedDate;
 }

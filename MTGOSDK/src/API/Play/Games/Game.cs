@@ -1,7 +1,9 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
+
+using System.Collections;
 
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Interface.ViewModels;
@@ -9,6 +11,7 @@ using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Play;
+using GameState = MTGOSDK.API.Play.Games.GameState;
 
 
 namespace MTGOSDK.API.Play.Games;
@@ -32,12 +35,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// property is accessed. It is best to cache this property to avoid frequent
   /// heap searches.
   /// </remarks>
-  public DuelSceneViewModel DuelScene =>
-    new(
+  public DuelSceneViewModel? DuelScene =>
+    Optional<DuelSceneViewModel>(
       // TODO: Use a more efficient method of retrieving view model objects
       //       without traversing the client's managed heap.
-      RemoteClient.GetInstances("Shiny.Play.Duel.ViewModel.DuelSceneViewModel")
-        .FirstOrDefault(vm => Try<bool>(() => vm.GameId == this.Id))
+      RemoteClient.GetInstances(new Proxy<DuelSceneViewModel>())
+        .FirstOrDefault(vm => Try(() => vm.GameId == this.Id))
     );
 
   //
@@ -53,8 +56,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The unique game server token.
   /// </summary>
-  public Guid ServerGuid =>
-    Cast<Guid>(Unbind(@base).ServerGuid);
+  public Guid ServerGuid => Cast<Guid>(Unbind(@base).ServerGuid);
+
+  /// <summary>
+  /// The game's state (e.g. NotStarted, Started, Finished, etc.).
+  /// </summary>
+  public GameState State => Cast<GameState>(Unbind(@base).GameState);
 
   /// <summary>
   /// The chat channel between all players.
@@ -74,12 +81,8 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The game phase of the current turn (e.g. Untap, Upkeep, Draw, etc.).
   /// </summary>
-  /// <remarks>
-  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
-  /// </remarks>
   [Default(GamePhase.Invalid)]
-  public GamePhase CurrentPhase =>
-    Cast<GamePhase>(Unbind(@base).CurrentPhase);
+  public GamePhase CurrentPhase => Cast<GamePhase>(Unbind(@base).CurrentPhase);
 
   /// <summary>
   /// The player whose turn it is.
@@ -99,14 +102,14 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The game's players.
   /// </summary>
-  public IEnumerable<GamePlayer> Players =>
-    Map<GamePlayer>(@base.Players);
+  public IList<GamePlayer> Players =>
+    Map<IList, GamePlayer>(@base.Players);
 
   /// <summary>
   /// The game's winning players.
   /// </summary>
-  public IEnumerable<GamePlayer> WinningPlayers =>
-    Map<GamePlayer>(@base.WinningPlayers);
+  public IList<GamePlayer> WinningPlayers =>
+    Map<IList, GamePlayer>(@base.WinningPlayers);
 
   /// <summary>
   /// The start time of the game.

@@ -1,11 +1,12 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.Core.Reflection;
 
-using WotC.MTGO.Common;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
@@ -36,8 +37,7 @@ public sealed class Tournament(dynamic tournament) : Event<Tournament>
   /// <summary>
   /// The time the event is scheduled to end.
   /// </summary>
-  [Default(null)]
-  public DateTime? EndTime => @base.ScheduledEndTime;
+  public DateTime EndTime => @base.ScheduledEndTime;
 
   /// <summary>
   /// The number of rounds in the tournament.
@@ -49,14 +49,11 @@ public sealed class Tournament(dynamic tournament) : Event<Tournament>
   //
 
   /// <summary>
-  /// The completion status of the tournament (i.e. "WaitingToStart", "RoundInProgress", etc.)
+  /// The completion status of the tournament
+  /// (i.e. "WaitingToStart", "RoundInProgress", etc.)
   /// </summary>
-  /// <remarks>
-  /// Requires the <c>MTGOEnumStruct</c> reference assembly.
-  /// </remarks>
-  public TournamentStateEnum State =>
-    Try(() => Cast<TournamentStateEnum>(Unbind(@base).State.EnumValue),
-        fallback: TournamentStateEnum.NotSet);
+  public TournamentState State =>
+    Cast<TournamentState>(Unbind(@base).State);
 
   /// <summary>
   /// The time remaining in the current round or tournament phase.
@@ -65,15 +62,9 @@ public sealed class Tournament(dynamic tournament) : Event<Tournament>
     Cast<TimeSpan>(Unbind(@base).TimeRemaining);
 
   /// <summary>
-  /// The current status of the tournament.
-  /// </summary>
-  public string Status => @base.TournamentStatus;
-
-  /// <summary>
   /// The current round of the tournament.
   /// </summary>
-  [Default(-1)]
-  public int CurrentRound => @base.CurrentRound;
+  public int CurrentRound => @base.CurrentRoundNumber;
 
   /// <summary>
   /// Whether the user has a bye in the current round.
@@ -88,14 +79,16 @@ public sealed class Tournament(dynamic tournament) : Event<Tournament>
   /// <summary>
   /// The tournament's detailed round information.
   /// </summary>
-  public IEnumerable<TournamentRound> Rounds =>
-    Map<TournamentRound>(@base.CurrentTournamentPart.Rounds);
+  public IList<TournamentRound> Rounds =>
+    Map<IList, TournamentRound>(@base.CurrentTournamentPart.Rounds);
 
   /// <summary>
   /// Standings for each player in the tournament.
   /// </summary>
-  public IEnumerable<StandingRecord> Standings =>
-    Map<StandingRecord>(@base.Standings);
+  public IList<StandingRecord> Standings =>
+    ((IEnumerable<StandingRecord>)Map<StandingRecord>(@base.Standings))
+      .OrderByDescending(s => s.Rank)
+      .ToList();
 
   //
   // ITournament wrapper events

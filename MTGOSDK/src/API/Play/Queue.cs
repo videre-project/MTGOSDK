@@ -6,7 +6,6 @@
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
-using WotC.MtGO.Client.Model.Play.Enums;
 
 
 namespace MTGOSDK.API.Play;
@@ -31,12 +30,7 @@ public sealed class Queue(dynamic queue) : Event<Queue>
   /// <summary>
   /// The current state of the queue (e.g. JoinRequested, Joined, Closed, etc.).
   /// </summary>
-  /// <remarks>
-  /// Requires the <c>WotC.MtGO.Client.Model.Play.Enums</c> reference assembly.
-  /// </remarks>
-  [Default(QueueState.NotSet)]
-  public QueueState CurrentState =>
-    Cast<QueueState>(Unbind(@base).CurrentState);
+  public QueueState CurrentState => Cast<QueueState>(Unbind(@base).CurrentState);
 
   //
   // IQueue wrapper events

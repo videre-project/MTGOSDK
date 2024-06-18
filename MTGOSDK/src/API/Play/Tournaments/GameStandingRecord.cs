@@ -9,6 +9,7 @@ using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Tournaments;
+using GameState = MTGOSDK.API.Play.Games.GameState;
 
 
 namespace MTGOSDK.API.Play.Tournaments;
@@ -33,21 +34,19 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <summary>
   /// The game's current completion (i.e. "NotStarted", "Started", "Finished")
   /// </summary>
-  /// <remarks>
-  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
-  /// </remarks>
-  public GameState GameState =>
-    Cast<GameState>(Unbind(@base).GameState);
+  [Default(GameState.Invalid)]
+  public GameState GameState => Cast<GameState>(Unbind(@base).GameState);
 
   /// <summary>
   /// The elapsed time to completion since the game started.
   /// </summary>
-  public TimeSpan CompletedDuration =>
-    Cast<TimeSpan>(Unbind(@base).CompletedDuration);
+  [Default(null)]
+  public TimeSpan? CompletedDuration =>
+    Cast<TimeSpan>(Try(() => Unbind(@base).CompletedDuration,
+                       () => TimeSpan.Zero)) ?? null;
 
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinnerIds =>
-    Map<IList, int>(Try(() => @base.WinnerIds, Enumerable.Empty<int>()));
+  public IList<int> WinnerIds => Map<IList, int>(@base.WinnerIds);
 }

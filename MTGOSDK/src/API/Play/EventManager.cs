@@ -73,7 +73,7 @@ public static class EventManager
   /// </exception>
   public static dynamic GetJoinableEvent(Guid guid) =>
     FromPlayerEvent((
-      s_playService.GetFilterablePlayerEventByGuid(guid)
+      Unbind(s_playService.GetFilterablePlayerEventByGuid(guid))
         ?? throw new KeyNotFoundException($"Event could not be found.")
     ).PlayerEvent);
 
@@ -87,7 +87,7 @@ public static class EventManager
   /// </exception>
 	public static dynamic GetEvent(int id) =>
     FromPlayerEvent((
-      s_playService.GetMatchOrTournamentOrQueueById(id)
+      Unbind(s_playService.GetMatchOrTournamentOrQueueById(id))
         ?? throw new KeyNotFoundException($"Event #{id} could not be found.")
     ).PlayerEvent);
 
@@ -101,7 +101,7 @@ public static class EventManager
   /// </exception>
   public static dynamic GetEvent(Guid guid) =>
     FromPlayerEvent(
-      s_playerEventManager.GetEvent(guid)
+      Unbind(s_playerEventManager.GetEvent(guid))
         ?? throw new KeyNotFoundException($"Event could not be found.")
     );
 
