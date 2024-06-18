@@ -14,7 +14,7 @@ using MTGOSDK.Core.Logging;
 
 namespace MTGOSDK.Tests;
 
-public class Users : BaseFixture
+public class Users : UserValidationFixture
 {
   [Test]
   public void Test_CurrentUser()
@@ -28,7 +28,7 @@ public class Users : BaseFixture
     Test_GetUser(user.Id, user.Name);
   }
 
-  [RateLimit(ms: 500)]
+  [RateLimit(ms: 100)]
   [TestCase(2650356, "TheQonfused")]
   [TestCase(3136075, "VidereBot1")]
   [TestCase(3136078, "VidereBot2")]
@@ -53,8 +53,11 @@ public class Users : BaseFixture
     Assert.That(name, Is.EqualTo((new User(id)).Name));
     ValidateUser(id, name, user);
   }
+}
 
-  private void ValidateUser(int id, string name, User user)
+public class UserValidationFixture : BaseFixture
+{
+  public void ValidateUser(int id, string name, User user)
   {
     Assert.That(user.Id, Is.EqualTo(id));
     Assert.That(user.Name, Is.EqualTo(name));
@@ -74,7 +77,7 @@ public class Users : BaseFixture
     }
   }
 
-  private void ValidateAvatar(Avatar avatar)
+  public void ValidateAvatar(Avatar avatar)
   {
     Assert.That(avatar.Name, Is.Not.EqualTo(string.Empty));
     Assert.That(avatar.Card.Id, Is.GreaterThan(0));
