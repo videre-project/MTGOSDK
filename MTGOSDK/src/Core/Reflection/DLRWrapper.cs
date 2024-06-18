@@ -116,6 +116,11 @@ public class DLRWrapper<I>() where I : class
     ?? throw new InvalidOperationException(
         $"{type.Name} type does not implement DynamicRemoteObject.");
 
+  public static T? Optional<T>(dynamic obj) where T : class =>
+    (obj != null && Unbind(obj) != null)
+      ? (T)(InstanceFactory.CreateInstance(typeof(T), obj))
+      : null;
+
   //
   // Wrapper methods for type casting and dynamic dispatching.
   //
@@ -189,6 +194,10 @@ public class DLRWrapper<I>() where I : class
     try { return (T)obj ?? throw null; }
     catch { }
 
+    // Test using the RuntimeBinder to implicitly cast the object.
+    try { T result = obj; return result; }
+    catch { }
+
     // Fallback to parsing the object type from a string.
     try
     {
@@ -212,6 +221,9 @@ public class DLRWrapper<I>() where I : class
     catch { }
     try { return (T)(InstanceFactory.CreateInstance(typeof(T), obj.ToString())); }
     catch { }
+
+    // Return the object if it is already of the given type.
+    if (typeof(T).FullName == obj.GetType().FullName) return obj;
 
     // Throw an exception if the object cannot be cast to the given type.
     throw new InvalidOperationException(
