@@ -5,6 +5,7 @@
 
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
@@ -24,12 +25,22 @@ public class STACommand(TestCommand command) : TestCommand(command.Test)
 
   public override TestResult Execute(TestExecutionContext context)
   {
-    TestResult? result = null;
-    var thread = new Thread(() => result = RunCommand(context));
+    var tcs = new TaskCompletionSource<TestResult>();
+    var thread = new Thread(() =>
+    {
+      try
+      {
+        tcs.SetResult(RunCommand(context));
+      }
+      catch (Exception e)
+      {
+        tcs.SetException(e);
+      }
+    });
     thread.SetApartmentState(ApartmentState.STA);
     thread.Start();
     thread.Join();
-    return result
-      ?? throw new ExternalErrorException("Failed to run test in STA!");
+
+    return tcs.Task.Result;
   }
 }
