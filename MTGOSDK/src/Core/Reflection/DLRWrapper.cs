@@ -110,14 +110,13 @@ public class DLRWrapper<I>() where I : class
   }
 
   /// <summary>
-  /// Internal reference to the remote object handle.
+  /// Marks the retrieval of a DLRWrapper's instance as optional.
   /// </summary>
-  internal dynamic @ro => Try(() => Unbind(@base).__ro, () => @base.__ro)
-    ?? throw new InvalidOperationException(
-        $"{type.Name} type does not implement DynamicRemoteObject.");
-
+  /// <typeparam name="T">The class type to instantiate.</typeparam>
+  /// <param name="obj">The object to wrap.</param>
+  /// <returns>The wrapped object or null if the object is null.</returns>
   public static T? Optional<T>(dynamic obj) where T : class =>
-    (obj != null && Unbind(obj) != null)
+    Try<bool>(() => (obj != null && Unbind(obj) != null))
       ? (T)(InstanceFactory.CreateInstance(typeof(T), obj))
       : null;
 

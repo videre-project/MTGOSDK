@@ -20,12 +20,22 @@ public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
     where I : class
     where T : class
 {
+  /// <summary>
+ 	/// Stores an internal reference to the eventhandler instance.
+ 	/// </summary>
   internal override dynamic obj => @ref;
 
-  internal void EventSubscribe(string eventName, Delegate callback) =>
+  /// <summary>
+  /// Internal reference to the remote object handle.
+  /// </summary>
+  private dynamic @ro => Try(() => Unbind(@base).__ro, () => @base.__ro)
+    ?? throw new InvalidOperationException(
+        $"{type.Name} type does not implement DynamicRemoteObject.");
+
+  private void EventSubscribe(string eventName, Delegate callback) =>
     @ro.EventSubscribe(eventName, callback);
 
-  internal void EventUnsubscribe(string eventName, Delegate callback) =>
+  private void EventUnsubscribe(string eventName, Delegate callback) =>
     @ro.EventUnsubscribe(eventName, callback);
 
   private Delegate ProxyTypedDelegate(Delegate c) =>
