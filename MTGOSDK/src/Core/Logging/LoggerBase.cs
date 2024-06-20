@@ -65,7 +65,11 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
       if (IsSuppressedCallerType()) return s_nulllogger;
 
       // Get the caller type of the calling method or class.
-      Type callerType = GetCallerType(3);
+      Type callerType;
+      int depth = 3;
+      do { callerType = GetCallerType(depth); depth++; }
+      while (callerType.FullName.StartsWith("System.") ||
+             callerType.FullName.StartsWith("MTGOSDK.Core.Logging."));
 
       // Fetch the base type if the caller is a compiler-generated type
       // (e.g. lambda expressions, async state machines, etc.).
