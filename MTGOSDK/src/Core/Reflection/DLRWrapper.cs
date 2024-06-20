@@ -306,6 +306,25 @@ public class DLRWrapper<I>() where I : class
     return newList;
   }
 
+  /// <summary>
+  /// Represents a method that defines a set of criteria and determines whether
+  /// the specified object in an iterable meets those criteria.
+  /// </summary>
+  /// <param name="obj">The object to test against the criteria.</param>
+  /// <returns>true if the object meets the criteria; otherwise, false.</returns>
+  public delegate bool Predicate(dynamic obj);
+
+  /// <summary>
+  /// Filters a collection of dynamic objects based on a given predicate.
+  /// </summary>
+  /// <param name="obj">The collection of dynamic objects to filter.</param>
+  /// <param name="predicate">The predicate used to filter the objects.</param>
+  /// <returns>An enumerable collection of dynamic objects that satisfy the predicate.</returns>
+  public static IEnumerable<dynamic> Filter(dynamic obj, Predicate predicate)
+  {
+    foreach (var item in obj) if (predicate(item)) yield return item;
+  }
+
   //
   // Wrapper methods for safely retrieving properties or invoking methods.
   //
