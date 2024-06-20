@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Linq;
+
 using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
@@ -31,7 +33,7 @@ public abstract class CardGrouping<T> : DLRWrapper<ICardGrouping>
   /// <summary>
   /// The format this grouping is associated with. (e.g. Standard, Historic, etc.)
   /// </summary>
-  public PlayFormat Format => new(@base.Format);
+  public PlayFormat? Format => Optional<PlayFormat>(@base.Format);
 
   /// <summary>
   /// The timestamp of the last modification to this grouping.
@@ -61,16 +63,16 @@ public abstract class CardGrouping<T> : DLRWrapper<ICardGrouping>
   /// this property will only return items with a quantity greater than zero.
   /// </remarks>
   public IEnumerable<CardQuantityPair> Items =>
-    ((IEnumerable<ICardQuantityPair>)
-      @base.Items)
-        .Where(item =>
-          @base.ShouldRemoveZeroQuantityItems == item.Quantity > 0)
-        .Select(item => new CardQuantityPair(item));
+    Map<CardQuantityPair>(
+      Filter(@base.Items, new Predicate(item =>
+          // If specified, filter out items with zero quantity.
+          @base.ShouldRemoveZeroQuantityItems == item.Quantity > 0))
+    );
 
   /// <summary>
   /// The unique identifiers of the items contained in this grouping.
   /// </summary>
-  public IEnumerable<int> ItemIds => @base.ItemIds;
+  public IEnumerable<int> ItemIds => Map<int>(@base.ItemIds);
 
   //
   // ICardGrouping derived methods

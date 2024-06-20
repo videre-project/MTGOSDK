@@ -156,6 +156,9 @@ public static class CollectionManager
   // IBinder wrapper methods
   //
 
+  public static IEnumerable<Binder> Binders =>
+    Map<Binder>(Unbind(s_collectionGroupingManager).BinderFolder.Contents);
+
   /// <summary>
   /// The last used binder for trading.
   /// </summary>
@@ -173,7 +176,7 @@ public static class CollectionManager
   /// </summary>
   /// <param name="id">The id of the binder to return.</param>
   /// <returns>A new binder object.</returns>
-  public static Binder GetBinder(int id) => new(GetCollectionItem(id));
+  public static Binder GetBinder(int id) => new(Unbind(GetCollectionItem(id)));
 
   // IBinder ImportTextDeckAsBinder(FileInfo textFileToImport, string name, IVisualResource binderImage);
   // IBinder CreateNewBinder(string name, IVisualResource binderImage = null, IEnumerable<ICardDefinition> initialCards = null);
@@ -198,7 +201,7 @@ public static class CollectionManager
   /// </summary>
   /// <param name="id">The id of the deck to return.</param>
   /// <returns>A new deck object.</returns>
-  public static Deck GetDeck(int id) => new(GetCollectionItem(id));
+  public static Deck GetDeck(int id) => new(Unbind(GetCollectionItem(id)));
 
   // IDeck ImportTextDeck(FileInfo textFileToImport, string name, IPlayFormat format, IVisualResource deckBoxImage, IDeckFolder location);
   // IDeck CreateNewDeck(string name, IPlayFormat format, IVisualResource deckBoxImage = null, IDeckFolder location = null, IEnumerable<ICardDefinition> initialCards = null);

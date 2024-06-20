@@ -3,9 +3,12 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model;
+using DeckRegion = MTGOSDK.API.Collection.DeckRegion;
 
 
 namespace MTGOSDK.API.Collection;
@@ -28,7 +31,8 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   //
 
   public IEnumerable<DeckRegion> Regions =>
-    Map<DeckRegion>(Unbind(@base).Regions);
+    Map<DeckRegion>(Unbind(@base).Regions,
+      new Func<dynamic, DeckRegion>(e => Cast<DeckRegion>(e.EnumValue)));
 
   /// <summary>
   /// The unique identifier for this deck used for matchmaking.
@@ -45,11 +49,33 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   //
 
   /// <summary>
+  /// Proxy type for the client's DeckRegion class.
+  /// </summary>
+  private static readonly Proxy<dynamic> s_DeckRegion =
+    new(typeof(WotC.MTGO.Common.DeckRegion));
+
+  public dynamic GetRegionRef(DeckRegion region)
+  {
+    string key;
+    switch (region)
+    {
+      case DeckRegion.CommandZone:
+        key = "Command Zone";
+        break;
+      default:
+        key = Enum.GetName(typeof(DeckRegion), region);
+        break;
+    }
+
+    return RemoteClient.InvokeMethod(s_DeckRegion, "GetFromKey", null, key);
+  }
+
+  /// <summary>
   /// Returns the number of cards in the specified region.
   /// </summary>
   /// <param name="region">The deck region to count cards in.</param>
   public int GetRegionCount(DeckRegion region) =>
-    @base.GetRegionCount(region);
+    Unbind(@base).GetRegionCount(GetRegionRef(region));
 
   /// <summary>
   /// Returns the cards in the specified region.
@@ -57,7 +83,7 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   /// <param name="region">The deck region to return cards from.</param>
   /// <returns>An iterator of CardQuantityPair objects.</returns>
   public IEnumerable<CardQuantityPair> GetCards(DeckRegion region) =>
-    Map<CardQuantityPair>(@base.GetCards(region));
+    Map<CardQuantityPair>(Unbind(@base).GetRegionCards(GetRegionRef(region)));
 
   // public void AddCards(...) => AddCardsToRegion(...)
   // public void RemoveCards(...) => RemoveCardsFromRegion(...)

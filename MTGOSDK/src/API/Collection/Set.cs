@@ -6,6 +6,7 @@
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
+using SetType = MTGOSDK.API.Collection.SetType;
 
 
 namespace MTGOSDK.API.Collection;
@@ -47,7 +48,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <summary>
   /// The set product type.
   /// </summary>
-  public SetType Type => new(Unbind(@base).Type);
+  public SetType Type => Cast<SetType>(Unbind(@base).Type.EnumValue);
 
   /// <summary>
   /// The set release number ordered by release date.
@@ -84,7 +85,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <returns>True if the set contains the card, otherwise false.</returns>
   public bool ContainsCard(Card card) => ContainsCatalogId(card.Id);
 
-  public override string ToString() => this.Name;
+  public override string ToString() => $"{Name} ({Code})";
 
-  public static implicit operator string(Set set) => set.Code;
+  public static implicit operator string(Set set) => set.ToString();
 }

@@ -31,7 +31,7 @@ public sealed class CardQuantityPair(dynamic cardQuantityPair)
 
   public int Id => @base.CatalogId;
 
-  public int Hash => Unbind(@base).Key.GetHashCode();
+  // public int Hash => Unbind(@base).Key.GetHashCode();
 
   public Card Card => new(@base.CardDefinition);
 

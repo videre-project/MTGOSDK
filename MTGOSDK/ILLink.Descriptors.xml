@@ -15,6 +15,14 @@
       </type>
     </namespace>
   </assembly>
+  <assembly fullname="MTGOEnumStruct">
+    <namespace fullname="WotC.MTGO.Common">
+      <type fullname="DeckRegion">
+        <field name="_KeyMap" />
+        <property name="EnumValue" />
+      </type>
+    </namespace>
+  </assembly>
   <assembly fullname="WotC.MtGO.Client.Common">
     <namespace fullname="WotC.MtGO.Client.Common.ServiceLocation">
       <type fullname="ObjectProvider">

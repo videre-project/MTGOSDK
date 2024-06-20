@@ -29,7 +29,7 @@ public sealed class Card(dynamic card) : CollectionItem<Card>
   /// <summary>
   /// A string representing the card's unique colors (e.g. "WUBRG").
   /// </summary>
-  public string Colors => @base.Colors;
+  public string Colors => @base.ColorDisplayString;
 
   /// <summary>
   /// The mana cost of the card.
