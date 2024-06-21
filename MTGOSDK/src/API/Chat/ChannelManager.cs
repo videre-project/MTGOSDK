@@ -5,6 +5,7 @@
 
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Reflection;
+using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model.Chat;
@@ -12,7 +13,6 @@ using WotC.MtGO.Client.Model.Chat;
 
 namespace MTGOSDK.API.Chat;
 using static MTGOSDK.API.Events;
-// using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public static class ChannelManager
 {
@@ -27,12 +27,24 @@ public static class ChannelManager
     ObjectProvider.Get<IChannelManager>();
 
   /// <summary>
+  /// A dictionary of all channels by their channel ID.
+  /// </summary>
+  private static dynamic ChannelsByName =>
+    Unbind(s_channelManager).m_channelsByName;
+
+  /// <summary>
+  /// All currently queryable channels in the client.
+  /// </summary>
+  public static IEnumerable<Channel> Channels =>
+    Map<Channel>(ChannelsByName.Values);
+
+  /// <summary>
   /// Gets the channel with the given ID.
   /// </summary>
   /// <param name="id">The ID of the channel to get.</param>
   /// <returns>A new channel object.</returns>
   public static Channel GetChannel(int id) =>
-    new(s_channelManager.GetChannelById(id));
+    new(Unbind(s_channelManager.GetChannelById(id)));
 
   /// <summary>
   /// Gets the channel with the given name.
@@ -40,11 +52,7 @@ public static class ChannelManager
   /// <param name="name">The name of the channel to get.</param>
   /// <returns>A new channel object.</returns>
   public static Channel GetChannel(string name) =>
-    new(s_channelManager.GetChannelByName(name));
-
-  // TODO: Expose this as a client-managed collection.
-  // public static dynamic Channels =>
-  //   Unbind(s_channelManager).m_channelsByName.Keys;
+    new(Unbind(s_channelManager.GetChannelByName(name)));
 
   //
   // IChatManager wrapper methods
@@ -56,22 +64,17 @@ public static class ChannelManager
   private static readonly IChatManager s_chatManager =
     ObjectProvider.Get<IShellViewModel>().ChatManager;
 
-  internal static ChatSessionViewModel GetChatForChannel(Channel channel) =>
-    new(s_chatManager.GetChatForChannel(channel.@base));
+  internal static ChatSessionViewModel? GetChatForChannel(dynamic channel) =>
+    Optional<ChatSessionViewModel>(
+        Unbind(s_chatManager).GetChatForChannel(channel));
 
   //
   // IChatManager wrapper events
   //
 
-  /// <summary>
-  /// Triggered when the user activates the chat window.
-  /// </summary>
   public static EventProxy<ChatSessionEventArgs> SessionAdded =
     new(/* IChatManager */ s_chatManager, nameof(SessionAdded));
 
-  /// <summary>
-  /// Triggered when the user closes the chat window.
-  /// </summary>
   public static EventProxy<ChatSessionEventArgs> SessionClosing =
     new(/* IChatManager */ s_chatManager, nameof(SessionClosing));
 

@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Users;
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Reflection;
@@ -24,6 +26,10 @@ public sealed class Channel(dynamic chatChannel)
   /// </summary>
   internal override dynamic obj => Bind<IChatChannel>(chatChannel);
 
+  private dynamic ChatLog =>
+    Try(() => Unbind(@base.MessageLog).m_chatLog,
+        () => new List<Message>());
+
   /// <summary>
   /// The ChatSessionViewModel of the channel.
   /// </summary>
@@ -31,8 +37,8 @@ public sealed class Channel(dynamic chatChannel)
   /// This is an instance of the chat's session view model, which is used by the
   /// client to control the client-side management of chat state and UI elements.
   /// </remarks>
-  public ChatSessionViewModel ChatSession =>
-    new(ChannelManager.GetChatForChannel(this));
+  public ChatSessionViewModel? ChatSession =>
+    ChannelManager.GetChatForChannel(chatChannel);
 
   //
   // IChannel wrapper properties
@@ -41,6 +47,7 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// The channel's ID.
   /// </summary>
+  [Default(-1)]
   public int Id => @base.Id;
 
   /// <summary>
@@ -66,7 +73,12 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// The log of messages in this channel.
   /// </summary>
-  public MessageLog Log => new(@base.MessageLog);
+  public IList<Message> Messages => Map<IList, Message>(ChatLog);
+
+  /// <summary>
+  /// The number of messages sent in this channel.
+  /// </summary>
+  public int MessageCount => ChatLog.Count;
 
   /// <summary>
   /// The users in this channel.
@@ -89,25 +101,16 @@ public sealed class Channel(dynamic chatChannel)
   //
 
   /// <summary>
-  /// The name of the chat channel.
-  /// </summary>
-  public string Title => @base.Title;
-
-  /// <summary>
   /// The type of chat channel (e.g. "System", "Private", "GameChat", "GameLog")
   /// </summary>
+  [Default("System")]
   public string Type => Unbind(@base).ChannelType.ToString();
 
   /// <summary>
   /// Whether the current user can send messages to the channel.
   /// </summary>
+  [Default(false)]
   public bool CanSendMessage => @base.CanSendMessage;
-
-  /// <summary>
-  /// The messages sent in the channel.
-  /// </summary>
-  public IEnumerable<Message> Messages =>
-    Map<Message>(Unbind(@base).Messages);
 
   //
   // IChatChannel wrapper events

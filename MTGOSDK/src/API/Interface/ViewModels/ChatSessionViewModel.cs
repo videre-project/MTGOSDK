@@ -37,6 +37,12 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   /// </summary>
   public Channel Channel => new(@base.Channel);
 
+  /// <summary>
+  /// Whether the channel is activated in the client.
+  /// </summary>
+  [Default(false)]
+  public bool IsActive => @base.IsActive;
+
   //
   // IChatSessionViewModel wrapper methods
   //
