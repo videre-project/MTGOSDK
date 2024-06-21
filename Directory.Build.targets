@@ -11,8 +11,12 @@
       <FoldersToClean Include="$(MSBuildProjectDirectory)\bin" />
       <FoldersToClean Include="$(MSBuildProjectDirectory)\logs" />
       <FoldersToClean Include="$(MSBuildProjectDirectory)\obj" />
+      <FoldersToClean Include="$(MSBuildProjectDirectory)\html-coverage-report" />
+      <FilesToClean Include="$(MSBuildProjectDirectory)\coverage.cobertura.xml" />
+      <FilesToClean Include="$(MSBuildProjectDirectory)\coverage.json" />
     </ItemGroup>
     <RemoveDir Directories="@(FoldersToClean)" />
+    <Delete Files="@(FilesToClean)" />
   </Target>
 
   <Target Name="PreBuildTimestamp"
