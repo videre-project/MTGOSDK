@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
+using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Leagues;
@@ -115,7 +116,7 @@ public class EventValidationFixture : BaseFixture
     Assert.That(eventObj.Id, Is.GreaterThan(0));
     Assert.That(eventObj.Token, Is.Not.EqualTo(Guid.Empty));
     Assert.That(eventObj.EventType, Is.EqualTo(typeof(T).Name));
-    Assert.That(eventObj.Format.ToString(), Is.Not.Empty);
+    ValidatePlayFormat(eventObj.Format);
     Assert.That(eventObj.Description, Is.Not.Empty);
     Assert.That(eventObj.TotalPlayers, Is.GreaterThanOrEqualTo(0));
     Assert.That(eventObj.Players,
@@ -195,7 +196,20 @@ public class EventValidationFixture : BaseFixture
     Assert.That((bool?)tournament.HasBye, Is.Not.Null);
     Assert.That((bool?)tournament.InPlayoffs, Is.Not.Null);
 
-    foreach(StandingRecord standing in tournament.Standings)
+    foreach(TournamentRound round in tournament.Rounds.Take(5))
+    {
+      Assert.That(round.Number, Is.GreaterThan(0));
+      Assert.That(round.IsComplete,
+          round.Number > tournament.CurrentRound || tournament.IsCompleted
+            ? Is.True
+            // Can be true or false if the tournament is still in progress
+            : Is.AnyOf(true, false));
+      Assert.That(round.Matches.Count, Is.GreaterThanOrEqualTo(0));
+      Assert.That(round.StartTime, Is.GreaterThan(tournament!.StartTime));
+      Assert.That(round.UsersWithByes.Take(5), Has.All.Not.Null);
+    }
+
+    foreach(StandingRecord standing in tournament.Standings.Take(5))
     {
       Assert.That(standing.Rank,
           tournament.CurrentRound <= 1 ? Is.GreaterThanOrEqualTo(0) : Is.GreaterThan(0));
@@ -277,5 +291,29 @@ public class EventValidationFixture : BaseFixture
       Assert.That(game.ServerGuid, Is.Not.EqualTo(Guid.Empty));
       Assert.That(game.State, Is.Not.EqualTo(GameState.Invalid));
     }
+  }
+
+  public void ValidatePlayFormat(PlayFormat format)
+  {
+    // IPlayFormat properties
+    Assert.That(format, Is.Not.Null);
+    Assert.That(format.Name, Is.Not.Empty);
+    Assert.That(format.Code, Is.Not.Empty);
+    Assert.That(format.MinDeckSize, Is.GreaterThan(0));
+    Assert.That(format.MaxDeckSize, Is.GreaterThanOrEqualTo(format.MinDeckSize));
+    Assert.That(format.MaxCopiesPerCard, Is.GreaterThanOrEqualTo(0));
+    Assert.That(format.MaxSideboardSize, Is.GreaterThanOrEqualTo(0));
+    Assert.That(format.Type, Is.Not.Empty);
+    Assert.That(format.LegalSets.Take(1),
+      format.MinDeckSize == 40 ? Is.Empty : Is.Not.Empty);
+    Assert.That(format.BasicLands.Take(1), Is.Not.Empty);
+
+    // IPlayFormat methods
+    var card = CollectionManager.GetCard("Colossal Dreadmaw");
+    Assert.That((bool?)format.IsCardLegal(card), Is.Not.Null);
+    Assert.That((bool?)format.IsCardRestricted(card), Is.Not.Null);
+    Assert.That((bool?)format.IsCardBanned(card), Is.Not.Null);
+    // format.IsDeckLegal(Deck deck);
+    Assert.That((string?)format, Is.EqualTo(format.Name));
   }
 }

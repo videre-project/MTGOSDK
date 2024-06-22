@@ -53,7 +53,7 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <summary>
   /// The format type (i.e. Constructed, Sealed, Draft).
   /// </summary>
-  internal string Type => Unbind(@base).Type.ToString();
+  public string Type => Unbind(@base).Type.ToString();
 
   /// <summary>
   /// The sets that are legal in this format.
@@ -73,7 +73,7 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <remarks>
   /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
   /// </remarks>
-  internal GameStructureEnum EnumValue =>
+  public GameStructureEnum EnumValue =>
     Cast<GameStructureEnum>(Unbind(@base).GameStructureEnum);
 
   //
@@ -86,7 +86,7 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <param name="catalogId">The catalog ID of the card to check.</param>
   /// <returns>True if the card is legal, false otherwise.</returns>
   public bool IsCardLegal(int catalogId) =>
-    @base.IsLegal(catalogId);
+    @base.IsCardLegal(catalogId);
 
   /// <summary>
   /// Checks if a card is restricted in this format.
@@ -120,4 +120,7 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   //   @base.SetDeckLegality(/* IDeck */ deck.@base);
 
   public override string ToString() => this.Name;
+
+  public static implicit operator string(PlayFormat playFormat) =>
+    playFormat.ToString();
 }
