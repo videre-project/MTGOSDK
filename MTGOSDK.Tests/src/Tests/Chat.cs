@@ -16,18 +16,16 @@ namespace MTGOSDK.Tests;
 
 public class Chat : ChatValidationFixture
 {
-  [Test]
-  public void Test_Channels()
+  [RateLimit(ms: 100)]
+  [TestCase("Main Lobby")]
+  [TestCase("Scheduled Events")]
+  [TestCase("Constructed Queues")]
+  public void Test_Channels(string name)
   {
-    var channel = ChannelManager.Channels.First();
+    var channel = ChannelManager.GetChannel(name);
     ValidateChannel(channel);
     ValidateChannel(ChannelManager.GetChannel(channel.Id));
-    ValidateChannel(ChannelManager.GetChannel(channel.Name));
-
-    foreach(var subChannel in ChannelManager.Channels.Skip(1))
-    {
-      ValidateChannel(subChannel);
-    }
+    Assert.That(ChannelManager.Channels.Any(c => c.Id == channel.Id));
   }
 }
 
@@ -47,9 +45,9 @@ public class ChatValidationFixture : BaseFixture
       channel.Id == 0 ? Is.EqualTo(-1) : Is.GreaterThanOrEqualTo(0));
     Assert.That((bool?)channel.IsJoined, Is.Not.Null);
     Assert.That((bool?)channel.IsJoinedForGame, Is.Not.Null);
-    // Assert.That(channel.Messages.Take(5), Has.None.Null);
+    Assert.That(channel.Messages.Take(5), Has.None.Null);
     Assert.That(channel.MessageCount, Is.GreaterThanOrEqualTo(0));
-    // Assert.That(channel.Users.Take(5), Has.None.Null);
+    Assert.That(channel.Users.Take(5), Has.None.Null);
     Assert.That(channel.UserCount, Is.GreaterThanOrEqualTo(0));
     Assert.That(channel.SubChannels, Has.None.Null);
 
