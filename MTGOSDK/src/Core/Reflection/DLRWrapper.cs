@@ -260,7 +260,20 @@ public class DLRWrapper<I>() where I : class
     where T2 : notnull
   {
     dynamic mapper = func as dynamic ?? UseTypeMapper<T1, T2>();
-    foreach (var item in Cast<E>(obj)) yield return mapper(item);
+
+    // Check if the object can support indexing
+    if (Try<bool>(() => obj[0] != null))
+    {
+      int count = Try(() => obj.Count, () => obj.Length);
+      for (var i = 0; i < count; i++)
+        yield return mapper(obj[i]);
+    }
+    // Otherwise, iterate using the object's enumerator
+    else
+    {
+      foreach (var item in Cast<E>(obj))
+        yield return mapper(item);
+    }
   }
 
   /// <summary>
