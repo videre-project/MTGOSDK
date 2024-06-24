@@ -1,10 +1,11 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
 using System.Dynamic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 
 namespace MTGOSDK.Core.Reflection;
@@ -12,13 +13,13 @@ namespace MTGOSDK.Core.Reflection;
 /// <summary>
 /// Provides a dynamic object that can be used to wrap a static value.
 /// </summary>
-/// <param name="value">The value to wrap.</param>
 public class ProxyObject(
   dynamic @base,
   dynamic @default = null,
-  dynamic fallback = null): DynamicObject
+  dynamic fallback = null,
+  int retries = 3): DynamicObject
 {
-  public override bool TryGetMember(GetMemberBinder binder, out object result)
+  private bool TryGetBaseMember(GetMemberBinder binder, ref object result)
   {
     // First attempt to retrieve the member from the base object.
     try
@@ -72,5 +73,24 @@ public class ProxyObject(
     }
 
     return true;
+  }
+
+  public override bool TryGetMember(GetMemberBinder binder, out object result)
+  {
+    bool ret = false;
+    object baseValue = null!;
+    for(int i = 0; i < retries; i++)
+    {
+      if(TryGetBaseMember(binder, ref baseValue))
+      {
+        ret = true;
+        break;
+      }
+      // Wait for a short period before retrying.
+      Thread.Sleep(10);
+    }
+
+    result = baseValue;
+    return ret;
   }
 }
