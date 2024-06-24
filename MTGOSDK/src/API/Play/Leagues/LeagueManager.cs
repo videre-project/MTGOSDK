@@ -10,6 +10,7 @@ using WotC.MtGO.Client.Model.Play;
 
 namespace MTGOSDK.API.Play.Leagues;
 using static MTGOSDK.API.Events;
+// using static MTGOSDK.API.Play.Event<dynamic>;
 using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 public static class LeagueManager
@@ -20,16 +21,36 @@ public static class LeagueManager
   private static readonly ILeaguesManager s_leagueManager =
     ObjectProvider.Get<ILeaguesManager>();
 
-  private static dynamic leaguesById =>
+  public static dynamic leaguesById =>
     Unbind(s_leagueManager).m_leaguesById;
 
-  // m_myLeagues
-  // SuggestedLeagues
+  private static dynamic leaguesByToken =>
+    Unbind(s_leagueManager).m_leaguesByToken;
 
   /// <summary>
   /// All currently queryable League events.
   /// </summary>
   public static IEnumerable<League> Leagues => Map<League>(leaguesById.Values);
+
+  /// <summary>
+  /// The current user's open leagues.
+  /// </summary>
+  public static IEnumerable<League> OpenLeagues =>
+    Map<League>(Unbind(s_leagueManager).m_myLeagues);
+
+  //
+  // ILeagueManager wrapper methods
+  //
+
+  public static League GetLeague(int id) =>
+    leaguesById.ContainsKey(id)
+      ? new League(leaguesById[id])
+      : throw new KeyNotFoundException($"No league found with id {id}");
+
+  public static League GetLeague(Guid guid) =>
+    leaguesByToken.ContainsKey(guid)
+      ? new League(leaguesByToken[guid])
+      : throw new KeyNotFoundException($"No league found with guid {guid}");
 
   //
   // ILeagueManager wrapper events

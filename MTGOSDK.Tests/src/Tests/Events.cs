@@ -33,18 +33,6 @@ public class Events : EventValidationFixture
         .First();
     }
 #pragma warning restore CS8600
-
-    Assert.That(EventManager.GetJoinableEvent(eventObj.Id).Description,
-                Is.EqualTo(eventObj.Description));
-
-    Assert.That(EventManager.GetJoinableEvent(eventObj.Token).Description,
-                Is.EqualTo(eventObj.Description));
-
-    Assert.That(EventManager.GetEvent(eventObj.Id).Description,
-                Is.EqualTo(eventObj.Description));
-
-    Assert.That(EventManager.GetEvent(eventObj.Token).Description,
-                Is.EqualTo(eventObj.Description));
   }
 
   [RateLimit(ms: 300)]
@@ -111,6 +99,22 @@ public class EventValidationFixture : BaseFixture
     Assert.That(eventObj, Is.Not.Null);
     Assert.That(eventObj, Is.InstanceOf<T>());
     Assert.That(eventObj.ToString(), Is.Not.Empty);
+
+    // Test that event can be retrieved by ID or event token
+    if (typeof(T) == typeof(League))
+    {
+      Assert.That(LeagueManager.GetLeague(eventObj.Id).Description,
+                  Is.EqualTo(eventObj.Description));
+      Assert.That(LeagueManager.GetLeague(eventObj.Token).Description,
+                  Is.EqualTo(eventObj.Description));
+    }
+    else
+    {
+      Assert.That(EventManager.GetEvent(eventObj.Id).Description,
+                  Is.EqualTo(eventObj.Description));
+      Assert.That(EventManager.GetEvent(eventObj.Token).Description,
+                  Is.EqualTo(eventObj.Description));
+    }
 
     // IEvent properties
     Assert.That(eventObj.Id, Is.GreaterThan(0));

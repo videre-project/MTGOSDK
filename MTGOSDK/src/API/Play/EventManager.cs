@@ -50,34 +50,6 @@ public static class EventManager
     Map<dynamic>(eventsById.Values, PlayerEventFactory);
 
   /// <summary>
-  /// Retrieves a joinable event by it's event ID.
-  /// </summary>
-  /// <param name="id">The event ID to query.</param>
-  /// <returns>The event object.</returns>
-  /// <exception cref="KeyNotFoundException">
-  /// Thrown if the event could not be found.
-  /// </exception>
-  public static dynamic GetJoinableEvent(int id) =>
-    FromPlayerEvent((
-      Unbind(s_playService).GetFilterablePlayerEventById(id)
-        ?? throw new KeyNotFoundException($"Event #{id} could not be found.")
-    ).PlayerEvent);
-
-  /// <summary>
-  /// Retrieves a joinable event by it's event GUID.
-  /// </summary>
-  /// <param name="guid">The event GUID to query.</param>
-  /// <returns>The event object.</returns>
-  /// <exception cref="KeyNotFoundException">
-  /// Thrown if the event could not be found.
-  /// </exception>
-  public static dynamic GetJoinableEvent(Guid guid) =>
-    FromPlayerEvent((
-      Unbind(s_playService.GetFilterablePlayerEventByGuid(guid))
-        ?? throw new KeyNotFoundException($"Event could not be found.")
-    ).PlayerEvent);
-
-  /// <summary>
   /// Retrieves an event by it's event ID.
   /// </summary>
   /// <param name="id">The event ID to query.</param>
@@ -87,7 +59,7 @@ public static class EventManager
   /// </exception>
 	public static dynamic GetEvent(int id) =>
     FromPlayerEvent((
-      Unbind(s_playService.GetMatchOrTournamentOrQueueById(id))
+      Unbind(s_playService).GetMatchOrTournamentOrQueueById(id)
         ?? throw new KeyNotFoundException($"Event #{id} could not be found.")
     ).PlayerEvent);
 
@@ -101,7 +73,7 @@ public static class EventManager
   /// </exception>
   public static dynamic GetEvent(Guid guid) =>
     FromPlayerEvent(
-      Unbind(s_playerEventManager.GetEvent(guid))
+      Unbind(s_playerEventManager).GetEvent(guid)
         ?? throw new KeyNotFoundException($"Event could not be found.")
     );
 

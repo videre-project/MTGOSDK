@@ -26,7 +26,7 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The event's tournament ID.
   /// </summary>
-  public int Id => @base.EventId;
+  public int Id => Unbind(@base).EventId;
 
   /// <summary>
   /// The event's session token.
