@@ -20,7 +20,7 @@ public class Users : UserValidationFixture
   public void Test_CurrentUser()
   {
     Log.Trace("Retrieving current user...");
-    UserManager.Users.Clear();
+    UserManager.ClearCache();
     User user = Client.CurrentUser;
 
     Assert.That(user.Id, Is.GreaterThan(0));
@@ -39,7 +39,7 @@ public class Users : UserValidationFixture
     // a user object. Partial queries (by id or name) will query against the
     // list of online users and may throw an exception if the user is not found.
     //
-    UserManager.Users.Clear();
+    UserManager.ClearCache();
     Log.Trace("Calling GetUser({id}, '{name}')...", id, name);
     User user = new(id, name);
 
@@ -47,7 +47,7 @@ public class Users : UserValidationFixture
     // Test that the user can be found only by their id or name. If successful,
     // the MTGO client will fill in missing user data from its internal cache.
     //
-    UserManager.Users.Clear();
+    UserManager.ClearCache();
     Log.Trace("Calling GetUser({id}) and GetUser('{name}')...", id, name);
     Assert.That(id, Is.EqualTo((new User(name)).Id));
     Assert.That(name, Is.EqualTo((new User(id)).Name));

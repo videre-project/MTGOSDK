@@ -26,6 +26,20 @@ public static class UserManager
   /// </summary>
   public static ConcurrentDictionary<int, User> Users { get; } = new();
 
+  /// <summary>
+  /// A map of user objects from their display name to their Login ID.
+  /// </summary>
+  public static ConcurrentDictionary<string, int> UserIds { get; } = new();
+
+  /// <summary>
+  /// Resets the local user cache.
+  /// </summary>
+  public static void ClearCache()
+  {
+    Users.Clear();
+    UserIds.Clear();
+  }
+
   //
   // UserManager wrapper methods
   //
@@ -55,6 +69,7 @@ public static class UserManager
         Unbind(s_userManager).CreateNewUser(id, name)
           ?? throw new ArgumentException($"User '{name}' (#{id}) does not exist.")
       );
+      UserIds[name] = id;
       // Set callback to remove user from cache when the client is disposed.
       RemoteClient.Disposed += (s, e) => Users.TryRemove(id, out _);
     }
@@ -71,10 +86,13 @@ public static class UserManager
   /// Thrown if the user does not exist.
   /// </exception>
   public static User GetUser(string name) =>
-    GetUser(
-      GetUserId(name)
-        ?? throw new ArgumentException($"User '{name}' does not exist."),
-      name
+    UserIds.TryGetValue(name, out var id) &&
+    Users.TryGetValue(id, out var user)
+      ? user
+      : GetUser(
+          GetUserId(name)
+            ?? throw new ArgumentException($"User '{name}' does not exist."),
+          name
     );
 
   /// <summary>
@@ -122,7 +140,8 @@ public static class UserManager
   /// Retrieves a list of the current user's buddy users.
   /// </summary>
   public static IEnumerable<User> GetBuddyUsers() =>
-    Map<User>(/* IEnumerable<IUser> */ s_buddyUsersList);
+    Map<User>(/* IEnumerable<IUser> */ s_buddyUsersList,
+      new Func<dynamic, User>(user => GetUser(user.Name)));
 
   //
   // IBuddyUsersList wrapper events

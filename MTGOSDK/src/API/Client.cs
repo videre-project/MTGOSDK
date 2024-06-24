@@ -253,7 +253,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   public void ClearCaches()
   {
     Log.Debug("Disposing all pinned remote objects registered with the client.");
-    UserManager.Users.Clear();
+    UserManager.ClearCache();
     CollectionManager.Cards.Clear();
     ObjectProvider.ResetCache();
   }
