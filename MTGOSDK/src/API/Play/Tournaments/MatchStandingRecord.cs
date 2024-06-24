@@ -29,7 +29,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// The ID of the match.
   /// </summary>
   [Default(-1)]
-  public int Id => @base.Id;
+  public int Id => @base.HasBye ? -1 : @base.Id;
 
   /// <summary>
   /// The round number of the match.
@@ -39,7 +39,6 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
-  [Default(MatchState.Invalid)]
   public MatchState State => Cast<MatchState>(Unbind(@base).Status);
 
   /// <summary>
@@ -51,7 +50,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// The user objects of both players.
   /// </summary>
   public IList<User> Players =>
-    Map<IList, User>(@base.Users,
+    Map<IList, User>(Unbind(@base).Users,
         new Func<dynamic, User>(player => new User(player.Name)));
 
   /// <summary>

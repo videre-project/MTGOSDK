@@ -31,7 +31,8 @@ public sealed class TournamentRound(dynamic tournamentRound)
   /// <summary>
   /// Whether the tournament round is complete.
   /// </summary>
-  public bool IsComplete => @base.IsComplete;
+  public bool IsComplete => @base.IsComplete ||
+    (Matches.Any() && Matches.All(m => m.IsComplete));
 
   /// <summary>
   /// The tournament round's matches.

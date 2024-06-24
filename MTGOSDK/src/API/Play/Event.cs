@@ -61,8 +61,7 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The user's registered deck for the event.
   /// </summary>
-  public Deck RegisteredDeck => new(@base.DeckUsedToJoin
-    ?? throw new InvalidOperationException("No deck registered."));
+  public Deck? RegisteredDeck => Optional<Deck>(@base.DeckUsedToJoin);
 
   /// <summary>
   /// The number of minutes each player has in each match.
@@ -121,9 +120,9 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
     // Map each event type to its corresponding wrapper class.
     switch (eventType)
     {
-      case "FilterableLeague" or "League":
-        eventObject = new League(eventObject);
-        break;
+      // case "FilterableLeague" or "League":
+      //   eventObject = new League(eventObject);
+      //   break;
       case "FilterableMatch" or "Match":
         eventObject = new Match(eventObject);
         break;

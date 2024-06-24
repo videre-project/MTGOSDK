@@ -48,6 +48,12 @@ public sealed class Match(dynamic match) : Event<Match>
   public MatchState State => Cast<MatchState>(Unbind(@base).Status);
 
   /// <summary>
+  /// Whether the match has been completed.
+  /// </summary>
+  public bool IsComplete => Unbind(@base).IsCompleted ||
+    State == (MatchState.MatchCompleted | MatchState.GameClosed);
+
+  /// <summary>
   /// The user who created the match.
   /// </summary>
   public User? Creator => Optional<User>(@base.Creator);
@@ -70,7 +76,7 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The current game being played.
   /// </summary>
-  public Game CurrentGame => new(@base.CurrentGame);
+  public Game? CurrentGame => Optional<Game>(@base.CurrentGame);
 
   /// <summary>
   /// The start time of the match.

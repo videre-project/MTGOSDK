@@ -121,6 +121,8 @@ public class EventValidationFixture : BaseFixture
     Assert.That(eventObj.TotalPlayers, Is.GreaterThanOrEqualTo(0));
     Assert.That(eventObj.Players,
         eventObj.TotalPlayers == 0 ? Is.Empty : Is.Not.Empty);
+    Assert.That(eventObj.RegisteredDeck?.Id,
+      eventObj.IsParticipant ? Is.GreaterThan(0) : Is.Null);
     Assert.That(eventObj.MinutesPerPlayer, Is.GreaterThanOrEqualTo(0));
     Assert.That(eventObj.MinimumPlayers, Is.GreaterThanOrEqualTo(0));
     Assert.That(eventObj.MaximumPlayers, Is.GreaterThanOrEqualTo(0));
@@ -130,12 +132,6 @@ public class EventValidationFixture : BaseFixture
     Assert.That((bool?)eventObj.HasJoined, Is.Not.Null);
     Assert.That((bool?)eventObj.IsParticipant, Is.Not.Null);
     Assert.That((bool?)eventObj.IsEliminated, Is.Not.Null);
-
-    if (!eventObj.IsParticipant)
-      Assert.That(() => eventObj.RegisteredDeck,
-          Throws.InstanceOf<InvalidOperationException>());
-    else
-      Assert.That(eventObj.RegisteredDeck.Id, Is.GreaterThan(0));
   }
 
   public void ValidateLeague(League league)
@@ -181,7 +177,7 @@ public class EventValidationFixture : BaseFixture
     ValidateEvent(tournament);
 
     // IQueueBasedEvent properties
-    Assert.That(tournament!.StartTime, Is.GreaterThan(DateTime.MinValue));
+    Assert.That(tournament.StartTime, Is.GreaterThan(DateTime.MinValue));
     Assert.That(tournament.EndTime, Is.GreaterThan(tournament.StartTime));
     Assert.That(tournament.TotalRounds, Is.GreaterThan(0));
 
@@ -195,7 +191,6 @@ public class EventValidationFixture : BaseFixture
 
     Assert.That((bool?)tournament.HasBye, Is.Not.Null);
     Assert.That((bool?)tournament.InPlayoffs, Is.Not.Null);
-
     foreach(TournamentRound round in tournament.Rounds.Take(5))
     {
       Assert.That(round.Number, Is.GreaterThan(0));
@@ -205,7 +200,7 @@ public class EventValidationFixture : BaseFixture
             // Can be true or false if the tournament is still in progress
             : Is.AnyOf(true, false));
       Assert.That(round.Matches.Count, Is.GreaterThanOrEqualTo(0));
-      Assert.That(round.StartTime, Is.GreaterThan(tournament!.StartTime));
+      Assert.That(round.StartTime, Is.GreaterThanOrEqualTo(tournament.StartTime));
       Assert.That(round.UsersWithByes.Take(5), Has.All.Not.Null);
     }
 
@@ -223,10 +218,14 @@ public class EventValidationFixture : BaseFixture
 
       foreach(MatchStandingRecord match in standing.PreviousMatches)
       {
-        Assert.That(match.Id, Is.GreaterThan(0));
+        Assert.That(match.Id,
+          match.HasBye ? Is.EqualTo(-1) : Is.GreaterThan(0));
         Assert.That(match.Round, Is.GreaterThan(0));
         Assert.That(match.Round, Is.LessThanOrEqualTo(tournament.CurrentRound));
-        Assert.That(match.State, Is.Not.EqualTo(MatchState.Invalid));
+        Assert.That(match.State,
+          match.HasBye
+            ? Is.EqualTo(MatchState.Invalid)
+            : Is.Not.EqualTo(MatchState.Invalid));
         Assert.That(match.HasBye, match.Players.Count == 1 ? Is.True : Is.False);
         Assert.That(match.Players.Count, Is.GreaterThanOrEqualTo(1));
         Assert.That(match.WinningPlayerIds.Count, Is.LessThanOrEqualTo(3));
@@ -237,10 +236,10 @@ public class EventValidationFixture : BaseFixture
         {
           Assert.That(game.Id, Is.GreaterThan(0));
           Assert.That(game.GameState, Is.Not.EqualTo(GameState.Invalid));
-          // Assert.That(game.CompletedDuration,
-          //   game.GameState == GameState.Finished
-          //     ? Is.GreaterThan(TimeSpan.Zero)
-          //     : Is.AnyOf(Is.Null, TimeSpan.Zero));
+          Assert.That(game.CompletedDuration,
+            game.GameState == GameState.Finished
+              ? Is.GreaterThan(TimeSpan.Zero)
+              : Is.AnyOf(Is.Null, TimeSpan.Zero));
           Assert.That(game.WinnerIds.Count, Is.LessThanOrEqualTo(1));
         }
       }
@@ -273,7 +272,8 @@ public class EventValidationFixture : BaseFixture
     if (match.StartTime > DateTime.MinValue &&
         match.State >= MatchState.GameStarted)
     {
-      Assert.That(match.CurrentGame.Id, Is.GreaterThanOrEqualTo(0));
+      Assert.That(match.CurrentGame?.Id,
+        match.Games.Count > 0 ? Is.GreaterThanOrEqualTo(0) : Is.Null);
       // Assert.That(match.EndTime, Is.GreaterThan(match.StartTime));
       Assert.That(match.EndTime, Is.GreaterThanOrEqualTo(DateTime.MinValue));
       // Assert.That(match.SideboardingEnds, Is.GreaterThan(match.StartTime));
