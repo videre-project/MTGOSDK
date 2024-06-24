@@ -19,11 +19,44 @@
     <PackageReference Include="ReportGenerator" />
   </ItemGroup>
 
+  <!--
+    Hoist the NUnit.Framework and MTGOSDK.NUnit namespaces to the project level
+    so that they can be used in all test files without needing to be imported.
+  -->
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+    <Using Include="MTGOSDK.NUnit" />
+  </ItemGroup>
+
+  <!-- Coverlet Report Generation -->
   <PropertyGroup>
     <CollectCoverage>true</CollectCoverage>
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
-    <IncludeTestAssembly>false</IncludeTestAssembly>
-    <!-- <Threshold>80</Threshold> -->
+    <ExcludeByAttribute>GeneratedCodeAttribute</ExcludeByAttribute>
+    <!-- <Threshold>80</Threshold>
+    <ThresholdType>line</ThresholdType> -->
+  </PropertyGroup>
+
+  <!-- ReportGenerator properties -->
+  <PropertyGroup>
+    <ClassFilters_Include>
+      +MTGOSDK.API.*
+    </ClassFilters_Include>
+    <ClassFilters_Exclude>
+      -MTGOSDK.API.Events;
+      -MTGOSDK.API.Interface.*;
+      <!-- -MTGOSDK.Core.Exceptions.*;
+      -MTGOSDK.Core.Logging.*;
+      -MTGOSDK.Core.Reflection.Emit.*;
+      -MTGOSDK.Core.Reflection.Snapshot.*;
+      -MTGOSDK.Core.Remoting.Internal.*;
+      -MTGOSDK.Core.Remoting.Interop.*;
+      -MTGOSDK.Resources.*;
+      -MTGOSDK.Win32.API.*;
+      -MTGOSDK.Win32.Extensions.*;
+      -MTGOSDK.Win32.Injection.*;
+      -MTGOSDK.Win32.Utilities.* -->
+    </ClassFilters_Exclude>
   </PropertyGroup>
 
   <Target Name="GenerateHtmlCoverageReport"
@@ -32,22 +65,9 @@
       ReportFiles="@(CoverletReport)"
       FileFilters="-*.g.cs;
                    -*.Version.cs"
-      ClassFilters="-MTGOSDK.Core.Exceptions.*;
-                    -MTGOSDK.Core.Reflection.Emit.*;
-                    -MTGOSDK.Core.Reflection.Snapshot.*;
-                    -MTGOSDK.Core.Remoting.Internal.*;
-                    -MTGOSDK.Core.Remoting.Interop.*;
-                    -MTGOSDK.Resources.*;
-                    -MTGOSDK.Win32.API.*;
-                    -MTGOSDK.Win32.Extensions.*;
-                    -MTGOSDK.Win32.Injection.*;
-                    -MTGOSDK.Win32.Utilities.*"
+      ClassFilters="$(ClassFilters_Include);
+                    $(ClassFilters_Exclude)"
       TargetDirectory="$(MSBuildThisFileDirectory)html-coverage-report" />
   </Target>
-
-  <ItemGroup>
-    <Using Include="NUnit.Framework" />
-    <Using Include="MTGOSDK.NUnit" />
-  </ItemGroup>
 
 </Project>
