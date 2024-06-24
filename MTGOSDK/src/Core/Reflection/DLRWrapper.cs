@@ -114,11 +114,37 @@ public class DLRWrapper<I>() where I : class
   /// </summary>
   /// <typeparam name="T">The class type to instantiate.</typeparam>
   /// <param name="obj">The object to wrap.</param>
+  /// <param name="condition">The condition to check before wrapping.</param>
   /// <returns>The wrapped object or null if the object is null.</returns>
-  public static T? Optional<T>(dynamic obj) where T : class =>
-    Try<bool>(() => (obj != null && Unbind(obj) != null))
-      ? (T)(InstanceFactory.CreateInstance(typeof(T), obj))
-      : null;
+  public static T? Optional<T>(
+      dynamic obj,
+      Func<dynamic, bool> condition = null) where T : class
+  {
+    // Return null if the condition is not met
+    if (condition != null && !condition(obj))
+      return null;
+
+    // Return null if the underlying object is null
+    if (!Try<bool>(() => (obj != null && Unbind(obj) != null)))
+      return null;
+
+    if (typeof(T).IsSubclassOf(typeof(DLRWrapper<I>)))
+      return (T)(InstanceFactory.CreateInstance(typeof(T), obj));
+    else
+      return Cast<T>(obj);
+  }
+
+  /// <summary>
+  /// Marks the retrieval of a DLRWrapper's instance as optional.
+  /// </summary>
+  /// <typeparam name="T">The class type to instantiate.</typeparam>
+  /// <param name="obj">The object to wrap.</param>
+  /// <param name="condition">The condition to check before wrapping.</param>
+  /// <returns>The wrapped object or null if the object is null.</returns>
+  public static T? Optional<T>(dynamic obj, bool condition) where T : class
+  {
+    return Optional<T>(obj, new Func<dynamic, bool>(_ => condition));
+  }
 
   //
   // Wrapper methods for type casting and dynamic dispatching.
