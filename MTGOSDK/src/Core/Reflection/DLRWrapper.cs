@@ -423,13 +423,16 @@ public class DLRWrapper<I>() where I : class
   /// Safely executes a lambda function with a given number of retries.
   /// </summary>
   /// <param name="lambda">The function to execute.</param>
+  /// <param name="default">The default value to fallback to (optional).</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
-  public static async Task<dynamic> TryUntil(
-    Func<dynamic> lambda,
-    int delay = 250,
-    int retries = 20)
+  public static T TryUntil<T>(
+    Func<T> lambda,
+    T @default = default(T),
+    int delay = 100,
+    int retries = 3,
+    bool raise = false)
   {
     while (true)
     {
@@ -437,8 +440,13 @@ public class DLRWrapper<I>() where I : class
       catch
       {
         retries--;
-        if (retries <= 0) throw;
-        await Task.Delay(delay);
+        if (retries <= 0)
+        {
+          if (raise) throw;
+          return @default;
+        }
+        // This will block the caller's thread for the duration of the delay.
+        Task.Delay(delay).Wait();
       }
     }
   }

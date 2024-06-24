@@ -29,7 +29,7 @@ public class Collection : CollectionValidationFixture
     var binder = CollectionManager.Binders.First();
     ValidateBinder(binder);
     ValidateBinder(CollectionManager.GetBinder(binder.Id));
-    ValidateBinder(CollectionManager.LastUsedBinder);
+    ValidateBinder(CollectionManager.LastUsedBinder!);
     ValidateBinder(CollectionManager.WishList);
   }
 

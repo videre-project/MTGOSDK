@@ -45,7 +45,17 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
-  public MatchState State => Cast<MatchState>(Unbind(@base).Status);
+  /// <remarks>
+  /// This is a bitfield of <see cref="MatchState"/> that will often be updated
+  /// in the background as matches progress. As this field is very volatile, it
+  /// may cause a lot of GC activity with snapshotting due to frequent polling.
+  /// <para/>
+  /// This field may not always be returned the first time (as references to
+  /// this field often change), so retrieval is attempted multiple times or else
+  /// the field is set to <see cref="MatchState.Invalid"/>.
+  /// </remarks>
+  public MatchState State =>
+    TryUntil(() => Cast<MatchState>(Unbind(@base).Status), MatchState.Invalid);
 
   /// <summary>
   /// Whether the match has been completed.

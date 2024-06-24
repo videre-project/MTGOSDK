@@ -39,7 +39,8 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
-  public MatchState State => Cast<MatchState>(Unbind(@base).Status);
+  public MatchState State =>
+    TryUntil(() => Cast<MatchState>(Unbind(@base).Status), MatchState.Invalid);
 
   /// <summary>
   /// Whether the player has been assigned a bye.
