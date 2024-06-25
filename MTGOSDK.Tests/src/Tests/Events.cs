@@ -268,8 +268,8 @@ public class EventValidationFixture : BaseFixture
     Assert.That(match.MatchId, Is.GreaterThan(0));
     Assert.That(match.MatchToken, Is.Not.EqualTo(Guid.Empty));
     Assert.That(match.State, Is.Not.EqualTo(MatchState.Invalid));
-    // Assert.That(match.Creator?.Id, Is.Not.EqualTo(-1));
-    // Assert.That(match.ChallengeReceiver?.Id, Is.Not.EqualTo(-1));
+    Assert.That(match.Creator?.Id, Is.Not.EqualTo(-1));
+    Assert.That(match.ChallengeReceiver?.Id, Is.Not.EqualTo(-1));
     Assert.That(match.ChallengeText, Is.Not.Empty);
     Assert.That(match.Games.Count, Is.GreaterThanOrEqualTo(0));
     Assert.That(match.StartTime, Is.GreaterThan(DateTime.MinValue));

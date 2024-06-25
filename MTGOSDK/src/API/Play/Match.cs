@@ -66,12 +66,14 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The user who created the match.
   /// </summary>
-  public User? Creator => Optional<User>(@base.Creator);
+  public User? Creator =>
+    Optional<User>(@base.Creator?.Name);
 
   /// <summary>
   /// The user being challenged to the match.
   /// </summary>
-  public User? ChallengeReceiver => Optional<User>(@base.ChallengeReceiver);
+  public User? ChallengeReceiver =>
+    Optional<User>(@base.ChallengeReceiver?.Name);
 
   /// <summary>
   /// The challenge text sent to the challenge receiver.
