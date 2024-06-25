@@ -35,13 +35,13 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// The game's current completion (i.e. "NotStarted", "Started", "Finished")
   /// </summary>
   public GameState GameState =>
-    TryUntil(() => Cast<GameState>(Unbind(@base).GameState), GameState.Invalid);
+    Retry(() => Cast<GameState>(Unbind(@base).GameState), GameState.Invalid);
 
   /// <summary>
   /// The elapsed time to completion since the game started.
   /// </summary>
   public TimeSpan? CompletedDuration =>
-    TryUntil(() => Cast<TimeSpan>(Unbind(@base).CompletedDuration), null);
+    Retry(() => Cast<TimeSpan>(Unbind(@base).CompletedDuration), null);
 
   /// <summary>
   /// The IDs of the winning player(s).

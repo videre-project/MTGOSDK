@@ -163,7 +163,7 @@ public static class CollectionManager
   /// The last used binder for trading.
   /// </summary>
   public static Binder? LastUsedBinder =>
-    TryUntil(() => new Binder(s_collectionGroupingManager.LastUsedBinder));
+    Retry(() => new Binder(s_collectionGroupingManager.LastUsedBinder));
 
   /// <summary>
   /// The user's wish list.

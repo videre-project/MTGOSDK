@@ -55,7 +55,7 @@ public sealed class Match(dynamic match) : Event<Match>
   /// the field is set to <see cref="MatchState.Invalid"/>.
   /// </remarks>
   public MatchState State =>
-    TryUntil(() => Cast<MatchState>(Unbind(@base).Status), MatchState.Invalid);
+    Retry(() => Cast<MatchState>(Unbind(@base).Status), MatchState.Invalid);
 
   /// <summary>
   /// Whether the match has been completed.

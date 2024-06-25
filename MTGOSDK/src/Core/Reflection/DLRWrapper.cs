@@ -427,7 +427,7 @@ public class DLRWrapper<I>() where I : class
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
-  public static T TryUntil<T>(
+  public static T Retry<T>(
     Func<T> lambda,
     T @default = default(T),
     int delay = 100,
@@ -474,7 +474,6 @@ public class DLRWrapper<I>() where I : class
     return t.IsDefined(typeof(CompilerGeneratedAttribute), false)
       || IsCompilerGenerated(t.DeclaringType);
   }
-
 
   //
   // Attribute wrapper helpers.
