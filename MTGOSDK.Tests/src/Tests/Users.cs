@@ -17,6 +17,32 @@ namespace MTGOSDK.Tests;
 public class Users : UserValidationFixture
 {
   [Test]
+  public void Test_UserManager()
+  {
+    // Ensure that invalid inputs do not create invalid user objects.
+    Assert.Throws<ArgumentException>(() => new User(-1));
+    Assert.Throws<ArgumentException>(() => new User("$_Invalid"));
+
+    // This method cannot differentiate between invalid and offline users,
+    // so we will avoid creating an invalid user object with both fields to
+    // prevent subsequent test runs from retrieving a cached user object.
+    // Assert.Throws<ArgumentException>(() => new User(-1, "$_Invalid"));
+
+    // Retrieve the current user for testing (as they are logged-in).
+    int userId = Client.CurrentUser.Id;
+    string username = Client.CurrentUser.Name;
+    UserManager.ClearCache();
+
+    // If an invalid id is given, assert that the user object is invalid.
+    Assert.Throws<ArgumentException>(() => new User(userId, "$_Invalid"));
+    Assert.Throws<ArgumentException>(() => new User(-1, username));
+#pragma warning disable CS8625
+    Assert.Throws<ArgumentException>(() => new User(-1, null));
+#pragma warning restore CS8625
+    Assert.Throws<ArgumentException>(() => new User(-1, ""));
+  }
+
+  [Test]
   public void Test_CurrentUser()
   {
     Log.Trace("Retrieving current user...");

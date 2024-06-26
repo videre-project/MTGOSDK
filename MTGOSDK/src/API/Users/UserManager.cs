@@ -17,7 +17,7 @@ using WotC.MtGO.Client.Model.Core;
 
 namespace MTGOSDK.API.Users;
 using static MTGOSDK.API.Events;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper<IUser>;
 
 public static class UserManager
 {
@@ -45,10 +45,38 @@ public static class UserManager
   //
 
   /// <summary>
-  /// This class manages the client's caching and updating of user information.
+  /// Manager for the client's caching and updating of user information.
   /// </summary>
   private static readonly IUserManager s_userManager =
     ObjectProvider.Get<IUserManager>();
+
+  private static readonly dynamic UsersById =
+    Unbind(s_userManager).m_usersById;
+
+  /// <summary>
+  /// Retrieves a user object by id from the client's UserManager.
+  /// </summary>
+  /// <param name="id">The Login ID of the user.</param>
+  /// <returns>A new User object.</returns>
+  private static User? GetUserById(int id)
+  {
+    if (!UsersById.ContainsKey(id)) return null;
+
+    Log.Trace("Retrieving user #{Id} from UserManager...", id);
+    return new User(UsersById[id]);
+  }
+
+  /// <summary>
+  /// Creates a new user object in the client's UserManager.
+  /// </summary>
+  /// <param name="name">The display name of the user.</param>
+  /// <param name="id">The Login ID of the user.</param>
+  /// <returns>A new User object.</returns>
+  private static User CreateNewUser(string name, int id)
+  {
+    Log.Trace("Creating new User object for {Name} (#{Id})", name, id);
+    return new User(Unbind(s_userManager).CreateNewUser(id, name));
+  }
 
   /// <summary>
   /// Retrieves a user object from the client's UserManager.
@@ -57,21 +85,52 @@ public static class UserManager
   /// <param name="name">The display name of the user.</param>
   /// <returns>A new User object.</returns>
   /// <exception cref="ArgumentException">
-  /// Thrown if the user does not exist.
+  /// Thrown if the user does not exist or does not match the given name.
   /// </exception>
   public static User GetUser(int id, string name)
   {
+    // Guard against invalid inputs.
+    if (id <= 0)
+    {
+      throw new ArgumentException(
+          $"User ID must be greater than zero. Got {id}.");
+    }
+    else if (string.IsNullOrEmpty(name))
+    {
+      throw new ArgumentException("Username cannot be null or empty.");
+    }
+
     if (!Users.TryGetValue(id, out var user))
     {
-      Log.Trace("Creating new User object for {Name} (#{Id})", name, id);
-      Users[id] = user = new User(
-        // This is a private method that is not exposed by the IUserManager type.
-        Unbind(s_userManager).CreateNewUser(id, name)
-          ?? throw new ArgumentException($"User '{name}' (#{id}) does not exist.")
-      );
+      // Ensure that the user exists and is named correctly.
+      // FIXME: We cannot differentiate between offline and invalid users.
+      var matchedName = GetUserName(id);
+      if (!string.IsNullOrEmpty(matchedName) && matchedName != name)
+      {
+        throw new ArgumentException($"User #{id} does not match User '{name}'.");
+      }
+
+      // Retrieve an existing object or create a new one in the client's cache.
+      user = GetUserById(id) ?? CreateNewUser(name, id);
+
+      // Cache the user object locally for future calls.
+      //
+      // Created user objects either add to the client's internal user cache or
+      // return an existing user object. If an existing user object is returned,
+      // it may not reflect the same user data for the given user name.
+      //
+      // In any case, only one instance of a user object is created per user id,
+      // so any client-side updates to the user cache will be reflected in our
+      // local user cache.
+      Users[id] = user;
       UserIds[name] = id;
+
       // Set callback to remove user from cache when the client is disposed.
-      RemoteClient.Disposed += (s, e) => Users.TryRemove(id, out _);
+      RemoteClient.Disposed += (s, e) =>
+      {
+        Users.TryRemove(id, out _);
+        UserIds.TryRemove(name, out _);
+      };
     }
 
     return user;
@@ -91,7 +150,7 @@ public static class UserManager
       ? user
       : GetUser(
           GetUserId(name)
-            ?? throw new ArgumentException($"User '{name}' does not exist."),
+            ?? throw new ArgumentException($"User '{name}' cannot be found."),
           name
     );
 
@@ -109,7 +168,7 @@ public static class UserManager
       : GetUser(
           id,
           GetUserName(id)
-            ?? throw new ArgumentException($"User #{id} does not exist.")
+            ?? throw new ArgumentException($"User #{id} cannot be found.")
         );
 
   /// <summary>
