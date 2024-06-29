@@ -125,7 +125,7 @@ public class DLRWrapper<I>() where I : class
       return null;
 
     // Return null if the underlying object is null
-    if (!Try<bool>(() => (obj != null && Unbind(obj) != null)))
+    if (Try<bool>(() => (obj == null || Unbind(obj) == null)))
       return null;
 
     if (typeof(T).IsSubclassOf(typeof(DLRWrapper<I>)))
@@ -176,13 +176,15 @@ public class DLRWrapper<I>() where I : class
   /// </remarks>
   public static dynamic Unbind(dynamic obj)
   {
+    Func<dynamic, bool> isProxy = (o) => o.GetType().Name.StartsWith("ActLike_");
+    if (!isProxy(obj)) return obj;
+
     var unbound_obj = Proxy<dynamic>.From(obj)
       ?? throw new InvalidOperationException(
           $"Unable to unbind types from {obj.GetType().Name}.");
 
     // Recursively unbind any nested interface types.
-    if (unbound_obj.GetType().Name.StartsWith("ActLike_"))
-      return Unbind(unbound_obj);
+    if (isProxy(unbound_obj)) return Unbind(unbound_obj);
 
     return unbound_obj;
   }
