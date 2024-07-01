@@ -60,8 +60,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// View model for the client's main window and scenes.
   /// </summary>
-  private static readonly dynamic s_shellViewModel =
-    ObjectProvider.Get<IShellViewModel>(bindTypes: false);
+  private static readonly IShellViewModel s_shellViewModel =
+    ObjectProvider.Get<IShellViewModel>();
 
   /// <summary>
   /// The current build version of the running MTGO client.
@@ -276,11 +276,16 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </remarks>
   public async Task<bool> WaitForClientReady() =>
     await WaitUntil(() =>
-      s_shellViewModel.IsSessionConnected == true &&
-      s_shellViewModel.ShowSplashScreen == false &&
-      s_shellViewModel.m_blockingProgressInstances.Count == 0,
-      delay: 250, // in ms
-      retries: 60 // or 15 seconds
+      // Checks to see if the ShellViewModel has finished initializing.
+      Unbind(s_shellViewModel).IsSessionConnected == true &&
+      Unbind(s_shellViewModel).ShowLoadDeckSplashScreen == false &&
+      Unbind(s_shellViewModel).m_blockingProgressInstances.Count == 0 &&
+      // Checks to see if the HomeSceneViewModel has finished initializing.
+      Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count > 0 &&
+      Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count >= 0 &&
+      Unbind(s_shellViewModel.CurrentScene).JoinedEvents.Count >= 0,
+      delay: 500, // in ms
+      retries: 60 // or 30 seconds
     );
 
   /// <summary>
@@ -321,8 +326,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     Log.Debug("Logging in as {Username}.", username);
     LoginVM.LogOnExecute();
     if (!(await WaitForClientReady()))
-      throw new TimeoutException(
-          "Failed to connect and initialize the client.");
+      throw new TimeoutException("Failed to connect and initialize the client.");
 
     // Explicitly update state for a non-interactive session.
     LoginVM.IsLoggedIn = true;
