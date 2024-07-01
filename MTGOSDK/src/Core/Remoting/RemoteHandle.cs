@@ -178,10 +178,8 @@ public class RemoteHandle : IDisposable
   // Remote Heap querying
   //
 
-  public IEnumerable<CandidateType> QueryTypes(string typeFullNameFilter)
+  public IEnumerable<CandidateType> QueryTypes(string typeFullName)
   {
-    Predicate<string> matchesFilter = Filter.CreatePredicate(typeFullNameFilter);
-
     _domains ??= Communicator.DumpDomains();
     foreach (DomainsDump.AvailableDomain domain in _domains.AvailableDomains)
     {
@@ -201,13 +199,12 @@ public class RemoteHandle : IDisposable
         foreach (TypesDump.TypeIdentifiers type in typeIdentifiers)
         {
           // TODO: Filtering should probably be done in the Diver's side
-          if (matchesFilter(type.TypeName))
+          if (type.TypeName == typeFullName)
             yield return new CandidateType(type.TypeName, assembly);
         }
 
       }
     }
-
   }
 
   public IEnumerable<CandidateObject> QueryInstances(Type typeFilter, bool dumpHashcodes = true) => QueryInstances(typeFilter.FullName, dumpHashcodes);

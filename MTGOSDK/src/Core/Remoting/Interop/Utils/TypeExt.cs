@@ -30,24 +30,35 @@ public static class TypeExt
   /// <summary>
   /// Searches a type for a specific method. If not found searches its ancestors.
   /// </summary>
-  /// <param name="t">TypeFullName to search</param>
+  /// <param name="t">The type to search</param>
   /// <param name="methodName">Method name</param>
   /// <param name="parameterTypes">Types of parameters in the function, in order.</param>
-  /// <returns></returns>
-  public static MethodInfo GetMethodRecursive(
+  /// <returns>MethodInfo of the method if found, null otherwise.</returns>
+  public static MethodInfo? GetMethodRecursive(
     this Type t,
     string methodName,
     Type[]? parameterTypes = null)
   => GetMethodRecursive(t, methodName, null, parameterTypes);
 
-  public static MethodInfo GetMethodRecursive(
+  /// <summary>
+  /// Searches a type for a specific method. If not found searches its ancestors.
+  /// </summary>
+  /// <param name="t">The type to search</param>
+  /// <param name="methodName">Method name</param>
+  /// <param name="genericArgumentTypes">Types of generic arguments in the function, in order.</param>
+  /// <param name="parameterTypes">Types of parameters in the function, in order.</param>
+  /// <returns>MethodInfo of the method if found, null otherwise.</returns>
+  public static MethodInfo? GetMethodRecursive(
     this Type t,
     string methodName,
     Type[]? genericArgumentTypes,
     Type[]? parameterTypes)
   {
+    // Find all methods with the given name
     var methods = t.GetMethods((BindingFlags)0xffff)
       .Where(m => m.Name == methodName);
+
+    // Filter methods by generic argument types (if provided)
     if (genericArgumentTypes != null && genericArgumentTypes.Length > 0)
     {
       methods = methods
@@ -56,11 +67,13 @@ public static class TypeExt
         .Select(m => m.MakeGenericMethod(genericArgumentTypes));
     }
 
-    MethodInfo method;
+    MethodInfo method = default;
+    // If no argument types are provided there exists only one possible method.
     if (parameterTypes == null)
     {
       method = methods.SingleOrDefault();
     }
+    // Filter methods by parameter types to find an exact match
     else
     {
       MethodInfo[]? exactMatches = methods.Where(m =>
@@ -99,7 +112,7 @@ public static class TypeExt
     Type resolvedType,
     Type[]? parameterTypes = null)
   {
-    ConstructorInfo ctorInfo;
+    ConstructorInfo ctorInfo = default;
 
     var methods = resolvedType.GetConstructors((BindingFlags)0xffff);
     ConstructorInfo[] exactMatches = methods

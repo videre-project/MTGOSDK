@@ -413,8 +413,8 @@ public class Diver : IDisposable
     string dumpHashcodesStr = arg.QueryString.Get("dump_hashcodes");
     bool dumpHashcodes = dumpHashcodesStr?.ToLower() == "true";
 
-               // Default filter - no filter. Just return everything.
-    Predicate<string> matchesFilter = Filter.CreatePredicate(filter);
+    // Default filter - Find all exact matches based on the filter type.
+    Predicate<string> matchesFilter = (string typeName) => typeName == filter;
 
     (bool anyErrors, List<HeapDump.HeapObject> objects) = _runtime.GetHeapObjects(
       matchesFilter,
