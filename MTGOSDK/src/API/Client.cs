@@ -134,7 +134,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// and should be instantiated once per application instance and prior to
   /// invoking with other API classes.
   /// </remarks>
-  /// <exception cref="SetupFailedException">
+  /// <exception cref="SetupFailureException">
   /// Thrown when the client process fails to finish installation or start.
   /// </exception>
   /// <exception cref="ExternalErrorException">
@@ -167,7 +167,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
           throw new ExternalErrorException("MTGO servers are currently offline.");
 
         if (!await RemoteClient.StartProcess())
-          throw new SetupFailedException("Failed to start the MTGO process.");
+          throw new SetupFailureException("Failed to start the MTGO process.");
       }
 
       // Sets the client's disposal policy.

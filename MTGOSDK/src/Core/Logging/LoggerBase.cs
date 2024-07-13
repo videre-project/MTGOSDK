@@ -8,6 +8,8 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using MTGOSDK.Core.Compiler.Extensions;
+using static MTGOSDK.Core.Compiler.Extensions.CallerExtensions;
 using MTGOSDK.Core.Reflection;
 
 
@@ -48,11 +50,6 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   private static readonly ConcurrentDictionary<Type, Type> s_callerTypes = new();
 
   /// <summary>
-  /// A concurrent bag of caller types that have been suppressed from logging.
-  /// </summary>
-  internal static readonly ConcurrentDictionary<Type, LogLevel> s_suppressedCallerTypes = new();
-
-  /// <summary>
   /// Represents a type used to perform logging.
   /// </summary>
   /// <remarks>Aggregates most logging patterns to a single method.</remarks>
@@ -62,7 +59,8 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
     {
       // If logging is suppressed and the caller type is a suppressed type,
       // return a null logger to prevent logging from suppressed sources.
-      if (IsSuppressedCallerType()) return s_nulllogger;
+      if (SuppressionContext.IsSuppressedCallerType())
+        return s_nulllogger;
 
       // Get the caller type of the calling method or class.
       Type callerType;
@@ -73,37 +71,16 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
 
       // Fetch the base type if the caller is a compiler-generated type
       // (e.g. lambda expressions, async state machines, etc.).
-      if (!s_loggers.ContainsKey(callerType) && IsCompilerGenerated(callerType))
+      if (!s_loggers.ContainsKey(callerType) && callerType.IsCompilerGenerated())
       {
         if (!s_callerTypes.TryGetValue(callerType, out Type? baseType))
-          baseType = GetBaseType(callerType);
+          baseType = callerType.GetBaseType();
 
         callerType = baseType;
       }
 
       return s_loggers.GetOrAdd(callerType, CreateLogger(callerType));
     }
-  }
-
-  public static bool IsSuppressedCallerType(int depth = 3)
-  {
-    if (s_suppressedCallerTypes.Count == 0)
-      return false;
-
-    // Search the entire call stack for a suppressed caller type.
-    try
-    {
-      for (int i = depth; i < 50; i++)
-      {
-        Type callerType = GetCallerType(i);
-        Type baseType = GetBaseType(callerType);
-        if (s_suppressedCallerTypes.ContainsKey(callerType))
-          return true;
-      }
-    }
-    catch { /* Have fetched past the current depth of the call stack. */ }
-
-    return false;
   }
 
   /// <summary>

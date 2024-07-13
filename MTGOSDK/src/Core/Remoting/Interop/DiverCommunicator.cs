@@ -1,7 +1,7 @@
 ﻿/** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0 and MIT
+  SPDX-License-Identifier: Apache-2.0
 **/
 
 using System.Collections.Specialized;
@@ -12,7 +12,7 @@ using System.Text;
 using System.Web;
 using Newtonsoft.Json;
 
-using MTGOSDK.Core.Remoting.Interop.Exceptions;
+using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -117,10 +117,10 @@ public class DiverCommunicator
 
     return heapDump;
   }
-  public DomainsDump DumpDomains()
+  public DomainDump DumpDomain()
   {
     string body = SendRequest("domains", null);
-    DomainsDump? results = JsonConvert.DeserializeObject<DomainsDump>(body, _withErrors);
+    DomainDump results = JsonConvert.DeserializeObject<DomainDump>(body, _withErrors)!;
 
     return results;
   }

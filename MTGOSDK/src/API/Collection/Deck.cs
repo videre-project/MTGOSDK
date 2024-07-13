@@ -51,7 +51,7 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   /// <summary>
   /// Proxy type for the client's DeckRegion class.
   /// </summary>
-  private static readonly Proxy<dynamic> s_DeckRegion =
+  private static readonly TypeProxy<dynamic> s_DeckRegion =
     new(typeof(WotC.MTGO.Common.DeckRegion));
 
   public dynamic GetRegionRef(DeckRegion region)

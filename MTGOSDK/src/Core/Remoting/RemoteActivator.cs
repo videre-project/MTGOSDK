@@ -1,12 +1,12 @@
 ﻿/** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0 and MIT
+  SPDX-License-Identifier: Apache-2.0
 **/
 
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
-using MTGOSDK.Core.Remoting.Internal.Reflection;
+using MTGOSDK.Core.Remoting.Types;
 
 
 namespace MTGOSDK.Core.Remoting;
@@ -35,16 +35,17 @@ public class RemoteActivator(DiverCommunicator communicator, RemoteHandle app)
       if (val.GetType().IsEnum)
       {
         var enumClass = app.GetRemoteEnum(val.GetType().FullName);
-        // TODO: This will break on the first enum value which represents 2 or more flags
+        // TODO: This breaks on the first enum value which has 2 or more flags.
         object enumVal = enumClass.GetValue(val.ToString());
-        // NOTE: Object stays in place in the remote app as long as we have it's reference
-        // in the paramsNoEnums array (so until end of this method)
+        // NOTE: Object stays in place in the remote app as long as we have it's
+        // reference in the paramsNoEnums array (so until end of this method)
         paramsNoEnums[i] = enumVal;
       }
     }
 
-    ObjectOrRemoteAddress[] remoteParams = paramsNoEnums.Select(
-        RemoteFunctionsInvokeHelper.CreateRemoteParameter).ToArray();
+    ObjectOrRemoteAddress[] remoteParams = paramsNoEnums
+      .Select(RemoteFunctionsInvokeHelper.CreateRemoteParameter)
+      .ToArray();
 
     // Create object + pin
     InvocationResults invoRes = communicator

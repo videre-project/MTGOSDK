@@ -22,7 +22,8 @@ library, which is licensed under the open-source MIT License with
 the following copyright information.
 
 The below filepaths are derived from these original components of RemoteNET:
-RemoteNET:      MTGOSDK\src\Core\Remoting
+RemoteNET:      MTGOSDK\src\Core\Compiler
+                MTGOSDK\src\Core\Remoting
 ScubaDiver.API: MTGOSDK\src\Core\Remoting\Interop
 ScubaDiver:     MTGOSDK\lib\ScubaDiver
 

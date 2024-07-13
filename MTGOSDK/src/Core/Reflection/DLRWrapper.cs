@@ -9,12 +9,15 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+using MTGOSDK.Core.Compiler;
+using static MTGOSDK.Core.Compiler.Extensions.CallerExtensions;
+using static MTGOSDK.Core.Compiler.Extensions.TypeExtensions;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Reflection.Attributes;
 using MTGOSDK.Core.Remoting;
 
 
 namespace MTGOSDK.Core.Reflection;
-using static Attributes;
 
 /// <summary>
 /// A wrapper for dynamic objects that implement an interface at runtime.
@@ -61,6 +64,23 @@ public class DLRWrapper<I>() where I : class
     if (factory != null) factory.Invoke().Wait();
   }
 
+  //
+  // Attributes and decorators for derived class properties and methods.
+  //
+
+  /// <summary>
+  /// A wrapper attribute that allows for a default value to fallback to.
+  /// </summary>
+  /// <param name="value">The default value.</param>
+  public class DefaultAttribute(object value) : CallerAttribute<DefaultAttribute>
+  {
+    public object Value { get; set; } = value;
+  }
+
+  //
+  // Internal fields and properties for the wrapped object.
+  //
+
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
@@ -94,10 +114,10 @@ public class DLRWrapper<I>() where I : class
       // Attempt to extract the base object from the derived class.
       var baseObj = Try(() => obj is DLRWrapper<I> ? obj.obj : obj);
 
-      // Return a ProxyObject wrapper with a default value, if present.
-      if (TryGetDefaultAttribute(out var defaultAttribute))
+      // Return a DynamicProxy wrapper with a default value, if present.
+      if (DefaultAttribute.TryGetCallerAttribute(out var defaultAttribute))
       {
-        return new ProxyObject(baseObj, @default: defaultAttribute.Value);
+        return new DynamicProxy(baseObj, @default: defaultAttribute.Value);
       }
       else if (baseObj is null)
       {
@@ -107,43 +127,6 @@ public class DLRWrapper<I>() where I : class
 
       return baseObj;
     }
-  }
-
-  /// <summary>
-  /// Marks the retrieval of a DLRWrapper's instance as optional.
-  /// </summary>
-  /// <typeparam name="T">The class type to instantiate.</typeparam>
-  /// <param name="obj">The object to wrap.</param>
-  /// <param name="condition">The condition to check before wrapping.</param>
-  /// <returns>The wrapped object or null if the object is null.</returns>
-  public static T? Optional<T>(
-      dynamic obj,
-      Func<dynamic, bool> condition = null) where T : class
-  {
-    // Return null if the condition is not met
-    if (condition != null && !condition(obj))
-      return null;
-
-    // Return null if the underlying object is null
-    if (Try<bool>(() => (obj == null || Unbind(obj) == null)))
-      return null;
-
-    if (typeof(T).IsSubclassOf(typeof(DLRWrapper<I>)))
-      return (T)(InstanceFactory.CreateInstance(typeof(T), obj));
-    else
-      return Cast<T>(obj);
-  }
-
-  /// <summary>
-  /// Marks the retrieval of a DLRWrapper's instance as optional.
-  /// </summary>
-  /// <typeparam name="T">The class type to instantiate.</typeparam>
-  /// <param name="obj">The object to wrap.</param>
-  /// <param name="condition">The condition to check before wrapping.</param>
-  /// <returns>The wrapped object or null if the object is null.</returns>
-  public static T? Optional<T>(dynamic obj, bool condition) where T : class
-  {
-    return Optional<T>(obj, new Func<dynamic, bool>(_ => condition));
   }
 
   //
@@ -161,7 +144,7 @@ public class DLRWrapper<I>() where I : class
   /// </remarks>
   public static T Bind<T>(dynamic obj) where T : class
   {
-    return Proxy<T>.As(obj)
+    return TypeProxy<T>.As(obj)
       ?? throw new InvalidOperationException(
           $"Unable to bind {obj.GetType().Name} to {typeof(T).Name}.");
   }
@@ -179,7 +162,7 @@ public class DLRWrapper<I>() where I : class
     Func<dynamic, bool> isProxy = (o) => o.GetType().Name.StartsWith("ActLike_");
     if (!isProxy(obj)) return obj;
 
-    var unbound_obj = Proxy<dynamic>.From(obj)
+    var unbound_obj = TypeProxy<dynamic>.From(obj)
       ?? throw new InvalidOperationException(
           $"Unable to unbind types from {obj.GetType().Name}.");
 
@@ -453,80 +436,40 @@ public class DLRWrapper<I>() where I : class
     }
   }
 
-  //
-  // Wrapper Attributes
-  //
-
   /// <summary>
-  /// A wrapper attribute that allows for a default value to fallback to.
+  /// Marks the retrieval of a DLRWrapper's instance as optional.
   /// </summary>
-  /// <param name="value">The default value.</param>
-  public class DefaultAttribute(object value) : Attribute
+  /// <typeparam name="T">The class type to instantiate.</typeparam>
+  /// <param name="obj">The object to wrap.</param>
+  /// <param name="condition">The condition to check before wrapping.</param>
+  /// <returns>The wrapped object or null if the object is null.</returns>
+  public static T? Optional<T>(
+      dynamic obj,
+      Func<dynamic, bool> condition = null) where T : class
   {
-    public object Value { get; set; } = value;
+    // Return null if the condition is not met
+    if (condition != null && !condition(obj))
+      return null;
+
+    // Return null if the underlying object is null
+    if (Try<bool>(() => (obj == null || Unbind(obj) == null)))
+      return null;
+
+    if (typeof(T).IsSubclassOf(typeof(DLRWrapper<I>)))
+      return (T)(InstanceFactory.CreateInstance(typeof(T), obj));
+    else
+      return Cast<T>(obj);
   }
 
   /// <summary>
-  /// Determines whether the type is compiler-generated.
+  /// Marks the retrieval of a DLRWrapper's instance as optional.
   /// </summary>
-  public static bool IsCompilerGenerated(Type t)
+  /// <typeparam name="T">The class type to instantiate.</typeparam>
+  /// <param name="obj">The object to wrap.</param>
+  /// <param name="condition">The condition to check before wrapping.</param>
+  /// <returns>The wrapped object or null if the object is null.</returns>
+  public static T? Optional<T>(dynamic obj, bool condition) where T : class
   {
-    if (t == null) return false;
-
-    return t.IsDefined(typeof(CompilerGeneratedAttribute), false)
-      || IsCompilerGenerated(t.DeclaringType);
-  }
-
-  //
-  // Attribute wrapper helpers.
-  //
-
-  /// <summary>
-  /// Extracts the base type from a compiler-generated type.
-  /// </summary>
-  /// <param name="callerType">The type to extract the base type from.</param>
-  /// <returns>The base type of the given type.</returns>
-  public static Type GetBaseType(Type callerType)
-  {
-    if (!IsCompilerGenerated(callerType))
-      return callerType;
-
-    string fullName = callerType.FullName;
-    string baseName = fullName.Substring(0, fullName.IndexOf("+<"));
-    Type baseType = callerType.DeclaringType.Assembly.GetType(baseName);
-
-    return baseType;
-  }
-
-  /// <summary>
-  /// Gets the parent type of the caller.
-  /// </summary>
-  /// <param name="depth">The stack frame depth.</param>
-  /// <returns>The type of the caller.</returns>
-  public static Type GetCallerType(int depth = 4) =>
-    new StackFrame(depth).GetMethod().ReflectedType;
-
-  /// <summary>
-  /// Gets the stack frame depth of the (outer) DLRWrapper caller.
-  /// </summary>
-  /// <param name="depth">The starting stack frame depth.</param>
-  /// <returns>The caller's stack frame depth.</returns>
-  private static int GetCallerDepth(int depth = 3)
-  {
-    Type wrapperType = GetCallerType(depth);
-    while(GetCallerType(depth).Name == wrapperType.Name && depth < 50) depth++;
-
-    return depth;
-  }
-
-  /// <summary>
-  /// Attempts to get the default attribute from the (outer) DLRWrapper caller.
-  /// </summary>
-  /// <param name="attribute">The default attribute (if present).</param>
-  /// <returns>True if the default attribute was found.</returns>
-  private static bool TryGetDefaultAttribute(out DefaultAttribute? attribute)
-  {
-    attribute = GetCallerAttribute<DefaultAttribute>(depth: GetCallerDepth());
-    return attribute != null;
+    return Optional<T>(obj, new Func<dynamic, bool>(_ => condition));
   }
 }

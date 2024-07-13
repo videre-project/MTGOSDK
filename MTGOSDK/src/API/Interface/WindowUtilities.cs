@@ -52,7 +52,7 @@ public static class WindowUtilities
       try
       {
         var collection = RemoteClient
-          .GetInstances(new Proxy<WindowCollection>())
+          .GetInstances(new TypeProxy<WindowCollection>())
           .LastOrDefault() ?? throw null;
 
         return Bind<ICollection<dynamic>>(collection);

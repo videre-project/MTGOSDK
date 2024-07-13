@@ -5,7 +5,7 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <RestoreLockedMode>true</RestoreLockedMode>
+    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
@@ -18,6 +18,8 @@
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
+    <!-- <PackageVersion Include="System.Text.Json"
+                    Version="8.0.4" /> -->
     <!-- MTGOSDK -->
 		<PackageVersion Include="Microsoft.CSharp"
                     Version="4.7.0" />

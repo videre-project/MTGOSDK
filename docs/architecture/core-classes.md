@@ -233,11 +233,11 @@ With the `GetInstance()` method, we can create a dynamic object that fetches a r
 We can do so using any of the following methods:
 
 ```C#
-using MTGOSDK.Core.Reflection; // Proxy<T>
+using MTGOSDK.Core.Reflection; // TypeProxy<T>
 using MTGOSDK.Core.Remoting;   // RemoteClient
 
-dynamic objB = RemoteClient.GetInstance(new Proxy<Bar>());
-dynamic objC = RemoteClient.GetInstance(new Proxy<dynamic>(typeof(Bar)));
+dynamic objB = RemoteClient.GetInstance(new TypeProxy<Bar>());
+dynamic objC = RemoteClient.GetInstance(new TypeProxy<dynamic>(typeof(Bar)));
 dynamic objA = RemoteClient.GetInstance("assembly.namespace.Bar");
 ```
 
@@ -247,7 +247,7 @@ dynamic objA = RemoteClient.GetInstance("assembly.namespace.Bar");
 Additionally, multiple instances of the object can be found by using `GetInstances()`, returning an enumerable collection of dynamic objects that represent the remote objects in the client's memory space.
 
 ```C#
-using MTGOSDK.Core.Reflection; // Proxy<T>
+using MTGOSDK.Core.Reflection; // TypeProxy<T>
 using MTGOSDK.Core.Remoting;   // RemoteClient
 
 foreach (dynamic obj in RemoteClient.GetInstances("assembly.namespace.Bar"))
@@ -260,7 +260,7 @@ foreach (dynamic obj in RemoteClient.GetInstances("assembly.namespace.Bar"))
 
 Creating a new instance of a remote object is similarly straightforward, using the `CreateInstance()` method to invoke the object's constructor with the specified arguments. This method takes a string parameter that represents the fully qualified name of the object to be created, and an array of objects that represent the arguments to be passed to the constructor.
 
-Below is an example of creating a new instance of a remote object with the `CreateInstance()` method, using the [`Proxy<T>`](MTGOSDK/src/Core/Reflection/Proxy.cs) class to convert the interface type to a string containing the fully qualified name of the object. We'll assume that the `Bar` class has two constructors, one with two arguments and the other with three arguments.
+Below is an example of creating a new instance of a remote object with the `CreateInstance()` method, using the [`TypeProxy<T>`](MTGOSDK/src/Core/Reflection/Proxy.cs) class to convert the interface type to a string containing the fully qualified name of the object. We'll assume that the `Bar` class has two constructors, one with two arguments and the other with three arguments.
 
 ```C#
 class Bar : IDisposable
@@ -272,16 +272,16 @@ class Bar : IDisposable
 ```
 
 ```C#
-using MTGOSDK.Core.Reflection; // Proxy<T>
+using MTGOSDK.Core.Reflection; // TypeProxy<T>
 using MTGOSDK.Core.Remoting;   // RemoteClient
 
 // Invoke the first constructor with 2 arguments (A and B).
-dynamic objA = RemoteClient.CreateInstance(new Proxy<Bar>(), 1, "foo");
+dynamic objA = RemoteClient.CreateInstance(new TypeProxy<Bar>(), 1, "foo");
 // Invoke the second constructor with 3 arguments (A, B, and C).
-dynamic objB = RemoteClient.CreateInstance(new Proxy<Bar>(), 2, "bar", "baz");
+dynamic objB = RemoteClient.CreateInstance(new TypeProxy<Bar>(), 2, "bar", "baz");
 
 // Invoke the first constructor and dispose of the object when out of scope.
-using (dynamic objC = RemoteClient.CreateInstance(new Proxy<Bar>(), 1, "quz"))
+using (dynamic objC = RemoteClient.CreateInstance(new TypeProxy<Bar>(), 1, "quz"))
 {
   // Do something with objC.
 }
@@ -480,15 +480,15 @@ Generally we can retrieve these objects using any of the following methods:
 
 ```C#
 using MTGOSDK.API;             // ObjectProvider
-using MTGOSDK.Core.Reflection; // Proxy<T>
+using MTGOSDK.Core.Reflection; // TypeProxy<T>
 
 IBar objA = ObjectProvider.Get<IBar>();
-IBar objB = ObjectProvider.Get(new Proxy<IBar>());
-IBar objB = ObjectProvider.Get(new Proxy<dynamic>(typeof(IBar)));
+IBar objB = ObjectProvider.Get(new TypeProxy<IBar>());
+IBar objB = ObjectProvider.Get(new TypeProxy<dynamic>(typeof(IBar)));
 IBar objC = ObjectProvider.Get("assembly.namespace.IBar");
 ```
 
-Here the [`Proxy<T>`](MTGOSDK/src/Core/Reflection/Proxy.cs) type is used to convert the interface type to a string containing the fully qualified name of the interface type. You can also hard-code the string value if you know the fully qualified name ahead of time.
+Here the [`TypeProxy<T>`](MTGOSDK/src/Core/Reflection/Proxy.cs) type is used to convert the interface type to a string containing the fully qualified name of the interface type. You can also hard-code the string value if you know the fully qualified name ahead of time.
 
 Under the hood, the `Get<T>` method will call the `Bind<T>()` method from [`DLRWrapper<T>`](#dlrwrapper), but it will also cache the object for future use. This is demonstrated in the following example, which uses the `Get<T>` method to retrieve an object of type IBar.
 

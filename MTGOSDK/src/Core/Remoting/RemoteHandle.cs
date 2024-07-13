@@ -1,17 +1,18 @@
 /** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0 and MIT
+  SPDX-License-Identifier: Apache-2.0
 **/
 
 using System.Diagnostics;
 using System.IO;
 
-using MTGOSDK.Core.Remoting.Internal;
-using MTGOSDK.Core.Remoting.Internal.Reflection;
+using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
-using MTGOSDK.Core.Remoting.Interop.Utils;
+using MTGOSDK.Core.Remoting.Reflection;
+using MTGOSDK.Core.Remoting.Types;
+using MTGOSDK.Core.Remoting.Structs;
 
 using MTGOSDK.Resources;
 
@@ -107,7 +108,7 @@ public class RemoteHandle : IDisposable
   }
 
   private Process _procWithDiver;
-  private DomainsDump _domains;
+  private DomainDump _currentDomain;
   private readonly RemoteObjectsCollection _remoteObjects;
 
   public Process Process => _procWithDiver;
@@ -121,6 +122,8 @@ public class RemoteHandle : IDisposable
   {
     _procWithDiver = procWithDiver;
     _communicator = communicator;
+
+    _currentDomain = communicator.DumpDomain();
     _remoteObjects = new RemoteObjectsCollection(this);
     Activator = new RemoteActivator(communicator, this);
   }
@@ -143,7 +146,7 @@ public class RemoteHandle : IDisposable
   {
     // Use discovery to check for existing diver
     string diverAddr = "127.0.0.1";
-    switch(DiverDiscovery.QueryStatus(target, diverAddr, diverPort))
+    switch(Bootstrapper.QueryStatus(target, diverAddr, diverPort))
     {
       case DiverState.NoDiver:
         // No diver, we need to inject one
@@ -180,34 +183,30 @@ public class RemoteHandle : IDisposable
 
   public IEnumerable<CandidateType> QueryTypes(string typeFullName)
   {
-    _domains ??= Communicator.DumpDomains();
-    foreach (DomainsDump.AvailableDomain domain in _domains.AvailableDomains)
+    foreach (string assembly in _currentDomain.Modules)
     {
-      foreach (string assembly in domain.AvailableModules)
+      List<TypesDump.TypeIdentifiers> typeIdentifiers;
+      // try
+      // {
+        typeIdentifiers = Communicator.DumpTypes(assembly).Types;
+      // }
+      // catch
+      // {
+      //   // TODO:
+      //   Debug.WriteLine($"[{nameof(RemoteHandle)}][{nameof(QueryTypes)}] Exception thrown when Dumping/Iterating assembly: {assembly}");
+      //   continue;
+      // }
+      foreach (TypesDump.TypeIdentifiers type in typeIdentifiers)
       {
-        List<TypesDump.TypeIdentifiers> typeIdentifiers;
-        try
-        {
-          typeIdentifiers = Communicator.DumpTypes(assembly).Types;
-        }
-        catch
-        {
-          // TODO:
-          Debug.WriteLine($"[{nameof(RemoteHandle)}][{nameof(QueryTypes)}] Exception thrown when Dumping/Iterating assembly: {assembly}");
-          continue;
-        }
-        foreach (TypesDump.TypeIdentifiers type in typeIdentifiers)
-        {
-          // TODO: Filtering should probably be done in the Diver's side
-          if (type.TypeName == typeFullName)
-            yield return new CandidateType(type.TypeName, assembly);
-        }
-
+        // TODO: Filtering should probably be done in the Diver's side
+        if (type.TypeName == typeFullName)
+          yield return new CandidateType(type.TypeName, assembly);
       }
     }
   }
 
-  public IEnumerable<CandidateObject> QueryInstances(Type typeFilter, bool dumpHashcodes = true) => QueryInstances(typeFilter.FullName, dumpHashcodes);
+  public IEnumerable<CandidateObject> QueryInstances(Type typeFilter, bool dumpHashcodes = true) =>
+    QueryInstances(typeFilter.FullName, dumpHashcodes);
 
   /// <summary>
   /// Gets all object candidates for a specific filter
@@ -237,7 +236,7 @@ public class RemoteHandle : IDisposable
   public Type GetRemoteType(string typeFullName, string assembly = null)
   {
     // Easy case: Trying to resolve from cache or from local assemblies
-    var resolver = TypesResolver.Instance;
+    var resolver = TypeResolver.Instance;
     Type res = resolver.Resolve(assembly, typeFullName);
     if (res != null)
     {
@@ -250,7 +249,7 @@ public class RemoteHandle : IDisposable
       {
         res = new RemoteType(this, res);
         // TODO: Registering here in the cache is a hack but we couldn't
-        // register within "TypesResolver.Resolve" because we don't have the
+        // register within "TypeResolver.Resolve" because we don't have the
         // RemoteHandle to associate the fake remote type with.
         // Maybe this should move somewhere else...
         resolver.RegisterType(res);
@@ -308,6 +307,6 @@ public class RemoteHandle : IDisposable
     _procWithDiver = null;
 
     // Clear global type cache
-    TypesResolver.Instance._cache.Clear();
+    TypeResolver.Instance.ClearCache();
   }
 }

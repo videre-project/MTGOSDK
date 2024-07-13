@@ -10,6 +10,8 @@ using System.Reflection;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting.Types;
+using MTGOSDK.Core.Remoting.Structs;
 using MTGOSDK.Resources;
 
 using MTGOSDK.Win32.API;
@@ -118,7 +120,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// attempt to install or update the client before starting it.
   /// </remarks>
   /// <returns>True if the MTGO client process was started.</returns>
-  /// <exception cref="SetupFailedException">
+  /// <exception cref="SetupFailureException">
   /// Thrown when the MTGO installation has failed.
   /// </exception>
   /// <exception cref="ExternalErrorException">
@@ -177,7 +179,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
         (await WaitUntil(() => IsUpdating, delay:  250, retries: 20 )) &&
        !(await WaitUntil(() => HasStarted, delay: 5000, retries: 60 )))
     {
-      throw new SetupFailedException("The MTGO installation has failed.");
+      throw new SetupFailureException("The MTGO installation has failed.");
     }
 
     //
@@ -186,7 +188,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     //
     if (!(await WaitUntil(() => HasStarted)) && (IsStarting || IsUpdating))
     {
-      throw new SetupFailedException(
+      throw new SetupFailureException(
           "The MTGO installation stalled and did not finish.");
     }
     else if (!HasStarted)

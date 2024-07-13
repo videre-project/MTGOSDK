@@ -14,35 +14,10 @@ namespace MTGOSDK.Core.Logging;
 /// </summary>
 public class Log : LoggerBase
 {
-  private class SuppressionContext : IDisposable
-  {
-    private static Type baseType;
-
-    public SuppressionContext(Type callerType, LogLevel logLevel)
-    {
-      baseType = GetBaseType(callerType);
-      s_suppressedCallerTypes.TryAdd(baseType, logLevel);
-      Debug("Suppressed logging for {type} below loglevel {level}", baseType, logLevel);
-    }
-
-    public void Dispose()
-    {
-      s_suppressedCallerTypes.TryRemove(baseType, out _);
-    }
-  }
-
   /// <summary>
   /// Suppresses all logging in the current context.
   /// </summary>
-  public static IDisposable Suppress()
-  {
-    Type callerType;
-    int depth = 2;
-    do { callerType = GetCallerType(depth); depth++; }
-    while (callerType.FullName.StartsWith("System.") ||
-           callerType.FullName.StartsWith("MTGOSDK.Core.Logging."));
-    return new SuppressionContext(callerType, LogLevel.None);
-  }
+  public static IDisposable Suppress() => new SuppressionContext(LogLevel.None);
 
   //
   // ILogger Extensions

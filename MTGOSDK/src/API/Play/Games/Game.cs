@@ -39,7 +39,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     Optional<DuelSceneViewModel>(
       // TODO: Use a more efficient method of retrieving view model objects
       //       without traversing the client's managed heap.
-      RemoteClient.GetInstances(new Proxy<DuelSceneViewModel>())
+      RemoteClient.GetInstances(new TypeProxy<DuelSceneViewModel>())
         .FirstOrDefault(vm => Try(() => vm.GameId == this.Id))
     );
 

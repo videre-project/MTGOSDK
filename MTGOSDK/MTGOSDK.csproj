@@ -23,6 +23,7 @@
           Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'" />
 
   <ItemGroup>
+    <!-- <PackageReference Include="System.Text.Json" /> -->
     <PackageReference Include="Microsoft.CSharp" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="Microsoft.Extensions.Logging" />

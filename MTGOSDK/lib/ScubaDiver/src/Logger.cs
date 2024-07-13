@@ -1,7 +1,7 @@
 ﻿/** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0 and MIT
+  SPDX-License-Identifier: Apache-2.0
 **/
 
 using System;
@@ -37,11 +37,11 @@ internal class Logger
 
   #endregion
 
-#if DEBUG
+// #if DEBUG
   public static bool IsDebug = true;
-#else
-  public static bool IsDebug = false;
-#endif
+// #else
+//   public static bool IsDebug = false;
+// #endif
 
   public static void RedirectConsole()
   {
