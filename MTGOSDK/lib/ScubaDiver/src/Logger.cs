@@ -37,7 +37,7 @@ internal class Logger
 
   #endregion
 
-#if DEBUG
+#if DEBUG && ENABLE_DEBUG_CONSOLE
   public static bool IsDebug = true;
 #else
   public static bool IsDebug = false;
