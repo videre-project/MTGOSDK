@@ -37,11 +37,11 @@ internal class Logger
 
   #endregion
 
-// #if DEBUG
+#if DEBUG
   public static bool IsDebug = true;
-// #else
-//   public static bool IsDebug = false;
-// #endif
+#else
+  public static bool IsDebug = false;
+#endif
 
   public static void RedirectConsole()
   {
@@ -60,7 +60,8 @@ internal class Logger
   {
     if (IsDebug || Debugger.IsAttached)
     {
-      System.Diagnostics.Debug.WriteLine(s);
+      Console.WriteLine(s);
+      // System.Diagnostics.Debug.WriteLine(s);
     }
   }
 }

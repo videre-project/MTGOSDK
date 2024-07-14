@@ -20,7 +20,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Diagnostics.Runtime;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Compiler.Extensions;
@@ -159,7 +158,6 @@ public class Diver : IDisposable
 
     var response = requestContext.Response;
     string body;
-    Logger.Debug($"--- {request.Url.AbsolutePath} ---");
     if (_responseBodyCreators.TryGetValue(request.Url.AbsolutePath, out var respBodyGenerator))
     {
       try
@@ -222,8 +220,7 @@ public class Diver : IDisposable
         }
         catch (Exception e)
         {
-          Logger.Debug("[Diver] Task faulted! Exception:");
-          Logger.Debug(e.ToString());
+          Logger.Debug("[Diver] Task faulted! Exception: " + e.ToString());
         }
       }
       IAsyncResult asyncOperation = listener.BeginGetContext(ListenerCallback, listener);
@@ -334,7 +331,6 @@ public class Diver : IDisposable
     }
 
     DomainDump domainDump = new(currentDomain, modules);
-    // DomainDump domainDump = new() { Name = currentDomain, Modules = modules };
     return JsonConvert.SerializeObject(domainDump);
   }
 

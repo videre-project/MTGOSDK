@@ -9,19 +9,23 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!-- ILLink trimmer -->
+  <PropertyGroup>
+    <UseILLinkTrim>true</UseILLinkTrim>
+  </PropertyGroup>
+  <Import Project="..\ILLink\ILLink.targets"
+          Condition="'$(UseILLinkTrim)' == 'true'" />
+
   <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
-  <Import Project="..\ILLink\ILLink.targets" />
   <PropertyGroup>
     <ILRepackTargetsFile>
       $(MSBuildThisFileDirectory)..\ILRepack\ILRepack.targets
     </ILRepackTargetsFile>
     <ILRepackTarget>Microsoft.Diagnostics.Runtime</ILRepackTarget>
     <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).dll</ILRepackOutput>
-    <UseILLinkTrim>true</UseILLinkTrim>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- <PackageReference Include="System.Text.Json" /> -->
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />

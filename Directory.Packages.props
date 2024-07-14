@@ -18,8 +18,6 @@
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
-    <!-- <PackageVersion Include="System.Text.Json"
-                    Version="8.0.4" /> -->
     <!-- MTGOSDK -->
 		<PackageVersion Include="Microsoft.CSharp"
                     Version="4.7.0" />

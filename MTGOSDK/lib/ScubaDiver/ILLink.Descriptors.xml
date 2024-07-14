@@ -1,7 +1,10 @@
 <linker>
   <assembly fullname="MTGOSDK">
     <type fullname="MTGOSDK.Core.Compiler.*"                   preserve="all" />
-    <type fullname="MTGOSDK.Core.Reflection*" required="false" preserve="all" />
-    <type fullname="MTGOSDK.Core.Remoting.Interop*"            preserve="all" />
+    <type fullname="MTGOSDK.Core.Reflection.*"                 preserve="all" />
+    <type fullname="MTGOSDK.Core.Remoting.Interop.*"           preserve="all" />
+  </assembly>
+  <assembly fullname="Newtonsoft.Json">
+    <namespace fullname="Newtonsoft.Json.Serialization"        preserve="all" />
   </assembly>
 </linker>
