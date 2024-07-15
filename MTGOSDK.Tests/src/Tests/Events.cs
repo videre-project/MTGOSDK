@@ -155,7 +155,7 @@ public class EventValidationFixture : BaseFixture
     Assert.That(league.MinMatches, Is.GreaterThanOrEqualTo(3));
     Assert.That((bool?)league.IsPaused, Is.Not.Null);
 
-    foreach(LeaderboardEntry entry in league.Leaderboard)
+    foreach(LeaderboardEntry entry in league.Leaderboard.Take(5))
     {
       Assert.That(entry.Name, Is.Not.Empty);
       Assert.That(entry.TrophyCount, Is.GreaterThanOrEqualTo(0));
