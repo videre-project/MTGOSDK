@@ -5,7 +5,7 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
+    <RestoreLockedMode>true</RestoreLockedMode>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
@@ -38,10 +38,10 @@
                     Version="4.7.0" />
     <!-- MTGOSDK/lib/ILRepack -->
     <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
-                    Version="2.0.33" />
+                    Version="2.0.34.1" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
-                    Version="17.0.0" />
+                    Version="17.10.4" />
     <PackageVersion Include="JetBrains.Refasmer"
                     Version="1.0.33" />
     <PackageVersion Include="Microsoft.ILVerification"
@@ -63,14 +63,14 @@
     <PackageVersion Include="NUnit3TestAdapter"
                     Version="4.5.0" />
     <PackageVersion Include="ReportGenerator"
-                    Version="5.3.6" />
+                    Version="5.3.8" />
   </ItemGroup>
 
   <!-- .NET Standard 2.0 -->
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <!-- Use API polyfills to help write .NET 5.0+ compatible code -->
     <GlobalPackageReference Include="Meziantou.Polyfill"
-                            Version="1.0.37"
+                            Version="1.0.39"
                             PrivateAssets="all"
                             Condition="'$(EnablePolyfills)' != 'false'" />
     <!-- For the .NET Standard TFM, we must provide the ILLink.Tasks package -->
@@ -95,7 +95,7 @@
        Condition="'$(EnableSourceLink)' != 'false'" />
   <ItemGroup Condition="'$(EnableSourceLink)' != 'false'">
     <GlobalPackageReference Include="DotNet.ReproducibleBuilds"
-                            Version="1.1.1"
+                            Version="1.2.4"
                             PrivateAssets="All" />
     <!--
       Required for deterministic source paths.
@@ -112,7 +112,7 @@
   <ItemGroup Condition="'$(IsPackable)' != 'false' And
                         '$(EnableSourceControlManagerQueries)' != 'false'">
     <GlobalPackageReference Include="Nerdbank.GitVersioning"
-                            Version="3.6.133"
+                            Version="3.6.139"
                             PrivateAssets="All" />
   </ItemGroup>
 
