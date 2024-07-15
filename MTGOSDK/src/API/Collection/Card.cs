@@ -15,6 +15,7 @@ public sealed class Card(dynamic card) : CollectionItem<Card>
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
+  [RuntimeInternal]
   internal override Type type => typeof(ICardDefinition);
 
   /// <summary>

@@ -32,7 +32,7 @@
   <PropertyGroup>
     <CollectCoverage>true</CollectCoverage>
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
-    <ExcludeByAttribute>GeneratedCodeAttribute</ExcludeByAttribute>
+    <ExcludeByAttribute>GeneratedCodeAttribute,RuntimeInternalAttribute</ExcludeByAttribute>
     <!-- <Threshold>80</Threshold>
     <ThresholdType>line</ThresholdType> -->
   </PropertyGroup>

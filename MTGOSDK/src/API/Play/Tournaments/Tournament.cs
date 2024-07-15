@@ -18,6 +18,7 @@ public sealed class Tournament(dynamic tournament) : Event<Tournament>
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
+  [RuntimeInternal]
   internal override Type type => typeof(ITournament);
 
   /// <summary>

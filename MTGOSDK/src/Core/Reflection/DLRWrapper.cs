@@ -69,6 +69,12 @@ public class DLRWrapper<I>() where I : class
   // Attributes and decorators for derived class properties and methods.
   //
 
+  public class RuntimeInternalAttribute()
+      : CallerAttribute<RuntimeInternalAttribute>
+  {
+    public readonly Type BaseType = typeof(DLRWrapper<I>);
+  }
+
   /// <summary>
   /// A wrapper attribute that allows for a default value to fallback to.
   /// </summary>

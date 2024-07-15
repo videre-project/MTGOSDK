@@ -19,6 +19,7 @@ public abstract class HistoricalItem<I, T> : DLRWrapper<IHistoricalItem>
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
+  [RuntimeInternal]
   internal override Type type => typeof(I);
 
   public sealed class Default(dynamic historicalItem)

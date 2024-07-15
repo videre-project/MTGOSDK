@@ -19,6 +19,7 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
+  [RuntimeInternal]
   internal override Type type => typeof(IDeck);
 
   /// <summary>

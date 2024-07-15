@@ -23,7 +23,7 @@ public sealed class BasicToastViewModel(dynamic basicToastViewModel)
   /// <summary>
   /// Creates a new remote instance of the BasicToastViewModel class.
   /// </summary>
-  internal static BasicToastViewModel NewInstance(params dynamic[] args) =>
+  private static BasicToastViewModel NewInstance(params dynamic[] args) =>
     new(RemoteClient.CreateInstance(
       "Shiny.Toast.ViewModels.BasicToastViewModel",
       Unbind(args)

@@ -21,6 +21,7 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
+  [RuntimeInternal]
   internal override Type type => typeof(IMatch);
 
   /// <summary>
