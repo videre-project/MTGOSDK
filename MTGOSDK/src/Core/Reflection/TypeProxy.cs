@@ -43,6 +43,14 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   public static dynamic From(dynamic? obj=null) =>
     Impromptu.UndoActLike(obj);
 
+  /// <summary>
+  /// Check whether an instance implements a proxy interface.
+  /// </summary>
+  /// <param name="obj">The object to check</param>
+  /// <returns>True if the object is a proxy</returns>
+  public static bool IsProxy(dynamic? obj=null) =>
+    typeof(IActLikeProxy).IsAssignableFrom(obj.GetType());
+
   //
   // Derived class properties
   //

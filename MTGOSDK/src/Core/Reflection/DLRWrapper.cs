@@ -166,15 +166,16 @@ public class DLRWrapper<I>() where I : class
   /// </remarks>
   public static dynamic Unbind(dynamic obj)
   {
-    Func<dynamic, bool> isProxy = (o) => o.GetType().Name.StartsWith("ActLike_");
-    if (!isProxy(obj)) return obj;
+    if (!TypeProxy<dynamic>.IsProxy(obj))
+      return obj;
 
     var unbound_obj = TypeProxy<dynamic>.From(obj)
       ?? throw new InvalidOperationException(
           $"Unable to unbind types from {obj.GetType().Name}.");
 
     // Recursively unbind any nested interface types.
-    if (isProxy(unbound_obj)) return Unbind(unbound_obj);
+    if (TypeProxy<dynamic>.IsProxy(unbound_obj))
+      return Unbind(unbound_obj);
 
     return unbound_obj;
   }
