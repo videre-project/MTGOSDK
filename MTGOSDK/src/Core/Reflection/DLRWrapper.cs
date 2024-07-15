@@ -14,6 +14,7 @@ using static MTGOSDK.Core.Compiler.Extensions.CallerExtensions;
 using static MTGOSDK.Core.Compiler.Extensions.TypeExtensions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Attributes;
+using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting;
 
 
@@ -243,7 +244,7 @@ public class DLRWrapper<I>() where I : class
   /// <summary>
   /// Provides a default type mapper based on the given reference type.
   /// </summary>
-  private static dynamic UseTypeMapper<T1, T2>()
+  internal static dynamic UseTypeMapper<T1, T2>()
     where T1 : notnull
     where T2 : notnull
   {
@@ -307,24 +308,41 @@ public class DLRWrapper<I>() where I : class
   /// <typeparam name="T">The item type to cast to.</typeparam>
   /// <param name="obj">The object or enumerable to iterate over.</param>
   /// <param name="func">The function to run for each item (optional).</param>
+  /// <param name="proxy">Whether to return a proxy instance (optional).</param>
   /// <returns>A list of the function's output.</returns>
-  public static IList<T> Map<L, T>(dynamic obj, Func<dynamic, T>? func = null)
-    where L : IList
-    where T : notnull
+  public static IList<T> Map<L, T>(
+    dynamic obj,
+    Func<dynamic, T>? func = null,
+    bool proxy = false)
+      where L : IList
+      where T : notnull
   {
-    IList<T> newList = Try(
-      // Attempt to create a new instance of the 'L' list type.
-      () => InstanceFactory.CreateInstance(typeof(L)),
-      // Otherwise fallback to a generic list implementation
-      // (i.e. when the provided type is abstract or has no constructor).
-      () => new List<T>());
-
     dynamic innerList = Try(
       // Attempt to cast the object to a list type.
       () => Cast<IList>(obj),
       () => Cast<IList>(Unbind(obj)),
       // Otherwise fallback to a dynamic list implementation.
       () => obj as dynamic);
+
+    // // If `T` is a DLRWrapper type and the object is a dynamic remote object,
+    // // then simply return a ListProxy instance wrapping the remote list object.
+    // if (typeof(T).IsOpenSubtypeOf(typeof(DLRWrapper<>)))
+    // {
+    //   IList<T> proxy = new ListProxy<T>innerList, func);
+    //
+    //   // If the instance has a well-defined count property, return the instance.
+    //   if (Try<bool>(() => proxy.Count >= 0))
+    //     return proxy;
+    // }
+    if (proxy) return new ListProxy<T>(innerList, func);
+
+    // Otherwise allocate a local list object and map the items to the new type.
+    IList<T> newList = Try(
+      // Attempt to create a new instance of the 'L' list type.
+      () => InstanceFactory.CreateInstance(typeof(L)),
+      // Otherwise fallback to a generic list implementation
+      // (i.e. when the provided type is abstract or has no constructor).
+      () => new List<T>());
 
     foreach (var item in Map<T>(innerList, func)) newList.Add(item);
     return newList;

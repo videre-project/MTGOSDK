@@ -73,7 +73,7 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// The log of messages in this channel.
   /// </summary>
-  public IList<Message> Messages => Map<IList, Message>(ChatLog);
+  public IList<Message> Messages => Map<IList, Message>(ChatLog, proxy: true);
 
   /// <summary>
   /// The number of messages sent in this channel.

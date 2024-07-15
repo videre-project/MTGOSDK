@@ -208,4 +208,22 @@ public static class TypeExtensions
     }
     return null;
   }
+
+  /// <summary>
+  /// Determines if a type is a subtype of another open generic type.
+  /// </summary>
+  /// <param name="type">The type to check.</param>
+  /// <param name="baseType">The open generic type to check against.</param>
+  /// <returns>True if the type is a subtype of the open generic type.</returns>
+  public static bool IsOpenSubtypeOf(this Type type, Type baseType)
+  {
+    try
+    {
+      return type.BaseType.GetGenericTypeDefinition().IsAssignableFrom(baseType);
+    }
+    catch
+    {
+      return false;
+    }
+  }
 }
