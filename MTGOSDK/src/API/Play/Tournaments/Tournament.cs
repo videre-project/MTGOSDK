@@ -18,6 +18,7 @@ public sealed class Tournament(dynamic tournament) : Event<Tournament>
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
+  [RuntimeInternal]
   internal override Type type => typeof(ITournament);
 
   /// <summary>
@@ -59,7 +60,9 @@ public sealed class Tournament(dynamic tournament) : Event<Tournament>
   /// The time remaining in the current round or tournament phase.
   /// </summary>
   public TimeSpan TimeRemaining =>
-    Cast<TimeSpan>(Unbind(@base).TimeRemaining);
+    State == TournamentState.BetweenRounds
+      ? TimeSpan.Zero
+      : Cast<TimeSpan>(Unbind(@base).TimeRemaining);
 
   /// <summary>
   /// The current round of the tournament.

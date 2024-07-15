@@ -1,7 +1,7 @@
 ﻿/** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0 and MIT
+  SPDX-License-Identifier: Apache-2.0
 **/
 
 using System;
@@ -9,7 +9,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using MTGOSDK.Core.Remoting.Interop.Utils;
+using MTGOSDK.Core.Reflection.Extensions;
+using MTGOSDK.Core.Remoting.Interop;
 
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;

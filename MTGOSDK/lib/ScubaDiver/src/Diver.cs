@@ -1,7 +1,7 @@
 /** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0 and MIT
+  SPDX-License-Identifier: Apache-2.0
 **/
 
 using System;
@@ -21,17 +21,18 @@ using System.Threading.Tasks;
 using Microsoft.Diagnostics.Runtime;
 using Newtonsoft.Json;
 
+using MTGOSDK.Core.Compiler;
+using MTGOSDK.Core.Compiler.Extensions;
+using MTGOSDK.Core.Compiler.Snapshot;
 using MTGOSDK.Core.Reflection;
-using MTGOSDK.Core.Reflection.Snapshot;
-using MTGOSDK.Core.Reflection.Emit;
+using MTGOSDK.Core.Reflection.Extensions;
+using MTGOSDK.Core.Reflection.Types;
 using MTGOSDK.Core.Remoting.Interop;
-using MTGOSDK.Core.Remoting.Interop.Extensions;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
-using MTGOSDK.Core.Remoting.Interop.Utils;
 
 using MTGOSDK.Win32.API;
 
@@ -165,6 +166,7 @@ public class Diver : IDisposable
       }
       catch (Exception ex)
       {
+        Logger.Debug("[Diver] Exception in handler: " + ex.ToString());
         body = QuickError(ex.Message, ex.StackTrace);
       }
     }
@@ -218,8 +220,7 @@ public class Diver : IDisposable
         }
         catch (Exception e)
         {
-          Logger.Debug("[Diver] Task faulted! Exception:");
-          Logger.Debug(e.ToString());
+          Logger.Debug("[Diver] Task faulted! Exception: " + e.ToString());
         }
       }
       IAsyncResult asyncOperation = listener.BeginGetContext(ListenerCallback, listener);
@@ -316,31 +317,21 @@ public class Diver : IDisposable
 
   private string MakeDomainsResponse(HttpListenerRequest req)
   {
-    List<DomainsDump.AvailableDomain> available = new();
+    // Extract the names of all available modules from the current AppDomain.
+    List<string> modules = new();
+    string currentDomain = AppDomain.CurrentDomain.FriendlyName;
     lock (_runtime.clrLock)
     {
-      foreach (ClrAppDomain clrAppDomain in _runtime.GetClrAppDomains())
-      {
-        var modules = clrAppDomain.Modules
-          .Select(m => Path.GetFileNameWithoutExtension(m.Name))
-          .Where(m => !string.IsNullOrWhiteSpace(m))
-          .ToList();
-        var dom = new DomainsDump.AvailableDomain()
-        {
-          Name = clrAppDomain.Name,
-          AvailableModules = modules
-        };
-        available.Add(dom);
-      }
+      ClrAppDomain clrAppDomain = _runtime.GetClrAppDomains()
+        .FirstOrDefault(ad => ad.Name == currentDomain);
+      modules = clrAppDomain.Modules
+        .Select(m => Path.GetFileNameWithoutExtension(m.Name))
+        .Where(m => !string.IsNullOrWhiteSpace(m))
+        .ToList();
     }
 
-    DomainsDump dd = new()
-    {
-      Current = AppDomain.CurrentDomain.FriendlyName,
-      AvailableDomains = available
-    };
-
-    return JsonConvert.SerializeObject(dd);
+    DomainDump domainDump = new(currentDomain, modules);
+    return JsonConvert.SerializeObject(domainDump);
   }
 
   private string MakeTypesResponse(HttpListenerRequest req)
@@ -789,7 +780,7 @@ public class Diver : IDisposable
         dumpedObjType = _runtime.ResolveType(clrObj.Type.Name);
         try
         {
-          instance = _runtime.DereferenceObject(clrObj.Address, mt);
+          instance = _runtime.Compile(clrObj.Address, mt);
         }
         catch (Exception)
         {
@@ -817,7 +808,7 @@ public class Diver : IDisposable
 
     // Infer parameter types from received parameters.
     // Note that for 'null' arguments we don't know the type so we use a "Wild Card" type
-    Type[] argumentTypes = paramsList.Select(p => p?.GetType() ?? new WildCardType()).ToArray();
+    Type[] argumentTypes = paramsList.Select(p => p?.GetType() ?? new TypeStub()).ToArray();
 
     // Get types of generic arguments <T1,T2, ...>
     Type[] genericArgumentTypes = request.GenericArgsTypeFullNames.Select(typeFullName => _runtime.ResolveType(typeFullName)).ToArray();
@@ -1035,7 +1026,7 @@ public class Diver : IDisposable
         clrObj = _runtime.GetClrObject(request.ObjAddress);
         if (clrObj.Type == null)
         {
-          return QuickError("'address' points at an invalid address");
+          return QuickError($"The invalid address for '${request.TypeFullName}'.");
         }
 
         // Make sure it's still in place
@@ -1045,14 +1036,14 @@ public class Diver : IDisposable
       if (clrObj.Type == null)
       {
         return
-          QuickError("Object moved since last refresh. 'address' now points at an invalid address.");
+          QuickError($"The address for '${request.TypeFullName}' moved since last refresh.");
       }
 
       ulong mt = clrObj.Type.MethodTable;
       dumpedObjType = _runtime.ResolveType(clrObj.Type.Name);
       try
       {
-        instance = _runtime.DereferenceObject(clrObj.Address, mt);
+        instance = _runtime.Compile(clrObj.Address, mt);
       }
       catch (Exception)
       {

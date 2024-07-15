@@ -32,7 +32,7 @@
   <PropertyGroup>
     <CollectCoverage>true</CollectCoverage>
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
-    <ExcludeByAttribute>GeneratedCodeAttribute</ExcludeByAttribute>
+    <ExcludeByAttribute>GeneratedCodeAttribute,RuntimeInternalAttribute</ExcludeByAttribute>
     <!-- <Threshold>80</Threshold>
     <ThresholdType>line</ThresholdType> -->
   </PropertyGroup>
@@ -45,17 +45,6 @@
     <ClassFilters_Exclude>
       -MTGOSDK.API.Events;
       -MTGOSDK.API.Interface.*;
-      <!-- -MTGOSDK.Core.Exceptions.*;
-      -MTGOSDK.Core.Logging.*;
-      -MTGOSDK.Core.Reflection.Emit.*;
-      -MTGOSDK.Core.Reflection.Snapshot.*;
-      -MTGOSDK.Core.Remoting.Internal.*;
-      -MTGOSDK.Core.Remoting.Interop.*;
-      -MTGOSDK.Resources.*;
-      -MTGOSDK.Win32.API.*;
-      -MTGOSDK.Win32.Extensions.*;
-      -MTGOSDK.Win32.Injection.*;
-      -MTGOSDK.Win32.Utilities.* -->
     </ClassFilters_Exclude>
   </PropertyGroup>
 

@@ -1,7 +1,7 @@
 ﻿/** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0 and MIT
+  SPDX-License-Identifier: Apache-2.0
 **/
 
 using System;
@@ -37,7 +37,7 @@ internal class Logger
 
   #endregion
 
-#if DEBUG
+#if DEBUG && ENABLE_DEBUG_CONSOLE
   public static bool IsDebug = true;
 #else
   public static bool IsDebug = false;
@@ -60,7 +60,8 @@ internal class Logger
   {
     if (IsDebug || Debugger.IsAttached)
     {
-      System.Diagnostics.Debug.WriteLine(s);
+      Console.WriteLine(s);
+      // System.Diagnostics.Debug.WriteLine(s);
     }
   }
 }

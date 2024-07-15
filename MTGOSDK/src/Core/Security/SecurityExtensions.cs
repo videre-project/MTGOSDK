@@ -29,7 +29,7 @@ public static class SecurityExtensions
     IntPtr passwordPtr = IntPtr.Zero;
     char @char;
     // Create a new SecureString object on the remote client.
-    dynamic secure_pwd = RemoteClient.CreateInstance(new Proxy<SecureString>());
+    dynamic secure_pwd = RemoteClient.CreateInstance(new TypeProxy<SecureString>());
     try
     {
       // Allocate a global handle for the password string in unmanaged memory.

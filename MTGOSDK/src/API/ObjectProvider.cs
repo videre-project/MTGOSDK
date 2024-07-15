@@ -9,7 +9,8 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
-using static MTGOSDK.Core.Remoting.LazyRemoteObject;
+using MTGOSDK.Core.Remoting.Reflection;
+using TResetter = MTGOSDK.Core.Remoting.Reflection.LazyRemoteObject.TResetter;
 
 
 namespace MTGOSDK.API;
@@ -22,7 +23,7 @@ public static class ObjectProvider
   /// <summary>
   /// Proxy type for the client's static ObjectProvider class.
   /// </summary>
-  private static readonly Proxy<dynamic> s_proxy =
+  private static readonly TypeProxy<dynamic> s_proxy =
     new(typeof(WotC.MtGO.Client.Common.ServiceLocation.ObjectProvider));
 
   private static readonly ConcurrentDictionary<string, dynamic> s_instances = new();
@@ -177,7 +178,7 @@ public static class ObjectProvider
   public static dynamic Get<T>(bool bindTypes = true) where T : class
   {
     // Create a proxy type for the given generic type
-    Proxy<T> proxy = new();
+    TypeProxy<T> proxy = new();
 
     //
     // If not binding types, return an instance leaving open all binding flags.
@@ -198,7 +199,7 @@ public static class ObjectProvider
 
     // Late bind the interface type to the proxy value
     if (bindTypes && (@interface != null || proxy.IsInterface))
-      obj = Proxy<dynamic>.As(obj, @interface ?? proxy.Class);
+      obj = TypeProxy<dynamic>.As(obj, @interface ?? proxy.Class);
 
     return obj;
   }

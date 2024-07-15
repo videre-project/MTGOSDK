@@ -9,7 +9,7 @@ using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Compiler;
 
 
 namespace MTGOSDK.Core.Logging;

@@ -17,6 +17,7 @@ public sealed class Collection(ICollectionGrouping collection)
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
+  [RuntimeInternal]
   internal override Type type => typeof(ICollectionGrouping);
 
   /// <summary>

@@ -22,7 +22,7 @@ public sealed class GenericDialogViewModel(dynamic genericDialogViewModel)
   /// <summary>
   /// Creates a new remote instance of the GenericDialogViewModel class.
   /// </summary>
-  internal static GenericDialogViewModel NewInstance() =>
+  private static GenericDialogViewModel NewInstance() =>
     new(RemoteClient.CreateInstance("Shiny.ViewModels.GenericDialogViewModel"));
 
   public GenericDialogViewModel(
