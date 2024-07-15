@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 
 
 using MTGOSDK.Core.Compiler.Extensions;
-using static MTGOSDK.Core.Compiler.Extensions.CallerExtensions;
 
 
 namespace MTGOSDK.Core.Logging;

@@ -5,8 +5,6 @@
 
 using System.Runtime.CompilerServices;
 
-using static MTGOSDK.Core.Compiler.Extensions.CallerExtensions;
-
 
 namespace MTGOSDK.Core.Reflection.Attributes;
 

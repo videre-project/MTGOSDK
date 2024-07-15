@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using MTGOSDK.Core.Compiler.Extensions;
-using static MTGOSDK.Core.Compiler.Extensions.CallerExtensions;
 using MTGOSDK.Core.Reflection;
 
 

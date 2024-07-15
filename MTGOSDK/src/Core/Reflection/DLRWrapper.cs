@@ -10,8 +10,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 
 using MTGOSDK.Core.Compiler;
-using static MTGOSDK.Core.Compiler.Extensions.CallerExtensions;
-using static MTGOSDK.Core.Compiler.Extensions.TypeExtensions;
+using MTGOSDK.Core.Compiler.Extensions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Attributes;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -63,25 +62,6 @@ public class DLRWrapper<I>() where I : class
   {
     // Initializes a given factory function, if provided.
     if (factory != null) factory.Invoke().Wait();
-  }
-
-  //
-  // Attributes and decorators for derived class properties and methods.
-  //
-
-  public class RuntimeInternalAttribute()
-      : CallerAttribute<RuntimeInternalAttribute>
-  {
-    public readonly Type BaseType = typeof(DLRWrapper<I>);
-  }
-
-  /// <summary>
-  /// A wrapper attribute that allows for a default value to fallback to.
-  /// </summary>
-  /// <param name="value">The default value.</param>
-  public class DefaultAttribute(object value) : CallerAttribute<DefaultAttribute>
-  {
-    public object Value { get; set; } = value;
   }
 
   //
