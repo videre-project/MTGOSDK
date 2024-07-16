@@ -158,7 +158,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       if (loggerProvider != null) Log.SetProviderInstance(loggerProvider);
       if (loggerFactory != null) Log.SetFactoryInstance(loggerFactory);
       Log.Debug("Running the MTGO client API factory.");
-      ValidateVersion(assert: false); // Ensure reference types are compatible.
 
       // Starts a new MTGO client process.
       if (options.CreateProcess)
@@ -169,6 +168,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         if (!await RemoteClient.StartProcess())
           throw new SetupFailureException("Failed to start the MTGO process.");
       }
+      // Ensure reference types are compatible.
+      ValidateVersion(assert: false);
 
       // Sets the client's disposal policy.
       if(options.DestroyOnExit)
@@ -232,6 +233,15 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </exception>
   public static bool ValidateVersion(bool assert = false)
   {
+    // Verify that an existing MTGO installation is present.
+    if (!File.Exists(AppRefPath) || Try(() => MTGOAppDirectory) == null)
+    {
+      if (assert)
+        throw new VerificationException("The MTGO client is not installed.");
+
+      return true; // Otherwise assume that MTGO will be installed.
+    }
+
     if (Version < CompatibleVersion)
       Log.Warning("The MTGO version {Version} does not match the SDK's compatible version {CompatibleVersion} and may no longer function correctly.",
         Version, CompatibleVersion);
