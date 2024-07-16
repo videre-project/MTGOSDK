@@ -36,6 +36,11 @@
                     Version="4.7.0" />
     <PackageVersion Include="System.Reflection.Emit.Lightweight"
                     Version="4.7.0" />
+    <PackageVersion Include="Meziantou.Polyfill"
+                    Version="1.0.39" />
+    <!-- MTGOSDK/lib/ILLink -->
+    <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
+                    Version="8.0.0" />
     <!-- MTGOSDK/lib/ILRepack -->
     <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
                     Version="2.0.34.1" />
@@ -69,15 +74,15 @@
   <!-- .NET Standard 2.0 -->
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <!-- Use API polyfills to help write .NET 5.0+ compatible code -->
-    <GlobalPackageReference Include="Meziantou.Polyfill"
-                            Version="1.0.39"
-                            PrivateAssets="all"
-                            Condition="'$(EnablePolyfills)' != 'false'" />
-    <!-- For the .NET Standard TFM, we must provide the ILLink.Tasks package -->
-    <PackageReference Include="Microsoft.NET.ILLink.Tasks"
-                      VersionOverride="8.0.0"
+    <PackageReference Include="Meziantou.Polyfill"
                       PrivateAssets="all"
-                      Condition="'$(UseILLinkTrim)' == 'true'" />
+                      Condition="'$(EnablePolyfills)' != 'false'" />
+  </ItemGroup>
+
+  <!-- For the .NET SDK and Standard TFM, provide the ILLink.Tasks package -->
+  <ItemGroup Condition="'$(UseILLinkTrim)' == 'true'">
+    <PackageReference Include="Microsoft.NET.ILLink.Tasks"
+                      PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Build-time dependencies for MTGOSDK.MSBuild -->
@@ -91,7 +96,7 @@
     - https://github.com/dotnet/reproducible-builds
   -->
   <Sdk Name="DotNet.ReproducibleBuilds.Isolated"
-       Version="1.1.1"
+       Version="1.2.4"
        Condition="'$(EnableSourceLink)' != 'false'" />
   <ItemGroup Condition="'$(EnableSourceLink)' != 'false'">
     <GlobalPackageReference Include="DotNet.ReproducibleBuilds"
