@@ -13,7 +13,8 @@
              TaskFactory="TaskHostFactory" />
 
   <Target Name="GenerateReferenceAssemblies"
-          BeforeTargets="ResolveAssemblyReferences"
+          BeforeTargets="ResolveAssemblyReferences;
+                         DesignTimeResolveReferenceAssemblies"
           Condition="'$(BuildProjectReferences)' != 'false'">
     <!--
       Extract the MTGO installation directory paths, or create a temporary
@@ -54,11 +55,6 @@
       <Output TaskParameter="OutputPath" PropertyName="_MTGOSDK_Refs" />
     </GenerateReferenceAssemblies>
 
-    <!-- Add the reference assembly path to the assembly search paths -->
-    <PropertyGroup Condition="'$(UseReferenceAssemblies)' != 'false'">
-      <AssemblySearchPaths>$(AssemblySearchPaths);$(_MTGOSDK_Refs)</AssemblySearchPaths>
-    </PropertyGroup>
-
     <!-- Notify if the task has finished or skipped generating assemblies -->
     <Message Text="MTGOSDK.MSBuild: Updated reference assemblies for MTGO version $(MTGOVersion)"
              Importance="high"
@@ -78,6 +74,31 @@
       <ReferenceAssemblies
         Include="@(ReferenceCopyLocalPaths)"
         Condition="$([System.String]::Copy(%(FullPath)).Contains($(_MTGOSDK_Refs)))" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="DesignTimeResolveReferenceAssemblies"
+          BeforeTargets="DesignTimeResolveAssemblyReferences;
+                         ResolveAssemblyReferences"
+          Condition="'$(UseReferenceAssemblies)' != 'false'">
+    <!-- Add the reference assembly path to the assembly search paths -->
+    <PropertyGroup Condition="Exists('$(_MTGOSDK_Refs)')">
+      <MTGOSDK_RefsCount>$([System.IO.Directory]::GetFiles($(_MTGOSDK_Refs), "*", System.IO.SearchOption.TopDirectoryOnly).Length)</MTGOSDK_RefsCount>
+      <MTGOSDK_Refs Condition="$(MTGOSDK_RefsCount) > 0">$(_MTGOSDK_Refs)</MTGOSDK_Refs>
+      <MTGOSDK_Refs Condition="'$(MTGOSDK_Refs)' == ''">$([System.IO.Directory]::GetDirectories($(_MTGOSDK_Refs), "*", System.IO.SearchOption.TopDirectoryOnly)[0])</MTGOSDK_Refs>
+      <AssemblySearchPaths>$(AssemblySearchPaths);$(MTGOSDK_Refs)</AssemblySearchPaths>
+      <DesignTimeAssemblySearchPaths>$(DesignTimeAssemblySearchPaths);$(MTGOSDK_Refs)</DesignTimeAssemblySearchPaths>
+    </PropertyGroup>
+    <!-- Update hintpaths for MTGO reference assemblies -->
+    <ItemGroup>
+      <Reference Update="@(Reference)"
+                 HintPath="$(MTGOSDK_Refs)\%(Identity).dll"
+                 Condition="Exists('$(MTGOSDK_Refs)\%(Identity).dll') And
+                            '%(Extension)' != '.dll'" />
+      <Reference Update="@(Reference)"
+                 HintPath="$(MTGOSDK_Refs)\%(Identity)"
+                 Condition="Exists('$(MTGOSDK_Refs)\%(Identity)') And
+                            '%(Extension)' == '.dll'" />
     </ItemGroup>
   </Target>
 
