@@ -4,11 +4,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-
 
 namespace MTGOSDK.Core.Compiler;
 
@@ -23,8 +18,8 @@ namespace MTGOSDK.Core.Compiler;
 /// </remarks>
 public class FrozenObjectsCollection
 {
-  private object _lock = new object();
-  private Dictionary<object, ulong> _frozenObjects = new();
+  private readonly object _lock = new object();
+  private readonly Dictionary<object, ulong> _frozenObjects = new();
   private Task _freezerTask = null!;
   private ManualResetEvent _unfreezeRequested = null!;
 

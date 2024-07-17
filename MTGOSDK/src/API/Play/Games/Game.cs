@@ -11,7 +11,6 @@ using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Play;
-using GameState = MTGOSDK.API.Play.Games.GameState;
 
 
 namespace MTGOSDK.API.Play.Games;

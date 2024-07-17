@@ -8,8 +8,6 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
-using MTGOSDK.Win32.API;
-
 
 namespace ScubaDiver;
 

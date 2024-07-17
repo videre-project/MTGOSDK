@@ -3,9 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
-
-using MTGOSDK.API;
 using MTGOSDK.API.Chat;
 using MTGOSDK.Core.Reflection;
 

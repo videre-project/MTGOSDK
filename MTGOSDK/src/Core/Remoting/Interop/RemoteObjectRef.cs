@@ -4,7 +4,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 

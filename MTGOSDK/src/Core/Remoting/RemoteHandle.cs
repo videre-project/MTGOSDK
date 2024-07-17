@@ -10,7 +10,6 @@ using System.IO;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
-using MTGOSDK.Core.Remoting.Reflection;
 using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Core.Remoting.Structs;
 
@@ -108,7 +107,7 @@ public class RemoteHandle : IDisposable
   }
 
   private Process _procWithDiver;
-  private DomainDump _currentDomain;
+  private readonly DomainDump _currentDomain;
   private readonly RemoteObjectsCollection _remoteObjects;
 
   public Process Process => _procWithDiver;

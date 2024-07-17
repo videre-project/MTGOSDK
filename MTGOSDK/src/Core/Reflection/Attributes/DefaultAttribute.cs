@@ -5,6 +5,7 @@
 
 
 namespace MTGOSDK.Core.Reflection.Attributes;
+
 /// <summary>
 /// A wrapper attribute that allows for a default value to fallback to.
 /// </summary>

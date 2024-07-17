@@ -19,7 +19,7 @@ public static class DotEnv
   /// <summary>
   /// The internal dictionary of variables.
   /// </summary>
-  private static Dictionary<string, SecureVariable> Variables = new();
+  private static readonly Dictionary<string, SecureVariable> s_variables = new();
 
   /// <summary>
   /// Gets the value of the specified variable.
@@ -29,7 +29,7 @@ public static class DotEnv
   /// <exception cref="KeyNotFoundException">
   /// Thrown if the variable does not exist.
   /// </exception>
-  public static dynamic Get(string key) => Variables[key];
+  public static dynamic Get(string key) => s_variables[key];
 
   /// <summary>
   /// Loads the .env file from the current directory or a given filepath.
@@ -80,7 +80,7 @@ public static class DotEnv
         // Skip and reset cursor on newlines.
         if (c == '\n' || c == '\r')
         {
-          Variables.Add(key.ToString(), new SecureVariable(value));
+          s_variables.Add(key.ToString(), new SecureVariable(value));
           key.Clear();
           value = new();
 

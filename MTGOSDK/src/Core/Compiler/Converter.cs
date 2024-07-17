@@ -4,7 +4,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
 using System.Reflection.Emit;
 
 using MTGOSDK.Core.Compiler.Extensions;
@@ -20,7 +19,7 @@ public class Converter<T>
   /// <summary>
   /// The delegate that converts an IntPtr to an object reference.
   /// </summary>
-  delegate U Void2ObjectConverter<U>(IntPtr pManagedObject);
+  private delegate U Void2ObjectConverter<U>(IntPtr pManagedObject);
 
   /// <summary>
   /// The converter instance that converts an IntPtr to an object reference.

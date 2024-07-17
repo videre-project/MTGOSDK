@@ -4,7 +4,6 @@
 **/
 
 using System.Collections;
-using System.Collections.Generic;
 
 
 namespace MTGOSDK.Core.Reflection;
@@ -22,7 +21,7 @@ public class ListProxy<T>(
   /// </summary>
   internal override dynamic obj => Bind<IList>(list);
 
-  private dynamic s_typeMapper = func ?? UseTypeMapper<dynamic, T>();
+  private readonly dynamic _typeMapper = func ?? UseTypeMapper<dynamic, T>();
 
   //
   // IList<T> wrapper properties
@@ -34,7 +33,7 @@ public class ListProxy<T>(
 
   public T this[int index]
   {
-    get => s_typeMapper(Unbind(@base)[index]);
+    get => _typeMapper(Unbind(@base)[index]);
     set => Unbind(@base)[index] = value;
   }
 
@@ -53,7 +52,7 @@ public class ListProxy<T>(
     var baseRef = Unbind(@base);
     for (int i = 0; i < this.Count; i++)
     {
-      array[arrayIndex + i] = s_typeMapper(baseRef[i]);
+      array[arrayIndex + i] = _typeMapper(baseRef[i]);
     }
   }
 

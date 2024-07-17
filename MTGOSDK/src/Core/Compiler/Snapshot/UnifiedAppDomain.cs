@@ -4,9 +4,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -19,7 +16,7 @@ namespace MTGOSDK.Core.Compiler.Snapshot;
 /// </summary>
 public class UnifiedAppDomain
 {
-  private AppDomain[] _domains = new[] { AppDomain.CurrentDomain };
+  private readonly AppDomain[] _domains = [AppDomain.CurrentDomain];
 
   public UnifiedAppDomain(SnapshotRuntime snapshot = null)
   {

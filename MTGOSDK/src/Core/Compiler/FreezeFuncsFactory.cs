@@ -4,11 +4,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
-using System.Collections.Generic;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Threading;
 
 using MTGOSDK.Core.Compiler.Structs;
 
@@ -32,7 +29,7 @@ public static class FreezeFuncsFactory
   /// <summary>
   /// A local cache of generated freeze functions for each parameter count.
   /// </summary>
-  private static Dictionary<int, FreezeFunc> _dict = new();
+  private static readonly Dictionary<int, FreezeFunc> s_dict = new();
 
   /// <summary>
   /// Generates a dynamic freeze function with the specified number of arguments.
@@ -44,10 +41,10 @@ public static class FreezeFuncsFactory
   /// </remarks>
   public static FreezeFunc Generate(int numArguments)
   {
-    if (!_dict.TryGetValue(numArguments, out FreezeFunc func))
+    if (!s_dict.TryGetValue(numArguments, out FreezeFunc func))
     {
       func = GenerateInternal(numArguments);
-      _dict[numArguments] = func;
+      s_dict[numArguments] = func;
     }
     return func;
   }

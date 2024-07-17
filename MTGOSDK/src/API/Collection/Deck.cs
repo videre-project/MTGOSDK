@@ -3,12 +3,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model;
-using DeckRegion = MTGOSDK.API.Collection.DeckRegion;
 
 
 namespace MTGOSDK.API.Collection;

@@ -12,6 +12,6 @@ public class InvocationRequest
   public ulong ObjAddress { get; set; }
   public string MethodName { get; set; }
   public string TypeFullName { get; set; }
-  public string[] GenericArgsTypeFullNames { get; set; } = new string[0];
+  public string[] GenericArgsTypeFullNames { get; set; } = [];
   public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
 }

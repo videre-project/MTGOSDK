@@ -8,7 +8,6 @@ using System.Collections.Concurrent;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 using MTGOSDK.Core.Remoting.Reflection;
 using TResetter = MTGOSDK.Core.Remoting.Reflection.LazyRemoteObject.TResetter;
 
@@ -34,7 +33,7 @@ public static class ObjectProvider
   /// Event raised when the ObjectProvider cache is reset.
   /// </summary>
   public static event EventHandler? OnReset;
-  private static object s_lock = new();
+  private static readonly object s_lock = new();
 
   /// <summary>
   /// Registers a callback to reset the instance of the given type.

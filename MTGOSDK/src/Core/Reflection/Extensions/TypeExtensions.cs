@@ -6,7 +6,6 @@
 
 using System.Reflection;
 
-using MTGOSDK.Core.Reflection.Attributes;
 using MTGOSDK.Core.Reflection.Types;
 
 

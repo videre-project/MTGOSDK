@@ -4,18 +4,15 @@
 **/
 
 using MTGOSDK.API.Collection;
-using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 
-using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play;
-using static MTGOSDK.API.Events;
 
 public abstract class Event<I> : DLRWrapper<IPlayerEvent>
 {

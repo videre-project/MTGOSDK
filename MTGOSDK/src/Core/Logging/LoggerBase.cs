@@ -3,7 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -30,7 +29,7 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   /// instances of <see cref="ILogger"/>.
   /// </summary>
   private static ILoggerFactory s_factory = NullLoggerFactory.Instance;
-  private static ILogger s_nulllogger = s_factory.CreateLogger("NullLogger");
+  private static readonly ILogger s_nulllogger = s_factory.CreateLogger("NullLogger");
 
   /// <summary>
   /// A concurrent dictionary of ILogger<T> instances mapped to their type.

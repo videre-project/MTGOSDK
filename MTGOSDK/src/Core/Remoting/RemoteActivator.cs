@@ -14,7 +14,7 @@ namespace MTGOSDK.Core.Remoting;
 public class RemoteActivator(DiverCommunicator communicator, RemoteHandle app)
 {
   public RemoteObject CreateInstance(Type t) =>
-    CreateInstance(t, new object[0]);
+    CreateInstance(t, Array.Empty<object>());
 
   public RemoteObject CreateInstance(Type t,
                                       params object[] parameters) =>

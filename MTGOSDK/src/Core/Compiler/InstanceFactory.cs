@@ -26,7 +26,7 @@ public static class InstanceFactory
     object arg3
   );
 
-  private static ConcurrentDictionary<Tuple<Type, Type, Type, Type>, CreateDelegate> cachedFuncs =
+  private static readonly ConcurrentDictionary<Tuple<Type, Type, Type, Type>, CreateDelegate> s_cachedFuncs =
     new ConcurrentDictionary<Tuple<Type, Type, Type, Type>, CreateDelegate>();
 
   public static object CreateInstance(Type type)
@@ -72,7 +72,7 @@ public static class InstanceFactory
       arg1?.GetType() ?? typeof(TypeStub),
       arg2?.GetType() ?? typeof(TypeStub));
 
-    if (cachedFuncs.TryGetValue(key, out CreateDelegate func))
+    if (s_cachedFuncs.TryGetValue(key, out CreateDelegate func))
       return func(type, arg0, arg1, arg2);
     else
       return CacheFunc(key)(type, arg0, arg1, arg2);
@@ -99,7 +99,7 @@ public static class InstanceFactory
     var callExpr = Expression.Call(generic, callParamExpr);
     var lambdaExpr = Expression.Lambda<CreateDelegate>(callExpr, paramExpr);
     var func = lambdaExpr.Compile();
-    cachedFuncs.TryAdd(key, func);
+    s_cachedFuncs.TryAdd(key, func);
 
     return func;
   }
@@ -107,12 +107,12 @@ public static class InstanceFactory
 
 public static class InstanceFactoryGeneric<TArg1, TArg2, TArg3>
 {
-  private static ConcurrentDictionary<Type, Func<TArg1, TArg2, TArg3, object>> cachedFuncs =
+  private static readonly ConcurrentDictionary<Type, Func<TArg1, TArg2, TArg3, object>> s_cachedFuncs =
     new ConcurrentDictionary<Type, Func<TArg1, TArg2, TArg3, object>>();
 
   public static object CreateInstance(Type type, TArg1 arg1, TArg2 arg2, TArg3 arg3)
   {
-    if (cachedFuncs.TryGetValue(type, out Func<TArg1, TArg2, TArg3, object> func))
+    if (s_cachedFuncs.TryGetValue(type, out Func<TArg1, TArg2, TArg3, object> func))
       return func(arg1, arg2, arg3);
     else
       return CacheFunc(type, arg1, arg2, arg3)(arg1, arg2, arg3);
@@ -144,7 +144,7 @@ public static class InstanceFactoryGeneric<TArg1, TArg2, TArg3>
     var newExpr = Expression.New(constructor, constructorParameters);
     var lambdaExpr = Expression.Lambda<Func<TArg1, TArg2, TArg3, object>>(newExpr, parameters);
     var func = lambdaExpr.Compile();
-    cachedFuncs.TryAdd(type, func);
+    s_cachedFuncs.TryAdd(type, func);
 
     return func;
   }

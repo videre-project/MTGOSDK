@@ -6,7 +6,6 @@
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
-using SetType = MTGOSDK.API.Collection.SetType;
 
 
 namespace MTGOSDK.API.Collection;
