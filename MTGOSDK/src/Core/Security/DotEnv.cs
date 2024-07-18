@@ -45,6 +45,7 @@ public static class DotEnv
       filepath = Path.Combine(Directory.GetCurrentDirectory(), filepath[3..]);
 
     // Recursively search for the .env file within each parent directory.
+    int maxSearchDepth = 25;
     while (!(File.Exists(filepath) && Path.GetFileName(filepath) == ".env"))
     {
       // If the filepath does not point to an .env file (caller path),
@@ -55,7 +56,8 @@ public static class DotEnv
       else
         filepath = Path.Combine(Path.GetDirectoryName(filepath), @"..\.env");
 
-      if (Path.GetDirectoryName(filepath) == Path.GetPathRoot(filepath))
+      if (Path.GetDirectoryName(filepath) == Path.GetPathRoot(filepath) ||
+          maxSearchDepth-- <= 0)
         throw new FileNotFoundException("Could not find .env file.");
     }
 
