@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Security;
+using System.Windows;
 
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -56,6 +57,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </summary>
   private static readonly ILoginViewModel s_loginManager =
     ObjectProvider.Get<ILoginViewModel>();
+
+  /// <summary>
+  /// The visibility of the client's login warning message.
+  /// </summary>
+  private static Visibility WarningVisibility =>
+    Cast<Visibility>(Unbind(s_loginManager).WarningVisibility);
 
   /// <summary>
   /// View model for the client's main window and scenes.
@@ -115,6 +122,15 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   public static bool IsLoggedIn => s_loginManager.IsLoggedIn;
 
   /// <summary>
+  /// Whether MTGO is currently down for maintenance or is otherwise offline.
+  /// </summary>
+  public static bool IsUnderMaintenance =>
+    Try<bool>(() =>
+      WarningVisibility == Visibility.Visible &&
+      Unbind(s_loginManager).m_maintenanceMessage != null
+    );
+
+  /// <summary>
   /// Whether the client is currently in an interactive session with a user.
   /// </summary>
   public static bool IsInteractive =>
@@ -134,6 +150,9 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// and should be instantiated once per application instance and prior to
   /// invoking with other API classes.
   /// </remarks>
+  /// <exception cref="ServerOfflineException">
+  /// Thrown when the MTGO servers are offline or under maintenance.
+  /// </exception>
   /// <exception cref="SetupFailureException">
   /// Thrown when the client process fails to finish installation or start.
   /// </exception>
@@ -159,27 +178,29 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       if (loggerFactory != null) Log.SetFactoryInstance(loggerFactory);
       Log.Debug("Running the MTGO client API factory.");
 
-      // Starts a new MTGO client process.
-      if (options.CreateProcess)
-      {
-        if (!await IsOnline())
-          throw new ExternalErrorException("MTGO servers are currently offline.");
-
-        if (!await RemoteClient.StartProcess())
-          throw new SetupFailureException("Failed to start the MTGO process.");
-      }
-      // Ensure reference types are compatible.
-      ValidateVersion(assert: false);
-
       // Sets the client's disposal policy.
       if(options.DestroyOnExit)
         RemoteClient.DestroyOnExit = true;
 
-      // Configure the remote client connection.
+      // Configure the remote client port.
       if(options.Port != null)
         RemoteClient.Port = Cast<ushort>(options.Port);
+
+      // Starts a new MTGO client process.
+      if (options.CreateProcess)
+      {
+        if (!await IsOnline())
+          throw new ServerOfflineException("MTGO servers are currently offline.");
+
+        if (!await RemoteClient.StartProcess())
+          throw new SetupFailureException("Failed to start the MTGO process.");
+      }
     })
   {
+    // Ensure that the SDK's reference types are compatible with MTGO.
+    if (ValidateVersion(assert: false))
+      Log.Debug("The SDK's reference types match MTGO v{Version}.", Version);
+
     // Initializes the client connection and starts the MTGO client API.
     RemoteClient.EnsureInitialize();
     Log.Information("Initialized the MTGO client API.");
@@ -200,6 +221,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       }
     }
 
+    // Verify that MTGO is not under maintenance or is otherwise offline.
+    if (IsUnderMaintenance)
+      throw new ServerOfflineException("MTGO is currently under maintenance.");
+
     // Verify that any existing user sessions are valid.
     if ((SessionId == Guid.Empty) && IsConnected)
       throw new VerificationException("Current user session is invalid.");
@@ -208,6 +233,13 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// Checks if the MTGO servers are online.
   /// </summary>
+  /// <returns>True if the servers are online, false otherwise.</returns>
+  /// <exception cref="HttpRequestException">
+  /// Thrown when the request to fetch server status fails.
+  /// </exception>
+  /// <exception cref="ExternalErrorException">
+  /// Thrown when no MTGO servers are found in the response.
+  /// </exception>
   public static async Task<bool> IsOnline()
   {
     using (HttpClient client = new HttpClient())
@@ -247,7 +279,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       if (assert)
         throw new VerificationException("The MTGO client is not installed.");
 
-      return true; // Otherwise assume that MTGO will be installed.
+      return true; // Otherwise assume that a new MTGO version will be installed.
     }
 
     if (Version < CompatibleVersion)
