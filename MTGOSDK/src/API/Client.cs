@@ -188,13 +188,21 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (options.StartMinimized)
       RemoteClient.MinimizeWindow();
 
+    // Closes any blocking dialogs preventing the client from logging in.
+    if (options.AcceptEULAPrompt && !IsConnected)
+    {
+      // Check if the last accepted EULA version is still the latest version.
+      var EULAVersion = SettingsService.GetSetting<Version>("LastEULAVersionNumberAgreedTo");
+      if (Version > EULAVersion)
+      {
+        Log.Debug("Accepting EULA prompt for MTGO v{Version}.", Version);
+        WindowUtilities.CloseDialogs();
+      }
+    }
+
     // Verify that any existing user sessions are valid.
     if ((SessionId == Guid.Empty) && IsConnected)
       throw new VerificationException("Current user session is invalid.");
-
-    // Closes any blocking dialogs preventing the client from logging in.
-    if (options.AcceptEULAPrompt && !IsConnected)
-      WindowUtilities.CloseDialogs();
   }
 
   /// <summary>
