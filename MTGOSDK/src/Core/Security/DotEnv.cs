@@ -80,9 +80,11 @@ public static class DotEnv
           continue;
 
         // Skip and reset cursor on newlines.
-        if (c == '\n' || c == '\r')
+        if ((c == '\n' || c == '\r') && key.Length > 0)
         {
-          s_variables.Add(key.ToString(), new SecureVariable(value));
+          string keyStr = key.ToString().Trim();
+          if (keyStr.Length > 0)
+            s_variables.Add(keyStr, new SecureVariable(value));
           key.Clear();
           value = new();
 
