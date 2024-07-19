@@ -14,6 +14,7 @@ using Newtonsoft.Json.Linq;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Users;
+using MTGOSDK.API.Settings;
 using MTGOSDK.API.Interface;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
@@ -213,7 +214,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (options.AcceptEULAPrompt && !IsConnected)
     {
       // Check if the last accepted EULA version is still the latest version.
-      var EULAVersion = SettingsService.GetSetting<Version>("LastEULAVersionNumberAgreedTo");
+      var EULAVersion = SettingsService.GetSetting<Version>(
+          Setting.LastEULAVersionNumberAgreedTo);
       if (Version > EULAVersion)
       {
         Log.Debug("Accepting EULA prompt for MTGO v{Version}.", Version);

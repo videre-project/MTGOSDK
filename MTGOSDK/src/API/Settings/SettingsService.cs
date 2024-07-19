@@ -3,20 +3,25 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections;
-
+using MTGOSDK.Core.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
 using WotC.MtGO.Client.Model.Settings;
 
 
-namespace MTGOSDK.API;
+namespace MTGOSDK.API.Settings;
 
 /// <summary>
 /// Provides access to the MTGO client's user and machine level settings.
 /// </summary>
 public static class SettingsService
 {
+  /// <summary>
+  /// Verifies that SDK's type enums match the client's settings enums.
+  /// </summary>
+  static SettingsService() =>
+    TypeValidator.ValidateEnums<Setting, SettingName>();
+
   /// <summary>
   /// The MTGO client's settings service instance.
   /// </summary>
@@ -26,14 +31,14 @@ public static class SettingsService
   /// <summary>
   /// The user level settings registered with the client.
   /// </summary>
-  private static IDictionary UserSettings =>
-    Bind<IDictionary>(Unbind(s_settingsService).m_userSettingsStorage);
+  public static DictionaryProxy<Setting, object> UserSettings =>
+    new(Unbind(s_settingsService).m_userSettingsStorage);
 
   /// <summary>
   /// The machine level settings registered with the client.
   /// </summary>
-  private static IDictionary ApplicationSettings =>
-    Bind<IDictionary>(Unbind(s_settingsService).m_machineSettingsStorage);
+  public static DictionaryProxy<Setting, object> ApplicationSettings =>
+    new(Unbind(s_settingsService).m_machineSettingsStorage);
 
   /// <summary>
   /// Gets the value of the specified application setting from the client.
@@ -47,15 +52,12 @@ public static class SettingsService
   /// <exception cref="KeyNotFoundException">
   /// Thrown when the specified key is not found in the application settings.
   /// </exception>
-  public static T GetSetting<T>(string key)
+  public static T GetSetting<T>(Setting key)
   {
-    foreach (var settings in Unbind([UserSettings, ApplicationSettings]))
+    foreach (var settings in new[] { UserSettings, ApplicationSettings })
     {
-      for (int i = 0; i < settings.Keys.Count; i++)
-      {
-        if (settings.Keys[i].ToString() == key)
-          return Cast<T>(settings.Values[i].Value);
-      }
+      if (settings.TryGetValue(key, out dynamic entry))
+        return Cast<T>(entry.Value);
     }
 
     throw new KeyNotFoundException(
@@ -73,5 +75,5 @@ public static class SettingsService
   /// <exception cref="KeyNotFoundException">
   /// Thrown when the specified key is not found in the application settings.
   /// </exception>
-  public static object GetSetting(string key) => GetSetting<object>(key);
+  public static object GetSetting(Setting key) => GetSetting<object>(key);
 }
