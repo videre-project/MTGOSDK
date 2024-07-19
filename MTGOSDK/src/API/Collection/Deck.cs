@@ -3,7 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model;

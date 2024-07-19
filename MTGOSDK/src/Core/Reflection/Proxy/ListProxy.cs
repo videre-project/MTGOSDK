@@ -6,7 +6,7 @@
 using System.Collections;
 
 
-namespace MTGOSDK.Core.Reflection;
+namespace MTGOSDK.Core.Reflection.Proxy;
 
 /// <summary>
 /// Represents a proxy object for a remote list object.
@@ -17,8 +17,9 @@ public class ListProxy<T>(
     : DLRWrapper<IList<T>>, IList<T> where T : notnull
 {
   /// <summary>
-  /// Stores an internal reference to the remote list object.
+  /// The internal reference for the binding type for the wrapped object.
   /// </summary>
+  [RuntimeInternal]
   internal override dynamic obj => Bind<IList>(list);
 
   private readonly dynamic _typeMapper = func ?? UseTypeMapper<dynamic, T>();

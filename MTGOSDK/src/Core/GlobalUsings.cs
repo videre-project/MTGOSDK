@@ -5,3 +5,4 @@
 
 global using static MTGOSDK.Core.Compiler.Extensions.CallerExtensions;
 global using MTGOSDK.Core.Reflection.Attributes;
+global using MTGOSDK.Core.Reflection.Proxy;

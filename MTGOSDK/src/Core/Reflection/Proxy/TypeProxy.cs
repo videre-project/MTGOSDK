@@ -6,7 +6,7 @@
 using ImpromptuInterface;
 
 
-namespace MTGOSDK.Core.Reflection;
+namespace MTGOSDK.Core.Reflection.Proxy;
 
 public class TypeProxy<T>(Type? @type=null) where T : class
 {

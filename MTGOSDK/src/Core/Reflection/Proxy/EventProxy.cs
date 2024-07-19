@@ -4,7 +4,7 @@
 **/
 
 
-namespace MTGOSDK.Core.Reflection;
+namespace MTGOSDK.Core.Reflection.Proxy;
 
 /// <summary>
 /// A wrapper for dynamic objects that implement events at runtime.

@@ -7,7 +7,7 @@ using System.Dynamic;
 using System.Runtime.CompilerServices;
 
 
-namespace MTGOSDK.Core.Reflection;
+namespace MTGOSDK.Core.Reflection.Proxy;
 
 /// <summary>
 /// Provides a dynamic object that can be used to wrap a static value.

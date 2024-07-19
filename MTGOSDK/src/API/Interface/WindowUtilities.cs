@@ -6,7 +6,6 @@
 using System.Windows;
 
 using MTGOSDK.Core.Logging;
-using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
 using Shiny.Core.Interfaces;

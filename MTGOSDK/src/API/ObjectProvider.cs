@@ -6,7 +6,6 @@
 using System.Collections.Concurrent;
 
 using MTGOSDK.Core.Logging;
-using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Reflection;
 using TResetter = MTGOSDK.Core.Remoting.Reflection.LazyRemoteObject.TResetter;
