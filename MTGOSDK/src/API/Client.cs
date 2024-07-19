@@ -56,14 +56,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// View model for the client's login and authentication process.
   /// </summary>
-  private static readonly ILoginViewModel s_loginManager =
-    ObjectProvider.Get<ILoginViewModel>();
-
-  /// <summary>
-  /// The visibility of the client's login warning message.
-  /// </summary>
-  private static Visibility WarningVisibility =>
-    Cast<Visibility>(Unbind(s_loginManager).WarningVisibility);
+  private static readonly dynamic s_loginManager =
+    Unbind(ObjectProvider.Get<IShellViewModel>()).m_loginViewModel;
 
   /// <summary>
   /// View model for the client's main window and scenes.
@@ -126,16 +120,13 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// Whether MTGO is currently down for maintenance or is otherwise offline.
   /// </summary>
   public static bool IsUnderMaintenance =>
-    Try<bool>(() =>
-      WarningVisibility == Visibility.Visible &&
-      Unbind(s_loginManager).m_maintenanceMessage != null
-    );
+    Cast<Visibility>(s_loginManager.WarningVisibility) == Visibility.Visible;
 
   /// <summary>
   /// Whether the client is currently in an interactive session with a user.
   /// </summary>
   public static bool IsInteractive =>
-    Unbind(s_loginManager).IsLoginEnabled == (IsLoggedIn || IsConnected);
+    s_loginManager.IsLoginEnabled == (IsLoggedIn || IsConnected);
 
   //
   // Constructors and destructors
@@ -361,28 +352,27 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       throw new InvalidOperationException("Cannot log on while logged in.");
 
     // Initializes the login manager if it has not already been initialized.
-    dynamic LoginVM = Unbind(s_loginManager);
-    if (!LoginVM.IsLoginEnabled)
+    if (!s_loginManager.IsLoginEnabled)
     {
       Log.Trace("Initializing the login manager.");
-      LoginVM.Initialize();
+      s_loginManager.Initialize();
     }
 
     // Passes the user's credentials to the MTGO client for authentication.
-    LoginVM.ScreenName = username;
-    LoginVM.Password = password.RemoteSecureString();
-    if (!LoginVM.LogOnCanExecute())
+    s_loginManager.ScreenName = username;
+    s_loginManager.Password = password.RemoteSecureString();
+    if (!s_loginManager.LogOnCanExecute())
       throw new ArgumentException("Missing one or more user credentials.");
 
     // Executes the login command and creates a new task to connect the client.
     Log.Debug("Logging in as {Username}.", username);
-    LoginVM.LogOnExecute();
-    if (!(await WaitForClientReady()))
+    s_loginManager.LogOnExecute();
+    if (!await WaitForClientReady())
       throw new TimeoutException("Failed to connect and initialize the client.");
 
     // Explicitly update state for a non-interactive session.
-    LoginVM.IsLoggedIn = true;
-    LoginVM.IsLoginEnabled = false;
+    s_loginManager.IsLoggedIn = true;
+    s_loginManager.IsLoginEnabled = false;
 
     return SessionId;
   }
@@ -407,8 +397,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Invokes logoff command and disconnects the MTGO client.
     Log.Debug("Logging off and disconnecting the client.");
     s_session.LogOff();
-    Try(() => Unbind(s_loginManager).IsLoginEnabled = true);
-    if (!(await WaitUntil(() => !IsConnected || !RemoteClient.IsInitialized ))) {
+    Try(() => s_loginManager.IsLoginEnabled = true);
+    if (!await WaitUntil(() => !IsConnected || !RemoteClient.IsInitialized )) {
       throw new TimeoutException("Failed to log off and disconnect the client.");
     }
   }
