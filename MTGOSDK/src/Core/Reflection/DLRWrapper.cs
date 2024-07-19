@@ -183,6 +183,12 @@ public class DLRWrapper<I>() where I : class
     try { return (T)obj ?? throw null; }
     catch { }
 
+    if (typeof(T) == typeof(string))
+    {
+      return (T)(obj?.ToString() ?? throw new InvalidOperationException(
+          $"Unable to cast {obj.GetType().Name} to {typeof(T).Name}."));
+    }
+
     // Test using the RuntimeBinder to implicitly cast the object.
     try { T result = obj; return result; }
     catch { }
@@ -229,7 +235,7 @@ public class DLRWrapper<I>() where I : class
     return new Func<dynamic, T2>((item) =>
       // Handle items based on an explicit constructor or fallback to casting.
       typeof(T2).GetConstructors().Length == 0
-        ? (T2)item
+        ? Cast<T2>(item)
         : Cast<T2>(Try(
           () => InstanceFactory.CreateInstance(typeof(T2), item),
           () => item)));
