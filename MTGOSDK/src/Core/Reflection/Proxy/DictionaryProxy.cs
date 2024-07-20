@@ -43,6 +43,31 @@ public class DictionaryProxy<TKey, TValue>(
   private bool CompareValues(TValue value, dynamic remoteValue) =>
     value.Equals(_valueTypeMapper(remoteValue));
 
+  internal IEnumerable<dynamic> RemoteKeys
+  {
+    get
+    {
+      var keyRef = Unbind(@base).Keys;
+      for (int i = 0; i < @base.Count; i++)
+        yield return keyRef[i];
+    }
+  }
+
+  internal bool TryGetRemoteKey(TKey key, out dynamic obj)
+  {
+    foreach (dynamic remoteKey in RemoteKeys)
+    {
+      if (CompareKeys(key, remoteKey))
+      {
+        obj = remoteKey;
+        return true;
+      }
+    }
+
+    obj = default;
+    return false;
+  }
+
   //
   // IDictionary<TKey, TValue> wrapper properties
   //
@@ -53,8 +78,22 @@ public class DictionaryProxy<TKey, TValue>(
 
   public TValue this[TKey key]
   {
-    get => _valueTypeMapper(Unbind(@base)[key]);
-    set => Unbind(@base)[key] = value;
+    get
+    {
+      if (!TryGetRemoteKey(key, out var remoteKey))
+        throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the dictionary.");
+
+      return _valueTypeMapper(Unbind(@base)[remoteKey]);
+    }
+    set
+    {
+      if (!TryGetRemoteKey(key, out var remoteKey))
+        throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the dictionary.");
+
+      Unbind(@base)[remoteKey] = value;
+    }
   }
 
   public ICollection<TKey> Keys => Map<TKey>(@base.Keys, _keyTypeMapper);
@@ -92,7 +131,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public bool TryGetValue(TKey key, out TValue value)
   {
-    foreach (dynamic remoteKey in Unbind(@base).Keys)
+    foreach (dynamic remoteKey in RemoteKeys)
     {
       if (CompareKeys(key, remoteKey))
       {
@@ -106,7 +145,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public bool Contains(KeyValuePair<TKey, TValue> item)
   {
-    foreach (dynamic remoteKey in Unbind(@base).Keys)
+    foreach (dynamic remoteKey in RemoteKeys)
     {
       if (CompareKeys(item.Key, remoteKey) &&
           CompareValues(item.Value, Unbind(@base)[remoteKey]))
@@ -117,7 +156,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
   {
-    foreach (dynamic remoteKey in Unbind(@base).Keys)
+    foreach (dynamic remoteKey in RemoteKeys)
     {
       array[arrayIndex++] = new KeyValuePair<TKey, TValue>(
         _keyTypeMapper(remoteKey),
@@ -127,7 +166,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
   {
-    foreach (dynamic remoteKey in Unbind(@base).Keys)
+    foreach (dynamic remoteKey in RemoteKeys)
     {
       yield return new KeyValuePair<TKey, TValue>(
         _keyTypeMapper(remoteKey),
