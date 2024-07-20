@@ -7,11 +7,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Commands;
-
-using MTGOSDK.Core.Exceptions;
 
 
 namespace MTGOSDK.NUnit.Threading;
