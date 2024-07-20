@@ -6,6 +6,12 @@
 using MTGOSDK.Core.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
+// Alias for the settings storage dictionary type.
+using SettingsStore = MTGOSDK.Core.Reflection.Proxy.DictionaryProxy<
+  MTGOSDK.API.Settings.Setting,
+  MTGOSDK.API.Settings.PrimitiveSetting<object>
+>;
+
 using WotC.MtGO.Client.Model.Settings;
 
 
@@ -31,21 +37,45 @@ public static class SettingsService
   /// <summary>
   /// The user level settings registered with the client.
   /// </summary>
-  public static DictionaryProxy<Setting, object> UserSettings =>
+  /// <remarks>
+  /// Reads from the client's <c>user_settings</c> file.
+  /// </remarks>
+  public static SettingsStore UserSettings =>
     new(Unbind(s_settingsService).m_userSettingsStorage);
 
   /// <summary>
   /// The machine level settings registered with the client.
   /// </summary>
-  public static DictionaryProxy<Setting, object> ApplicationSettings =>
+  /// <remarks>
+  /// Reads from the client's <c>application_settings</c> file.
+  /// </remarks>
+  public static SettingsStore ApplicationSettings =>
     new(Unbind(s_settingsService).m_machineSettingsStorage);
+
+  /// <summary>
+  /// Gets the remote key for the specified setting.
+  /// </summary>
+  /// <param name="key">The key of the setting to retrieve.</param>
+  /// <returns>The remote key of the setting.</returns>
+  /// <remarks>
+  /// This method converts the <c>Settings</c> enum to a remote reference to
+  /// the client's <c>SettingName</c> enum.
+  /// </remarks>
+  private static dynamic GetSettingKey(Setting key)
+  {
+    foreach (var settings in new[] { UserSettings, ApplicationSettings })
+    {
+      if (settings.TryGetRemoteKey(key, out dynamic remoteKey))
+        return remoteKey;
+    }
+
+    throw new KeyNotFoundException(
+        $"The key '{key}' was not found in the client settings.");
+  }
 
   /// <summary>
   /// Gets the value of the specified application setting from the client.
   /// </summary>
-  /// <remarks>
-  /// Application settings correspond to entries in the <c>SettingName</c> enum.
-  /// </remarks>
   /// <typeparam name="T">The type of the setting value.</typeparam>
   /// <param name="key">The key of the setting to retrieve.</param>
   /// <returns>The value of the setting.</returns>
@@ -54,26 +84,52 @@ public static class SettingsService
   /// </exception>
   public static T GetSetting<T>(Setting key)
   {
-    foreach (var settings in new[] { UserSettings, ApplicationSettings })
-    {
-      if (settings.TryGetValue(key, out dynamic entry))
-        return Cast<T>(entry.Value);
-    }
+    dynamic remoteKey = GetSettingKey(key);
+    var obj = Unbind(s_settingsService).GetSetting(remoteKey)
+      ?? throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the client settings.");
 
-    throw new KeyNotFoundException(
-        $"The key '{key}' was not found in the application settings.");
+    return Cast<PrimitiveSetting<T>>(obj).Value;
   }
 
   /// <summary>
   /// Gets the value of the specified application setting from the client.
   /// </summary>
-  /// <remarks>
-  /// Application settings correspond to entries in the <c>SettingName</c> enum.
-  /// </remarks>
   /// <param name="key">The key of the setting to retrieve.</param>
   /// <returns>The value of the setting.</returns>
   /// <exception cref="KeyNotFoundException">
   /// Thrown when the specified key is not found in the application settings.
   /// </exception>
-  public static object GetSetting(Setting key) => GetSetting<object>(key);
+  public static object GetSetting(Setting key) =>
+    GetSetting<object>(key);
+
+  /// <summary>
+  /// Gets the default value of the specified application setting from the client.
+  /// </summary>
+  /// <typeparam name="T">The type of the setting value.</typeparam>
+  /// <param name="key">The key of the setting to retrieve.</param>
+  /// <returns>The default value of the setting.</returns>
+  /// <exception cref="KeyNotFoundException">
+  /// Thrown when the specified key is not found in the application settings.
+  /// </exception>
+  public static T GetDefaultSetting<T>(Setting key)
+  {
+    dynamic remoteKey = GetSettingKey(key);
+    var obj = Unbind(s_settingsService).GetDefaultSetting(remoteKey)
+      ?? throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the default client settings.");
+
+    return Cast<PrimitiveSetting<T>>(obj).Value;
+  }
+
+  /// <summary>
+  /// Gets the default value of the specified application setting from the client.
+  /// </summary>
+  /// <param name="key">The key of the setting to retrieve.</param>
+  /// <returns>The default value of the setting.</returns>
+  /// <exception cref="KeyNotFoundException">
+  /// Thrown when the specified key is not found in the application settings.
+  /// </exception>
+  public static object GetDefaultSetting(Setting key) =>
+    GetDefaultSetting<object>(key);
 }
