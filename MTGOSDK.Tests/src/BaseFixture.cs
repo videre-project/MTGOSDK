@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Threading.Tasks;
+using NUnit.Framework.Interfaces;
 
 
 namespace MTGOSDK.Tests;
@@ -12,6 +12,8 @@ namespace MTGOSDK.Tests;
 [Parallelizable]
 public abstract class BaseFixture : SetupFixture.Shared
 {
+  private static bool s_stop = false;
+
   public static void Write(string message) =>
     TestContext.WriteLine(message);
 
@@ -21,12 +23,26 @@ public abstract class BaseFixture : SetupFixture.Shared
   [SetUp]
   public void Setup()
   {
-    Mark(TestContext.CurrentContext.Test.FullName);
+    if (s_stop)
+    {
+      Assert.Inconclusive("Previous test failed");
+    }
+    else
+    {
+      Mark(TestContext.CurrentContext.Test.FullName);
+    }
   }
 
   [TearDown]
   public void Cleanup()
   {
-    Mark();
+    if (TestContext.CurrentContext.Result.Outcome.Status == TestStatus.Failed)
+    {
+      s_stop = true;
+    }
+    else if (!s_stop)
+    {
+      Mark();
+    }
   }
 }
