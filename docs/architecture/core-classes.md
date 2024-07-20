@@ -2,6 +2,23 @@
 
 This document covers core classes used throughout the **MTGOSDK** library, providing a technical overview of classes that interact with the MTGO client. This document is intended for developers who are familiar with the .NET runtime and the C# programming language, and who are interested in developing applications with this SDK that interact with the MTGO client.
 
+## Table of Contents
+
+- [MTGOSDK.API.Client](#mtgosdkapiclient)
+  - [Initializing the Client](#initializing-the-client)
+  - [Using Client Events](#using-client-events)
+  - [Logging Dependency Injection](#logging-dependency-injection)
+- [MTGOSDK.Core.Remoting.RemoteClient](#mtgosdkcoreremotingremoteclient)
+  - [Fetching Remote Objects](#fetching-remote-objects)
+  - [Creating Remote Objects](#creating-remote-objects)
+  - [Remarks](#remarks)
+- [MTGOSDK.Core.Reflection.DLRWrapper](#mtgosdkcorereflectiondlrwrapper)
+  - [Type Binding and Unbinding](#type-binding-and-unbinding)
+  - [Remarks](#remarks-1)
+- [MTGOSDK.API.ObjectProvider](#mtgosdkapiobjectprovider)
+  - [Retrieving Singleton Objects](#retrieving-singleton-objects)
+  - [Caveats](#caveats)
+
 ## MTGOSDK.API.Client
 
 The [`Client`](MTGOSDK/src/API/Client.cs) class is the main entry point for interacting with the MTGO client, managing the connection to the client and the current user session. This useful for managing both passive and active connections to the client, and helps ensure that sessions are properly managed and cleaned up when the client is closed.
@@ -46,7 +63,7 @@ direction LR
   Client --> RemoteClient: Client..ctor()
 ```
 
-Under the hood, this class instantiates a [`RemoteClient`](#remoteclient) instance to manage the connection to the client, and provides a way to access remote objects in the client's memory space. This class is initialized when creating a new instance of the [`Client`](MTGOSDK/src/API/Client.cs) class or when interacting with any dynamic remote objects in the **MTGOSDK.API** namespace (refer to [`examples/GameTracker`](examples/GameTracker) for an example of implicit instantiation).
+Under the hood, this class instantiates a [`RemoteClient`](#mtgosdkcoreremotingremoteclient) instance to manage the connection to the client, and provides a way to access remote objects in the client's memory space. This class is initialized when creating a new instance of the [`Client`](MTGOSDK/src/API/Client.cs) class or when interacting with any dynamic remote objects in the **MTGOSDK.API** namespace (refer to [`examples/GameTracker`](examples/GameTracker) for an example of implicit instantiation).
 
 <!-- <table align="center">
 <tr>
@@ -242,13 +259,13 @@ dynamic objA = RemoteClient.GetInstance("assembly.namespace.Bar");
 ```
 
 > [!NOTE]
-> Objects returned this way must be handled as dynamic objects, which defer type checking to runtime. Refer to the [`DLRWrapper`](#dlrwrapper) class for a way to bind interfaces to dynamic objects in a type-safe manner.
+> Objects returned this way must be handled as dynamic objects, which defer type checking to runtime. Refer to the [`DLRWrapper`](#mtgosdkcorereflectiondlrwrapper) class for a way to bind interfaces to dynamic objects in a type-safe manner.
 
 Additionally, multiple instances of the object can be found by using `GetInstances()`, returning an enumerable collection of dynamic objects that represent the remote objects in the client's memory space.
 
 ```C#
-using MTGOSDK.Core.Reflection; // TypeProxy<T>
-using MTGOSDK.Core.Remoting;   // RemoteClient
+using MTGOSDK.Core.Reflection.Proxy; // TypeProxy<T>
+using MTGOSDK.Core.Remoting;         // RemoteClient
 
 foreach (dynamic obj in RemoteClient.GetInstances("assembly.namespace.Bar"))
 {
@@ -272,8 +289,8 @@ class Bar : IDisposable
 ```
 
 ```C#
-using MTGOSDK.Core.Reflection; // TypeProxy<T>
-using MTGOSDK.Core.Remoting;   // RemoteClient
+using MTGOSDK.Core.Reflection.Proxy; // TypeProxy<T>
+using MTGOSDK.Core.Remoting;         // RemoteClient
 
 // Invoke the first constructor with 2 arguments (A and B).
 dynamic objA = RemoteClient.CreateInstance(new TypeProxy<Bar>(), 1, "foo");
@@ -291,7 +308,7 @@ using (dynamic objC = RemoteClient.CreateInstance(new TypeProxy<Bar>(), 1, "quz"
 
 As the `RemoteClient` class is a low-level class that interacts directly with the client's memory space, it is best to limit frequent use of the `RemoteClient` class to cases where the `MTGOSDK.API` classes are not sufficient. Each method in the `RemoteClient` class must traverse the client's memory heap to retrieve or interact with objects, which can be slow and resource-intensive.
 
-As such, it is recommended to use the `MTGOSDK.API` classes or the [`ObjectProvider`](#objectprovider) class where possible, as these classes provide a more optimized code-path for interacting with remote objects in the client's memory space.
+As such, it is recommended to use the `MTGOSDK.API` classes or the [`ObjectProvider`](#mtgosdkapiobjectprovider) class where possible, as these classes provide a more optimized code-path for interacting with remote objects in the client's memory space.
 
 ## MTGOSDK.Core.Reflection.DLRWrapper
 
@@ -350,13 +367,13 @@ The `obj` property is the dynamic object that the DLRWrapper is bound to, which 
 We can observe this dynamic by creating a DLRWrapper class that binds an interface IBar to a dynamic object bar that wraps a Bar object. The DLRWrapper class will only expose the members of the IBar interface to the `@base` property, creating a compile-time error if we try to access any members that are not declared in the interface.
 
 ```C#
-interface IBar
+public interface IBar
 {
   int A;
   string B;
 }
 
-class Bar : IBar
+public class Bar : IBar
 {
   public int A { get; set; }
   public string B { get; private set; }
@@ -367,7 +384,7 @@ class Bar : IBar
 ```C#
 using MTGOSDK.Core.Reflection; // DLRWrapper<I>
 
-class Foo(dynamic bar) : DLRWrapper<Bar>
+public class Foo(dynamic bar) : DLRWrapper<Bar>
 {
   internal override IBar obj => Bind<IBar>(bar); // Bind IBar to the object.
 
@@ -386,7 +403,7 @@ To access members of the dynamic object that are not declared in the interface, 
 ```C#
 using MTGOSDK.Core.Reflection; // DLRWrapper<I>
 
-class Foo(dynamic bar) : DLRWrapper<Bar>
+public class Foo(dynamic bar) : DLRWrapper<Bar>
 {
   internal override IBar obj => Bind<IBar>(bar); // Bind IBar to the object.
 
@@ -405,7 +422,7 @@ Additionally, if we were to bind an interface to another dynamic object in the c
 ```C#
 using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
 
-static class Foo
+public static class Foo
 {
   private static dynamic bar = GetBar(); // Placeholder for demo purposes.
   private static IBar barObj = Bind<IBar>(bar);
@@ -432,14 +449,14 @@ static class Foo
 }
 ```
 
-Here the `GetBar()` method is a placeholder for a method that retrieves the dynamic object from a remote source, such as [`ObjectProvider.Get<T>`](#objectprovider) or [`RemoteClient.GetInstance()`](#remoteclient). In this example we assume that the **baz** object is another class that implements the `IBaz` interface, which is bound to the **bar** dynamic object behind the **baz** property.
+Here the `GetBar()` method is a placeholder for a method that retrieves the dynamic object from a remote source, such as [`ObjectProvider.Get<T>`](#mtgosdkapiobjectprovider) or [`RemoteClient.GetInstance()`](#mtgosdkcoreremotingremoteclient). In this example we assume that the **baz** object is another class that implements the `IBaz` interface, which is bound to the **bar** dynamic object behind the **baz** property.
 
 If the **baz** property is present in the `IBar` interface, we can simply access it and specity it's type as `IBaz` without any additional binding. This will allow us to access the public members of the **baz** object in the same way as the **bar** object.
 
 ```C#
 using MTGOSDK.Core.Reflection; // DLRWrapper<I>
 
-class Foo(dynamic bar) : DLRWrapper<Bar>
+public class Foo(dynamic bar) : DLRWrapper<Bar>
 {
   private IBar barObj => Bind<IBar>(bar); // Bind IBar to the object.
 
@@ -479,8 +496,8 @@ For MTGO reference assembly types, we can use the **ObjectProvider** class to re
 Generally we can retrieve these objects using any of the following methods:
 
 ```C#
-using MTGOSDK.API;             // ObjectProvider
-using MTGOSDK.Core.Reflection; // TypeProxy<T>
+using MTGOSDK.API;                   // ObjectProvider
+using MTGOSDK.Core.Reflection.Proxy; // TypeProxy<T>
 
 IBar objA = ObjectProvider.Get<IBar>();
 IBar objB = ObjectProvider.Get(new TypeProxy<IBar>());
@@ -490,13 +507,13 @@ IBar objC = ObjectProvider.Get("assembly.namespace.IBar");
 
 Here the [`TypeProxy<T>`](MTGOSDK/src/Core/Reflection/Proxy.cs) type is used to convert the interface type to a string containing the fully qualified name of the interface type. You can also hard-code the string value if you know the fully qualified name ahead of time.
 
-Under the hood, the `Get<T>` method will call the `Bind<T>()` method from [`DLRWrapper<T>`](#dlrwrapper), but it will also cache the object for future use. This is demonstrated in the following example, which uses the `Get<T>` method to retrieve an object of type IBar.
+Under the hood, the `Get<T>` method will call the `Bind<T>()` method from [`DLRWrapper<T>`](#mtgosdkcorereflectiondlrwrapper), but it will also cache the object for future use. This is demonstrated in the following example, which uses the `Get<T>` method to retrieve an object of type IBar.
 
 ```C#
 using MTGOSDK.API;             // ObjectProvider
 using MTGOSDK.Core.Reflection; // DLRWrapper<I>
 
-class Foo : DLRWrapper<Bar>
+public class Foo : DLRWrapper<Bar>
 {
   internal override IBar obj = ObjectProvider.Get<IBar>();
 
@@ -521,7 +538,7 @@ A possible workaround is demonstrated in the following example, which retrieves 
 using MTGOSDK.API;             // ObjectProvider
 using MTGOSDK.Core.Reflection; // DLRWrapper<I>
 
-class Foo : DLRWrapper<Bar>
+public class Foo : DLRWrapper<Bar>
 {
   internal override dynamic obj => ObjectProvider.Get<IBar>(bindTypes: false);
 
@@ -531,4 +548,27 @@ class Foo : DLRWrapper<Bar>
 }
 ```
 
-In such cases, it is best to limit the use of the [`ObjectProvider`](#objectprovider) class to objects that have well-defined interface types, or objects that are not unbound and rebound to different interface types. Objects provided by [`RemoteClient`](#remoteclient) will not attempt to bind interface types, though these objects may still face reflection cache conflicts if another instance is bound to an interface type.
+In such cases, it is best to limit the use of the [`ObjectProvider`](#mtgosdkapiobjectprovider) class to objects that have well-defined interface types, or objects that are not unbound and rebound to different interface types. Objects provided by [`RemoteClient`](#mtgosdkcoreremotingremoteclient) will not attempt to bind interface types, though these objects may still face reflection cache conflicts if another instance is bound to an interface type.
+
+It may help to provide the `DLRWrapper<T>` class with a reference to the bound type to yield more informative stack traces, as the `DLRWrapper<T>` class will attempt to resolve the type from the reflection cache if the type is not provided. Below demonstrates how to provide the `DLRWrapper<T>` class with a reference to the bound type by overriding the `type` property.
+
+```C#
+using MTGOSDK.API;             // ObjectProvider
+using MTGOSDK.Core.Reflection; // DLRWrapper<I>
+
+public class Foo(dynamic bar) : DLRWrapper<Bar>
+{
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  [RuntimeInternal]
+  internal override Type type => typeof(IBar);
+
+  /// <summary>
+  /// Stores an internal reference to the IBar object.
+  /// </summary>
+  internal override dynamic obj => Bind<IBar>(bar);
+}
+```
+
+Providing a separate reference to the underlying type will help the `DLRWrapper<T>` class ensure that the correct type is used when checking the results of type binding and unbinding operations. This will help prevent reflection cache conflicts and ensure that the correct type is used in cases that would otherwise result in a runtime exception.
