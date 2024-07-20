@@ -54,16 +54,16 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     ObjectProvider.Get<IFlsClientSession>();
 
   /// <summary>
-  /// View model for the client's login and authentication process.
-  /// </summary>
-  private static readonly dynamic s_loginManager =
-    Unbind(ObjectProvider.Get<IShellViewModel>()).m_loginViewModel;
-
-  /// <summary>
   /// View model for the client's main window and scenes.
   /// </summary>
   private static readonly IShellViewModel s_shellViewModel =
     ObjectProvider.Get<IShellViewModel>();
+
+  /// <summary>
+  /// View model for the client's login and authentication process.
+  /// </summary>
+  private static dynamic s_loginManager =>
+    Unbind(s_shellViewModel).m_loginViewModel;
 
   /// <summary>
   /// The current build version of the running MTGO client.
