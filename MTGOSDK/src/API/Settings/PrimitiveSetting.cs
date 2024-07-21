@@ -28,6 +28,9 @@ public sealed class PrimitiveSetting<T>(dynamic setting)
   /// </summary>
   internal override dynamic obj => Bind<IPrimitiveSetting<T>>(setting);
 
+  public static implicit operator PrimitiveSetting<T>(PrimitiveSetting<object> v) =>
+    new(v.obj);
+
   //
   // IPrimitiveSetting wrapper properties
   //

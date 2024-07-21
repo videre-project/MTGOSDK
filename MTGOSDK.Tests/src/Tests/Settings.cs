@@ -38,46 +38,55 @@ public class Settings : SettingsValidationFixture
     Assert.That(phaseLadder, Is.True);
   }
 
-  [TestCase(Setting.ShowBigCardWindow, true)]
-  [TestCase(Setting.AlwaysShowRedZone, false)]
-  [TestCase(Setting.ShowPhaseLadder, true)]
-  [TestCase(Setting.EnableAnimation, true)]
-  [TestCase(Setting.AutoSizeCards, true)]
-  [TestCase(Setting.ManuallyChosenBattlefieldCardSize, 50)]
-  [TestCase(Setting.RedZoneDefaultSize, 40.0)]
-  [TestCase(Setting.ShowChatInDuel, false)]
-  [TestCase(Setting.ShowLogInDuel, true)]
-  [TestCase(Setting.IgnoreChatNotifications, false)]
-  [TestCase(Setting.AlwaysDisableBluffing, false)]
-  [TestCase(Setting.AlwaysFastStacking, false)]
-  public void Test_UserSettings(Setting key, object defaultValue)
+  [TestCase<bool>(Setting.ShowBigCardWindow, true)]
+  [TestCase<bool>(Setting.AlwaysShowRedZone, false)]
+  [TestCase<bool>(Setting.ShowPhaseLadder, true)]
+  [TestCase<bool>(Setting.EnableAnimation, true)]
+  [TestCase<bool>(Setting.AutoSizeCards, true)]
+  [TestCase<int>(Setting.ManuallyChosenBattlefieldCardSize, 50)]
+  [TestCase<double>(Setting.RedZoneDefaultSize, 40.0)]
+  [TestCase<bool>(Setting.ShowChatInDuel, false)]
+  [TestCase<bool>(Setting.ShowLogInDuel, true)]
+  [TestCase<bool>(Setting.IgnoreChatNotifications, false)]
+  [TestCase<bool>(Setting.AlwaysDisableBluffing, false)]
+  [TestCase<bool>(Setting.AlwaysFastStacking, false)]
+  public void Test_UserSettings<TValue>(Setting key, object defaultValue)
+    where TValue : notnull
   {
     ValidateSetting(key, defaultValue);
     object setting = SettingsService.GetSetting(key);
 
-    PrimitiveSetting<object> entry = SettingsService.UserSettings[key];
+    PrimitiveSetting<TValue> entry = SettingsService.UserSettings[key];
+    ValidatePrimitiveSetting(key, entry);
+
     object currentValue = entry.Value;
     Assert.That(currentValue, Is.Not.Null);
     Assert.That(currentValue.GetType(), Is.EqualTo(defaultValue.GetType()));
     Assert.That(currentValue, Is.EqualTo(setting));
   }
 
-  [Test]
-  [TestCase(Setting.LastLoginName, "")]
-  [TestCase(Setting.LastEULAVersionNumberAgreedTo, "")]
-  [TestCase(Setting.ShowAccountActivationDialog, default(bool))]
-  // [TestCase(Setting.AgeGateBirthDate, "0001-01-01")]
-  [TestCase(Setting.JoinBegoneWarning, false)]
-  public void Test_ApplicationSettings(Setting key, object defaultValue)
+  [TestCase<string>(Setting.LastLoginName, "")]
+  [TestCase<string>(Setting.LastEULAVersionNumberAgreedTo, "")]
+  [TestCase<bool>(Setting.ShowAccountActivationDialog, false)]
+  [TestCase<DateTime>(Setting.AgeGateBirthDate)]
+  [TestCase<bool>(Setting.JoinBegoneWarning, false)]
+  public void Test_ApplicationSettings<TValue>(
+    Setting key,
+    object? defaultValue = null)
+      where TValue : notnull
   {
+    // Ensure that the default value is not null (and matches the value type).
+    if (defaultValue == null)
+      defaultValue = default(TValue)!;
+
     ValidateSetting(key, defaultValue);
     object setting = SettingsService.GetSetting(key);
 
-    PrimitiveSetting<object> entry = SettingsService.ApplicationSettings[key];
+    PrimitiveSetting<TValue> entry = SettingsService.ApplicationSettings[key];
     object currentValue = entry.Value;
     Assert.That(currentValue, Is.Not.Null);
     Assert.That(currentValue.GetType(),
-        Is.EqualTo(defaultValue?.GetType() ?? setting.GetType()));
+          Is.EqualTo(defaultValue?.GetType() ?? setting.GetType()));
     Assert.That(currentValue, Is.EqualTo(setting));
   }
 }
@@ -99,5 +108,24 @@ public class SettingsValidationFixture : BaseFixture
 
       Assert.That(setting.GetType(), Is.EqualTo(defaultSetting.GetType()));
     }
+  }
+
+  public void ValidatePrimitiveSetting<T>(
+    Setting key,
+    PrimitiveSetting<T> entry)
+      where T : notnull
+  {
+    Assert.That(entry, Is.Not.Null);
+
+    // IPrimitiveSetting wrapper properties
+    // Assert.That(entry.IsNull, Is.False);
+    Assert.That(entry.Value.GetType(), Is.EqualTo(typeof(T)));
+
+    // ISetting wrapper properties
+    Assert.That(entry.Id, Is.EqualTo(key));
+    Assert.That(entry.IsLoaded, Is.True);
+    Assert.That(entry.IsDefault, Is.False);
+    Assert.That(entry.IsReadOnly, Is.False);
+    Assert.That(entry.StoreLocally, Is.True);
   }
 }
