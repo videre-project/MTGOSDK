@@ -122,6 +122,10 @@ public class DLRWrapper<I>() where I : class
   /// </remarks>
   public static T Bind<T>(dynamic obj) where T : class
   {
+    // Unbind any nested interface types before re-binding the object.
+    if (TypeProxy<dynamic>.IsProxy(obj))
+      obj = Unbind(obj);
+
     return TypeProxy<T>.As(obj)
       ?? throw new InvalidOperationException(
           $"Unable to bind {obj.GetType().Name} to {typeof(T).Name}.");
@@ -137,6 +141,7 @@ public class DLRWrapper<I>() where I : class
   /// </remarks>
   public static dynamic Unbind(dynamic obj)
   {
+    // Return the object if it is not a proxy type.
     if (!TypeProxy<dynamic>.IsProxy(obj))
       return obj;
 
