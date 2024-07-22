@@ -4,8 +4,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Reflection.Types;
 
-namespace MTGOSDK.Core.Reflection.Types;
+
+namespace MTGOSDK.Core.Reflection;
 
 public class TypeComparer : IEqualityComparer<Type>
 {
