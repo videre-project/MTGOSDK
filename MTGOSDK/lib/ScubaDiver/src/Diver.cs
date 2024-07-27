@@ -20,6 +20,7 @@ using Microsoft.Diagnostics.Runtime;
 using Newtonsoft.Json;
 
 using MTGOSDK.Core.Compiler.Snapshot;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Reflection.Types;
@@ -93,23 +94,23 @@ public class Diver : IDisposable
     var manager = listener.TimeoutManager;
     manager.IdleConnection = TimeSpan.FromSeconds(5);
     listener.Start();
-    Logger.Debug($"[Diver] Listening on {listeningUrl}...");
+    Log.Debug($"[Diver] Listening on {listeningUrl}...");
 
     Task endpointsMonitor = Task.Run(CallbacksEndpointsMonitor);
     Dispatcher(listener);
-    Logger.Debug("[Diver] Stopping Callback Endpoints Monitor");
+    Log.Debug("[Diver] Stopping Callback Endpoints Monitor");
     _monitorEndpoints = false;
     try { endpointsMonitor.Wait(); } catch { }
 
-    Logger.Debug("[Diver] Closing listener");
+    Log.Debug("[Diver] Closing listener");
     listener.Stop();
     listener.Close();
-    Logger.Debug("[Diver] Closing ClrMD runtime and snapshot");
+    Log.Debug("[Diver] Closing ClrMD runtime and snapshot");
 
-    Logger.Debug("[Diver] Unpinning objects");
-    Logger.Debug("[Diver] Unpinning finished");
+    Log.Debug("[Diver] Unpinning objects");
+    Log.Debug("[Diver] Unpinning finished");
 
-    Logger.Debug("[Diver] Dispatcher returned, Start is complete.");
+    Log.Debug("[Diver] Dispatcher returned, Start is complete.");
   }
 
   private void CallbacksEndpointsMonitor()
@@ -122,12 +123,12 @@ public class Diver : IDisposable
       {
         endpoint = registeredEventHandlerInfo.Value.Endpoint;
         ReverseCommunicator reverseCommunicator = new(endpoint);
-        Logger.Debug($"[Diver] Checking if callback client at {endpoint} is alive. Token = {registeredEventHandlerInfo.Key}. Type = Event");
+        Log.Debug($"[Diver] Checking if callback client at {endpoint} is alive. Token = {registeredEventHandlerInfo.Key}. Type = Event");
         bool alive = reverseCommunicator.CheckIfAlive();
-        Logger.Debug($"[Diver] Callback client at {endpoint} (Token = {registeredEventHandlerInfo.Key}) is alive = {alive}");
+        Log.Debug($"[Diver] Callback client at {endpoint} (Token = {registeredEventHandlerInfo.Key}) is alive = {alive}");
         if (!alive)
         {
-          Logger.Debug(
+          Log.Debug(
             $"[Diver] Dead Callback client at {endpoint} (Token = {registeredEventHandlerInfo.Key}) DROPPED!");
           _remoteEventHandler.TryRemove(registeredEventHandlerInfo.Key, out _);
         }
@@ -160,7 +161,7 @@ public class Diver : IDisposable
       }
       catch (Exception ex)
       {
-        Logger.Debug("[Diver] Exception in handler: " + ex.ToString());
+        Log.Debug("[Diver] Exception in handler: " + ex.ToString());
         body = QuickError(ex.Message, ex.StackTrace);
       }
     }
@@ -195,14 +196,14 @@ public class Diver : IDisposable
         }
         catch (ObjectDisposedException)
         {
-          Logger.Debug("[Diver][ListenerCallback] Listener was disposed. Exiting.");
+          Log.Debug("[Diver][ListenerCallback] Listener was disposed. Exiting.");
           return;
         }
         catch (HttpListenerException e)
         {
           if (e.Message.StartsWith("The I/O operation has been aborted"))
           {
-            Logger.Debug($"[Diver][ListenerCallback] Listener was aborted. Exiting.");
+            Log.Debug($"[Diver][ListenerCallback] Listener was aborted. Exiting.");
             return;
           }
           throw;
@@ -214,7 +215,7 @@ public class Diver : IDisposable
         }
         catch (Exception e)
         {
-          Logger.Debug("[Diver] Task faulted! Exception: " + e.ToString());
+          Log.Debug("[Diver] Task faulted! Exception: " + e.ToString());
         }
       }
       IAsyncResult asyncOperation = listener.BeginGetContext(ListenerCallback, listener);
@@ -246,15 +247,15 @@ public class Diver : IDisposable
       }
     }
 
-    Logger.Debug("[Diver] HTTP Loop ended. Cleaning up");
+    Log.Debug("[Diver] HTTP Loop ended. Cleaning up");
 
-    Logger.Debug("[Diver] Removing all event subscriptions");
+    Log.Debug("[Diver] Removing all event subscriptions");
     foreach (RegisteredEventHandlerInfo rehi in _remoteEventHandler.Values)
     {
       rehi.EventInfo.RemoveEventHandler(rehi.Target, rehi.RegisteredProxy);
     }
     _remoteEventHandler.Clear();
-    Logger.Debug("[Diver] Removed all event subscriptions");
+    Log.Debug("[Diver] Removed all event subscriptions");
   }
   #endregion
 
@@ -279,7 +280,7 @@ public class Diver : IDisposable
     {
       _registeredPids.Add(pid);
     }
-    Logger.Debug("[Diver] New client registered. ID = " + pid);
+    Log.Debug("[Diver] New client registered. ID = " + pid);
     return "{\"status\":\"OK'\"}";
   }
   private string MakeUnregisterClientResponse(HttpListenerRequest arg)
@@ -296,7 +297,7 @@ public class Diver : IDisposable
       removed = _registeredPids.Remove(pid);
       remaining = _registeredPids.Count;
     }
-    Logger.Debug("[Diver] Client unregistered. ID = " + pid);
+    Log.Debug("[Diver] Client unregistered. ID = " + pid);
 
     UnregisterClientResponse ucResponse = new()
     {
@@ -354,10 +355,10 @@ public class Diver : IDisposable
     }
 
     string assembly = dumpRequest.Assembly;
-    //Logger.Debug($"[Diver] Trying to dump Type: {type}");
+    //Log.Debug($"[Diver] Trying to dump Type: {type}");
     if (assembly != null)
     {
-      //Logger.Debug($"[Diver] Trying to dump Type: {type}, WITH Assembly: {assembly}");
+      //Log.Debug($"[Diver] Trying to dump Type: {type}, WITH Assembly: {assembly}");
     }
     Type resolvedType = _runtime.ResolveType(type, assembly);
 
@@ -426,7 +427,7 @@ public class Diver : IDisposable
     {
       return QuickError("Missing parameter 'address'");
     }
-    Logger.Debug($"[Diver][MakeEventUnsubscribeResponse] Called! Token: {token}");
+    Log.Debug($"[Diver][MakeEventUnsubscribeResponse] Called! Token: {token}");
 
     if (_remoteEventHandler.TryRemove(token, out RegisteredEventHandlerInfo eventInfo))
     {
@@ -450,7 +451,7 @@ public class Diver : IDisposable
       return QuickError("Failed to parse either IP Address ('ip' param) or port ('port' param)");
     }
     IPEndPoint endpoint = new IPEndPoint(ipAddress, port);
-    Logger.Debug($"[Diver][Debug](RegisterEventHandler) objAddrStr={objAddr:X16}");
+    Log.Debug($"[Diver][Debug](RegisterEventHandler) objAddrStr={objAddr:X16}");
 
     // Check if we have this objects in our pinned pool
     if (!_runtime.TryGetPinnedObject(objAddr, out object target))
@@ -491,9 +492,9 @@ public class Diver : IDisposable
       var wrapperInstance = Activator.CreateInstance(wrapperType, eventHandler);
       Delegate my_delegate = Delegate.CreateDelegate(eventDelegateType, wrapperInstance, "Handle");
 
-      Logger.Debug($"[Diver] Adding event handler to event {eventName}...");
+      Log.Debug($"[Diver] Adding event handler to event {eventName}...");
       eventObj.AddEventHandler(target, my_delegate);
-      Logger.Debug($"[Diver] Added event handler to event {eventName}!");
+      Log.Debug($"[Diver] Added event handler to event {eventName}!");
 
       // Save all the registeration info so it can be removed later upon request
       _remoteEventHandler[token] = new RegisteredEventHandlerInfo()
@@ -623,7 +624,7 @@ public class Diver : IDisposable
 
   private string MakeCreateObjectResponse(HttpListenerRequest arg)
   {
-    Logger.Debug("[Diver] Got /create_object request!");
+    Log.Debug("[Diver] Got /create_object request!");
     string body = null;
     using (StreamReader sr = new(arg.InputStream))
     {
@@ -651,13 +652,13 @@ public class Diver : IDisposable
     List<object> paramsList = new();
     if (request.Parameters.Any())
     {
-      Logger.Debug($"[Diver] Ctor'ing with parameters. Count: {request.Parameters.Count}");
+      Log.Debug($"[Diver] Ctor'ing with parameters. Count: {request.Parameters.Count}");
       paramsList = request.Parameters.Select(_runtime.ParseParameterObject).ToList();
     }
     else
     {
       // No parameters.
-      Logger.Debug("[Diver] Ctor'ing without parameters");
+      Log.Debug("[Diver] Ctor'ing without parameters");
     }
 
     object createdObject = null;
@@ -705,7 +706,7 @@ public class Diver : IDisposable
 
   private string MakeInvokeResponse(HttpListenerRequest arg)
   {
-    Logger.Debug("[Diver] Got /Invoke request!");
+    Log.Debug("[Diver] Got /Invoke request!");
     string body = null;
     using (StreamReader sr = new(arg.InputStream))
     {
@@ -791,13 +792,13 @@ public class Diver : IDisposable
     List<object> paramsList = new();
     if (request.Parameters.Any())
     {
-      Logger.Debug($"[Diver] Invoking with parameters. Count: {request.Parameters.Count}");
+      Log.Debug($"[Diver] Invoking with parameters. Count: {request.Parameters.Count}");
       paramsList = request.Parameters.Select(_runtime.ParseParameterObject).ToList();
     }
     else
     {
       // No parameters.
-      Logger.Debug("[Diver] Invoking without parameters");
+      Log.Debug("[Diver] Invoking without parameters");
     }
 
     // Infer parameter types from received parameters.
@@ -812,12 +813,12 @@ public class Diver : IDisposable
     if (method == null)
     {
       Debugger.Launch();
-      Logger.Debug($"[Diver] Failed to Resolved method :/");
+      Log.Debug($"[Diver] Failed to Resolved method :/");
       return QuickError("Couldn't find method in type.");
     }
 
     string argsSummary = string.Join(", ", argumentTypes.Select(arg => arg.Name));
-    Logger.Debug($"[Diver] Resolved method: {method.Name}({argsSummary}), Containing Type: {method.DeclaringType}");
+    Log.Debug($"[Diver] Resolved method: {method.Name}({argsSummary}), Containing Type: {method.DeclaringType}");
 
     object results = null;
     try
@@ -825,7 +826,7 @@ public class Diver : IDisposable
       argsSummary = string.Join(", ", paramsList.Select(param => param?.ToString() ?? "null"));
       if (string.IsNullOrEmpty(argsSummary))
         argsSummary = "No Arguments";
-      Logger.Debug($"[Diver] Invoking {method.Name} with those args (Count: {paramsList.Count}): `{argsSummary}`");
+      Log.Debug($"[Diver] Invoking {method.Name} with those args (Count: {paramsList.Count}): `{argsSummary}`");
       results = method.Invoke(instance, paramsList.ToArray());
     }
     catch (Exception e)
@@ -879,7 +880,7 @@ public class Diver : IDisposable
   }
   private string MakeGetFieldResponse(HttpListenerRequest arg)
   {
-    Logger.Debug("[Diver] Got /get_field request!");
+    Log.Debug("[Diver] Got /get_field request!");
     string body = null;
     using (StreamReader sr = new(arg.InputStream))
     {
@@ -933,11 +934,11 @@ public class Diver : IDisposable
       if (fieldInfo == null)
       {
         Debugger.Launch();
-        Logger.Debug($"[Diver] Failed to Resolved field :/");
+        Log.Debug($"[Diver] Failed to Resolved field :/");
         return QuickError("Couldn't find field in type.");
       }
 
-      Logger.Debug($"[Diver] Resolved field: {fieldInfo.Name}, Containing Type: {fieldInfo.DeclaringType}");
+      Log.Debug($"[Diver] Resolved field: {fieldInfo.Name}, Containing Type: {fieldInfo.DeclaringType}");
 
       try
       {
@@ -977,7 +978,7 @@ public class Diver : IDisposable
   }
   private string MakeSetFieldResponse(HttpListenerRequest arg)
   {
-    Logger.Debug("[Diver] Got /set_field request!");
+    Log.Debug("[Diver] Got /set_field request!");
     string body = null;
     using (StreamReader sr = new(arg.InputStream))
     {
@@ -1051,10 +1052,10 @@ public class Diver : IDisposable
     if (fieldInfo == null)
     {
       Debugger.Launch();
-      Logger.Debug($"[Diver] Failed to Resolved field :/");
+      Log.Debug($"[Diver] Failed to Resolved field :/");
       return QuickError("Couldn't find field in type.");
     }
-    Logger.Debug($"[Diver] Resolved field: {fieldInfo.Name}, Containing Type: {fieldInfo.DeclaringType}");
+    Log.Debug($"[Diver] Resolved field: {fieldInfo.Name}, Containing Type: {fieldInfo.DeclaringType}");
 
     object results = null;
     try
@@ -1152,7 +1153,7 @@ public class Diver : IDisposable
     }
     else if (pinnedObj is IDictionary dict)
     {
-      Logger.Debug("[Diver] Array access: Object is an IDICTIONARY!");
+      Log.Debug("[Diver] Array access: Object is an IDICTIONARY!");
       item = dict[index];
     }
     else if (pinnedObj is IEnumerable enumerable)
@@ -1175,7 +1176,7 @@ public class Diver : IDisposable
     }
     else
     {
-      Logger.Debug("[Diver] Array access: Object isn't an Array, IList, IDictionary or IEnumerable");
+      Log.Debug("[Diver] Array access: Object isn't an Array, IList, IDictionary or IEnumerable");
       return QuickError("Object isn't an Array, IList, IDictionary or IEnumerable");
     }
 
@@ -1216,7 +1217,7 @@ public class Diver : IDisposable
     {
       return QuickError("Missing parameter 'address'");
     }
-    Logger.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
+    Log.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
 
     // Remove if we have this object in our pinned pool, otherwise ignore.
     _runtime.UnpinObject(objAddr);
@@ -1226,19 +1227,19 @@ public class Diver : IDisposable
 
   private string MakeDieResponse(HttpListenerRequest req)
   {
-    Logger.Debug("[Diver] Die command received");
+    Log.Debug("[Diver] Die command received");
     bool forceKill = req.QueryString.Get("force")?.ToUpper() == "TRUE";
     lock (_registeredPidsLock)
     {
       if (_registeredPids.Count > 0 && !forceKill)
       {
-        Logger.Debug("[Diver] Die command failed - More clients exist.");
+        Log.Debug("[Diver] Die command failed - More clients exist.");
         return "{\"status\":\"Error more clients remaining. You can use the force=true argument to ignore this check.\"}";
       }
     }
 
-    Logger.Debug("[Diver] Die command accepted.");
-    _stayAlive.Reset();
+    Log.Debug("[Diver] Die command accepted.");
+    // _stayAlive.Reset();
     return "{\"status\":\"Goodbye\"}";
   }
 

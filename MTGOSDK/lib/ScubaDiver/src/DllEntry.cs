@@ -6,7 +6,11 @@
 
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
+
+using MTGOSDK.Core.Logging;
+using MTGOSDK.Resources;
 
 
 namespace ScubaDiver;
@@ -22,26 +26,32 @@ public class DllEntry
       if (!ushort.TryParse((string)pwzArgument, out ushort port))
         port = (ushort)Process.GetCurrentProcess().Id;
 
+      // Configure logging options to write to a dedicated log file sink.
+      Bootstrapper.ExtractDir = "MTGOSDK";
+      FileLoggerOptions options = new()
+      {
+        LogDirectory = Path.Combine(Bootstrapper.AppDataDir, "Logs"),
+        FileName = $"Diver-{port}.log",
+        MaxAge = TimeSpan.FromDays(3),
+      };
+      LoggerBase.SetProviderInstance(new FileLoggerProvider(options));
+
       Diver _instance = new();
       _instance.Start(port);
 
-      Logger.Debug("[DiverHost] Diver finished gracefully.");
+      Log.Debug("[DiverHost] Diver finished gracefully.");
     }
     catch (Exception e)
     {
-      Logger.Debug("[DiverHost] ScubaDiver crashed.");
-      Logger.Debug(e.ToString());
-      Logger.Debug("[DiverHost] Exiting entry point in 10 seconds.");
+      Log.Debug("[DiverHost] ScubaDiver crashed.");
+      Log.Debug(e.ToString());
+      Log.Debug("[DiverHost] Exiting entry point in 10 seconds.");
       Thread.Sleep(TimeSpan.FromSeconds(10));
     }
   }
 
   public static int EntryPoint(string pwzArgument)
   {
-    // If we need to log and a debugger isn't attached to the target process
-    // then we need to allocate a console and redirect STDOUT to it.
-    Logger.RedirectConsole();
-
     // The bootstrapper is expecting to call a C# function with this signature,
     // so we use it to start a new thread to host the diver in it's own thread.
     ParameterizedThreadStart func = DiverHost;
