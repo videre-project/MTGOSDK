@@ -40,7 +40,7 @@ public static class SettingsService
   /// <remarks>
   /// Reads from the client's <c>user_settings</c> file.
   /// </remarks>
-  public static SettingsStore UserSettings =>
+  public static SettingsStore UserSettings =
     new(Unbind(s_settingsService).m_userSettingsStorage);
 
   /// <summary>
@@ -49,7 +49,7 @@ public static class SettingsService
   /// <remarks>
   /// Reads from the client's <c>application_settings</c> file.
   /// </remarks>
-  public static SettingsStore ApplicationSettings =>
+  public static SettingsStore ApplicationSettings =
     new(Unbind(s_settingsService).m_machineSettingsStorage);
 
   /// <summary>

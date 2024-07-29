@@ -48,7 +48,7 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The total number of players registered for the event.
   /// </summary>
-  public int TotalPlayers => @base.JoinedUsers.Count;
+  public int TotalPlayers => Unbind(@base.JoinedUsers).Count;
 
   /// <summary>
   /// The current players registered for the event.

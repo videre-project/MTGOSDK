@@ -67,12 +67,14 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The user who created the match.
   /// </summary>
+  [Default(null)]
   public User? Creator =>
     Optional<User>(@base.Creator?.Name);
 
   /// <summary>
   /// The user being challenged to the match.
   /// </summary>
+  [Default(null)]
   public User? ChallengeReceiver =>
     Optional<User>(@base.ChallengeReceiver?.Name);
 
@@ -84,7 +86,7 @@ public sealed class Match(dynamic match) : Event<Match>
   /// <summary>
   /// The games played in this match.
   /// </summary>
-  public IList<Game> Games => Map<IList, Game>(@base.Games);
+  public IList<Game> Games => Map<IList, Game>(@base.Games, proxy: true);
 
   /// <summary>
   /// The current game being played.

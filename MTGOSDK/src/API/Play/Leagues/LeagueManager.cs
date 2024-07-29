@@ -20,10 +20,10 @@ public static class LeagueManager
   private static readonly ILeaguesManager s_leagueManager =
     ObjectProvider.Get<ILeaguesManager>();
 
-  public static dynamic leaguesById =>
+  public static readonly dynamic leaguesById =
     Unbind(s_leagueManager).m_leaguesById;
 
-  private static dynamic leaguesByToken =>
+  private static readonly dynamic leaguesByToken =
     Unbind(s_leagueManager).m_leaguesByToken;
 
   /// <summary>

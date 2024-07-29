@@ -118,7 +118,6 @@ public class SettingsValidationFixture : BaseFixture
     Assert.That(entry, Is.Not.Null);
 
     // IPrimitiveSetting wrapper properties
-    // Assert.That(entry.IsNull, Is.False);
     Assert.That(entry.Value.GetType(), Is.EqualTo(typeof(T)));
 
     // ISetting wrapper properties

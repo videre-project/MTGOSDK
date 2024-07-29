@@ -93,8 +93,7 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// The sub-channels parented to this channel.
   /// </summary>
-  public IEnumerable<Channel> SubChannels =>
-    Map<Channel>(Unbind(@base).SubChannels);
+  public IEnumerable<Channel> SubChannels => Map<Channel>(@base.SubChannels);
 
   //
   // IChatChannel wrapper properties

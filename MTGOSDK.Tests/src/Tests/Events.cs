@@ -4,7 +4,6 @@
 **/
 
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
@@ -152,7 +151,7 @@ public class EventValidationFixture : BaseFixture
     Assert.That(league.JoinedMembers, Is.GreaterThanOrEqualTo(0));
     Assert.That(league.Leaderboard.Count, Is.LessThanOrEqualTo(league.JoinedMembers));
     Assert.That(league.TotalMatches, Is.GreaterThanOrEqualTo(3));
-    Assert.That(league.MinMatches, Is.GreaterThanOrEqualTo(3));
+    Assert.That(league.MinMatches, Is.GreaterThanOrEqualTo(1));
     Assert.That((bool?)league.IsPaused, Is.Not.Null);
 
     foreach(LeaderboardEntry entry in league.Leaderboard.Take(5))

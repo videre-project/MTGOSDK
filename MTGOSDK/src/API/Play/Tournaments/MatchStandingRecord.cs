@@ -67,7 +67,6 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The results of each game in the match.
   /// </summary>
-  [Default(null)]
   public IList<GameStandingRecord> GameStandingRecords =>
     Map<IList, GameStandingRecord?>(@base.GameStandingRecords);
 }

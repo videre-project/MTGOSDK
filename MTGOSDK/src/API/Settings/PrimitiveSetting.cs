@@ -36,11 +36,6 @@ public sealed class PrimitiveSetting<T>(dynamic setting)
   //
 
   /// <summary>
-  /// Indicates whether the setting value is null.
-  /// </summary>
-  public bool IsNull => @base.IsNull;
-
-  /// <summary>
   /// The setting's value.
   /// </summary>
   public T Value => Cast<T>(Unbind(@base).Value);
