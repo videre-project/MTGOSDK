@@ -71,10 +71,10 @@ public class DLRWrapper<I>() where I : class
   /// <summary>
   /// This is the internal reference for any dynamic or derived class objects.
   /// </summary>
+  /// <remarks>
+  /// Derived classes must override this property to capture dynamic objects.
+  /// </remarks>
   internal virtual dynamic obj =>
-    //
-    // Derived classes must override this property to capture dynamic objects.
-    //
     throw new ArgumentException(
         $"{nameof(DLRWrapper<I>)}.obj must capture a {type.Name} type.");
 
@@ -90,17 +90,15 @@ public class DLRWrapper<I>() where I : class
     get
     {
       // Attempt to extract the base object from the derived class.
-      var baseObj = Try(() => obj is DLRWrapper<I> ? obj.obj : obj);
+      dynamic baseObj = Try(() => obj is DLRWrapper<I> ? obj.obj : obj)
+        ?? throw new ArgumentException(
+            $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
 
       // Return a DynamicProxy wrapper with a default value, if present.
       if (DefaultAttribute.TryGetCallerAttribute(out var defaultAttribute))
       {
-        return new DynamicProxy(baseObj, @default: defaultAttribute.Value);
-      }
-      else if (baseObj is null)
-      {
-        throw new ArgumentException(
-            $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+        DynamicProxy proxy = new(baseObj, defaultAttribute.Value);
+        return Rebind(baseObj, proxy);
       }
 
       return baseObj;
@@ -171,6 +169,25 @@ public class DLRWrapper<I>() where I : class
       unbound_objs[i] = Unbind(objs[i]);
 
     return unbound_objs;
+  }
+
+  /// <summary>
+  /// Rebinds the given object instance to the proxied wrapper type.
+  /// </summary>
+  /// <param name="baseObj">The base object to extract the binding type.</param>
+  /// <param name="obj">The object to rebind.</param>
+  /// <returns>The rebound object.</returns>
+  public static dynamic Rebind(dynamic baseObj, dynamic obj)
+  {
+    // If the base object is a proxy type, rebind the new proxy instance.
+    if (TypeProxy<I>.IsProxy(baseObj))
+    {
+      var bindingType = new TypeProxy<I>(baseObj.GetType());
+      return TypeProxy<I>.As(obj, bindingType.Interface);
+    }
+
+    // Otherwise, no rebinding is necessary.
+    return obj;
   }
 
   /// <summary>
