@@ -6,7 +6,6 @@
 using System.Collections;
 using System.Collections.Concurrent;
 
-using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Collection;

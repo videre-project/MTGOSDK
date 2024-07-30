@@ -9,7 +9,6 @@ using System.Globalization;
 using System.Linq;
 
 using MTGOSDK.API.Collection;
-using MTGOSDK.Core.Logging;
 
 
 namespace MTGOSDK.Tests;
