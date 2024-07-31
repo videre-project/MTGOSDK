@@ -10,7 +10,9 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API.Collection;
 
-public sealed class Card(dynamic card) : CollectionItem<Card>
+public sealed class Card(dynamic card)
+    // We override the base instance with the ICardDefinition interface.
+    : CollectionItem<Card>(null)
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
@@ -51,9 +53,10 @@ public sealed class Card(dynamic card) : CollectionItem<Card>
   /// A list of the card's types.
   /// </summary>
   public IList<string> Types =>
-    ((string)Unbind(@base).Types.ToString())
-      .Split(new string[] { ", " }, StringSplitOptions.RemoveEmptyEntries)
-      .ToList();
+    Map<IList, string>(
+      Unbind(@base).Types
+        .ToString()
+        .Split(new string[] { ", " }, StringSplitOptions.RemoveEmptyEntries));
 
   /// <summary>
   /// A list of the card's subtypes.
@@ -109,6 +112,11 @@ public sealed class Card(dynamic card) : CollectionItem<Card>
   /// The card's initial battle defense.
   /// </summary>
   public string Defense => @base.InitialBattleDefense;
+
+  /// <summary>
+  /// Whether the card represents a token.
+  /// </summary>
+  public bool IsToken => @base.IsToken;
 
   //
   // ICardDefinition wrapper methods

@@ -20,6 +20,9 @@ public class Collection : CollectionValidationFixture
   {
     var collection = CollectionManager.Collection;
     ValidateCollection(collection);
+
+    // TODO: Get an ItemCollection instance of the collection in the heap
+    //       created by the `ActiveTradeViewModel.SyncCollection` method.
   }
 
   [Test]

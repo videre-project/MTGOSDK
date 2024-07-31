@@ -10,8 +10,20 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API.Collection;
 
-public abstract class CollectionItem<T> : DLRWrapper<IMagicEntityDefinition>
+public class CollectionItem<T>(dynamic collectionItem)
+    : DLRWrapper<IMagicEntityDefinition>
 {
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  [RuntimeInternal]
+  internal override Type type => typeof(IMagicEntityDefinition);
+
+  /// <summary>
+  /// Stores an internal reference to the CollectionItem object.
+  /// </summary>
+  internal override dynamic obj => collectionItem;
+
   //
   // IMagicEntityDefinition properties
   //

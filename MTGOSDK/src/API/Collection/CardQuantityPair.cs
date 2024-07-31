@@ -10,7 +10,7 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API.Collection;
 
-public sealed class CardQuantityPair(dynamic cardQuantityPair)
+public class CardQuantityPair(dynamic cardQuantityPair)
     : DLRWrapper<ICardQuantityPair>
 {
   /// <summary>
