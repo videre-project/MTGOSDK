@@ -49,6 +49,7 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <param name="obj">The object to check</param>
   /// <returns>True if the object is a proxy</returns>
   public static bool IsProxy(dynamic? obj=null) =>
+    obj != null &&
     typeof(IActLikeProxy).IsAssignableFrom(obj.GetType());
 
   //

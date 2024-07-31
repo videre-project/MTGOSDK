@@ -277,6 +277,9 @@ public class DLRWrapper<I>() where I : class
     where T1 : notnull
     where T2 : notnull
   {
+    // Guard against null objects and return an empty enumerable.
+    if (obj == null) yield break;
+
     dynamic mapper = func as dynamic ?? UseTypeMapper<T1, T2>();
 
     // Check if the object can support indexing
@@ -350,7 +353,9 @@ public class DLRWrapper<I>() where I : class
       // (i.e. when the provided type is abstract or has no constructor).
       () => new List<T>());
 
-    foreach (var item in Map<T>(innerList, func)) newList.Add(item);
+    foreach (var item in Map<T>(innerList, func))
+      newList.Add(item);
+
     return newList;
   }
 
@@ -370,7 +375,8 @@ public class DLRWrapper<I>() where I : class
   /// <returns>An enumerable collection of dynamic objects that satisfy the predicate.</returns>
   public static IEnumerable<dynamic> Filter(dynamic obj, Predicate predicate)
   {
-    foreach (var item in obj) if (predicate(item)) yield return item;
+    foreach (var item in obj)
+      if (predicate(item)) yield return item;
   }
 
   //
@@ -476,11 +482,11 @@ public class DLRWrapper<I>() where I : class
       return null;
 
     // Return null if the underlying object is null
-    if (Try<bool>(() => (obj == null || Unbind(obj) == null)))
+    if (Try<bool>(() => obj == null || Unbind(obj) == null))
       return null;
 
     if (typeof(T).IsSubclassOf(typeof(DLRWrapper<I>)))
-      return (T)(InstanceFactory.CreateInstance(typeof(T), obj));
+      return (T)InstanceFactory.CreateInstance(typeof(T), obj);
     else
       return Cast<T>(obj);
   }

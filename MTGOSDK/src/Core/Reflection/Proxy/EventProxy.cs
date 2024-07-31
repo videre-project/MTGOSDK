@@ -113,5 +113,5 @@ public class EventProxy<T>(dynamic @ref, string name)
 public class EventProxy(dynamic @ref, string name)
     : EventProxy<dynamic>(null, name)
 {
-  internal override dynamic obj => @ref;
+  internal override dynamic obj => Unbind(@ref);
 }
