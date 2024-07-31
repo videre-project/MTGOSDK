@@ -38,6 +38,7 @@
     <Reference Include="WotC.MtGO.Client.Model.Chat"      Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Core"      Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Reference" Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Trade"     Private="$(UseRef)" />
   </ItemGroup>
 
   <!--
