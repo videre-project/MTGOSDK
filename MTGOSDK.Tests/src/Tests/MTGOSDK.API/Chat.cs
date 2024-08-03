@@ -4,15 +4,12 @@
 **/
 
 using System;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 
 using MTGOSDK.API.Chat;
-using MTGOSDK.Core.Logging;
 
 
-namespace MTGOSDK.Tests;
+namespace MTGOSDK.Tests.MTGOSDK_API;
 
 public class Chat : ChatValidationFixture
 {

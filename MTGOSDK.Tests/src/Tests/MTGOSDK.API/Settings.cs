@@ -10,7 +10,7 @@ using MTGOSDK.API;
 using MTGOSDK.API.Settings;
 
 
-namespace MTGOSDK.Tests;
+namespace MTGOSDK.Tests.MTGOSDK_API;
 
 public class Settings : SettingsValidationFixture
 {

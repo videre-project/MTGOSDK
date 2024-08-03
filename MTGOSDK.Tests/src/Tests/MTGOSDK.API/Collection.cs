@@ -11,7 +11,7 @@ using System.Linq;
 using MTGOSDK.API.Collection;
 
 
-namespace MTGOSDK.Tests;
+namespace MTGOSDK.Tests.MTGOSDK_API;
 
 public class Collection : CollectionValidationFixture
 {

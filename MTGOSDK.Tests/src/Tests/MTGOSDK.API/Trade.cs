@@ -10,7 +10,7 @@ using MTGOSDK.API.Trade;
 using MTGOSDK.API.Trade.Enums;
 
 
-namespace MTGOSDK.Tests;
+namespace MTGOSDK.Tests.MTGOSDK_API;
 
 public class Trade : TradeValidationFixture
 {

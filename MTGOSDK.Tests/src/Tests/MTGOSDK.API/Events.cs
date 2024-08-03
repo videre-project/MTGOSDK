@@ -15,7 +15,7 @@ using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 
 
-namespace MTGOSDK.Tests;
+namespace MTGOSDK.Tests.MTGOSDK_API;
 
 public class Events : EventValidationFixture
 {

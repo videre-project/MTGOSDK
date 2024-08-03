@@ -12,7 +12,7 @@ using MTGOSDK.API.Users;
 using MTGOSDK.Core.Logging;
 
 
-namespace MTGOSDK.Tests;
+namespace MTGOSDK.Tests.MTGOSDK_API;
 
 public class Users : UserValidationFixture
 {
