@@ -4,11 +4,9 @@
 **/
 
 using System;
-using System.Globalization;
-using System.Linq;
-using System.Text;
 
 using Microsoft.Extensions.Logging;
+
 
 namespace MTGOSDK.NUnit.Logging;
 
@@ -19,10 +17,8 @@ public class NUnitLoggerProvider(LogLevel minLevel, DateTimeOffset? logStart)
 
   public NUnitLoggerProvider(LogLevel minLevel) : this(minLevel, null) { }
 
-  public ILogger CreateLogger(string categoryName)
-  {
-    return new NUnitLogger(categoryName, minLevel, logStart);
-  }
+  public ILogger CreateLogger(string categoryName) =>
+    new NUnitLogger(categoryName, minLevel, logStart);
 
   public void Dispose() { }
 }

@@ -9,10 +9,8 @@ using System.Threading;
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Commands;
 
-using MTGOSDK.NUnit.Threading;
 
-
-namespace MTGOSDK.NUnit;
+namespace MTGOSDK.NUnit.Attributes;
 
 /// <summary>
 /// This attribute rate limits the execution of an NUnit test method.

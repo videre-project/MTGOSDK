@@ -11,7 +11,7 @@ using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Builders;
 
 
-namespace MTGOSDK.NUnit;
+namespace MTGOSDK.NUnit.Attributes;
 
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
 public class TestCaseGenericAttribute(params object[] arguments)

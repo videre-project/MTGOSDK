@@ -10,7 +10,7 @@ using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal.Commands;
 
 
-namespace MTGOSDK.NUnit.Threading;
+namespace MTGOSDK.NUnit.Attributes;
 
 /// <summary>
 /// This attribute forces an NUnit test to execute in an STA Thread.

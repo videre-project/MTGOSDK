@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 using MTGOSDK.API;
+using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
 
 using MTGOSDK.NUnit.Logging;
@@ -16,7 +18,7 @@ using MTGOSDK.NUnit.Logging;
 namespace MTGOSDK.Tests;
 
 [SetUpFixture]
-public class SetupFixture
+public class SetupFixture : DLRWrapper<Client>
 {
   /// <summary>
   /// A shared setup fixture that can be used to interact with the global state
@@ -26,7 +28,7 @@ public class SetupFixture
   {
 #pragma warning disable CS1998
   public override async Task RunBeforeAnyTests() { }
-  public override void RunAfterAnyTests() { }
+  public override async Task RunAfterAnyTests() { }
 #pragma warning restore CS1998
   }
 
@@ -43,17 +45,20 @@ public class SetupFixture
   [OneTimeSetUp]
   public virtual async Task RunBeforeAnyTests()
   {
+    // Skip if the client has already been initialized.
+    if (Client.HasStarted && client != null) return;
+
     client = new Client(
       Client.HasStarted
         ? new ClientOptions()
         : new ClientOptions
           {
             CreateProcess = true,
+            StartMinimized = true,
             // DestroyOnExit = true,
             AcceptEULAPrompt = true
           },
-      // loggerProvider: new NUnitLoggerProvider(LogLevel.Debug)
-      loggerProvider: new NUnitLoggerProvider()
+      loggerProvider: new NUnitLoggerProvider(LogLevel.Trace)
     );
 
     if (!Client.IsConnected)
@@ -70,8 +75,22 @@ public class SetupFixture
   }
 
   [OneTimeTearDown]
-  public virtual void RunAfterAnyTests()
+  public virtual async Task RunAfterAnyTests()
   {
+    // Skip if the client has already been disposed.
+    if (!RemoteClient.IsInitialized && client == null) return;
+
+    // Set a callback to indicate when the client has been disposed.
+    bool isDisposed = false;
+    RemoteClient.Disposed += (s, e) => isDisposed = true;
+
+    // Safely dispose of the client instance.
     client.Dispose();
+    client = null!;
+    await WaitUntil(() => isDisposed);
+
+    // Verify that all remote handles have been reset.
+    Assert.That(RemoteClient.IsInitialized, Is.False);
+    Assert.That(RemoteClient.Port, Is.Null);
   }
 }
