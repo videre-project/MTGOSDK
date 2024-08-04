@@ -108,6 +108,7 @@ public class RemoteHandle : IDisposable
 
   private Process _procWithDiver;
   private readonly DomainDump _currentDomain;
+  private readonly Dictionary<string, TypesDump> _remoteTypes = new();
   private readonly RemoteObjectsCollection _remoteObjects;
 
   public Process Process => _procWithDiver;
@@ -123,6 +124,10 @@ public class RemoteHandle : IDisposable
     _communicator = communicator;
 
     _currentDomain = communicator.DumpDomain();
+    foreach (string assembly in _currentDomain.Modules)
+    {
+      _remoteTypes.Add(assembly, communicator.DumpTypes(assembly));
+    }
     _remoteObjects = new RemoteObjectsCollection(this);
     Activator = new RemoteActivator(communicator, this);
   }
@@ -184,20 +189,8 @@ public class RemoteHandle : IDisposable
   {
     foreach (string assembly in _currentDomain.Modules)
     {
-      List<TypesDump.TypeIdentifiers> typeIdentifiers;
-      // try
-      // {
-        typeIdentifiers = Communicator.DumpTypes(assembly).Types;
-      // }
-      // catch
-      // {
-      //   // TODO:
-      //   Debug.WriteLine($"[{nameof(RemoteHandle)}][{nameof(QueryTypes)}] Exception thrown when Dumping/Iterating assembly: {assembly}");
-      //   continue;
-      // }
-      foreach (TypesDump.TypeIdentifiers type in typeIdentifiers)
+      foreach (TypesDump.TypeIdentifiers type in _remoteTypes[assembly].Types)
       {
-        // TODO: Filtering should probably be done in the Diver's side
         if (type.TypeName == typeFullName)
           yield return new CandidateType(type.TypeName, assembly);
       }
@@ -307,5 +300,6 @@ public class RemoteHandle : IDisposable
 
     // Clear global type cache
     TypeResolver.Instance.ClearCache();
+    _remoteTypes.Clear();
   }
 }
