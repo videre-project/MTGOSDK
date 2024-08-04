@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Play.Tournaments;
 
 using WotC.MtGO.Client.Model.Settings;
@@ -14,7 +16,7 @@ namespace MTGOSDK.API.Play.History;
 /// Represents a historical tournament.
 /// </summary>
 public sealed class HistoricalTournament(dynamic historicalTournament)
-    : HistoricalItem<IHistoricalTournament, Tournament>
+    : HistoricalItem<Tournament>
 {
   /// <summary>
   /// Stores an internal reference to the IHistoricalTournament object.
@@ -29,8 +31,8 @@ public sealed class HistoricalTournament(dynamic historicalTournament)
   /// <summary>
   /// The player's matches in the tournament.
   /// </summary>
-  public IEnumerable<HistoricalMatch> Matches =>
-    Map<HistoricalMatch>(Unbind(@base).Matches);
+  public IList<HistoricalMatch> Matches =>
+    Map<IList, HistoricalMatch>(Unbind(@base).Matches);
 
   /// <summary>
   /// The number of matches won by the player.

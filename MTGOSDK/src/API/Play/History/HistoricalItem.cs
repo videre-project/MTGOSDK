@@ -14,16 +14,15 @@ namespace MTGOSDK.API.Play.History;
 /// <summary>
 /// Represents a historical game, match, or tournament.
 /// </summary>
-public abstract class HistoricalItem<I, T> : DLRWrapper<IHistoricalItem>
+public abstract class HistoricalItem<T> : DLRWrapper<IHistoricalItem>
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
   [RuntimeInternal]
-  internal override Type type => typeof(I);
+  internal override Type type => typeof(T);
 
-  public sealed class Default(dynamic historicalItem)
-      : HistoricalItem<IHistoricalItem, dynamic>
+  public sealed class Default(dynamic historicalItem) : HistoricalItem<dynamic>
   {
     /// <summary>
     /// Stores an internal reference to the IHistoricalItem object.

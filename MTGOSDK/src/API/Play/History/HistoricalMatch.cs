@@ -16,7 +16,7 @@ namespace MTGOSDK.API.Play.History;
 /// Represents a historical match.
 /// </summary>
 public sealed class HistoricalMatch(dynamic historicalMatch)
-    : HistoricalItem<IHistoricalMatch, Match>
+    : HistoricalItem<Match>
 {
   /// <summary>
   /// Stores an internal reference to the IHistoricalMatch object.
@@ -30,7 +30,7 @@ public sealed class HistoricalMatch(dynamic historicalMatch)
   /// <summary>
   /// The opponents' player objects.
   /// </summary>
-  public IEnumerable<User> Opponents => Map<User>(@base.Opponents);
+  public IList<User> Opponents => Map<IList, User>(Unbind(@base).Opponents);
 
   /// <summary>
   /// The game IDs for the match.
@@ -46,4 +46,9 @@ public sealed class HistoricalMatch(dynamic historicalMatch)
   /// The number of games lost by the player.
   /// </summary>
   public int GameLosses => @base.GameLosses;
+
+  /// <summary>
+  /// The number of games tied by the player.
+  /// </summary>
+  public int GameTies => GameIds.Count - (GameWins + GameLosses);
 }

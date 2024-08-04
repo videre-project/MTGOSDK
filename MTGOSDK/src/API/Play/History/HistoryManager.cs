@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
 using System.IO;
 using System.Text;
 using System.Security.Cryptography;
@@ -41,18 +42,15 @@ public static class HistoryManager
   /// <summary>
   /// The historical items (games, matches, tournaments, etc.) for the player.
   /// </summary>
-  public static IEnumerable<dynamic> Items =>
-    Map<dynamic>(
-      s_gameHistoryManager.Items,
-      new Func<dynamic, dynamic>(item => CastHistoricalItem(item))
-    );
+  public static IList<dynamic> Items =>
+    Map<IList, dynamic>(s_gameHistoryManager.Items, HistoricalEventFactory);
 
   /// <summary>
   /// Reads the local game history for a given player.
   /// </summary>
   /// <param name="username">The username of the player.</param>
   /// <returns>The player's game history.</returns>
-  public static IEnumerable<dynamic> ReadGameHistory(string? username = null)
+  public static IList<dynamic> ReadGameHistory(string? username = null)
   {
     // Default to the current user if no username is provided.
     if (string.IsNullOrEmpty(username))
@@ -70,10 +68,7 @@ public static class HistoryManager
     );
     Log.Debug("Read {Count} items from game history.", gameHistory.Count);
 
-    return Map<dynamic>(
-      gameHistory,
-      new Func<dynamic, dynamic>(item => CastHistoricalItem(item))
-    );
+    return Map<IList, dynamic>(gameHistory, HistoricalEventFactory);
   }
 
   /// <summary>
@@ -81,7 +76,7 @@ public static class HistoryManager
   /// </summary>
   /// <param name="filePath">The path to the 'mtgo_game_history' file.</param>
   /// <returns>The merged game history collection.</returns>
-  public static IEnumerable<dynamic> MergeGameHistory(string filePath)
+  public static IList<dynamic> MergeGameHistory(string filePath)
   {
     // Find the user data directory for the current MTGO installation.
     string currentDataDir = new Glob(Path.Combine(
@@ -99,10 +94,10 @@ public static class HistoryManager
     //
     string mockUsername = $"$RESERVED-{Guid.NewGuid().ToString("N")[..7]}";
     byte[] usernameBytes = Encoding.ASCII.GetBytes(mockUsername.ToLower());
-    byte[] usernameBytesHash = MD5.Create().ComputeHash(usernameBytes);
+    byte[] usernameBytesHash = MD5.HashData(usernameBytes);
 
     string temporaryDataDir = Path.Combine(currentDataDir,
-      String.Join("", usernameBytesHash.Select(b => b.ToString("X2")))
+      string.Join("", usernameBytesHash.Select(b => b.ToString("X2")))
     );
 
     // Copy the game history file to the temporary user directory.
@@ -137,6 +132,8 @@ public static class HistoryManager
   // IHistoricalItem helper methods
   //
 
+  internal static Func<dynamic, dynamic> HistoricalEventFactory = new(CastHistoricalItem);
+
   /// <summary>
   /// Cast a historical item to it's implementation subclass.
   /// </summary>
@@ -149,24 +146,32 @@ public static class HistoryManager
   /// </exception>
   private static dynamic CastHistoricalItem(dynamic item)
   {
-    dynamic historicalObject;
-    var type = item.GetType().Name;
-    switch (type)
+    // Extract the underlying historical item from any proxied objects.
+    dynamic historicalItem = Unbind(item);
+
+    // If an event is provided as a FilterableEvent, extract the actual event.
+    string eventType = historicalItem.GetType().Name;
+    dynamic eventObject = eventType.StartsWith("Filterable")
+      ? historicalItem.PlayerEvent
+      : historicalItem;
+
+    switch (eventType)
     {
       case "HistoricalItem":
-        historicalObject = new HistoricalItem<IHistoricalItem, dynamic>.Default(item);
+        eventObject = new HistoricalItem<dynamic>.Default(eventObject);
         break;
       case "HistoricalMatch":
-        historicalObject = new HistoricalMatch(item);
+        eventObject = new HistoricalMatch(eventObject);
         break;
       case "HistoricalTournament":
-        historicalObject = new HistoricalTournament(item);
+        eventObject = new HistoricalTournament(eventObject);
         break;
       default:
-        throw new NotImplementedException($"Unsupported type: {type}");
+        throw new NotImplementedException($"Unsupported type: {eventType}");
     }
-    Log.Trace("Creating new {Type} object for item id #{HistoricalObject}", historicalObject.GetType(), historicalObject.Id);
+    Log.Trace("Creating new {Type} object for item id #{HistoricalObject}",
+        eventObject.GetType(), eventObject.Id);
 
-    return historicalObject;
+    return eventObject;
   }
 }
