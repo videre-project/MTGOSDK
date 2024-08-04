@@ -248,6 +248,11 @@ public class DLRWrapper<I>() where I : class
   }
 
   /// <summary>
+  /// A type wrapper function method for safely executing a lambda function.
+  /// </summary>
+  public static Func<dynamic> Lambda(Func<dynamic> lambda) => lambda;
+
+  /// <summary>
   /// Provides a default type mapper based on the given reference type.
   /// </summary>
   internal static dynamic UseTypeMapper<T1, T2>()
@@ -331,7 +336,7 @@ public class DLRWrapper<I>() where I : class
       () => Cast<IList>(obj),
       () => Cast<IList>(Unbind(obj)),
       // Otherwise fallback to a dynamic list implementation.
-      () => obj as dynamic);
+      () => obj);
 
     // // If `T` is a DLRWrapper type and the object is a dynamic remote object,
     // // then simply return a ListProxy instance wrapping the remote list object.

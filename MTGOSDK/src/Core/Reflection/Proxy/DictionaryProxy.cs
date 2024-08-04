@@ -4,7 +4,6 @@
 **/
 
 using System.Collections;
-using System.Collections.Generic;
 
 
 namespace MTGOSDK.Core.Reflection.Proxy;
@@ -38,24 +37,29 @@ public class DictionaryProxy<TKey, TValue>(
     valueMapper ?? UseTypeMapper<dynamic, TValue>();
 
   private bool CompareKeys(TKey key, dynamic remoteKey) =>
-    key.Equals(_keyTypeMapper(remoteKey));
+    Try(() => key.ToString() == remoteKey.ToString(),
+        () => key.Equals(_keyTypeMapper(remoteKey)));
 
   private bool CompareValues(TValue value, dynamic remoteValue) =>
-    value.Equals(_valueTypeMapper(remoteValue));
+    Try(() => value.ToString() == remoteValue.ToString(),
+        () => value.Equals(_valueTypeMapper(remoteValue)));
 
-  internal IEnumerable<dynamic> RemoteKeys
-  {
-    get
-    {
-      var keyRef = Unbind(@base).Keys;
-      for (int i = 0; i < @base.Count; i++)
-        yield return keyRef[i];
-    }
-  }
+  /// <summary>
+  /// Stores a reference to the remote keys collection.
+  /// </summary>
+  private readonly dynamic _remoteKeys =
+    Map<IList, dynamic>(
+      Try(Lambda(() => Unbind(dictionary).Keys), dictionary.Keys));
 
-  internal bool TryGetRemoteKey(TKey key, out dynamic obj)
+  /// <summary>
+  /// Attempts to get the remote key object for the given key.
+  /// </summary>
+  /// <param name="key">The key to search for.</param>
+  /// <param name="obj">The remote key object if found.</param>
+  /// <returns>True if the key was found; otherwise, false.</returns>
+  public bool TryGetRemoteKey(TKey key, out dynamic obj)
   {
-    foreach (dynamic remoteKey in RemoteKeys)
+    foreach (dynamic remoteKey in _remoteKeys)
     {
       if (CompareKeys(key, remoteKey))
       {
@@ -131,7 +135,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public bool TryGetValue(TKey key, out TValue value)
   {
-    foreach (dynamic remoteKey in RemoteKeys)
+    foreach (dynamic remoteKey in _remoteKeys)
     {
       if (CompareKeys(key, remoteKey))
       {
@@ -145,7 +149,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public bool Contains(KeyValuePair<TKey, TValue> item)
   {
-    foreach (dynamic remoteKey in RemoteKeys)
+    foreach (dynamic remoteKey in _remoteKeys)
     {
       if (CompareKeys(item.Key, remoteKey) &&
           CompareValues(item.Value, Unbind(@base)[remoteKey]))
@@ -156,7 +160,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
   {
-    foreach (dynamic remoteKey in RemoteKeys)
+    foreach (dynamic remoteKey in _remoteKeys)
     {
       array[arrayIndex++] = new KeyValuePair<TKey, TValue>(
         _keyTypeMapper(remoteKey),
@@ -166,7 +170,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
   {
-    foreach (dynamic remoteKey in RemoteKeys)
+    foreach (dynamic remoteKey in _remoteKeys)
     {
       yield return new KeyValuePair<TKey, TValue>(
         _keyTypeMapper(remoteKey),
