@@ -261,7 +261,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </summary>
   /// <param name="assert">Whether to throw an exception on failure.</param>
   /// <returns>Whether the client version is compatible.</returns>
-  /// <exception cref="VerificationException">
+  /// <exception cref="ValidationException">
   /// Thrown when the client version is not compatible with the SDK.
   /// </exception>
   public static bool ValidateVersion(bool assert = false)
@@ -270,7 +270,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (!File.Exists(AppRefPath) || Try(() => MTGOAppDirectory) == null)
     {
       if (assert)
-        throw new VerificationException("The MTGO client is not installed.");
+        throw new ValidationException("The MTGO client is not installed.");
 
       return true; // Otherwise assume that a new MTGO version will be installed.
     }
@@ -284,7 +284,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     else return true;
 
     if (assert)
-      throw new VerificationException(
+      throw new ValidationException(
         "The MTGO client version is not compatible with the SDK.");
 
     return false;

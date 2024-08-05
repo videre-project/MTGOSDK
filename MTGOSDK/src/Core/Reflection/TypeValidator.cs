@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Security;
+using MTGOSDK.Core.Exceptions;
 
 
 namespace MTGOSDK.Core.Reflection;
@@ -20,7 +20,7 @@ public static class TypeValidator
   /// <typeparam name="TEnum2">The second enum type to validate.</typeparam>
   /// <param name="assert">Whether to throw an exception if the enums do not match.</param>
   /// <returns>True if the enums match; otherwise, false.</returns>
-  /// <exception cref="VerificationException">
+  /// <exception cref="ValidationException">
   /// Thrown when the enums do not match.
   /// </exception>
   public static bool ValidateEnums<TEnum1, TEnum2>(bool assert = true)
@@ -32,7 +32,7 @@ public static class TypeValidator
         Enum.GetNames(typeof(TEnum2)).Length)
     {
       if (assert)
-        throw new VerificationException(
+        throw new ValidationException(
             $"The {typeof(TEnum2)} enum does not match the {typeof(TEnum1)} enum.");
 
       return false;
@@ -43,7 +43,7 @@ public static class TypeValidator
       if (!Enum.TryParse<TEnum1>(name, out _))
       {
         if (assert)
-          throw new VerificationException(
+          throw new ValidationException(
               $"The Setting enum is missing a '{name}' value.");
 
           return false;
