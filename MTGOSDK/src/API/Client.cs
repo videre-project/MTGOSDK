@@ -4,6 +4,7 @@
 **/
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.Http;
 using System.Security;
@@ -264,6 +265,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <exception cref="ValidationException">
   /// Thrown when the client version is not compatible with the SDK.
   /// </exception>
+  [ExcludeFromCodeCoverage]
   public static bool ValidateVersion(bool assert = false)
   {
     // Verify that an existing MTGO installation is present.
