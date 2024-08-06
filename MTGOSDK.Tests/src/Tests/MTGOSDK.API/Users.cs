@@ -22,6 +22,8 @@ public class Users : UserValidationFixture
     // Ensure that invalid inputs do not create invalid user objects.
     Assert.Throws<ArgumentException>(() => new User(-1));
     Assert.Throws<ArgumentException>(() => new User("$_Invalid"));
+    Assert.Throws<ArgumentException>(() => new User(""));
+    Assert.Throws<ArgumentException>(() => new User(null!));
 
     // This method cannot differentiate between invalid and offline users,
     // so we will avoid creating an invalid user object with both fields to
@@ -35,11 +37,11 @@ public class Users : UserValidationFixture
 
     // If an invalid id is given, assert that the user object is invalid.
     Assert.Throws<ArgumentException>(() => new User(userId, "$_Invalid"));
+    Assert.Throws<ArgumentException>(() => new User(userId, ""));
+    Assert.Throws<ArgumentException>(() => new User(userId, null!));
     Assert.Throws<ArgumentException>(() => new User(-1, username));
-#pragma warning disable CS8625
-    Assert.Throws<ArgumentException>(() => new User(-1, null));
-#pragma warning restore CS8625
     Assert.Throws<ArgumentException>(() => new User(-1, ""));
+    Assert.Throws<ArgumentException>(() => new User(-1, null!));
   }
 
   [Test]

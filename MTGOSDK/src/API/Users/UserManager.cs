@@ -144,15 +144,23 @@ public static class UserManager
   /// <exception cref="ArgumentException">
   /// Thrown if the user does not exist.
   /// </exception>
-  public static User GetUser(string name) =>
-    UserIds.TryGetValue(name, out var id) &&
-    Users.TryGetValue(id, out var user)
-      ? user
-      : GetUser(
-          GetUserId(name)
-            ?? throw new ArgumentException($"User '{name}' cannot be found."),
-          name
+  public static User GetUser(string name)
+  {
+    if (string.IsNullOrEmpty(name))
+      throw new ArgumentException("Username cannot be null or empty.");
+
+    // Attempt to retrieve the user object from the local cache.
+    if (UserIds.TryGetValue(name, out var id) &&
+        Users.TryGetValue(id, out var user))
+      return user;
+
+    // Otherwise, retrieve the user object from the client's UserManager.
+    return GetUser(
+      GetUserId(name)
+        ?? throw new ArgumentException($"User '{name}' cannot be found."),
+      name
     );
+  }
 
   /// <summary>
   /// Retrieves a user object from the client's UserManager.
@@ -162,14 +170,22 @@ public static class UserManager
   /// <exception cref="ArgumentException">
   /// Thrown if the user does not exist.
   /// </exception>
-  public static User GetUser(int id) =>
-    Users.TryGetValue(id, out var user)
-      ? user
-      : GetUser(
-          id,
-          GetUserName(id)
-            ?? throw new ArgumentException($"User #{id} cannot be found.")
-        );
+  public static User GetUser(int id)
+  {
+    if (id <= 0)
+      throw new ArgumentException($"User ID must be greater than zero. Got {id}.");
+
+    // Attempt to retrieve the user object from the local cache.
+    if (Users.TryGetValue(id, out var user))
+      return user;
+
+    // Otherwise, retrieve the user object from the client's UserManager.
+    return GetUser(
+      id,
+      GetUserName(id)
+        ?? throw new ArgumentException($"User #{id} cannot be found.")
+    );
+  }
 
   /// <summary>
   /// Retrieves the username of a user by their Login ID.
