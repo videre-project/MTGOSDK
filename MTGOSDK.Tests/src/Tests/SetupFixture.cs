@@ -27,8 +27,8 @@ public class SetupFixture : DLRWrapper<Client>
   public class Shared : SetupFixture
   {
 #pragma warning disable CS1998
-  public override async Task RunBeforeAnyTests() { }
-  public override async Task RunAfterAnyTests() { }
+    public override async Task RunBeforeAnyTests() { }
+    public override async Task RunAfterAnyTests() { }
 #pragma warning restore CS1998
   }
 
@@ -42,7 +42,7 @@ public class SetupFixture : DLRWrapper<Client>
   /// </remarks>
   public static Client client { get; private set; } = null!;
 
-  [OneTimeSetUp]
+  [OneTimeSetUp, CancelAfter(/* 5 min */ 300_000)]
   public virtual async Task RunBeforeAnyTests()
   {
     // Skip if the client has already been initialized.
