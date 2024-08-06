@@ -54,14 +54,21 @@ public class RemoteMethodInfo(
         .Select(pi => new RemoteParameterInfo(pi))
         .Cast<ParameterInfo>()
         .ToArray())
-  {}
+  { }
 
   public RemoteMethodInfo(
     Type declaringType,
     Type returnType,
     string name,
     Type[] genericArgs,
-    ParameterInfo[] paramInfos) : this(declaringType, new LazyRemoteTypeResolver(returnType), name, genericArgs, paramInfos)
+    ParameterInfo[] paramInfos)
+      : this(declaringType,
+             // If the return type cannot be lazy resolved, it is likely a boxed
+             // value type, so we default to object to distinguish it from null.
+             new LazyRemoteTypeResolver(returnType ?? typeof(object)),
+             name,
+             genericArgs,
+             paramInfos)
   { }
 
   public override MethodInfo MakeGenericMethod(params Type[] typeArguments)

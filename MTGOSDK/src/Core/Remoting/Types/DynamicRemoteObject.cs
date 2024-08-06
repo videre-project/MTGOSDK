@@ -62,7 +62,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     {
       List<RemoteMethodInfo> overloads = _methods;
 
-      // Narrow down (hopefuly to one) overload with the same amount of types
+      // Narrow down (hopefully to one) overload with the same amount of types
       // TODO: We COULD possibly check the args types (local ones,
       // RemoteObjects, DynamicObjects, ...) if we still have multiple results
       overloads = overloads
@@ -79,13 +79,14 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           {
             throw new ArgumentException("A non-generic method was intialized with some generic arguments.");
           }
-          else if (overload.IsGenericMethod
-              && overload.GetGenericArguments().Length != _genericArguments.Length)
+          else if (overload.IsGenericMethod &&
+                   overload.GetGenericArguments().Length != _genericArguments.Length)
           {
             throw new ArgumentException("Wrong number of generic arguments was provided to a generic method");
           }
+
           // OK, invoking with generic arguments
-          result = overloads.Single()
+          result = overload
             .MakeGenericMethod(_genericArguments)
             .Invoke(_parent.__ro, args);
         }
@@ -355,9 +356,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   private DynamicRemoteMethod GetMethodProxy(string name)
   {
-    var methods = __members
-      .Where(member => member.Name == name)
-      .ToArray();
+    var methods = __members.Where(member => member.Name == name).ToArray();
     if (methods.Length == 0)
     {
       throw new Exception($"Method \"{name}\" wasn't found in the members of type {__type.Name}.");
