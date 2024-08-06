@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.Core.Reflection;
+using System.Diagnostics.CodeAnalysis;
 
 // using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Settings;
@@ -22,6 +23,7 @@ public abstract class HistoricalItem<T> : DLRWrapper<IHistoricalItem>
   [RuntimeInternal]
   internal override Type type => typeof(T);
 
+  [ExcludeFromCodeCoverage]
   public sealed class Default(dynamic historicalItem) : HistoricalItem<dynamic>
   {
     /// <summary>

@@ -5,7 +5,7 @@
 
 using System;
 using System.Linq;
-
+using MTGOSDK.API;
 using MTGOSDK.API.Play.History;
 using MTGOSDK.Core.Logging;
 
@@ -21,6 +21,20 @@ public class History : HistoryValidationFixture
   {
     Assert.That(HistoryManager.HistoryLoaded, Is.True);
     Assert.That(HistoryManager.Items, Is.Not.Empty);
+    Log.Debug("History items: {0}", HistoryManager.Items.Count);
+
+    var gameHistory = HistoryManager.ReadGameHistory();
+    Assert.That(gameHistory, Is.Not.Empty);
+    Assert.That(gameHistory.Count,
+        Is.GreaterThanOrEqualTo(HistoryManager.Items.Count));
+
+    var gameHistory2 = HistoryManager.ReadGameHistory(Client.CurrentUser.Name);
+    Assert.That(gameHistory2, Is.Not.Empty);
+    Assert.That(gameHistory2.Count,
+        Is.GreaterThanOrEqualTo(HistoryManager.Items.Count));
+    Assert.That(gameHistory2.Count, Is.EqualTo(gameHistory.Count));
+
+    // var gameHistory3 = HistoryManager.MergeGameHistory
   }
 
   // [RateLimit(ms: 300)]

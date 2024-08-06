@@ -14,6 +14,7 @@ using MTGOSDK.Win32.FileSystem;
 
 using WotC.MtGO.Client.Model.Core;
 using WotC.MtGO.Client.Model.Settings;
+using WotC.MtGO.Client.Model.Settings.History;
 
 
 namespace MTGOSDK.API.Play.History;
@@ -33,6 +34,15 @@ public static class HistoryManager
   /// </summary>
   private static readonly IGameHistoryManager s_gameHistoryManager =
     ObjectProvider.Get<ISettings>().GameHistoryManager;
+
+  private static readonly IIsoSerializer s_isoSerializer =
+    ObjectProvider.Get<IIsoSerializer>();
+
+  private static readonly dynamic s_loadIsoConfiguration =
+    Unbind(s_gameHistoryManager).LoadIsoConfigration;
+
+  private static readonly dynamic s_serializationBinder =
+    RemoteClient.CreateInstance(new TypeProxy<HistoricalSerializationBinder>());
 
   /// <summary>
   /// Whether or not the game history has been loaded by the client.
@@ -57,15 +67,14 @@ public static class HistoryManager
       username = Client.CurrentUser.Name;
     Log.Information("Reading game history for {Username}.", username);
 
-    var serializer = ObjectProvider.Get<IIsoSerializer>(bindTypes: false);
-    dynamic serializationBinder = RemoteClient.CreateInstance(
-      "WotC.MtGO.Client.Model.Settings.History.HistoricalSerializationBinder");
-
-    var gameHistory = serializer.ReadBinaryObject<dynamic>("mtgo_game_history",
-      Unbind(s_gameHistoryManager).LoadIsoConfigration,
+    object binaryObject = Unbind(s_isoSerializer).ReadBinaryObject<dynamic>(
+      "mtgo_game_history",
+      s_loadIsoConfiguration,
       username,
-      serializationBinder
+      s_serializationBinder
     );
+
+    var gameHistory = Bind<IList<IHistoricalItem>>(binaryObject);
     Log.Debug("Read {Count} items from game history.", gameHistory.Count);
 
     return Map<IList, dynamic>(gameHistory, HistoricalEventFactory);
@@ -75,8 +84,9 @@ public static class HistoryManager
   /// Merges a game history file with the current game history collection.
   /// </summary>
   /// <param name="filePath">The path to the 'mtgo_game_history' file.</param>
+  /// <param name="save">Whether or not to save the merged collection.</param>
   /// <returns>The merged game history collection.</returns>
-  public static IList<dynamic> MergeGameHistory(string filePath)
+  public static IList<dynamic> MergeGameHistory(string filePath, bool save = true)
   {
     // Find the user data directory for the current MTGO installation.
     string currentDataDir = new Glob(Path.Combine(
@@ -122,7 +132,7 @@ public static class HistoryManager
     }
 
     // Save the merged game history collection to the local game history file.
-    Unbind(s_gameHistoryManager).SaveItems();
+    if (save) Unbind(s_gameHistoryManager).SaveItems();
     Unbind(s_gameHistoryManager).HistoryLoaded |= true;
 
     return Items;
