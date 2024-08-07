@@ -353,13 +353,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
 
-    // Initializes the login manager if it has not already been initialized.
-    if (!s_loginManager.IsLoginEnabled)
-    {
-      Log.Trace("Initializing the login manager.");
-      s_loginManager.Initialize();
-    }
-
     // Passes the user's credentials to the MTGO client for authentication.
     s_loginManager.ScreenName = username;
     s_loginManager.Password = password.RemoteSecureString();
