@@ -21,14 +21,15 @@ public class Users : UserValidationFixture
   {
     // Ensure that invalid inputs do not create invalid user objects.
     Assert.Throws<ArgumentException>(() => new User(-1));
-    Assert.Throws<ArgumentException>(() => new User("$_Invalid"));
     Assert.Throws<ArgumentException>(() => new User(""));
     Assert.Throws<ArgumentException>(() => new User(null!));
+    Assert.Throws<KeyNotFoundException>(() => new User(1));
+    Assert.Throws<KeyNotFoundException>(() => new User("$_Invalid"));
 
     // This method cannot differentiate between invalid and offline users,
     // so we will avoid creating an invalid user object with both fields to
     // prevent subsequent test runs from retrieving a cached user object.
-    // Assert.Throws<ArgumentException>(() => new User(-1, "$_Invalid"));
+    // Assert.Throws<ArgumentException>(() => new User(1, "$_Invalid"));
 
     // Retrieve the current user for testing (as they are logged-in).
     int userId = Client.CurrentUser.Id;

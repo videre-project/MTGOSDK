@@ -139,6 +139,8 @@ public static class UserManager
   /// <param name="name">The display name of the user.</param>
   /// <returns>A new User object.</returns>
   /// <exception cref="ArgumentException">
+  /// Thrown if the username is null or empty.
+  /// <exception cref="KeyNotFoundException">
   /// Thrown if the user does not exist.
   /// </exception>
   public static User GetUser(string name)
@@ -147,16 +149,21 @@ public static class UserManager
       throw new ArgumentException("Username cannot be null or empty.");
 
     // Attempt to retrieve the user object from the local cache.
-    if (UserIds.TryGetValue(name, out var id) &&
-        Users.TryGetValue(id, out var user))
-      return user;
+    if (UserIds.TryGetValue(name, out var id))
+    {
+      // If a user ID is cached, retrieve the user object from the local cache.
+      if (Users.TryGetValue(id, out var user))
+        return user;
+    }
+    else
+    {
+      // If the user ID is not cached, retrieve it from the client's UserManager.
+      id = GetUserId(name)
+        ?? throw new KeyNotFoundException($"User '{name}' cannot be found.");
+    }
 
     // Otherwise, retrieve the user object from the client's UserManager.
-    return GetUser(
-      GetUserId(name)
-        ?? throw new ArgumentException($"User '{name}' cannot be found."),
-      name
-    );
+    return GetUser(id, name);
   }
 
   /// <summary>
@@ -165,23 +172,25 @@ public static class UserManager
   /// <param name="id">The Login ID of the user.</param>
   /// <returns>A new User object.</returns>
   /// <exception cref="ArgumentException">
+  /// Thrown if the user ID is less than or equal to zero.
+  /// </exception>
+  /// <exception cref="KeyNotFoundException">
   /// Thrown if the user does not exist.
   /// </exception>
   public static User GetUser(int id)
   {
     if (id <= 0)
-      throw new ArgumentException($"User ID must be greater than zero. Got {id}.");
+      throw new ArgumentException("User ID must be greater than 0.");
 
     // Attempt to retrieve the user object from the local cache.
     if (Users.TryGetValue(id, out var user))
       return user;
 
+    string name = GetUserName(id)
+      ?? throw new KeyNotFoundException($"User #{id} cannot be found.");
+
     // Otherwise, retrieve the user object from the client's UserManager.
-    return GetUser(
-      id,
-      GetUserName(id)
-        ?? throw new ArgumentException($"User #{id} cannot be found.")
-    );
+    return GetUser(id, name);
   }
 
   /// <summary>

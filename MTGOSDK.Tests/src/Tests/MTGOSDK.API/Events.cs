@@ -4,6 +4,7 @@
 **/
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
@@ -22,6 +23,7 @@ public class Events : EventValidationFixture
   [Test]
   public void Test_EventManager()
   {
+    // Grab a random event type to test
     dynamic eventObj = null!;
     using (Log.Suppress())
     {
@@ -30,6 +32,18 @@ public class Events : EventValidationFixture
         .Skip(new Random().Next(0, 50))
         .First();
     }
+    Assert.That(eventObj, Is.Not.Null);
+    ValidateEvent(eventObj);
+
+    // Ensure that invalid event ids or tokens throw an exception
+    Assert.That(() => EventManager.GetEvent(-1),
+                Throws.TypeOf<ArgumentException>());
+    Assert.That(() => EventManager.GetEvent(1),
+                Throws.TypeOf<KeyNotFoundException>());
+    Assert.That(() => EventManager.GetEvent(Guid.Empty),
+                Throws.TypeOf<ArgumentException>());
+    Assert.That(() => EventManager.GetEvent(new Guid("00000000-0000-0000-0000-000000000001")),
+                Throws.TypeOf<KeyNotFoundException>());
   }
 
   [RateLimit(ms: 300)]
