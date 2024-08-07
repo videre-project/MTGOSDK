@@ -182,6 +182,10 @@ public class EventValidationFixture : BaseFixture
     Assert.That(league.TrophyCount, Is.GreaterThanOrEqualTo(0));
     Assert.That((bool?)league.IsWaitingInMatchQueue, Is.Not.Null);
     Assert.That((bool?)league.IsMatchInProgress, Is.Not.Null);
+
+    // Check if the league is in the client's list of open leagues
+    Assert.That(LeagueManager.OpenLeagues,
+      league.ActiveDeck != null ? Has.Member(league) : Has.No.Member(league));
   }
 
   public void ValidateTournament(Tournament tournament)

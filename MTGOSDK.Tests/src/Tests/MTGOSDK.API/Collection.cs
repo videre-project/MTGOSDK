@@ -73,6 +73,7 @@ public class Collection : CollectionValidationFixture
     Assert.That(card.Toughness, Is.EqualTo("6"));
     Assert.That(card.Loyalty, Is.EqualTo("0"));
     Assert.That(card.Defense, Is.EqualTo("0"));
+    Assert.That(card.IsToken, Is.False);
 
     Assert.That((string)card, Is.EqualTo("Colossal Dreadmaw"));
     Assert.That((int)card, Is.EqualTo(65378));
@@ -83,6 +84,9 @@ public class Collection : CollectionValidationFixture
   {
     var set = CollectionManager.GetSet("XLN");
     ValidateSet(set);
+
+    // Ensure that invalid set codes do not return an invalid set object
+    Assert.Throws<KeyNotFoundException>(() => CollectionManager.GetSet("$_NA"));
   }
 }
 
@@ -189,6 +193,10 @@ public class CollectionValidationFixture : BaseFixture
         ValidateCardQuantityPair(pair);
       }
     }
+
+    // Test special zones/cases that vendor friendly names on the client.
+    int commandZoneCount = deck.GetRegionCount(DeckRegion.CommandZone);
+    Assert.That(commandZoneCount, Is.GreaterThanOrEqualTo(0));
   }
 
   public void ValidateCard(Card card)
