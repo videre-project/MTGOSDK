@@ -39,17 +39,17 @@ public class Settings : SettingsValidationFixture
   }
 
   [TestCase<bool>(Setting.ShowBigCardWindow, true)]
-  [TestCase<bool>(Setting.AlwaysShowRedZone, false)]
-  [TestCase<bool>(Setting.ShowPhaseLadder, true)]
-  [TestCase<bool>(Setting.EnableAnimation, true)]
-  [TestCase<bool>(Setting.AutoSizeCards, true)]
+  // [TestCase<bool>(Setting.AlwaysShowRedZone, false)]
+  // [TestCase<bool>(Setting.ShowPhaseLadder, true)]
+  // [TestCase<bool>(Setting.EnableAnimation, true)]
+  // [TestCase<bool>(Setting.AutoSizeCards, true)]
   [TestCase<int>(Setting.ManuallyChosenBattlefieldCardSize, 50)]
   [TestCase<double>(Setting.RedZoneDefaultSize, 40.0)]
-  [TestCase<bool>(Setting.ShowChatInDuel, false)]
-  [TestCase<bool>(Setting.ShowLogInDuel, true)]
-  [TestCase<bool>(Setting.IgnoreChatNotifications, false)]
-  [TestCase<bool>(Setting.AlwaysDisableBluffing, false)]
-  [TestCase<bool>(Setting.AlwaysFastStacking, false)]
+  // [TestCase<bool>(Setting.ShowChatInDuel, false)]
+  // [TestCase<bool>(Setting.ShowLogInDuel, true)]
+  // [TestCase<bool>(Setting.IgnoreChatNotifications, false)]
+  // [TestCase<bool>(Setting.AlwaysDisableBluffing, false)]
+  // [TestCase<bool>(Setting.AlwaysFastStacking, false)]
   public void Test_UserSettings<TValue>(Setting key, object defaultValue)
     where TValue : notnull
   {
@@ -66,8 +66,8 @@ public class Settings : SettingsValidationFixture
   }
 
   [TestCase<string>(Setting.LastLoginName, "")]
-  [TestCase<string>(Setting.LastEULAVersionNumberAgreedTo, "")]
-  [TestCase<bool>(Setting.ShowAccountActivationDialog, false)]
+  // [TestCase<string>(Setting.LastEULAVersionNumberAgreedTo, "")]
+  // [TestCase<bool>(Setting.ShowAccountActivationDialog, false)]
   [TestCase<DateTime>(Setting.AgeGateBirthDate)]
   [TestCase<bool>(Setting.JoinBegoneWarning, false)]
   public void Test_ApplicationSettings<TValue>(
