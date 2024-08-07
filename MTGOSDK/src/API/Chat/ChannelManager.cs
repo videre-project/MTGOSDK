@@ -5,7 +5,7 @@
 
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Reflection;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model.Chat;

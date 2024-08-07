@@ -8,7 +8,7 @@ using WotC.MtGO.Client.Model.Play;
 
 namespace MTGOSDK.API.Play.Leagues;
 using static MTGOSDK.API.Events;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class LeagueManager
 {

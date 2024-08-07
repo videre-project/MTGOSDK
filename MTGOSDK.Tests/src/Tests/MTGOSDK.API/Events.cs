@@ -22,7 +22,6 @@ public class Events : EventValidationFixture
   [Test]
   public void Test_EventManager()
   {
-#pragma warning disable CS8600
     dynamic eventObj = null!;
     using (Log.Suppress())
     {
@@ -31,7 +30,6 @@ public class Events : EventValidationFixture
         .Skip(new Random().Next(0, 50))
         .First();
     }
-#pragma warning restore CS8600
   }
 
   [RateLimit(ms: 300)]
@@ -69,7 +67,6 @@ public class EventValidationFixture : BaseFixture
 {
   public T GetEvent<T>(Func<dynamic, bool> predicate = null!) where T : class
   {
-#pragma warning disable CS8600
     dynamic eventObj = null!;
     switch (typeof(T).Name)
     {
@@ -88,7 +85,6 @@ public class EventValidationFixture : BaseFixture
         break;
     }
     Log.Trace("Retrieved event: {0}", eventObj);
-#pragma warning restore CS8600
 
     return (eventObj as T)!;
   }
@@ -316,7 +312,11 @@ public class EventValidationFixture : BaseFixture
     Assert.That((bool?)format.IsCardLegal(card), Is.Not.Null);
     Assert.That((bool?)format.IsCardRestricted(card), Is.Not.Null);
     Assert.That((bool?)format.IsCardBanned(card), Is.Not.Null);
-    // format.IsDeckLegal(Deck deck);
+
+    // Verify that any deck passed does not return an error.
+    var deck = CollectionManager.Decks.First();
+    Assert.That((bool?)format.IsDeckLegal(deck), Is.Not.Null);
+
     Assert.That((string?)format, Is.EqualTo(format.Name));
   }
 }

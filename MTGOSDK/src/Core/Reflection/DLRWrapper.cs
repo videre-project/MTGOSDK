@@ -14,96 +14,17 @@ namespace MTGOSDK.Core.Reflection;
 /// A wrapper for dynamic objects that implement an interface at runtime.
 /// </summary>
 /// <remarks>
-/// This class exposes an overrideable <see cref="obj"/> property that is used
-/// to capture dynamic objects passed to the constructor. This allows derived
-/// classes to defer dynamic dispatching of class constructors until after
-/// the base class constructor has completed, exposing the captured dynamic
-/// object to derived classes with the <see cref="@base"/> property.
+/// This class represents a generic interface for <see cref="DLRWrapper{I}"/>
+/// objects that capture dynamic remote objects at runtime. It provides a way
+/// to defer dynamic dispatching when comparing or casting their underlying
+/// captured dynamic objects.
 /// </remarks>
-/// <typeparam name="I">The interface type to wrap.</typeparam>
-public class DLRWrapper<I>() where I : class
+public abstract class DLRWrapper
 {
-  /// <summary>
-  /// Initializes a new instance of the <see cref="DLRWrapper{I}"/> class,
-  /// executing any given factory function before any derived class constructors.
-  /// </summary>
-  /// <param name="factory">The factory function to execute (optional).</param>
-  /// <remarks>
-  /// This constructor is used to allow derived classes to override the type or
-  /// instance of the wrapped object in a more flexible manner than possible
-  /// through generics or constructor parameters.
-  /// </remarks>
-  public DLRWrapper(Action? factory = null) : this()
-  {
-    // Initializes a given factory function, if provided.
-    if (factory != null) factory.Invoke();
-  }
-
-  /// <summary>
-  /// Initializes a new instance of the <see cref="DLRWrapper{I}"/> class,
-  /// executing any given factory function before any derived class constructors.
-  /// </summary>
-  /// <param name="factory">The factory function to execute (optional).</param>
-  /// <remarks>
-  /// This constructor is used to allow derived classes to override the type or
-  /// instance of the wrapped object in a more flexible manner than possible
-  /// through generics or constructor parameters.
-  /// </remarks>
-  public DLRWrapper(Func<Task>? factory = null) : this()
-  {
-    // Initializes a given factory function, if provided.
-    if (factory != null) factory.Invoke().Wait();
-  }
-
-  //
-  // Internal fields and properties for the wrapped object.
-  //
-
-  /// <summary>
-  /// The internal reference for the binding type for the wrapped object.
-  /// </summary>
-  /// <remarks>
-  /// This is used to allow derived classes to override the type of the
-  /// wrapped object in a more flexible manner than using generics.
-  /// </remarks>
-  internal virtual Type type => typeof(I);
-
-  /// <summary>
-  /// This is the internal reference for any dynamic or derived class objects.
-  /// </summary>
-  /// <remarks>
-  /// Derived classes must override this property to capture dynamic objects.
-  /// </remarks>
-  internal virtual dynamic obj =>
-    throw new ArgumentException(
-        $"{nameof(DLRWrapper<I>)}.obj must capture a {type.Name} type.");
-
   /// <summary>
   /// Internal unwrapped reference to any captured dynamic objects.
   /// </summary>
-  /// <remarks>
-  /// This is used to extract dynamic objects passed from any derived
-  /// classes, deferring any dynamic dispatching of class constructors.
-  /// </remarks>
-  internal virtual dynamic @base
-  {
-    get
-    {
-      // Attempt to extract the base object from the derived class.
-      dynamic baseObj = Try(() => obj is DLRWrapper<I> ? obj.obj : obj)
-        ?? throw new ArgumentException(
-            $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
-
-      // Return a DynamicProxy wrapper with a default value, if present.
-      if (DefaultAttribute.TryGetCallerAttribute(out var defaultAttribute))
-      {
-        DynamicProxy proxy = new(baseObj, defaultAttribute.Value);
-        return Rebind(baseObj, proxy);
-      }
-
-      return baseObj;
-    }
-  }
+  internal virtual dynamic @base { get; }
 
   //
   // Wrapper methods for type casting and dynamic dispatching.
@@ -128,6 +49,16 @@ public class DLRWrapper<I>() where I : class
       ?? throw new InvalidOperationException(
           $"Unable to bind {obj.GetType().Name} to {typeof(T).Name}.");
   }
+
+  /// <summary>
+  /// Unbinds the given object instance from the proxied wrapper type.
+  /// </summary>
+  /// <param name="obj">The object to unbind.</param>
+  /// <returns>The unbound object.</returns>
+  /// <remarks>
+  /// This method is a wrapper for the <see cref="Proxy{T}.From"/> method.
+  /// </remarks>
+  public static dynamic Unbind(DLRWrapper obj) => Unbind(obj.@base);
 
   /// <summary>
   /// Unbinds the given object instance from the proxied wrapper type.
@@ -180,10 +111,10 @@ public class DLRWrapper<I>() where I : class
   public static dynamic Rebind(dynamic baseObj, dynamic obj)
   {
     // If the base object is a proxy type, rebind the new proxy instance.
-    if (TypeProxy<I>.IsProxy(baseObj))
+    if (TypeProxy<dynamic>.IsProxy(baseObj))
     {
-      var bindingType = new TypeProxy<I>(baseObj.GetType());
-      return TypeProxy<I>.As(obj, bindingType.Interface);
+      var bindingType = new TypeProxy<dynamic>(baseObj.GetType());
+      return TypeProxy<dynamic>.As(obj, bindingType.Interface);
     }
 
     // Otherwise, no rebinding is necessary.
@@ -449,7 +380,7 @@ public class DLRWrapper<I>() where I : class
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
   public static T Retry<T>(
     Func<T> lambda,
-    T @default = default(T),
+    T @default = default,
     int delay = 100,
     int retries = 3,
     bool raise = false)
@@ -490,7 +421,7 @@ public class DLRWrapper<I>() where I : class
     if (Try<bool>(() => obj == null || Unbind(obj) == null))
       return null;
 
-    if (typeof(T).IsSubclassOf(typeof(DLRWrapper<I>)))
+    if (typeof(T).IsSubclassOf(typeof(DLRWrapper)))
       return (T)InstanceFactory.CreateInstance(typeof(T), obj);
     else
       return Cast<T>(obj);
@@ -506,5 +437,101 @@ public class DLRWrapper<I>() where I : class
   public static T? Optional<T>(dynamic obj, bool condition) where T : class
   {
     return Optional<T>(obj, new Func<dynamic, bool>(_ => condition));
+  }
+}
+
+/// <summary>
+/// A wrapper for dynamic objects that implement an interface at runtime.
+/// </summary>
+/// <remarks>
+/// This class exposes an overrideable <see cref="obj"/> property that is used
+/// to capture dynamic objects passed to the constructor. This allows derived
+/// classes to defer dynamic dispatching of class constructors until after
+/// the base class constructor has completed, exposing the captured dynamic
+/// object to derived classes with the <see cref="@base"/> property.
+/// </remarks>
+/// <typeparam name="I">The interface type to wrap.</typeparam>
+public class DLRWrapper<I>(): DLRWrapper where I : class
+{
+  /// <summary>
+  /// Initializes a new instance of the <see cref="DLRWrapper{I}"/> class,
+  /// executing any given factory function before any derived class constructors.
+  /// </summary>
+  /// <param name="factory">The factory function to execute (optional).</param>
+  /// <remarks>
+  /// This constructor is used to allow derived classes to override the type or
+  /// instance of the wrapped object in a more flexible manner than possible
+  /// through generics or constructor parameters.
+  /// </remarks>
+  public DLRWrapper(Action? factory = null) : this()
+  {
+    // Initializes a given factory function, if provided.
+    if (factory != null) factory.Invoke();
+  }
+
+  /// <summary>
+  /// Initializes a new instance of the <see cref="DLRWrapper{I}"/> class,
+  /// executing any given factory function before any derived class constructors.
+  /// </summary>
+  /// <param name="factory">The factory function to execute (optional).</param>
+  /// <remarks>
+  /// This constructor is used to allow derived classes to override the type or
+  /// instance of the wrapped object in a more flexible manner than possible
+  /// through generics or constructor parameters.
+  /// </remarks>
+  public DLRWrapper(Func<Task>? factory = null) : this()
+  {
+    // Initializes a given factory function, if provided.
+    if (factory != null) factory.Invoke().Wait();
+  }
+
+  //
+  // Internal fields and properties for the wrapped object.
+  //
+
+  /// <summary>
+  /// The internal reference for the binding type for the wrapped object.
+  /// </summary>
+  /// <remarks>
+  /// This is used to allow derived classes to override the type of the
+  /// wrapped object in a more flexible manner than using generics.
+  /// </remarks>
+  internal virtual Type type => typeof(I);
+
+  /// <summary>
+  /// This is the internal reference for any dynamic or derived class objects.
+  /// </summary>
+  /// <remarks>
+  /// Derived classes must override this property to capture dynamic objects.
+  /// </remarks>
+  internal virtual dynamic obj =>
+    throw new ArgumentException(
+        $"{nameof(DLRWrapper<I>)}.obj must capture a {type.Name} type.");
+
+  /// <summary>
+  /// Internal unwrapped reference to any captured dynamic objects.
+  /// </summary>
+  /// <remarks>
+  /// This is used to extract dynamic objects passed from any derived
+  /// classes, deferring any dynamic dispatching of class constructors.
+  /// </remarks>
+  internal override dynamic @base
+  {
+    get
+    {
+      // Attempt to extract the base object from the derived class.
+      dynamic baseObj = Try(() => obj is DLRWrapper<I> ? obj.obj : obj)
+        ?? throw new ArgumentException(
+            $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+
+      // Return a DynamicProxy wrapper with a default value, if present.
+      if (DefaultAttribute.TryGetCallerAttribute(out var defaultAttribute))
+      {
+        DynamicProxy proxy = new(baseObj, defaultAttribute.Value);
+        return Rebind(baseObj, proxy);
+      }
+
+      return baseObj;
+    }
   }
 }

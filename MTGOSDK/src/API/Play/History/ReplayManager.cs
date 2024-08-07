@@ -10,7 +10,7 @@ using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.History;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 /// <summary>
 /// Manager for the player's game replays.

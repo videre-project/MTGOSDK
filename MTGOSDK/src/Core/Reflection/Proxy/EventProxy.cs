@@ -23,7 +23,7 @@ public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
   /// <summary>
  	/// Stores an internal reference to the eventhandler instance.
  	/// </summary>
-  internal override dynamic obj => @ref;
+  internal override dynamic obj => Unbind(@ref);
 
   /// <summary>
   /// Internal reference to the remote object handle.
@@ -99,7 +99,7 @@ public class EventProxy<I, T>(dynamic @ref, string name) : DLRWrapper<I>
 public class EventProxy<T>(dynamic @ref, string name)
     : EventProxy<dynamic, T>(null, name) where T : class
 {
-  internal override dynamic obj => @ref;
+  internal override dynamic obj => Unbind(@ref);
 }
 
 /// <summary>

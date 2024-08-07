@@ -5,7 +5,7 @@
 
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Logging;
-using MTGOSDK.Core.Reflection;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Shiny.Core;
 using Shiny.Core.Interfaces;
@@ -25,10 +25,16 @@ public static class ToastViewManager
   //
 
   /// <summary>
+  /// Manages the client's connection and user session information.
+  /// </summary>
+  private static readonly ISession s_session =
+    ObjectProvider.Get<ISession>();
+
+  /// <summary>
   /// Global manager for creating and displaying toast modal on the client.
   /// </summary>
-  private static readonly dynamic s_toastViewManager =
-    ObjectProvider.Get<IToastViewManager>(bindTypes: false);
+  private static readonly IToastViewManager s_toastViewManager =
+    ObjectProvider.Get<IToastViewManager>();
 
   /// <summary>
   /// The main shell view currently displayed on the primary MTGO window.
@@ -51,7 +57,7 @@ public static class ToastViewManager
     //     s_toastController.WindowsShell.StartProcess(uri.OriginalString));
 
     using var viewModel = new BasicToastViewModel(title, text, relatedView);
-    s_toastViewManager.DisplayToast(viewModel.@base);
+    Unbind(s_toastViewManager).DisplayToast(Unbind(viewModel));
   }
 
   //
@@ -59,5 +65,5 @@ public static class ToastViewManager
   //
 
   public static EventProxy<ToastEventArgs> ToastRequested =
-    new(/* ISession */ ObjectProvider.Get<ISession>(), nameof(ToastRequested));
+    new(/* ISession */ s_session, nameof(ToastRequested));
 }

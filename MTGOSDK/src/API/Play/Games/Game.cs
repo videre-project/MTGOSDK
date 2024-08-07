@@ -139,7 +139,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   /// <param name="action">The game action to execute.</param>
   public void ExecuteAction(GameAction action) =>
-    @base.ExecuteAction(action.@base); // TODO: Verify method is callable.
+    Unbind(@base).ExecuteAction(Unbind(action));
 
   /// <summary>
   /// Gets a game card by the given card ID.
@@ -163,7 +163,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </exception>
   public GameZone GetGameZone(GamePlayer player, CardZone cardZone)
   {
-    var playerKey = Unbind(player.@base);
+    var playerKey = Unbind(player);
     foreach(var zoneEntry in Unbind(@base).m_playerZones[playerKey])
     {
       // Cast enum values to avoid boxing remote key values

@@ -3,8 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.Core.Reflection;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 // Alias for the settings storage dictionary type.
 using SettingsStore = MTGOSDK.Core.Reflection.Proxy.DictionaryProxy<
@@ -22,12 +21,6 @@ namespace MTGOSDK.API.Settings;
 /// </summary>
 public static class SettingsService
 {
-  /// <summary>
-  /// Verifies that SDK's type enums match the client's settings enums.
-  /// </summary>
-  static SettingsService() =>
-    TypeValidator.ValidateEnums<Setting, SettingName>();
-
   /// <summary>
   /// The MTGO client's settings service instance.
   /// </summary>

@@ -18,7 +18,7 @@ using WotC.MtGO.Client.Model.Settings.History;
 
 
 namespace MTGOSDK.API.Play.History;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 /// <summary>
 /// Manager for the player's game history.
@@ -126,7 +126,7 @@ public static class HistoryManager
       // Skip items that are already in the current game history collection.
       if (itemIds.Contains(item.Id)) continue;
 
-      dynamic dro = Unbind(item.@base); // Get handle to the remote object.
+      dynamic dro = Unbind(item); // Get handle to the remote object.
       if (dro.LoadSuccessfull)
         Unbind(s_gameHistoryManager).Items.Add(dro);
     }

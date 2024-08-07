@@ -13,7 +13,7 @@ using WotC.MtGO.Client.Model.Core;
 
 
 namespace MTGOSDK.API.Collection;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class CollectionManager
 {

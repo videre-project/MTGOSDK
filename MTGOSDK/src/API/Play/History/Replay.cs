@@ -46,8 +46,8 @@ public class Replay(dynamic replayEvent) : DLRWrapper<IReplayGameEvent>
   // IReplayGameEvent wrapper methods
   //
 
-  // public void ExecuteAction(GameAction action) =>
-  //   Unbind(@base).ExecuteAction(action.@base);
+  public void ExecuteAction(GameAction action) =>
+    Unbind(@base).ExecuteAction(action);
 
   //
   // IReplayGameEvent wrapper events

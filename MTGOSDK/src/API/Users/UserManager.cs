@@ -17,7 +17,7 @@ using WotC.MtGO.Client.Model.Core;
 
 namespace MTGOSDK.API.Users;
 using static MTGOSDK.API.Events;
-using static MTGOSDK.Core.Reflection.DLRWrapper<IUser>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class UserManager
 {

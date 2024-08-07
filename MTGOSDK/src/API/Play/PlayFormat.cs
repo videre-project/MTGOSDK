@@ -6,7 +6,6 @@
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Reflection;
 
-using WotC.MTGO.Common;
 using WotC.MtGO.Client.Model.Collection;
 
 
@@ -28,6 +27,9 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// </summary>
   public string Name => @base.Name;
 
+  /// <summary>
+  /// The code of the format (i.e. "CSTANDARD", "CMODERN", ... "DMRDDST5DN").
+  /// </summary>
   public string Code => @base.Code;
 
   /// <summary>
@@ -67,15 +69,6 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   public IEnumerable<Card> BasicLands =>
     Map<Card>(Unbind(@base).BasicLandsForDeckbuilding);
 
-  /// <summary>
-  /// The internal enum flag value of the format game structure.
-  /// </summary>
-  /// <remarks>
-  /// Requires the <c>WotC.MTGO.Common</c> reference assembly.
-  /// </remarks>
-  public GameStructureEnum EnumValue =>
-    Cast<GameStructureEnum>(Unbind(@base).GameStructureEnum);
-
   //
   // IPlayFormat wrapper methods
   //
@@ -110,14 +103,14 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <param name="deck">The deck object to check.</param>
   /// <returns>True if the deck is legal, false otherwise.</returns>
   public bool IsDeckLegal(Deck deck) =>
-    @base.CheckDeckLegality(/* IDeck */ deck.@base, /* ignoreErrors */ false);
+    Unbind(@base).CheckDeckLegality(/* IDeck */ Unbind(deck), false);
 
-  // /// <summary>
-  // /// Sets the format legality of a deck to match this format.
-  // /// </summary>
-  // /// <param name="deck">The deck object to set legality on.</param>
-  // public void SetDeckLegality(Deck deck) =>
-  //   @base.SetDeckLegality(/* IDeck */ deck.@base);
+  /// <summary>
+  /// Sets the format legality of a deck to match this format.
+  /// </summary>
+  /// <param name="deck">The deck object to set legality on.</param>
+  public void SetDeckLegality(Deck deck) =>
+    Unbind(@base).SetDeckLegality(/* IDeck */ Unbind(deck));
 
   public override string ToString() => this.Name;
 

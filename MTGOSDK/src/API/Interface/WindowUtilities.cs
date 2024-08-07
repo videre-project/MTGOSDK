@@ -12,7 +12,7 @@ using Shiny.Core.Interfaces;
 
 
 namespace MTGOSDK.API.Interface;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 /// <summary>
 /// Manages the client's WPF Windows and window utilities

@@ -420,7 +420,7 @@ public class Foo(dynamic bar) : DLRWrapper<Bar>
 Additionally, if we were to bind an interface to another dynamic object in the class, we can use the interface as the type for the dynamic object. We can see this in the following example, which encapsulates the dynamic object in roughly the same way as the previous example using a static class.
 
 ```C#
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class Foo
 {

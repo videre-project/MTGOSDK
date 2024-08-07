@@ -4,7 +4,7 @@
 **/
 
 using static MTGOSDK.API.Events;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using WotC.MtGO.Client.Model.Trade;
 using WotC.MtGO.Client.Model.Trade.Interfaces;

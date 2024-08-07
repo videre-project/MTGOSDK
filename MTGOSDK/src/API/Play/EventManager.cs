@@ -11,7 +11,7 @@ using WotC.MtGO.Client.Model.Play;
 namespace MTGOSDK.API.Play;
 using static MTGOSDK.API.Events;
 using static MTGOSDK.API.Play.Event<dynamic>;
-using static MTGOSDK.Core.Reflection.DLRWrapper<dynamic>;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class EventManager
 {
