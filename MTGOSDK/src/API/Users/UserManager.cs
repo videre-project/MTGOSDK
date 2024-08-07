@@ -4,20 +4,17 @@
 **/
 
 using System.Collections.Concurrent;
-using System.Reflection;
 
 using MTGOSDK.Core.Logging;
-using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
-using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Chat;
 using WotC.MtGO.Client.Model.Core;
 
 
 namespace MTGOSDK.API.Users;
 using static MTGOSDK.API.Events;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class UserManager
 {

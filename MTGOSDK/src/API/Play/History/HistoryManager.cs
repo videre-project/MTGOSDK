@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Win32.FileSystem;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using WotC.MtGO.Client.Model.Core;
 using WotC.MtGO.Client.Model.Settings;
@@ -18,7 +19,6 @@ using WotC.MtGO.Client.Model.Settings.History;
 
 
 namespace MTGOSDK.API.Play.History;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 /// <summary>
 /// Manager for the player's game history.

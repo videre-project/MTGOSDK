@@ -3,18 +3,18 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using static MTGOSDK.API.Events;
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Trade.Enums;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
-using WotC.MtGO.Client.Model.Trade;
-
 using CollectionItem = MTGOSDK.API.Collection.CollectionItem<dynamic>;
+
+using WotC.MtGO.Client.Model.Trade;
 
 
 namespace MTGOSDK.API.Trade;
+using static MTGOSDK.API.Events;
 
 public class TradeEscrow(dynamic tradeEscow) : DLRWrapper<ITradeEscrow>
 {

@@ -5,10 +5,10 @@
 
 using System.Collections;
 
+using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play.Tournaments;
-using GameState = MTGOSDK.API.Play.Games.GameState;
 
 
 namespace MTGOSDK.API.Play.Tournaments;

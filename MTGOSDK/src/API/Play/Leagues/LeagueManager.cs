@@ -3,12 +3,13 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using static MTGOSDK.Core.Reflection.DLRWrapper;
+
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.Leagues;
 using static MTGOSDK.API.Events;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class LeagueManager
 {

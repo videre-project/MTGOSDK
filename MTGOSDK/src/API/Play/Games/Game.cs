@@ -171,7 +171,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         return new GameZone(zoneEntry.Value);
     }
 
-    throw new KeyNotFoundException($"Could not find {cardZone.ToString()}.");
+    throw new KeyNotFoundException($"Could not find {cardZone}.");
   }
 
   /// <summary>
@@ -191,7 +191,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         return new GameZone(zoneEntry.Value);
     }
 
-    throw new KeyNotFoundException($"Could not find {cardZone.ToString()}.");
+    throw new KeyNotFoundException($"Could not find {cardZone}.");
   }
 
   /// <summary>

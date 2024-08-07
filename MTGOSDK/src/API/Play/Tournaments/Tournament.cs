@@ -5,8 +5,6 @@
 
 using System.Collections;
 
-using MTGOSDK.Core.Reflection;
-
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 

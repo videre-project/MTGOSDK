@@ -3,7 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using static MTGOSDK.API.Events;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using WotC.MtGO.Client.Model.Trade;
@@ -11,6 +10,7 @@ using WotC.MtGO.Client.Model.Trade.Interfaces;
 
 
 namespace MTGOSDK.API.Trade;
+using static MTGOSDK.API.Events;
 
 /// <summary>
 /// A manager that provides access to trade posts, trade partners, and current

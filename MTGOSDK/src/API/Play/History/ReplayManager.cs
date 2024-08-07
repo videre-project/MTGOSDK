@@ -4,13 +4,13 @@
 **/
 
 using MTGOSDK.Core.Logging;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.History;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 /// <summary>
 /// Manager for the player's game replays.
