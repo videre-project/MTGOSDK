@@ -45,6 +45,20 @@ public static class HistoryManager
     RemoteClient.CreateInstance(new TypeProxy<HistoricalSerializationBinder>());
 
   /// <summary>
+  /// Gets the pattern used to generate a user-specific data directory.
+  /// </summary>
+  /// <param name="username">The username of the player.</param>
+  /// <returns>The user-specific hash pattern.</returns>
+  private static string GetUserHash(string username) =>
+    string.Join("", MD5.HashData(Encoding.ASCII.GetBytes(username.ToLower()))
+      .Select(b => b.ToString("X2")));
+
+  /// <summary>
+  /// The file name of the game history file.
+  /// </summary>
+  private static readonly string s_gameHistoryFile = "mtgo_game_history";
+
+  /// <summary>
   /// Whether or not the game history has been loaded by the client.
   /// </summary>
   public static bool HistoryLoaded => s_gameHistoryManager.HistoryLoaded;
@@ -68,7 +82,7 @@ public static class HistoryManager
     Log.Information("Reading game history for {Username}.", username);
 
     object binaryObject = Unbind(s_isoSerializer).ReadBinaryObject<dynamic>(
-      "mtgo_game_history",
+      s_gameHistoryFile,
       s_loadIsoConfiguration,
       username,
       s_serializationBinder
@@ -81,6 +95,36 @@ public static class HistoryManager
   }
 
   /// <summary>
+  /// Gets the game history files for a given player.
+  /// </summary>
+  /// <param name="username">The username of the player.</param>
+  /// <param name="filterFiles">
+  /// Whether to only search for and return existing game history files.
+  /// </param>
+  /// <returns>The file paths to the player's game history files.</returns>
+  public static string[] GetGameHistoryFiles(
+    string? username = null,
+    bool filterFiles = true)
+  {
+    // Default to the current user if no username is provided.
+    if (string.IsNullOrEmpty(username))
+      username = Client.CurrentUser.Name;
+    Log.Information("Getting game history files for {Username}.", username);
+
+    // Get a list of existing MTGO data directories on the system.
+    string userPattern = GetUserHash(username);
+    string[] dataDirectories = new Glob(Path.Combine(
+      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+      @"Apps\2.0\Data\**\mtgo..tion_*\**\AppFiles"
+    ));
+
+    return Map<string>(dataDirectories.OrderByDescending(File.GetLastWriteTime),
+                       (d) => Path.Combine(d, userPattern, s_gameHistoryFile))
+      .Where(f => !filterFiles || File.Exists(f))
+      .ToArray();
+  }
+
+  /// <summary>
   /// Merges a game history file with the current game history collection.
   /// </summary>
   /// <param name="filePath">The path to the 'mtgo_game_history' file.</param>
@@ -88,13 +132,6 @@ public static class HistoryManager
   /// <returns>The merged game history collection.</returns>
   public static IList<dynamic> MergeGameHistory(string filePath, bool save = true)
   {
-    // Find the user data directory for the current MTGO installation.
-    string currentDataDir = new Glob(Path.Combine(
-      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-      @"Apps\2.0\Data\**\mtgo..tion_*\**\AppFiles"
-    ));
-    Log.Trace("Found MTGO data directory: {CurrentDataDir}", currentDataDir);
-
     //
     // Use a reserved username to mark a temporary user directory.
     //
@@ -103,20 +140,19 @@ public static class HistoryManager
     // reserve a temporary user directory with a copy of the game history file.
     //
     string mockUsername = $"$RESERVED-{Guid.NewGuid().ToString("N")[..7]}";
-    byte[] usernameBytes = Encoding.ASCII.GetBytes(mockUsername.ToLower());
-    byte[] usernameBytesHash = MD5.HashData(usernameBytes);
-
-    string temporaryDataDir = Path.Combine(currentDataDir,
-      string.Join("", usernameBytesHash.Select(b => b.ToString("X2")))
-    );
+    string temporaryFile = GetGameHistoryFiles(mockUsername, false).First();
+    string temporaryDataDir = Path.GetDirectoryName(temporaryFile);
+    Log.Trace("Using temporary user directory: {TemporaryDataDir}", temporaryDataDir);
 
     // Copy the game history file to the temporary user directory.
     Directory.CreateDirectory(temporaryDataDir);
-    File.Copy(filePath, Path.Combine(temporaryDataDir, "mtgo_game_history"));
+    File.Copy(filePath, temporaryFile);
 
     // Read the game history file into a new collection in client memory.
     IEnumerable<dynamic> gameHistory = ReadGameHistory(mockUsername);
     Directory.Delete(temporaryDataDir, recursive: true);
+    Log.Trace("Read {Count} items from game history file: {FilePath}",
+        gameHistory.Count(), filePath);
 
     // Merge the new game history with the current game history collection.
     Log.Information("Merging game history with current collection.");
@@ -131,9 +167,13 @@ public static class HistoryManager
         Unbind(s_gameHistoryManager).Items.Add(dro);
     }
 
+    // Update the client's history load status if not already set.
+    if (!s_gameHistoryManager.HistoryLoaded)
+      Unbind(s_gameHistoryManager).HistoryLoaded |= true;
+
     // Save the merged game history collection to the local game history file.
-    if (save) Unbind(s_gameHistoryManager).SaveItems();
-    Unbind(s_gameHistoryManager).HistoryLoaded |= true;
+    if (save)
+      Unbind(s_gameHistoryManager).SaveItems();
 
     return Items;
   }

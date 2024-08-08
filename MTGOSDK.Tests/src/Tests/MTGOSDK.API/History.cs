@@ -5,7 +5,6 @@
 
 using System;
 using System.Linq;
-using MTGOSDK.API;
 using MTGOSDK.API.Play.History;
 using MTGOSDK.Core.Logging;
 
@@ -21,20 +20,25 @@ public class History : HistoryValidationFixture
   {
     Assert.That(HistoryManager.HistoryLoaded, Is.True);
     Assert.That(HistoryManager.Items, Is.Not.Empty);
-    Log.Debug("History items: {0}", HistoryManager.Items.Count);
+
+    int itemCount = HistoryManager.Items.Count;
+    Log.Debug("History items: {0}", itemCount);
 
     var gameHistory = HistoryManager.ReadGameHistory();
     Assert.That(gameHistory, Is.Not.Empty);
-    Assert.That(gameHistory.Count,
-        Is.GreaterThanOrEqualTo(HistoryManager.Items.Count));
+    Assert.That(gameHistory.Count, Is.GreaterThanOrEqualTo(itemCount));
 
-    var gameHistory2 = HistoryManager.ReadGameHistory(Client.CurrentUser.Name);
+    // Get a list of game history files on the system, ordered by recency.
+    string[] gameHistoryFiles = HistoryManager.GetGameHistoryFiles();
+    Assert.That(gameHistoryFiles, Is.Not.Empty);
+
+    // Merge the latest game history file into the current game history,
+    // without overwriting the existing game history file (memory-persisted).
+    string gameHistoryFile = gameHistoryFiles.First();
+    var gameHistory2 = HistoryManager.MergeGameHistory(gameHistoryFile, false);
     Assert.That(gameHistory2, Is.Not.Empty);
-    Assert.That(gameHistory2.Count,
-        Is.GreaterThanOrEqualTo(HistoryManager.Items.Count));
-    Assert.That(gameHistory2.Count, Is.EqualTo(gameHistory.Count));
-
-    // var gameHistory3 = HistoryManager.MergeGameHistory
+    Assert.That(gameHistory2.Count, Is.GreaterThanOrEqualTo(itemCount));
+    Log.Debug("History items: {0}", itemCount);
   }
 
   // [RateLimit(ms: 300)]
