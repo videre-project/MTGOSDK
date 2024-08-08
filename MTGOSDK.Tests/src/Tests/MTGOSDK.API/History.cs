@@ -24,6 +24,10 @@ public class History : HistoryValidationFixture
     int itemCount = HistoryManager.Items.Count;
     Log.Debug("History items: {0}", itemCount);
 
+    // Clear the existing store in client memory.
+    Log.Trace("Clearing game history items from memory...");
+    HistoryManager.Items.Clear();
+
     var gameHistory = HistoryManager.ReadGameHistory();
     Assert.That(gameHistory, Is.Not.Empty);
     Assert.That(gameHistory.Count, Is.GreaterThanOrEqualTo(itemCount));

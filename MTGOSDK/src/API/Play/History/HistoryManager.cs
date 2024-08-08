@@ -25,38 +25,38 @@ namespace MTGOSDK.API.Play.History;
 /// </summary>
 public static class HistoryManager
 {
-  //
-  // IGameHistoryManager wrapper methods
-  //
-
   /// <summary>
   /// Global manager for the player's game history.
   /// </summary>
   private static readonly IGameHistoryManager s_gameHistoryManager =
     ObjectProvider.Get<ISettings>().GameHistoryManager;
 
+  /// <summary>
+  /// The MTGO client's ISO serializer for reading and writing binary objects.
+  /// </summary>
   private static readonly IIsoSerializer s_isoSerializer =
     ObjectProvider.Get<IIsoSerializer>();
 
+  /// <summary>
+  /// The method used to load the ISO configuration for reading binary objects.
+  /// </summary>
   private static readonly dynamic s_loadIsoConfiguration =
     Unbind(s_gameHistoryManager).LoadIsoConfigration;
 
+  /// <summary>
+  /// The serialization binder used to deserialize the game history file.
+  /// </summary>
   private static readonly dynamic s_serializationBinder =
     RemoteClient.CreateInstance(new TypeProxy<HistoricalSerializationBinder>());
-
-  /// <summary>
-  /// Gets the pattern used to generate a user-specific data directory.
-  /// </summary>
-  /// <param name="username">The username of the player.</param>
-  /// <returns>The user-specific hash pattern.</returns>
-  private static string GetUserHash(string username) =>
-    string.Join("", MD5.HashData(Encoding.ASCII.GetBytes(username.ToLower()))
-      .Select(b => b.ToString("X2")));
 
   /// <summary>
   /// The file name of the game history file.
   /// </summary>
   private static readonly string s_gameHistoryFile = "mtgo_game_history";
+
+  //
+  // IGameHistoryManager wrapper properties
+  //
 
   /// <summary>
   /// Whether or not the game history has been loaded by the client.
@@ -68,6 +68,10 @@ public static class HistoryManager
   /// </summary>
   public static IList<dynamic> Items =>
     Map<IList, dynamic>(s_gameHistoryManager.Items, HistoricalEventFactory);
+
+  //
+  // IGameHistoryManager wrapper methods
+  //
 
   /// <summary>
   /// Reads the local game history for a given player.
@@ -178,11 +182,21 @@ public static class HistoryManager
     return Items;
   }
 
+  /// <summary>
+  /// Gets the pattern used to generate a user-specific data directory.
+  /// </summary>
+  /// <param name="username">The username of the player.</param>
+  /// <returns>The user-specific hash pattern.</returns>
+  private static string GetUserHash(string username) =>
+    string.Join("", MD5.HashData(Encoding.ASCII.GetBytes(username.ToLower()))
+      .Select(b => b.ToString("X2")));
+
   //
   // IHistoricalItem helper methods
   //
 
-  internal static Func<dynamic, dynamic> HistoricalEventFactory = new(CastHistoricalItem);
+  private static readonly Func<dynamic, dynamic> HistoricalEventFactory =
+    new(CastHistoricalItem);
 
   /// <summary>
   /// Cast a historical item to it's implementation subclass.
