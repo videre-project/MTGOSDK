@@ -8,6 +8,9 @@ using ImpromptuInterface;
 
 namespace MTGOSDK.Core.Reflection.Proxy;
 
+public class TypeProxy(Type? @type=null) : TypeProxy<dynamic>(@type)
+{ }
+
 public class TypeProxy<T>(Type? @type=null) where T : class
 {
   //

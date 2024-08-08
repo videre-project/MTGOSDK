@@ -3,15 +3,16 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Concurrent;
-
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Reflection;
+
 using TResetter = MTGOSDK.Core.Remoting.Reflection.LazyRemoteObject.TResetter;
+using t_ObjectProvider = WotC.MtGO.Client.Common.ServiceLocation.ObjectProvider;
 
 
 namespace MTGOSDK.API;
+using static MTGOSDK.API.ObjectCache;
 
 /// <summary>
 /// Global manager for all singleton objects registered with the client.
@@ -21,66 +22,7 @@ public static class ObjectProvider
   /// <summary>
   /// Proxy type for the client's static ObjectProvider class.
   /// </summary>
-  private static readonly TypeProxy<dynamic> s_proxy =
-    new(typeof(WotC.MtGO.Client.Common.ServiceLocation.ObjectProvider));
-
-  private static readonly ConcurrentDictionary<string, dynamic> s_instances = new();
-  private static readonly ConcurrentDictionary<string, TResetter> s_resetters = new();
-  private static readonly ConcurrentDictionary<string, Func<dynamic>> s_callbacks = new();
-
-  /// <summary>
-  /// Event raised when the ObjectProvider cache is reset.
-  /// </summary>
-  public static event EventHandler? OnReset;
-  private static readonly object s_lock = new();
-
-  /// <summary>
-  /// Registers a callback to reset the instance of the given type.
-  /// </summary>
-  /// <param name="key">The query path of the registered type.</param>
-  /// <param name="callback">The callback to reset the instance.</param>
-  private static void RegisterCallback(string key, Func<dynamic> callback)
-  {
-    if (!s_callbacks.TryAdd(key, callback))
-      throw new InvalidOperationException("A duplicate callback was registered.");
-
-    OnReset += (s, e) => Reset(key, callback);
-    RemoteClient.Disposed += (s, e) => Reset(key, callback);
-  }
-
-  /// <summary>
-  /// Clears the callback to reset the instance of the given type.
-  /// </summary>
-  /// <param name="key">The query path of the registered type.</param>
-  /// <param name="callback">The callback used to reset the instance.</param>
-  private static void ClearCallback(string key, Func<dynamic>? callback = null)
-  {
-    if (!s_callbacks.TryRemove(key, out var oldCallback))
-      throw new InvalidOperationException("The callback was not registered.");
-
-    callback ??= oldCallback;
-    OnReset -= (s, e) => Reset(key, callback);
-    RemoteClient.Disposed -= (s, e) => Reset(key, callback);
-  }
-
-  /// <summary>
-  /// Resets the instance of the given type in the ObjectProvider cache.
-  /// </summary>
-  /// <param name="key">The query path of the registered type.</param>
-  /// <param name="callback">The callback used to reset the instance.</param>
-  private static void Reset(string key, Func<dynamic> callback)
-  {
-    lock (s_lock)
-    {
-      // Skip if no instance exists for the given key.
-      if (!s_instances.TryRemove(key, out _) ||
-          !s_resetters.TryGetValue(key, out var s_reset)) return;
-
-      Log.Trace("Resetting instance type {Type}", key);
-      s_reset(callback);
-      ClearCallback(key, callback);
-    }
-  }
+  private static readonly TypeProxy s_proxy = new(typeof(t_ObjectProvider));
 
   /// <summary>
   /// Creates a lazy instance of the given type to later invoke ObjectProvider.
@@ -106,11 +48,14 @@ public static class ObjectProvider
 
     // Store the resetter callback to reset the lazy instance when
     // the RemoteClient is disposed or the ObjectProvider cache is reset.
-    s_resetters.AddOrUpdate(queryPath, resetter,
-      // If a callback already exists, combine the two callbacks.
-      new Func<string, TResetter, TResetter>((_, oldResetter) =>
-        (TResetter)Delegate.Combine(oldResetter, resetter)
-      ));
+    lock (s_lock)
+    {
+      s_resetters.AddOrUpdate(queryPath, resetter,
+        // If a callback already exists, combine the two callbacks.
+        new Func<string, TResetter, TResetter>((_, oldResetter) =>
+          (TResetter)Delegate.Combine(oldResetter, resetter)
+        ));
+    }
 
     // Return the lazy instance directly, as the later call to ObjectProvider
     // will add the created instance to the cache.
@@ -131,40 +76,43 @@ public static class ObjectProvider
     bool useHeap = false,
     bool useLazy = true)
   {
-    // Check if the instance is already cached
-    if (useCache && s_instances.TryGetValue(queryPath, out dynamic instance))
+    lock (s_lock)
     {
-      Log.Trace("Retrieved cached instance type {Type}", queryPath);
+      // Check if the instance is already cached
+      if (useCache && s_instances.TryGetValue(queryPath, out dynamic instance))
+      {
+        Log.Trace("Retrieved cached instance type {Type}", queryPath);
+        return instance;
+      }
+      // Otherwise create a lazy instance and store its resetter for future use.
+      else if (useLazy) return Defer(queryPath, useCache, useHeap);
+
+      // Query using the ObjectProvider.Get<T>() method on the client
+      if (!useHeap)
+      {
+        // Get the RemoteType from the type's query path
+        Log.Trace("Retrieving instance type {Type}", queryPath);
+        Type genericType = RemoteClient.GetInstanceType(queryPath);
+
+        // Invoke the Get<T>() method on the client's ObjectProvider class
+        instance = RemoteClient.InvokeMethod(s_proxy, "Get", [genericType]);
+      }
+      // Query the for the instance type from the client's object heap
+      else
+      {
+        Log.Trace("Retrieving heap instance of type {Type}", queryPath);
+        instance = RemoteClient.GetInstance(queryPath);
+      }
+
+      // Cache the instance for future use
+      s_instances.TryAdd(queryPath, instance);
+
+      // Register a callback to reset the instance when disposed
+      RegisterCallback(queryPath,
+        new Func<dynamic>(() => Get(queryPath, useCache, useHeap, useLazy)));
+
       return instance;
     }
-    // Otherwise create a lazy instance and store its resetter for future use.
-    else if (useLazy) return Defer(queryPath, useCache, useHeap);
-
-    // Query using the ObjectProvider.Get<T>() method on the client
-    if (!useHeap)
-    {
-      // Get the RemoteType from the type's query path
-      Log.Trace("Retrieving instance type {Type}", queryPath);
-      Type genericType = RemoteClient.GetInstanceType(queryPath);
-
-      // Invoke the Get<T>() method on the client's ObjectProvider class
-      instance = RemoteClient.InvokeMethod(s_proxy, "Get", [genericType]);
-    }
-    // Query the for the instance type from the client's object heap
-    else
-    {
-      Log.Trace("Retrieving heap instance of type {Type}", queryPath);
-      instance = RemoteClient.GetInstance(queryPath);
-    }
-
-    // Cache the instance for future use
-    s_instances.TryAdd(queryPath, instance);
-
-    // Register a callback to reset the instance when disposed
-    RegisterCallback(queryPath,
-      new Func<dynamic>(() => Get(queryPath, useCache, useHeap, useLazy)));
-
-    return instance;
   }
 
   /// <summary>
@@ -219,6 +167,6 @@ public static class ObjectProvider
   public static void ResetCache()
   {
     Log.Debug("Resetting ObjectProvider cache.");
-    OnReset?.Invoke(null, EventArgs.Empty);
+    ObjectCache.Clear();
   }
 }
