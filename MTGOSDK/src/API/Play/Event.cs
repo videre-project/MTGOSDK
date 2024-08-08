@@ -14,7 +14,7 @@ using WotC.MtGO.Client.Model.Play;
 
 namespace MTGOSDK.API.Play;
 
-public abstract class Event<I> : DLRWrapper<IPlayerEvent>
+public abstract class Event : DLRWrapper<IPlayerEvent>
 {
   //
   // IPlayerEvent wrapper properties
@@ -103,38 +103,6 @@ public abstract class Event<I> : DLRWrapper<IPlayerEvent>
   //
   // IPlayerEvent wrapper methods
   //
-
-  internal static Func<dynamic, dynamic> PlayerEventFactory = new(FromPlayerEvent);
-
-  internal static dynamic FromPlayerEvent(dynamic playerEvent)
-  {
-    // If an event is provided as a FilterableEvent, extract the actual event.
-    string eventType = playerEvent.GetType().Name;
-    dynamic eventObject = eventType.StartsWith("Filterable")
-      ? playerEvent.PlayerEvent
-      : playerEvent;
-
-    // Map each event type to its corresponding wrapper class.
-    switch (eventType)
-    {
-      // case "FilterableLeague" or "League":
-      //   eventObject = new League(eventObject);
-      //   break;
-      case "FilterableMatch" or "Match":
-        eventObject = new Match(eventObject);
-        break;
-      case "FilterableTournament" or "Tournament":
-        eventObject = new Tournament(eventObject);
-        break;
-      case "FilterableQueue" or "Queue":
-        eventObject = new Queue(eventObject);
-        break;
-    }
-    Log.Trace("Created new {Type} object for '{EventObject}'.",
-        eventObject.GetType().Name, eventObject);
-
-    return eventObject;
-  }
 
   public override string ToString() => $"{Description} #{Id}";
 }

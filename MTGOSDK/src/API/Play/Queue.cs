@@ -9,7 +9,7 @@ using WotC.MtGO.Client.Model.Play;
 namespace MTGOSDK.API.Play;
 using static MTGOSDK.API.Events;
 
-public sealed class Queue(dynamic queue) : Event<Queue>
+public sealed class Queue(dynamic queue) : Event
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.

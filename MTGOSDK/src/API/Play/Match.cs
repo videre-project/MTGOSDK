@@ -14,7 +14,7 @@ using WotC.MtGO.Client.Model.Play;
 namespace MTGOSDK.API.Play;
 using static MTGOSDK.API.Events;
 
-public sealed class Match(dynamic match) : Event<Match>
+public sealed class Match(dynamic match) : Event
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.

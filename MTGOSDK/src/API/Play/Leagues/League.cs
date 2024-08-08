@@ -13,7 +13,7 @@ using WotC.MtGO.Client.Model.Play;
 namespace MTGOSDK.API.Play.Leagues;
 using static MTGOSDK.API.Events;
 
-public sealed class League(dynamic league) : Event<League>
+public sealed class League(dynamic league) : Event
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.

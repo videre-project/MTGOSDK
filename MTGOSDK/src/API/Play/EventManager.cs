@@ -3,7 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using static MTGOSDK.API.Play.Event<dynamic>;
+using MTGOSDK.API.Play.Tournaments;
+using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using WotC.MtGO.Client.Model.Play;
@@ -88,6 +89,39 @@ public static class EventManager
       ?? throw new KeyNotFoundException($"Event ({guid}) could not be found.");
 
     return FromPlayerEvent(playerEvent);
+  }
+
+  internal static readonly Func<dynamic, Event> PlayerEventFactory =
+    new(FromPlayerEvent);
+
+  private static Event FromPlayerEvent(dynamic playerEvent)
+  {
+    // If an event is provided as a FilterableEvent, extract the actual event.
+    string eventType = playerEvent.GetType().Name;
+    dynamic eventObject = eventType.StartsWith("Filterable")
+      ? playerEvent.PlayerEvent
+      : playerEvent;
+
+    // Map each event type to its corresponding wrapper class.
+    switch (eventType)
+    {
+      // case "FilterableLeague" or "League":
+      //   eventObject = new League(eventObject);
+      //   break;
+      case "FilterableMatch" or "Match":
+        eventObject = new Match(eventObject);
+        break;
+      case "FilterableTournament" or "Tournament":
+        eventObject = new Tournament(eventObject);
+        break;
+      case "FilterableQueue" or "Queue":
+        eventObject = new Queue(eventObject);
+        break;
+    }
+    Log.Trace("Created new {Type} object for '{EventObject}'.",
+        eventObject.GetType().Name, eventObject);
+
+    return eventObject;
   }
 
   //

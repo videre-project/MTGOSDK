@@ -7,7 +7,7 @@ using MTGOSDK.Core.Reflection;
 
 
 namespace MTGOSDK.API;
-using static MTGOSDK.API.Play.Event<dynamic>;
+using static MTGOSDK.API.Play.EventManager;
 
 /// <summary>
 /// EventHandler wrapper types used by the API.
@@ -43,7 +43,7 @@ public sealed partial class Events
     /// <summary>
     /// The match instance that triggered the event.
     /// </summary>
-    public dynamic PlayerEvent => FromPlayerEvent(@base.PlayerEvent);
+    public dynamic PlayerEvent => PlayerEventFactory(@base.PlayerEvent);
 
     /// <summary>
     /// The internal reason code for the exception.

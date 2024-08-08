@@ -11,7 +11,7 @@ using WotC.MtGO.Client.Model.Play.Tournaments;
 namespace MTGOSDK.API.Play.Tournaments;
 using static MTGOSDK.API.Events;
 
-public sealed class Tournament(dynamic tournament) : Event<Tournament>
+public sealed class Tournament(dynamic tournament) : Event
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.

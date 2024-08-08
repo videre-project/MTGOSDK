@@ -3,11 +3,11 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
 
 namespace MTGOSDK.API;
-using static MTGOSDK.API.Play.Event<dynamic>;
 
 /// <summary>
 /// EventHandler wrapper types used by the API.
@@ -44,6 +44,6 @@ public sealed partial class Events
     /// The PlayerEvent instances that triggered the event.
     /// </summary>
     public IEnumerable<dynamic> Events =>
-      Map<dynamic>(@base.Events, PlayerEventFactory);
+      Map<dynamic>(@base.Events, EventManager.PlayerEventFactory);
   }
 }

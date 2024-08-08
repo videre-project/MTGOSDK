@@ -51,11 +51,23 @@ public class Events : EventValidationFixture
   [TestCase<Match>()]
   [TestCase<Tournament>()]
   [TestCase<Queue>()]
-  public void Test_Events<T>() where T : Event<T>
+  public void Test_Events<T>() where T : Event
   {
     // For testing, we'll restrict testing to small-sized events.
-    T eventObj = GetEvent<T>(e => e.Description != string.Empty &&
-                                  e.TotalPlayers <= 16);
+    T eventObj = GetEvent<T>(e =>
+    {
+      // Filter out mid-size events that don't contain an event description.
+      if (e.Description == string.Empty || e.TotalPlayers > 32)
+        return false;
+
+      // Ensure that any retrieved events have already started.
+      if (typeof(T) == typeof(Tournament))
+        return Try<bool>(() => (e as Tournament)!.State >= TournamentState.RoundInProgress);
+      if (typeof(T) == typeof(Match))
+        return Try<bool>(() => (e as Match)!.State >= MatchState.GameStarted);
+
+      return true;
+    });
     switch (typeof(T).Name)
     {
       case "League":
@@ -103,7 +115,7 @@ public class EventValidationFixture : BaseFixture
     return (eventObj as T)!;
   }
 
-  public void ValidateEvent<T>(T? eventObj) where T : Event<T>
+  public void ValidateEvent<T>(T? eventObj) where T : Event
   {
     Assert.That(eventObj, Is.Not.Null);
     Assert.That(eventObj, Is.InstanceOf<T>());
@@ -281,6 +293,9 @@ public class EventValidationFixture : BaseFixture
     Assert.That(match.MatchId, Is.GreaterThan(0));
     Assert.That(match.MatchToken, Is.Not.EqualTo(Guid.Empty));
     Assert.That(match.State, Is.Not.EqualTo(MatchState.Invalid));
+    Assert.That(match.IsComplete,
+        Is.EqualTo(true).Or.EqualTo(
+          match.State == (MatchState.MatchCompleted | MatchState.GameClosed)));
     Assert.That(match.Creator?.Id, Is.Not.EqualTo(-1));
     Assert.That(match.ChallengeReceiver?.Id, Is.Not.EqualTo(-1));
     Assert.That(match.ChallengeText, Is.Not.Empty);
