@@ -38,10 +38,6 @@ using static MTGOSDK.API.Events;
 /// </summary>
 public sealed class Client : DLRWrapper<ISession>, IDisposable
 {
-  //
-  // Static fields and properties
-  //
-
   /// <summary>
   /// Manages the client's connection and user session information.
   /// </summary>
@@ -65,6 +61,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </summary>
   private static dynamic s_loginManager =>
     Unbind(s_shellViewModel).m_loginViewModel;
+
+  //
+  // Static fields and properties
+  //
 
   /// <summary>
   /// The current build version of the running MTGO client.
@@ -174,10 +174,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       // Sets the client's disposal policy.
       if(options.DestroyOnExit)
         RemoteClient.DestroyOnExit = true;
-
-      // Configure the remote client port.
-      if(options.Port != null)
-        RemoteClient.Port = Cast<ushort>(options.Port);
 
       // Starts a new MTGO client process.
       if (options.CreateProcess)
@@ -338,7 +334,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </summary>
   /// <param name="username">The user's login name.</param>
   /// <param name="password">The user's login password.</param>
-  /// <returns>The user's session id.</returns>
   /// <exception cref="InvalidOperationException">
   /// Thrown when the client is already logged in.
   /// </exception>
@@ -348,7 +343,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <exception cref="TimeoutException">
   /// Thrown when the client times out trying to connect and initialize.
   /// </exception>
-  public async Task<Guid> LogOn(string username, SecureString password)
+  public async Task LogOn(string username, SecureString password)
   {
     if (IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
@@ -357,7 +352,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     s_loginManager.ScreenName = username;
     s_loginManager.Password = password.RemoteSecureString();
     if (!s_loginManager.LogOnCanExecute())
+    {
+      s_loginManager.Password = null;
       throw new ArgumentException("Missing one or more user credentials.");
+    }
 
     // Executes the login command and creates a new task to connect the client.
     Log.Debug("Logging in as {Username}.", username);
@@ -368,8 +366,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Explicitly update state for a non-interactive session.
     s_loginManager.IsLoggedIn = true;
     s_loginManager.IsLoginEnabled = false;
-
-    return SessionId;
   }
 
   /// <summary>
@@ -391,8 +387,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
 
     // Invokes logoff command and disconnects the MTGO client.
     Log.Debug("Logging off and disconnecting the client.");
-    s_session.LogOff();
-    Try(() => s_loginManager.IsLoginEnabled = true);
+    s_loginManager.Disconnect();
     if (!await WaitUntil(() => !IsConnected || !RemoteClient.IsInitialized )) {
       throw new TimeoutException("Failed to log off and disconnect the client.");
     }

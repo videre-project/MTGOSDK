@@ -27,11 +27,6 @@ public struct ClientOptions()
   public bool DestroyOnExit { get; init; } = false;
 
   /// <summary>
-  /// The port to use for the remote client connection with the MTGO process.
-  /// </summary>
-  public int? Port { get; init; } = null;
-
-  /// <summary>
   /// Whether to accept the EULA prompt when starting the MTGO client.
   /// </summary>
   /// <remarks>

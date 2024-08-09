@@ -49,17 +49,18 @@ public class SetupFixture : DLRWrapper<Client>
     if (Client.HasStarted && client != null) return;
 
     client = new Client(
-      Client.HasStarted
-        ? new ClientOptions()
-        : new ClientOptions
-          {
-            CreateProcess = true,
-            StartMinimized = true,
-            // DestroyOnExit = true,
-            AcceptEULAPrompt = true
-          },
+      new ClientOptions
+      {
+        CreateProcess = true,
+        StartMinimized = true,
+        // DestroyOnExit = true,
+        AcceptEULAPrompt = true
+      },
       loggerProvider: new NUnitLoggerProvider(LogLevel.Trace)
     );
+
+    // Ensure the MTGO client is not interactive (with an existing user session).
+    Assert.That(Client.IsInteractive, Is.False);
 
     if (!Client.IsConnected)
     {
@@ -69,16 +70,24 @@ public class SetupFixture : DLRWrapper<Client>
         username: DotEnv.Get("USERNAME"), // String value
         password: DotEnv.Get("PASSWORD")  // SecureString value
       );
+      Assert.That(Client.IsLoggedIn, Is.True);
+
+      // Revalidate the client's reported interactive state.
+      Assert.That(Client.IsInteractive, Is.False);
     }
 
     client.ClearCaches();
   }
 
-  [OneTimeTearDown]
+  [OneTimeTearDown, CancelAfter(/* 10 seconds */ 10_000)]
   public virtual async Task RunAfterAnyTests()
   {
     // Skip if the client has already been disposed.
     if (!RemoteClient.IsInitialized && client == null) return;
+
+    // Log off the client to ensure that the user session terminates.
+    await client.LogOff();
+    Assert.That(Client.IsLoggedIn, Is.False);
 
     // Set a callback to indicate when the client has been disposed.
     bool isDisposed = false;
@@ -87,7 +96,10 @@ public class SetupFixture : DLRWrapper<Client>
     // Safely dispose of the client instance.
     client.Dispose();
     client = null!;
-    await WaitUntil(() => isDisposed);
+    if (!await WaitUntil(() => isDisposed)) // Waits at most 5 seconds.
+    {
+      Assert.Fail("The client was not disposed within the timeout period.");
+    }
 
     // Verify that all remote handles have been reset.
     Assert.That(RemoteClient.IsInitialized, Is.False);
