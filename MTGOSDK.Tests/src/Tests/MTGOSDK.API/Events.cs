@@ -87,6 +87,18 @@ public class Events : EventValidationFixture
         break;
     }
   }
+
+  [Test]
+  public void Test_PlayFormat()
+  {
+    var deck = CollectionManager.Decks.First();
+    var format = deck.Format!;
+    ValidatePlayFormat(format);
+
+    // Verify that any deck passed does not return an error.
+    Assert.That((bool?)format.IsDeckLegal(deck), Is.Not.Null);
+    Assert.DoesNotThrow(() => format.SetDeckLegality(deck));
+  }
 }
 
 public class EventValidationFixture : BaseFixture
@@ -345,11 +357,6 @@ public class EventValidationFixture : BaseFixture
     Assert.That((bool?)format.IsCardLegal(card), Is.Not.Null);
     Assert.That((bool?)format.IsCardRestricted(card), Is.Not.Null);
     Assert.That((bool?)format.IsCardBanned(card), Is.Not.Null);
-
-    // Verify that any deck passed does not return an error.
-    var deck = CollectionManager.Decks.First();
-    Assert.That((bool?)format.IsDeckLegal(deck), Is.Not.Null);
-
     Assert.That((string?)format, Is.EqualTo(format.Name));
   }
 }
