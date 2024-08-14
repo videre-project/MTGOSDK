@@ -36,9 +36,16 @@ public class DllEntry
       };
       LoggerBase.SetProviderInstance(new FileLoggerProvider(options));
 
+      // Register a handler for uncaught exceptions to log them.
+      AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+      {
+        Log.Error("[DiverHost] Unhandled exception occurred.");
+        Log.Error(e.ExceptionObject.ToString());
+      };
+
+      // Start the diver instance and block the thread until it exits.
       Diver _instance = new();
       _instance.Start(port);
-
       Log.Debug("[DiverHost] Diver finished gracefully.");
     }
     catch (Exception e)
