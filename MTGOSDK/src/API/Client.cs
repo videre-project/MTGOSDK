@@ -172,8 +172,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       Log.Debug("Running the MTGO client API factory.");
 
       // Sets the client's disposal policy.
-      if(options.DestroyOnExit)
-        RemoteClient.DestroyOnExit = true;
+      if(options.CloseOnExit)
+        RemoteClient.CloseOnExit = true;
 
       // Starts a new MTGO client process.
       if (options.CreateProcess)

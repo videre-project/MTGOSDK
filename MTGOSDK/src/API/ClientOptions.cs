@@ -24,7 +24,7 @@ public struct ClientOptions()
   /// <summary>
   /// Whether to kill the MTGO process when the client object is disposed.
   /// </summary>
-  public bool DestroyOnExit { get; init; } = false;
+  public bool CloseOnExit { get; init; } = false;
 
   /// <summary>
   /// Whether to accept the EULA prompt when starting the MTGO client.
