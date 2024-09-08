@@ -14,13 +14,11 @@ namespace MTGOSDK.Core.Remoting.Types;
 
 public class RemoteAssembly(string assemblyName) : Assembly
 {
-  private AssemblyName name = new(assemblyName);
+  private readonly AssemblyName _name = new(assemblyName);
 
-  public override string FullName =>
-    throw new Exception(
-      $"You tried to get the 'FullName' property on a {nameof(RemoteAssembly)}." +
-      $"Currently, this is forbidden to reduce confusion between 'full name' and 'short name'." +
-      $"You should call 'GetName().Name' instead.");
+  public override string FullName => _name.FullName;
 
-  public override AssemblyName GetName() => name;
+  public override bool IsDynamic => true;
+
+  public override AssemblyName GetName() => _name;
 }
