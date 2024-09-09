@@ -202,12 +202,14 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (options.AcceptEULAPrompt && !IsConnected)
     {
       // Check if the last accepted EULA version is still the latest version.
-      var EULAVersion = SettingsService.GetSetting<Version>(
+      Version GetEulaVersion() => SettingsService.GetSetting<Version>(
           Setting.LastEULAVersionNumberAgreedTo);
-      if (Version > EULAVersion)
+      if (Version > GetEulaVersion())
       {
         Log.Debug("Accepting EULA prompt for MTGO v{Version}.", Version);
-        WindowUtilities.CloseDialogs();
+        WindowUtilities.CloseDialogs(assert: false);
+        if (Version != GetEulaVersion())
+          throw new SetupFailureException("Failed to accept the EULA prompt.");
       }
     }
 

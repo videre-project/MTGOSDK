@@ -11,6 +11,7 @@ using MTGOSDK.Core.Remoting;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Shiny.Core.Interfaces;
+using MTGOSDK.Core.Exceptions;
 
 
 namespace MTGOSDK.API.Interface;
@@ -128,27 +129,41 @@ public static class WindowUtilities
   /// <summary>
   /// Closes all open dialog windows, unblocking the client's MainUI thread.
   /// </summary>
+  /// <param name="assert">Whether to throw an exception if the operation fails.</param>
+  /// <exception cref="InvalidOperationException">
+  /// Thrown if some window objects could not be accessed or closed.
+  /// </exception>
   /// <remarks>
   /// This will close the window if it is a dialog window, returning true for
   /// any waiting Window.ShowDialog() calls.
   /// </remarks>
-  public static void CloseDialogs()
+  public static void CloseDialogs(bool assert = true)
   {
     if (Client.IsConnected && Client.IsInteractive)
       throw new InvalidOperationException("Cannot close dialogs in an interactive session.");
 
     Log.Information("Closing all dialog windows.");
-    foreach(var window in GetWindows())
+    try
     {
-      //
-      // Sets the DialogResult property of the IClosableViewModel proxy object,
-      // which is bound to the base window's DialogResult property.
-      //
-      if (window.GetType().Name == "BaseDialog" && !window.m_isWindowClosing)
+      foreach(var window in GetWindows())
       {
-        // Setting the DialogResult property value will also close the window.
-        try { window.m_closable.DialogResult = true; } catch { /* Closed */ }
+        //
+        // Set the DialogResult property of the IClosableViewModel proxy object,
+        // which is bound to the base window's DialogResult property.
+        //
+        if (window.GetType().Name == "BaseDialog" && !window.m_isWindowClosing)
+        {
+          // Setting the DialogResult property value will also close the window.
+          try { window.m_closable.DialogResult = true; } catch { /* Closed */ }
+        }
       }
+    }
+    catch (RemoteException e)
+    {
+      if (assert)
+        throw new InvalidOperationException("Failed to close dialog windows.", e);
+      else
+        Log.Warning("Some windows may not have been closed: {0}", e.Message);
     }
   }
 }
