@@ -6,7 +6,6 @@
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Reflection;
 
-using Shiny.Core.Enums;
 using Shiny.Core.Interfaces;
 
 
@@ -37,9 +36,6 @@ public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
   /// <summary>
   /// The layout type of the DuelScene (e.g. Solitare, Duel, Multiplayer).
   /// </summary>
-  /// <remarks>
-  /// Requires the <c>Shiny.Core.Enums</c> reference assembly.
-  /// </remarks>
   public GameViewType LayoutType =>
     Cast<GameViewType>(Unbind(@base).LayoutType);
 

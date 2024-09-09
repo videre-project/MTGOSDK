@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
@@ -35,6 +36,14 @@ public sealed class BasicToastViewModel(dynamic basicToastViewModel)
     IToastRelatedView relatedView,
     bool showForever = false)
       : this(NewInstance(text, relatedView, title, showForever))
+  { }
+
+  public BasicToastViewModel(
+    string title,
+    string text,
+    Event playerEvent,
+    bool showForever = false)
+      : this(NewInstance(text, playerEvent, title, showForever))
   { }
 
   //
