@@ -76,7 +76,7 @@ Check out the [FAQ](/docs/FAQ.md) for common questions about the SDK, and the pr
 
 ## Documentation
 
-Refer to the [documentation](/docs/README.md) for more in-depth information about the SDK's APIs.
+Refer to the [SDK documentation](/docs/README.md) for more in-depth information about the SDK's APIs.
 
 ## Installation
 
@@ -103,7 +103,7 @@ dotnet add package MTGOSDK
 
 ### Local Package Feed
 
-When building the project locally, you can use the SDK's local package feed to reference the development build. This feed is created by the SDK build process and is created under the `MTGOSDK/packages` directory.
+When building the project locally, you can use the SDK's local package feed to reference the development build. This feed is created by the SDK build process and is created under the `packages` directory.
 
 To reference the local package feed created by the SDK, you can add the following to the `NuGet.config` file in the root of your project:
 ```xml
@@ -134,7 +134,13 @@ To reference these packages, you can use the `*-dev*` version specifier in your 
 
 ```xml
 <!-- Add to your project's .csproj or Directory.Packages.props file: -->
-<PackageReference Include="MTGOSDK" Version="*-dev*" />
+<PackageReference Include="MTGOSDK"
+                  Version="*-dev*" />
+<PackageReference Include="MTGOSDK.MSBuild"
+                  Version="*-dev*"
+                  PrivateAssets="All" />
+<PackageReference Include="MTGOSDK.Win32"
+                  Version="*-dev*" />
 ```
 
 ## Building this Project
