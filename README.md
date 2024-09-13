@@ -17,44 +17,158 @@
 
 </div>
 
-> [!WARNING]
-> This project is still under construction and is not production-ready!
+## Overview
 
 This SDK provides common APIs for accessing the **Magic: The Gathering Online (MTGO)** client's game state and player information, as well as internal states of the game engine useful for building tools that can assist with gameplay, such as deck trackers, or for analyzing game data for research purposes.
 
-**Explore:**
+For example, to simply query the MTGO collection for a card, you can use the `CollectionManager` class to retrieve all printings of your favorite card:
 
-* Refer to the project's [examples](/examples) for demo applications built with the SDK.
+```csharp
+using MTGOSDK.API.Collection; // CollectionManager
 
-**Learn More:**
+IEnumerable<Card> printings = CollectionManager.GetCards("Colossal Dreadmaw");
+foreach (Card card in printings)
+{
+  Console.WriteLine($"Name:      {card.Name}");          // "Colossal Dreadmaw"
+  Console.WriteLine($"Colors:    {card.Colors}");        // "G"
+  Console.WriteLine($"Mana Cost: {card.ManaCost}");      // "4GG"
+  Console.WriteLine($"CMC:       {card.ConvertedCost}"); // 6
+  string types = string.Join(", ", card.Types);
+  Console.WriteLine($"Types:     {types)}");             // "Creature, Dinosaur"
+  Console.WriteLine($"Power:     {card.Power}");         // 6
+  Console.WriteLine($"Toughness: {card.Toughness}");     // 6
+}
+```
 
-* For more in-depth information on the SDK's APIs, refer to the project [documentation](/docs/README.md).
-* Consult the [FAQ](/docs/FAQ.md) for common questions about the SDK.
+This will automatically connect to the MTGO client and retrieve these cards from the collection manager. The SDK will automatically connect and disconnect when needed, no setup required.
+
+Or if you prefer, you can also explicitly manage the client connection yourself:
+
+```csharp
+using System;      // InvalidOperationException
+using MTGOSDK.API; // Client
+
+using (var client = new Client())
+{
+  if (!Client.IsLoggedIn)
+    throw new InvalidOperationException("The MTGO client is not logged in.");
+
+  string username = client.CurrentUser.Name;
+  Console.WriteLine($"The current MTGO session is under '{username}'.");
+
+  // Teardown when the MTGO client disconnects.
+  client.IsConnectedChanged += delegate(object? sender)
+  {
+    if (!client.IsConnected)
+    {
+      Console.WriteLine("The MTGO client has been disconnected. Stopping...");
+      client.Dispose(); // Manually dispose of our connection to the client.
+      Environment.Exit(-1);
+    }
+  };
+
+  // Do something with the client session.
+}
+// The connection to MTGO is automatically torn down when the using block exits.
+```
+
+Check out the [FAQ](/docs/FAQ.md) for common questions about the SDK, and the project's [examples](/examples) for demo applications built with the SDK.
+
+## Documentation
+
+Refer to the [documentation](/docs/README.md) for more in-depth information about the SDK's APIs.
+
+## Installation
+
+> [!NOTE]
+> Currently, the MTGOSDK is in early development and is not yet available on NuGet. You can currently build the SDK locally and reference it in your project using a local package feed.
+
+The MTGOSDK is available as a NuGet package on the NuGet Gallery, and on GitHub Packages. You can install the package using the NuGet Package Manager in Visual Studio, or with the .NET Core CLI.
+
+### With Visual Studio
+
+From within Visual Studio, you can use the NuGet Package Manager GUI to search for and install the MTGOSDK NuGet package. Alternatively, you can use the Package Manager Console to install the package:
+
+```powershell
+Install-Package MTGOSDK
+```
+
+### With the .NET Core CLI
+
+If you are building with .NET Core command line tools, you can use the below command to add the MTGOSDK package to your project:
+
+```powershell
+dotnet add package MTGOSDK
+```
+
+### Local Package Feed
+
+When building the project locally, you can use the SDK's local package feed to reference the development build. This feed is created by the SDK build process and is created under the `MTGOSDK/packages` directory.
+
+To reference the local package feed created by the SDK, you can add the following to the `NuGet.config` file in the root of your project:
+```xml
+<!-- NuGet.config -->
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+    <!-- Configure the local feed as a package source -->
+    <add key="SDK Feed" value="MTGOSDK/packages" />
+  </packageSources>
+  <packageSourceMapping>
+    <!-- Prioritize the local feed over NuGet for SDK packages -->
+    <packageSource key="SDK Feed">
+      <package pattern="MTGOSDK" />
+      <package pattern="MTGOSDK.MSBuild" />
+      <package pattern="MTGOSDK.Win32" />
+    </packageSource>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>
+```
+
+To reference these packages, you can use the `*-dev*` version specifier in your project file:
+
+```xml
+<!-- Add to your project's .csproj or Directory.Packages.props file: -->
+<PackageReference Include="MTGOSDK" Version="*-dev*" />
+```
 
 ## Building this Project
 
-This project requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) to be installed with Visual Studio 2017 or newer. This also be installed separately with the above installers or when installing Visual Studio with the [Visual Studio Installer](https://learn.microsoft.com/en-us/visualstudio/install/install-visual-studio?view=vs-2022).
+This project requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) to be installed with Visual Studio 2017 or newer. This can also be installed in Visual Studio using the [Visual Studio Installer](https://learn.microsoft.com/en-us/visualstudio/install/install-visual-studio?view=vs-2022).
 
 To build this project, run either of the below commands from the root of the repository:
 
 ```powershell
-# Build using the .NET CLI
-$ dotnet build -c Release
+# Build using the .NET Core CLI
+dotnet build -c Release
+```
 
+```powershell
 # Build using MSBuild in Visual Studio
-$ msbuild /t:Build /p:Configuration=Release
+msbuild /t:Build /p:Configuration=Release
 ```
 
 The MTGOSDK project will automatically build reference assemblies for the latest version of MTGO, even if no existing MTGO installation exists. This helps ensure that the SDK is always up-to-date with the latest versions of MTGO.
 
-To build the project in watch-mode, you can use the `dotnet watch` command with the **MTGOSDK** project instead of the solution file:
+To build the project in watch-mode (and rebuild the solution as it picks up changes), you can use the `dotnet watch` command targeting the **MTGOSDK** project instead of the solution file:
 
 ```powershell
 # Automatically rebuild MTGOSDK when file changes are detected
 $ dotnet watch --project MTGOSDK/MTGOSDK.csproj build -c Release
 ```
 
-This will pick up changes to dependent **MTGOSDK.MSBuild** and **MTGOSDK.Win32** projects as well. As build evaluation is rooted from the MTGOSDK .csproj file, all logs from the build will be stored under the `MTGOSDK/logs` directory.
+This will also pick up changes to dependent **MTGOSDK.MSBuild** and **MTGOSDK.Win32** projects as well. As build evaluation is rooted from the MTGOSDK .csproj file, all logs from the build will be stored under the `MTGOSDK/logs` directory.
+
+## Acknowledgements
+
+MTGOSDK's snapshot runtime uses the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library under the hood. We're grateful to the ClrMD maintainers for their support and their work in providing a powerful library for inspecting and debugging .NET applications.
+
+MTGOSDK's remoting API is also based on an early version of [RemoteNET](https://github.com/theXappy/RemoteNET), which forms the backbone of the SDK's client-server architecture.
 
 ## License
 
