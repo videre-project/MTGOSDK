@@ -8,10 +8,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.Http;
 using System.Security;
+using System.Text.Json;
 using System.Windows;
 
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Users;
@@ -252,15 +252,17 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         throw new HttpRequestException("Failed to fetch server status");
 
       using var content = response.Content;
-      var json = JObject.Parse(await content.ReadAsStringAsync());
+      var json = JsonDocument.Parse(await content.ReadAsStringAsync()).RootElement;
 
-      if (json["returned"].ToObject<int>() == 0)
+      int returned = json.GetProperty("returned").GetInt32();
+      if (returned == 0)
         throw new ExternalErrorException("No MTGO servers were found");
 
       // Check if any servers are online.
+      string serverStatus = json.GetProperty("game_server_status_list")[0]
+        .GetProperty("last_reported_state").GetString();
       string[] statuses = [ "high", "medium", "low" ];
-      return json["game_server_status_list"].Any(s =>
-          statuses.Contains(s["last_reported_state"].ToObject<string>()));
+      return statuses.Contains(serverStatus);
     }
   }
 

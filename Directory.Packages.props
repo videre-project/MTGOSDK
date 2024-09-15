@@ -29,8 +29,8 @@
                     Version="8.0.0" />
     <PackageVersion Include="ImpromptuInterface"
                     Version="8.0.4" />
-    <PackageVersion Include="Newtonsoft.Json"
-                    Version="13.0.3" />
+    <PackageVersion Include="System.Text.Json"
+                    Version="8.0.4" />
     <!-- MTGOSDK.Core -->
     <PackageVersion Include="System.Reflection.Emit.ILGeneration"
                     Version="4.7.0" />
