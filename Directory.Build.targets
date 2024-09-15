@@ -142,7 +142,8 @@
   </Target>
 
   <Target Name="UpdateFeed"
-          AfterTargets="Pack">
+          AfterTargets="Pack"
+          Condition="'$(OS)' == 'Windows_NT'">
     <!-- Query all existing package versions in the feed -->
     <PropertyGroup>
       <FeedPackagePath>$(FeedOutputPath)\$(MSBuildProjectName.ToLower())</FeedPackagePath>
