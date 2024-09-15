@@ -5,37 +5,19 @@
     "precision": "revision"
   },
   "gitCommitIdShortAutoMinimum": 7,
-  "nugetPackageVersion": {
-    "semVer": 2
+  "nuGetPackageVersion": {
+    "semVer": 2.0
   },
-  "pathFilters": [
-    ":!/.config",
-    ":!/.github",
-    ":!/.vscode",
-    ":!/assets",
-    ":!/docs",
-    ":!/examples",
-    ":!/third_party",
-    "!.editorconfig",
-    "!.gitattributes",
-    "!.gitignore",
-    "!Directory.Build.props",
-    "!Directory.Build.rsp",
-    "!Directory.Build.targets",
-    "!Directory.Packages.props",
-    "!LICENSE",
-    "!NOTICE",
-    "!README.md"
-  ],
   "publicReleaseRefSpec": [
     "^refs/heads/main$",
-    "^refs/heads/release/v\\d+(?:\\.\\d+)?$"
+    "^refs/heads/v\\d+(?:\\.\\d+)?$",
+    "^refs/tags/v.*$"
   ],
   "cloudBuild": {
     "setVersionVariables": false
   },
   "release": {
-    "branchName" : "release/v{version}",
-    "firstUnstableTag" : "dev"
+    "firstUnstableTag": "dev",
+    "tagName": "v{version}"
   }
 }
