@@ -49,7 +49,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <summary>
   /// Whether to destroy the MTGO process when disposing of the Remote Client.
   /// </summary>
-  public static bool DestroyOnExit = false;
+  public static bool CloseOnExit = false;
 
   /// <summary>
   /// The port to manage the connection to the MTGO client process.
@@ -272,11 +272,11 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     @client.Dispose();
     Port = null;
 
-    // Kill the MTGO process if DestroyOnExit is set
-    if (DestroyOnExit)
+    // Kill the MTGO process if CloseOnExit is set
+    if (CloseOnExit)
     {
       @process.Kill();
-      DestroyOnExit = false;
+      CloseOnExit = false;
     }
 
     // Reset the singleton instance to allow lazy reinitialization

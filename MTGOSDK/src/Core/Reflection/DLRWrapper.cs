@@ -58,7 +58,15 @@ public abstract class DLRWrapper
   /// <remarks>
   /// This method is a wrapper for the <see cref="Proxy{T}.From"/> method.
   /// </remarks>
-  public static dynamic Unbind(DLRWrapper obj) => Unbind(obj.@base);
+  public static dynamic Unbind(DLRWrapper obj)
+  {
+    dynamic unbound_obj = Try(() => Unbind(obj.@base), () => obj.@base);
+    if (TypeProxy<dynamic>.IsProxy(unbound_obj))
+      throw new InvalidOperationException(
+          $"Unable to unbind types from {obj.GetType().Name}.");
+
+    return unbound_obj;
+  }
 
   /// <summary>
   /// Unbinds the given object instance from the proxied wrapper type.

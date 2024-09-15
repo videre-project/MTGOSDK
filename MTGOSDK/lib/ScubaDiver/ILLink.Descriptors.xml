@@ -4,7 +4,7 @@
     <type fullname="MTGOSDK.Core.Reflection.*"                 preserve="all" />
     <type fullname="MTGOSDK.Core.Remoting.Interop.*"           preserve="all" />
   </assembly>
-  <assembly fullname="Newtonsoft.Json">
-    <namespace fullname="Newtonsoft.Json.Serialization"        preserve="all" />
+  <assembly fullname="System.Text.Json">
+    <namespace fullname="System.Text.Json.Serialization"       preserve="all" />
   </assembly>
 </linker>

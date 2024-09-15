@@ -6,7 +6,8 @@
 
 using System.Net;
 using System.Net.Http;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -19,9 +20,9 @@ namespace MTGOSDK.Core.Remoting.Interop;
 /// </summary>
 public class ReverseCommunicator
 {
-  private readonly JsonSerializerSettings _withErrors = new()
+  private readonly JsonSerializerOptions _withErrors = new ()
   {
-    MissingMemberHandling = MissingMemberHandling.Error,
+    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
   };
 
   private readonly string _hostname;
@@ -99,14 +100,14 @@ public class ReverseCommunicator
       Parameters = args.ToList()
     };
 
-    var requestJsonBody = JsonConvert.SerializeObject(invocReq);
+    var requestJsonBody = JsonSerializer.Serialize(invocReq, _withErrors);
     try
     {
       string resJson = SendRequest("invoke_callback", null, requestJsonBody);
       if(resJson.Contains("\"error\":"))
         return null;
 
-      return JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
+      return JsonSerializer.Deserialize<InvocationResults>(resJson, _withErrors);
     }
     catch
     {

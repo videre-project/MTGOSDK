@@ -14,10 +14,10 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Diagnostics.Runtime;
-using Newtonsoft.Json;
 
 using MTGOSDK.Core.Compiler.Snapshot;
 using MTGOSDK.Core.Logging;
@@ -139,7 +139,7 @@ public partial class Diver : IDisposable
       stackTrace = (new StackTrace(true)).ToString();
     }
     DiverError errResults = new(error, stackTrace);
-    return JsonConvert.SerializeObject(errResults);
+    return JsonSerializer.Serialize(errResults);
   }
 
   #region HTTP Dispatching
