@@ -26,9 +26,9 @@
   </PropertyGroup>
 
   <!-- Enables debug logging from the MTGO client to a separate console -->
-  <!-- <PropertyGroup>
+  <PropertyGroup>
     <DefineConstants>$(DefineConstants);ENABLE_DEBUG_CONSOLE</DefineConstants>
-  </PropertyGroup> -->
+  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Text.Json" />

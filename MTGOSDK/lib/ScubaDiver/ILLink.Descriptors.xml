@@ -5,6 +5,6 @@
     <type fullname="MTGOSDK.Core.Remoting.Interop.*"           preserve="all" />
   </assembly>
   <assembly fullname="System.Text.Json">
-    <namespace fullname="System.Text.Json.Serialization"       preserve="all" />
+    <type fullname="System.Text.Json.*"                        preserve="all" />
   </assembly>
 </linker>
