@@ -5,30 +5,16 @@
 **/
 
 using System;
-using System.Collections;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Diagnostics.Runtime;
-using Newtonsoft.Json;
+using System.Text.Json;
 
-using MTGOSDK.Core.Compiler.Snapshot;
 using MTGOSDK.Core.Logging;
-using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
-using MTGOSDK.Core.Reflection.Types;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
-using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
-using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
-using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
 
@@ -51,7 +37,7 @@ public partial class Diver : IDisposable
     }
 
     TextReader textReader = new StringReader(body);
-    FieldSetRequest request = JsonConvert.DeserializeObject<FieldSetRequest>(body);
+    var request = JsonSerializer.Deserialize<FieldSetRequest>(body);
     if (request == null)
     {
       return QuickError("Failed to deserialize body");
@@ -132,6 +118,6 @@ public partial class Diver : IDisposable
       };
     }
 
-    return JsonConvert.SerializeObject(invocResults);
+    return JsonSerializer.Serialize(invocResults);
   }
 }
