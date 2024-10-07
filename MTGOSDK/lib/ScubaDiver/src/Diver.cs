@@ -337,9 +337,22 @@ public class Diver : IDisposable
       return QuickError($"No assemblies found matching the query '{assembly}'");
 
     List<TypesDump.TypeIdentifiers> types = new List<TypesDump.TypeIdentifiers>();
-    foreach (Type type in matchingAssembly.GetTypes())
+    try
     {
-      types.Add(new TypesDump.TypeIdentifiers() { TypeName = type.FullName });
+      foreach (Type type in matchingAssembly.GetTypes())
+      {
+        types.Add(new TypesDump.TypeIdentifiers() { TypeName = type.FullName });
+      }
+    }
+    // .NET could not load the assembly, which means that the assembly is likely
+    // not a managed assembly that we can perform reflection on. This is not an
+    // error we are too concerned with, so we just log it and continue.
+    catch (ReflectionTypeLoadException e)
+    {
+      foreach (var loaderException in e.LoaderExceptions)
+      {
+        Log.Debug($"[Diver] Failed to load type: {loaderException.Message}");
+      }
     }
 
     TypesDump dump = new() { AssemblyName = assembly, Types = types };
