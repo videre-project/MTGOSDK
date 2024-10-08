@@ -40,10 +40,24 @@ public static class CollectionManager
   /// Returns a list of catalog ids for the given card name.
   /// </summary>
   /// <param name="cardName">The name of the card to query.</param>
+  /// <param name="excludeGoldBorders">
+  /// Whether to exclude gold-bordered cards (non-tournament legal).
+  /// </param>
+  /// <param name="excludeNonMtgoCards">
+  /// Whether to exclude cards that are not available on MTGO.
+  /// </param>
   /// <returns>A list of catalog ids.</returns>
-  public static IList<int> GetCardIds(string cardName) =>
+  public static IList<int> GetCardIds(
+    string cardName,
+    bool excludeGoldBorders = true,
+    bool excludeNonMtgoCards = false
+  ) =>
     Map<IList, int>(
-      s_cardDataManager.GetCatalogIdsForNameInPreferentialOrder(cardName, true));
+      Unbind(s_cardDataManager).GetCatalogIdsForNameInPreferentialOrder(
+        cardName,
+        excludeGoldBorders,
+        excludeNonMtgoCards
+      ));
 
   /// <summary>
   /// Returns a card object by the given catalog id.
