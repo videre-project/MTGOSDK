@@ -133,11 +133,11 @@
           Condition="'$(UseLocalFeed)' == 'true'">
     <ItemGroup>
       <PackageReference Update="MTGOSDK"
-                        VersionOverride="*-dev*" />
+                        VersionOverride="*" />
       <PackageReference Update="MTGOSDK.MSBuild"
-                        VersionOverride="*-dev*" />
+                        VersionOverride="*" />
       <PackageReference Update="MTGOSDK.Win32"
-                        VersionOverride="*-dev*" />
+                        VersionOverride="*" />
     </ItemGroup>
   </Target>
 

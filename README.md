@@ -110,17 +110,17 @@ To reference the local package feed created by the SDK, you can add the followin
 </configuration>
 ```
 
-To reference these packages, you can use the `*-dev*` version specifier in your project file:
+To reference these packages, you can use the `*` wildcard specifier in your project file:
 
 ```xml
 <!-- Add to your project's .csproj or Directory.Packages.props file: -->
 <PackageReference Include="MTGOSDK"
-                  Version="*-dev*" />
+                  Version="*" />
 <PackageReference Include="MTGOSDK.MSBuild"
-                  Version="*-dev*"
+                  Version="*"
                   PrivateAssets="All" />
 <PackageReference Include="MTGOSDK.Win32"
-                  Version="*-dev*" />
+                  Version="*" />
 ```
 
 ## Building this Project

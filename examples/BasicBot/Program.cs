@@ -37,7 +37,7 @@ using var client = new Client(
     : new ClientOptions
       {
         CreateProcess = true,
-        DestroyOnExit = true,
+        CloseOnExit = true,
         AcceptEULAPrompt = true
       },
   loggerFactory: factory
