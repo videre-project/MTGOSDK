@@ -41,7 +41,11 @@ public static class EventManager
   /// All currently queryable events with GetEvent().
   /// </summary>
   public static IEnumerable<dynamic> Events =>
-    Map<dynamic>(eventsById.Values, PlayerEventFactory);
+    Map<dynamic>(
+      Filter(
+        eventsById.Values,
+        new Predicate(e => Try<bool>(() => e.EventId != -1))),
+      PlayerEventFactory);
 
   //
   // IPlayerEvent wrapper methods
@@ -102,6 +106,16 @@ public static class EventManager
       ? playerEvent.PlayerEvent
       : playerEvent;
 
+    //
+    // Here, we encountered a null PlayerEvent object extracted from a
+    // FilterablePlayerEvent (or the input playerEvent was simply null).
+    //
+    // This is likely an object that should have been garbage collected
+    // but wasn't due to a strong reference elsewhere (a memory leak).
+    //
+    if (eventObject == null)
+      throw new InvalidOperationException("PlayerEvent object is null.");
+
     // Map each event type to its corresponding wrapper class.
     switch (eventType)
     {
@@ -117,6 +131,8 @@ public static class EventManager
       case "FilterableQueue" or "Queue":
         eventObject = new Queue(eventObject);
         break;
+      default:
+        throw new InvalidOperationException($"Unknown event type: {eventType}");
     }
     Log.Trace("Created new {Type} object for '{EventObject}'.",
         eventObject.GetType().Name, eventObject);
