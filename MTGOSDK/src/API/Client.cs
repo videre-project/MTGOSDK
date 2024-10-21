@@ -181,8 +181,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         if (!await IsOnline())
           throw new ServerOfflineException("MTGO servers are currently offline.");
 
-        if (!await RemoteClient.StartProcess())
-          throw new SetupFailureException("Failed to start the MTGO process.");
+        // Close any existing MTGO processes.
+        if (!await WaitUntil(() => !RemoteClient.KillProcess(), delay: 10))
+          throw new SetupFailureException("Unable to close existing MTGO processes.");
+
+        // Start a new MTGO process.
+        await RemoteClient.StartProcess();
       }
     })
   {

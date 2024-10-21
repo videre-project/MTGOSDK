@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -78,18 +79,23 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <summary>
   /// The ClickOnce deployment process.
   /// </summary>
-  private static Process ClickOnceProcess() =>
-    Process.GetProcessesByName("dfsvc")
-      .OrderBy(x => x.StartTime)
-      .LastOrDefault();
+  public static Process? ClickOnceProcess() =>
+    Try(() =>
+          Process.GetProcessesByName("dfsvc")
+            .OrderBy(x => x.StartTime)
+            .LastOrDefault(),
+        fallback: null);
 
   /// <summary>
   /// Fetches the MTGO client process.
   /// </summary>
-  private static Process MTGOProcess() =>
-    Process.GetProcessesByName("MTGO")
-      .OrderBy(x => x.StartTime)
-      .FirstOrDefault();
+  public static Process? MTGOProcess() =>
+    Try(() =>
+          Process.GetProcessesByName("MTGO")
+            .Where(x => x.Threads.Count > 1)
+            .OrderBy(x => x.StartTime)
+            .First(),
+        fallback: null);
 
   /// <summary>
   /// Whether the MTGO (ClickOnce) deployment has started.
@@ -126,10 +132,8 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// <exception cref="ExternalErrorException">
   /// Thrown when the MTGO process failed to start.
   /// </exception>
-  public static async Task<bool> StartProcess()
+  public static async Task StartProcess()
   {
-    // Close any existing MTGO processes.
-    try { using var p = MTGOProcess(); p.Kill(); p.WaitForExit(); } catch { }
 
     // Start MTGO using the ClickOnce application manifest uri.
     Log.Debug("Starting MTGO process as the current desktop user.");
@@ -197,7 +201,54 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
-    return await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero);
+    if (!await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero))
+    {
+      // Check to see if the MTGO process has any windows associated with it.
+      if (!Environment.UserInteractive)
+        throw new ExternalErrorException(
+          "Could not launch MTGO in user interactive mode.");
+
+      //
+      // Otherwise, we'll assume that MTGO was launched using native Win32 APIs
+      // which may not be reflected in the HWND returned from COM APIs.
+      //
+      // The best we can do in this case is simply check if the window title has
+      // been updated to indicate that the application entrypoint has ben ran.
+      //
+      if (!string.IsNullOrEmpty(MTGOProcess().MainWindowTitle))
+        throw new SetupFailureException("Failed to start the MTGO process.");
+    }
+  }
+
+  /// <summary>
+  /// Kills the MTGO process.
+  /// </summary>
+  /// <returns>True if the MTGO process was killed.</returns>
+  public static bool KillProcess()
+  {
+    var process = MTGOProcess();
+    if (process is not null)
+    {
+      try
+      {
+        process.Kill();
+        process.WaitForExit();
+        Log.Debug("Killed MTGO process with PID {PID}.", process.Id);
+
+        return true;
+      }
+      catch (Win32Exception)
+      {
+        process.CloseMainWindow();
+        process.WaitForExit();
+
+        process.Refresh();
+        return process.HasExited;
+      }
+
+    }
+
+    return false;
   }
 
   public static bool MinimizeWindow()
