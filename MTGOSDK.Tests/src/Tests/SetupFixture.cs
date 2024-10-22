@@ -86,8 +86,11 @@ public class SetupFixture : DLRWrapper<Client>
     if (!RemoteClient.IsInitialized && client == null) return;
 
     // Log off the client to ensure that the user session terminates.
-    await client.LogOff();
-    Assert.That(Client.IsLoggedIn, Is.False);
+    if (!Client.IsInteractive)
+    {
+      await client.LogOff();
+      Assert.That(Client.IsLoggedIn, Is.False);
+    }
 
     // Set a callback to indicate when the client has been disposed.
     bool isDisposed = false;

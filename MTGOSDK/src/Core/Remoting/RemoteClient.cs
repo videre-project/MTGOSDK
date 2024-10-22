@@ -21,6 +21,7 @@ using MTGOSDK.Win32.Utilities;
 
 namespace MTGOSDK.Core.Remoting;
 using static MTGOSDK.Win32.Constants;
+using static MTGOSDK.Resources.EmbeddedResources;
 
 /// <summary>
 /// A singleton class that manages the connection to the MTGO client process.
@@ -77,16 +78,6 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   //
 
   /// <summary>
-  /// The ClickOnce deployment process.
-  /// </summary>
-  public static Process? ClickOnceProcess() =>
-    Try(() =>
-          Process.GetProcessesByName("dfsvc")
-            .OrderBy(x => x.StartTime)
-            .LastOrDefault(),
-        fallback: null);
-
-  /// <summary>
   /// Fetches the MTGO client process.
   /// </summary>
   public static Process? MTGOProcess() =>
@@ -98,23 +89,35 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
         fallback: null);
 
   /// <summary>
-  /// Whether the MTGO (ClickOnce) deployment has started.
-  /// </summary>
-  public static bool IsStarting =>
-    Try<bool>(() =>
-      ClickOnceProcess().MainWindowTitle.Contains("Launching Process"));
-
-  /// <summary>
-  /// Whether ClickOnce is currently updating the MTGO client.
-  /// </summary>
-  public static bool IsUpdating =>
-    Try<bool>(() =>
-      ClickOnceProcess().MainWindowTitle.Contains("Magic The Gathering Online"));
-
-  /// <summary>
   /// Whether the MTGO client process has started.
   /// </summary>
   public static bool HasStarted => MTGOProcess() is not null;
+
+  /// <summary>
+  /// Installs or updates the MTGO client.
+  /// </summary>
+  public static async Task InstallOrUpdate()
+  {
+    byte[] launcherResource = GetBinaryResource(@"Resources\Launcher.exe");
+    string launcherPath = Path.Combine(Bootstrapper.AppDataDir, "Launcher.exe");
+    OverrideFileIfChanged(launcherPath, launcherResource);
+
+    // Check if there are any updates first before starting MTGO.
+    using var launcher = new Process()
+    {
+      StartInfo = new ProcessStartInfo()
+      {
+        FileName = launcherPath,
+        Arguments = ApplicationUri,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+      },
+    };
+    launcher.Start();
+    await launcher.WaitForExitAsync();
+  }
 
   /// <summary>
   /// Starts the MTGO client process.
@@ -134,6 +137,8 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   /// </exception>
   public static async Task StartProcess()
   {
+    // Check if there are any updates first before starting MTGO.
+    await InstallOrUpdate();
 
     // Start MTGO using the ClickOnce application manifest uri.
     Log.Debug("Starting MTGO process as the current desktop user.");
@@ -152,7 +157,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
         "rundll32.exe",
         $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}"
       );
-      process.WaitForExit();
+      await process.WaitForExitAsync();
     }
     catch
     {
@@ -167,35 +172,14 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
         Arguments = $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}",
       };
       process.Start();
-      process.WaitForExit();
-    }
-
-    //
-    // Check for ClickOnce installation or updates and wait for it to finish.
-    //
-    // This will wait up to 5 seconds for the ClickOnce process to start, then
-    // fallback and wait up to 5 seconds for ClickOnce to begin updating.
-    //
-    // If the MTGO process hasn't started after the first check or 5 minutes
-    // after updating, the process is considered to have failed startup.
-    //
-    if ((await WaitUntil(() => IsStarting, delay:  250, retries: 20 )) ||
-        (await WaitUntil(() => IsUpdating, delay:  250, retries: 20 )) &&
-       !(await WaitUntil(() => HasStarted, delay: 5000, retries: 60 )))
-    {
-      throw new SetupFailureException("The MTGO installation has failed.");
+      await process.WaitForExitAsync();
     }
 
     //
     // Here we perform another check to verify that the process has stalled
     // during installation or updating to better inform the user.
     //
-    if (!(await WaitUntil(() => HasStarted)) && (IsStarting || IsUpdating))
-    {
-      throw new SetupFailureException(
-          "The MTGO installation stalled and did not finish.");
-    }
-    else if (!HasStarted)
+    if (!await WaitUntil(() => HasStarted, delay: 500, retries: 20))
     {
       throw new ExternalErrorException("The MTGO process failed to start.");
     }
@@ -213,7 +197,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
       // which may not be reflected in the HWND returned from COM APIs.
       //
       // The best we can do in this case is simply check if the window title has
-      // been updated to indicate that the application entrypoint has ben ran.
+      // been updated to indicate that the application entrypoint has been ran.
       //
       if (!string.IsNullOrEmpty(MTGOProcess().MainWindowTitle))
         throw new SetupFailureException("Failed to start the MTGO process.");

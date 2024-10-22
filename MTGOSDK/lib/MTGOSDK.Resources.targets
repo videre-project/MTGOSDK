@@ -26,6 +26,7 @@
     <!-- Bundle resource projects' build artifacts into the main library -->
     <ItemGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
+      <ResourceFiles Include="$(SolutionDir)\MTGOSDK\lib\Launcher\dist\*.*" />
     </ItemGroup>
     <!-- Embed all resource files into the MTGOSDK assembly -->
     <ItemGroup Condition="'@(ResourceFiles)' != ''">

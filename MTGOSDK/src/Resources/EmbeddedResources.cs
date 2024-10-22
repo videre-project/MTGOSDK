@@ -65,4 +65,33 @@ public static class EmbeddedResources
 
     return doc;
   }
+
+  public static void OverrideFileIfChanged(string filePath, byte[] data)
+  {
+    bool fileChanged = true;
+
+    if (File.Exists(filePath))
+    {
+      using (FileStream file = new(filePath, FileMode.Open, FileAccess.Read))
+      {
+        if (file.Length == data.Length)
+        {
+          fileChanged = false;
+          for (int i = 0; i < file.Length; i++)
+          {
+            if (file.ReadByte() != data[i])
+            {
+              fileChanged = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (fileChanged)
+    {
+      File.WriteAllBytes(filePath, data);
+    }
+  }
 }

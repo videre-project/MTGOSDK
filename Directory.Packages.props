@@ -44,6 +44,9 @@
     <!-- MTGOSDK/lib/ILRepack -->
     <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
                     Version="2.0.34.1" />
+    <!-- MTGOSDK/lib/Launcher -->
+    <PackageVersion Include="FrameworkExtract.System.Deployment"
+                    Version="4.0.30319" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
                     Version="17.10.4" />

@@ -82,7 +82,7 @@ public static class SettingsService
       ?? throw new KeyNotFoundException(
           $"The key '{key}' was not found in the client settings.");
 
-    return Cast<PrimitiveSetting<T>>(obj).Value;
+    return Try(() => Cast<PrimitiveSetting<T>>(obj).Value, default(T));
   }
 
   /// <summary>
