@@ -70,6 +70,13 @@ public static class EmbeddedResources
   {
     bool fileChanged = true;
 
+    // If the parent directories don't exist, create them recursively.
+    var parentDir = Path.GetDirectoryName(filePath);
+    if (!Directory.Exists(parentDir))
+    {
+      Directory.CreateDirectory(parentDir);
+    }
+
     if (File.Exists(filePath))
     {
       using (FileStream file = new(filePath, FileMode.Open, FileAccess.Read))
