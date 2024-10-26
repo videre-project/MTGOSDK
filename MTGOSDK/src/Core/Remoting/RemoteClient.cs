@@ -17,6 +17,7 @@ using MTGOSDK.Resources;
 
 using MTGOSDK.Win32.API;
 using MTGOSDK.Win32.Utilities;
+using MTGOSDK.Win32.Deployment;
 
 
 namespace MTGOSDK.Core.Remoting;
@@ -26,7 +27,7 @@ using static MTGOSDK.Resources.EmbeddedResources;
 /// <summary>
 /// A singleton class that manages the connection to the MTGO client process.
 /// </summary>
-public sealed class RemoteClient : DLRWrapper<dynamic>
+public sealed class RemoteClient : DLRWrapper
 {
   //
   // Singleton instance and static accessors
@@ -94,6 +95,44 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
   public static bool HasStarted => MTGOProcess() is not null;
 
   /// <summary>
+  /// Starts a shell process and logs the output.
+  /// </summary>
+  /// <param name="path">The path to the executable.</param>
+  /// <param name="args">The arguments to pass to the executable.</param>
+  /// <param name="timeout">The timeout to wait for the process to exit.</param>
+  private static async Task StartShellProcess(
+    string path,
+    string args = "",
+    TimeSpan? timeout = null)
+  {
+    using var process = new Process()
+    {
+      StartInfo = new ProcessStartInfo()
+      {
+        FileName = path,
+        Arguments = args,
+        UseShellExecute = true,
+        CreateNoWindow = false,
+      },
+    };
+    process.Start();
+
+    // Return early if no timeout is specified
+    if (timeout == TimeSpan.Zero) return;
+
+    // Wait for the process to exit or timeout
+    var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(10));
+    try
+    {
+      await process.WaitForExitAsync(cts.Token);
+    }
+    catch (OperationCanceledException)
+    {
+      throw new ExternalErrorException($"The process '{path}' timed out after {cts.Token} seconds.");
+    }
+  }
+
+  /// <summary>
   /// Installs or updates the MTGO client.
   /// </summary>
   public static async Task InstallOrUpdate()
@@ -103,20 +142,24 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     OverrideFileIfChanged(launcherPath, launcherResource);
 
     // Check if there are any updates first before starting MTGO.
-    using var launcher = new Process()
+    // This will also create a new MTGO installation if one does not exist.
+    await StartShellProcess(launcherPath, ApplicationUri,
+                            timeout: TimeSpan.FromMinutes(5));
+
+    //
+    // Its possible for the ClickOnce service to not be running after a new
+    // installation of MTGO (usually on Windows Server i.e. Datacenter builds).
+    //
+    // This is a workaround to ensure that the ClickOnce service is running
+    // before trying to start the MTGO process (which will fail if not running).
+    //
+    if (Process.GetProcessesByName("dfsvc").Length == 0)
     {
-      StartInfo = new ProcessStartInfo()
-      {
-        FileName = launcherPath,
-        Arguments = ApplicationUri,
-        UseShellExecute = false,
-        CreateNoWindow = true,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-      },
-    };
-    launcher.Start();
-    await launcher.WaitForExitAsync();
+      Log.Debug("The ClickOnce service is not running. Starting it now.");
+      await StartShellProcess(ClickOncePaths.ClickOnceServiceExecutable,
+                              // Do not wait for the service to exit.
+                              timeout: TimeSpan.Zero);
+    }
   }
 
   /// <summary>
@@ -153,10 +196,7 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
       // account running this process. Refer to the below resource for more info:
       // https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/replace-a-process-level-token
       //
-      using var process = ProcessUtilities.RunAsDesktopUser(
-        "rundll32.exe",
-        $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}"
-      );
+      using var process = ProcessUtilities.RunAsDesktopUser(AppRefPath, "");
       await process.WaitForExitAsync();
     }
     catch
@@ -165,26 +205,21 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
       // Fall back to starting the process assuming the process has proper
       // permissions set to start as the current user (or is now set).
       //
-      using var process = new Process();
-      process.StartInfo = new ProcessStartInfo()
-      {
-        FileName = "rundll32.exe",
-        Arguments = $"dfshim.dll,ShOpenVerbApplication {ApplicationUri}",
-      };
-      process.Start();
-      await process.WaitForExitAsync();
+      await StartShellProcess(AppRefPath, timeout: TimeSpan.FromSeconds(10));
     }
 
     //
     // Here we perform another check to verify that the process has stalled
     // during installation or updating to better inform the user.
     //
-    if (!await WaitUntil(() => HasStarted, delay: 500, retries: 20))
+    if (!await WaitUntil(() => HasStarted, delay: 500, retries: 20)) // 10s
     {
       throw new ExternalErrorException("The MTGO process failed to start.");
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
+    MTGOProcess().WaitForInputIdle();
+    await WaitUntil(() => !string.IsNullOrEmpty(MTGOProcess().MainWindowTitle));
     if (!await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero))
     {
       // Check to see if the MTGO process has any windows associated with it.
@@ -194,13 +229,14 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
 
       //
       // Otherwise, we'll assume that MTGO was launched using native Win32 APIs
-      // which may not be reflected in the HWND returned from COM APIs.
+      // which may not be reflected in the HWND returned from COM APIs. This is
+      // after 10 seconds of waiting for the process's HWND to be refreshed.
       //
-      // The best we can do in this case is simply check if the window title has
-      // been updated to indicate that the application entrypoint has been ran.
+      // The best we can do in this case is simply check if the window title is
+      // unset to indicate that the application entrypoint has not finished.
       //
       if (!string.IsNullOrEmpty(MTGOProcess().MainWindowTitle))
-        throw new SetupFailureException("Failed to start the MTGO process.");
+        throw new SetupFailureException("The MTGO process failed to initialize.");
     }
   }
 
@@ -269,7 +305,9 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     // Connect to the MTGO process
     ushort port = Port ??= Cast<ushort>(_clientProcess.Id);
     Log.Trace("Connecting to MTGO process on port {Port}", port);
-    RemoteHandle client = RemoteHandle.Connect(_clientProcess, port);
+    var client = Retry(() => RemoteHandle.Connect(_clientProcess, port),
+                       // Retry connecting to avoid creating a race condition
+                       delay: 500, retries: 3, raise: true);
 
     // Teardown on fatal exception.
     AppDomain.CurrentDomain.UnhandledException += (s, e) =>

@@ -202,12 +202,19 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (options.StartMinimized)
       RemoteClient.MinimizeWindow();
 
+    //
     // Closes any blocking dialogs preventing the client from logging in.
-    if (options.AcceptEULAPrompt && !IsConnected)
+    //
+    // This will often check for the presence of certain classes and UI elements
+    // that may still be initializing, so for consistency we give our initial
+    // checks a few seconds to complete before proceeding.
+    //
+    if (options.AcceptEULAPrompt && !Retry(() => IsConnected, delay: 1000))
     {
       // Check if the last accepted EULA version is still the latest version.
-      var EULAVersion = SettingsService.GetSetting<Version>(
-          Setting.LastEULAVersionNumberAgreedTo);
+      var EULAVersion = Retry(() =>
+        SettingsService.GetSetting<Version>(Setting.LastEULAVersionNumberAgreedTo),
+        delay: 1000, retries: 5);
       if (Version > EULAVersion)
       {
         Log.Debug("Accepting EULA prompt for MTGO v{Version}.", Version);
