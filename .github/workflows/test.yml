@@ -1,0 +1,67 @@
+name: Test
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - '.github/workflows/test.yml'
+      - '**/*.cs'
+      - '**/*.sln'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '**/packages.lock.json'
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.workflow }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  test:
+    runs-on: windows-latest
+    name: "Run SDK Tests"
+    steps:
+      # Fetches remote repository without --progress option.
+      #
+      # The default behavior of @actions/checkout outputs many noisy lines of
+      # status output in the workflow log, which is problematic for log size.
+      - name: Checkout latest repository commit
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+          fetch-depth: 0 # Disable shallow clone for Nerdbank.GitVersioning
+
+      # Setup the .NET environment
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v4
+
+      # Setup NuGet environment
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet Cache
+        id: nuget-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore NuGet packages
+        if: steps.nuget-cache.outputs.cache-hit != 'true'
+        run: nuget restore -Verbosity quiet -NonInteractive -UseLockFile
+
+      # Build the SDK
+      - name: Build SDK Solution
+        run: dotnet build
+
+      # Create .env file for integration tests
+      - name: Create .env file
+        run: |
+          echo "USERNAME=${{ secrets.USERNAME }}" > .env
+          echo "PASSWORD=${{ secrets.PASSWORD }}" >> .env
+
+      # Run the test suite
+      - name: Run tests
+        run: dotnet test --no-build -clp:NoSummary

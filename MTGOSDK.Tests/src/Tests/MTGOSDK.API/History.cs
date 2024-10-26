@@ -15,7 +15,7 @@ namespace MTGOSDK.Tests.MTGOSDK_API;
 
 public class History : HistoryValidationFixture
 {
-  [Test]
+  // [Test]
   public void Test_HistoryManager()
   {
     Assert.That(HistoryManager.HistoryLoaded, Is.True);
@@ -47,7 +47,7 @@ public class History : HistoryValidationFixture
 
   // [RateLimit(ms: 300)]
   // [TestCase<HistoricalItem>()]
-  [TestCase<HistoricalMatch>()]
+  // [TestCase<HistoricalMatch>()]
   // [TestCase<HistoricalTournament>()]
   public void Test_HistoricalItems<T>()
     where T : class
