@@ -20,14 +20,32 @@ jobs:
   test:
     runs-on: windows-latest
     name: "Run SDK Tests"
+    timeout-minutes: 15
     steps:
-      # Fetches remote repository without --progress option.
+      # Creates a dev drive using ReFS.
       #
-      # The default behavior of @actions/checkout outputs many noisy lines of
-      # status output in the workflow log, which is problematic for log size.
+      # This step creates a 10GB VHDX file, mounts it, initializes the disk,
+      # creates a partition, and formats the volume using ReFS. The drive letter
+      # is stored in the DEV_DRIVE environment variable for later use.
+      - name: Create dev drive using ReFS
+        run: |
+          $VHD_PATH = "${{ github.workspace }}/dev.vhdx"
+          $Volume = New-VHD -Path $VHD_PATH -SizeBytes 10GB -Fixed |
+                    Mount-VHD -Passthru |
+                    Initialize-Disk -Passthru |
+                    New-Partition -AssignDriveLetter -UseMaximumSize |
+                    Format-Volume -FileSystem ReFS -Confirm:$false -Force
+          Write-Output "WORKSPACE=$($Volume.DriveLetter):/workspace" >> $env:GITHUB_ENV
+
+      # Checks out the repository to the dev drive.
+      #
+      # This is a patch of the actions/checkout action to allow for `path` to
+      # point to another drive. By default, this is restricted to paths relative
+      # to the $GITHUB_WORKSPACE directory, which is slower than a ReFS VHDX.
       - name: Checkout latest repository commit
-        uses: actions/checkout@v4
+        uses: Qonfused/checkout@4.2.2
         with:
+          path: ${{ env.WORKSPACE }}
           show-progress: false
           fetch-depth: 0 # Disable shallow clone for Nerdbank.GitVersioning
 
@@ -43,25 +61,40 @@ jobs:
         id: nuget-cache
         uses: actions/cache@v4
         with:
-          path: ~/.nuget/packages
+          path: ${{ env.WORKSPACE }}/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: Restore NuGet packages
         if: steps.nuget-cache.outputs.cache-hit != 'true'
-        run: nuget restore -Verbosity quiet -NonInteractive -UseLockFile
+        run: |
+          nuget restore `
+            -Verbosity quiet `
+            -NonInteractive -UseLockFile `
+            -OutputDirectory "${{ env.WORKSPACE }}/packages"
+        working-directory: ${{ env.WORKSPACE }}
 
       # Build the SDK
       - name: Build SDK Solution
         run: dotnet build
+        working-directory: ${{ env.WORKSPACE }}
 
       # Create .env file for integration tests
       - name: Create .env file
         run: |
           echo "USERNAME=${{ secrets.USERNAME }}" > .env
           echo "PASSWORD=${{ secrets.PASSWORD }}" >> .env
+        working-directory: ${{ env.WORKSPACE }}
 
       # Run the test suite
+      #
+      # Run tests with a retry mechanism to handle transient test failures from
+      # slow Windows runners. This is a workaround for intermittent crashes
+      # caused by small Windows Server 2022 runners' service instability.
       - name: Run tests
-        run: dotnet test --no-build -clp:NoSummary
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: dotnet test "${{ env.WORKSPACE }}" --no-build -clp:NoSummary
