@@ -81,7 +81,7 @@ public class SetupFixture : Shared
     // If an exception occurs, log the error and immediately exit the runner.
     catch (Exception ex)
     {
-      TestContext.Error.WriteLine(ex);
+      TestContext.Error.WriteLine($"Error: {ex.ToString()}");
       TestContext.Error.Flush();
       await Task.Delay(1000);
       Environment.Exit(-100);
