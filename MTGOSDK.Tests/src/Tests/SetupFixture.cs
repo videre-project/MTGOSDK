@@ -81,14 +81,26 @@ public class SetupFixture : Shared
     // If an exception occurs, log the error and immediately exit the runner.
     catch (Exception ex)
     {
-      // Check if inside a GitHub Actions CI environment.
-      if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+      // If the exception is an aggregate exception, get the inner exception
+      // and unroll the full stack trace.
+      string error;
+      if (ex is AggregateException ae)
       {
-        TestContext.Error.WriteLine($"::error title=Encountered an error during setup::{ex.ToString()}");
+        error = ae.Flatten().ToString();
       }
       else
       {
-        TestContext.Error.WriteLine(ex.ToString());
+        error = ex.ToString();
+      }
+
+      // Check if inside a GitHub Actions CI environment.
+      if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+      {
+        TestContext.Error.WriteLine($"::error title=Encountered an error during setup::{error}");
+      }
+      else
+      {
+        TestContext.Error.WriteLine(error);
       }
 
       TestContext.Error.Flush();
