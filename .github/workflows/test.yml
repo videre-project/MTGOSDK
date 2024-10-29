@@ -20,7 +20,6 @@ jobs:
   test:
     runs-on: windows-latest
     name: "Run SDK Tests"
-    timeout-minutes: 30
     steps:
       # Creates a dev drive using ReFS.
       #
@@ -96,6 +95,7 @@ jobs:
         uses: nick-fields/retry@v3
         with:
           max_attempts: 3
+          timeout_minutes: 15
           command: dotnet test "${{ env.WORKSPACE }}" --no-build -clp:NoSummary
           retry_on_exit_code: 1
           polling_interval_seconds: 5
