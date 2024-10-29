@@ -11,7 +11,7 @@ namespace MTGOSDK.Tests;
 public abstract class BaseFixture : Shared
 {
   public static void Write(string message) =>
-    TestContext.Out.WriteLine(message);
+    TestContext.WriteLine(message);
 
   private static void Mark(string? name = null) =>
     Write("----------------------- " + (name != null ? name + ":" : ""));

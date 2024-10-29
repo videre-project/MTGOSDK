@@ -67,7 +67,7 @@ public class NUnitLogger(
     try
     {
       // TestContext.Progress.WriteLine(message); // Requires '--logger "Console;Verbosity=normal"'
-      TestContext.Out.WriteLine(message);
+      TestContext.WriteLine(message);
     }
     catch (Exception)
     {
