@@ -17,21 +17,12 @@ using MTGOSDK.NUnit.Logging;
 
 namespace MTGOSDK.Tests;
 
-[SetUpFixture]
-public class SetupFixture : DLRWrapper<Client>
+/// <summary>
+/// A shared setup fixture that can be used to interact with the global state
+/// of the test runner.
+/// </summary>
+public class Shared : DLRWrapper<Client>
 {
-  /// <summary>
-  /// A shared setup fixture that can be used to interact with the global state
-  /// of the test runner.
-  /// </summary>
-  public class Shared : SetupFixture
-  {
-#pragma warning disable CS1998
-    public override async Task RunBeforeAnyTests() { }
-    public override async Task RunAfterAnyTests() { }
-#pragma warning restore CS1998
-  }
-
   /// <summary>
   /// The default client instance to interact with the MTGO API.
   /// </summary>
@@ -40,8 +31,14 @@ public class SetupFixture : DLRWrapper<Client>
   /// tests in the test suite in a multi-threaded environment to avoid redundant
   /// setup and teardown operations with the <see cref="SetupFixture"/> class.
   /// </remarks>
-  public static Client client { get; private set; } = null!;
+#pragma warning disable CA2211 // Non-constant fields should not be visible
+  public static Client client = null!;
+#pragma warning restore CA2211 // Non-constant fields should not be visible
+}
 
+[SetUpFixture]
+public class SetupFixture : Shared
+{
   [OneTimeSetUp, CancelAfter(/* 5 min */ 300_000)]
   public virtual async Task RunBeforeAnyTests()
   {
