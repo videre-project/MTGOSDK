@@ -63,15 +63,15 @@
     <PackageVersion Include="coverlet.msbuild"
                     Version="6.0.2" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk"
-                    Version="17.11.1" />
+                    Version="17.10.0" />
     <PackageVersion Include="NUnit"
-                    Version="4.2.2" />
+                    Version="4.1.0" />
     <PackageVersion Include="NUnit.Analyzers"
-                    Version="4.3.0" />
+                    Version="4.2.0" />
     <PackageVersion Include="NUnit3TestAdapter"
-                    Version="4.6.0" />
+                    Version="4.5.0" />
     <PackageVersion Include="ReportGenerator"
-                    Version="5.3.11" />
+                    Version="5.3.8" />
   </ItemGroup>
 
   <!-- .NET Standard 2.0 -->

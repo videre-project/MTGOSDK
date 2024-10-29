@@ -47,10 +47,10 @@ public class Events : EventValidationFixture
   }
 
   [RateLimit(ms: 300)]
-  [TestCaseGeneric<League>()]
-  [TestCaseGeneric<Match>()]
-  [TestCaseGeneric<Tournament>()]
-  [TestCaseGeneric<Queue>()]
+  [TestCase<League>()]
+  [TestCase<Match>()]
+  [TestCase<Tournament>()]
+  [TestCase<Queue>()]
   public void Test_Events<T>() where T : Event
   {
     // For testing, we'll restrict testing to small-sized events.

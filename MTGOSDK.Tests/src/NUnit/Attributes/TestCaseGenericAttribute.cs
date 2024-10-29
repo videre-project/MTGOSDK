@@ -38,22 +38,22 @@ public class TestCaseGenericAttribute(params object[] arguments)
 }
 
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public class TestCaseGenericAttribute<T> : TestCaseGenericAttribute
+public class TestCaseAttribute<T> : TestCaseGenericAttribute
 {
-  public TestCaseGenericAttribute(params object[] arguments) : base(arguments) =>
+  public TestCaseAttribute(params object[] arguments) : base(arguments) =>
     TypeArguments = new[] { typeof(T) };
 }
 
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public class TestCaseGenericAttribute<T1, T2> : TestCaseGenericAttribute
+public class TestCaseAttribute<T1, T2> : TestCaseGenericAttribute
 {
-  public TestCaseGenericAttribute(params object[] arguments) : base(arguments) =>
+  public TestCaseAttribute(params object[] arguments) : base(arguments) =>
     TypeArguments = new[] { typeof(T1), typeof(T2) };
 }
 
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public class TestCaseGenericAttribute<T1, T2, T3> : TestCaseGenericAttribute
+public class TestCaseAttribute<T1, T2, T3> : TestCaseGenericAttribute
 {
-  public TestCaseGenericAttribute(params object[] arguments) : base(arguments) =>
+  public TestCaseAttribute(params object[] arguments) : base(arguments) =>
     TypeArguments = new[] { typeof(T1), typeof(T2), typeof(T3) };
 }
