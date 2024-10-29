@@ -81,7 +81,16 @@ public class SetupFixture : Shared
     // If an exception occurs, log the error and immediately exit the runner.
     catch (Exception ex)
     {
-      TestContext.Error.WriteLine($"Error: {ex.ToString()}");
+      // Check if inside a GitHub Actions CI environment.
+      if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+      {
+        TestContext.Error.WriteLine($"::error title=Encountered an error during setup::{ex.ToString()}");
+      }
+      else
+      {
+        TestContext.Error.WriteLine(ex.ToString());
+      }
+
       TestContext.Error.Flush();
       await Task.Delay(1000);
       Environment.Exit(-100);
