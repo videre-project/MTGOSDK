@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
@@ -42,38 +43,49 @@ public class SetupFixture : Shared
   [OneTimeSetUp, CancelAfter(/* 5 min */ 300_000)]
   public virtual async Task RunBeforeAnyTests()
   {
-    // Skip if the client has already been initialized.
-    if (Client.HasStarted && client != null) return;
-
-    client = new Client(
-      new ClientOptions
-      {
-        CreateProcess = true,
-        StartMinimized = true,
-        // DestroyOnExit = true,
-        AcceptEULAPrompt = true
-      },
-      loggerProvider: new NUnitLoggerProvider(LogLevel.Trace)
-    );
-
-    // Ensure the MTGO client is not interactive (with an existing user session).
-    Assert.That(Client.IsInteractive, Is.False);
-
-    if (!Client.IsConnected)
+    try
     {
-      DotEnv.LoadFile();
-      // Waits until the client has loaded and is ready.
-      await client.LogOn(
-        username: DotEnv.Get("USERNAME"), // String value
-        password: DotEnv.Get("PASSWORD")  // SecureString value
+      // Skip if the client has already been initialized.
+      if (Client.HasStarted && client != null) return;
+
+      client = new Client(
+        new ClientOptions
+        {
+          CreateProcess = true,
+          StartMinimized = true,
+          // DestroyOnExit = true,
+          AcceptEULAPrompt = true
+        },
+        loggerProvider: new NUnitLoggerProvider(LogLevel.Trace)
       );
-      Assert.That(Client.IsLoggedIn, Is.True);
 
-      // Revalidate the client's reported interactive state.
+      // Ensure the MTGO client is not interactive (with an existing user session).
       Assert.That(Client.IsInteractive, Is.False);
-    }
 
-    client.ClearCaches();
+      if (!Client.IsConnected)
+      {
+        DotEnv.LoadFile();
+        // Waits until the client has loaded and is ready.
+        await client.LogOn(
+          username: DotEnv.Get("USERNAME"), // String value
+          password: DotEnv.Get("PASSWORD")  // SecureString value
+        );
+        Assert.That(Client.IsLoggedIn, Is.True);
+
+        // Revalidate the client's reported interactive state.
+        Assert.That(Client.IsInteractive, Is.False);
+      }
+
+      client.ClearCaches();
+    }
+    // If an exception occurs, log the error and immediately exit the runner.
+    catch (Exception ex)
+    {
+      TestContext.Error.WriteLine(ex);
+      TestContext.Error.Flush();
+      await Task.Delay(1000);
+      Environment.Exit(-100);
+    }
   }
 
   [OneTimeTearDown, CancelAfter(/* 10 seconds */ 10_000)]
