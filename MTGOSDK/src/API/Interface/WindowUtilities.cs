@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using ICollection = System.Collections.Generic.ICollection<dynamic>;
 using System.Windows;
 
 using MTGOSDK.Core.Logging;
@@ -36,7 +37,7 @@ public static class WindowUtilities
   /// <exception cref="InvalidOperationException">
   /// Thrown if the window collection can not be retrieved.
   /// </exception>
-  public static ICollection<dynamic> GetWindows()
+  public static ICollection GetWindows()
   {
     // This is a hack that caches the dispatcher's registered windows.
     _ = Unbind(s_windowUtilities).AllWindows;
@@ -52,7 +53,7 @@ public static class WindowUtilities
           .GetInstances(new TypeProxy<WindowCollection>())
           .LastOrDefault() ?? throw null;
 
-        return Bind<ICollection<dynamic>>(collection);
+        return Bind<ICollection>(collection);
       }
       catch { }
     }
@@ -73,7 +74,7 @@ public static class WindowUtilities
       throw new InvalidOperationException("Cannot close dialogs in an interactive session.");
 
     Log.Information("Closing all dialog windows.");
-    foreach(var window in GetWindows())
+    foreach(var window in Retry<ICollection>(GetWindows, delay: 500, raise: true))
     {
       //
       // Sets the DialogResult property of the IClosableViewModel proxy object,
