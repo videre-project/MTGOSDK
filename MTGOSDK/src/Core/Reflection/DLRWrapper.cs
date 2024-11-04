@@ -410,6 +410,14 @@ public abstract class DLRWrapper
     }
   }
 
+  /// <summary>
+  /// Safely executes a lambda function with a given number of retries.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="default">The default value to fallback to (optional).</param>
+  /// <param name="delay">The delay in ms between retries (optional).</param>
+  /// <param name="retries">The number of times to retry (optional).</param>
+  /// <returns>The result of the function, otherwise an exception is thrown.</returns>
   public static void Retry(
     Action lambda,
     int delay = 100,
