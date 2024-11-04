@@ -87,19 +87,9 @@ jobs:
         working-directory: ${{ env.WORKSPACE }}
 
       # Run the test suite
-      #
-      # Run tests with a retry mechanism to handle transient test failures from
-      # slow Windows runners. This is a workaround for intermittent crashes
-      # caused by small Windows Server 2022 runners' service instability.
       - name: Run tests
-        uses: nick-fields/retry@v3
-        with:
-          max_attempts: 3
-          timeout_minutes: 10
-          command: dotnet test "${{ env.WORKSPACE }}" --no-build -clp:NoSummary
-          # Cleanup the MTGO process if it's still running after a test failure
-          on_retry_command: |
-            Get-Process -Name "MTGO*" | Stop-Process -Force -ErrorAction SilentlyContinue
+        run: dotnet test --no-build -clp:NoSummary
+        working-directory: ${{ env.WORKSPACE }}
 
       # Show the Diver logs for debugging test failures or crashes
       - if: ${{ failure() }}
