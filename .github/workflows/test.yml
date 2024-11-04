@@ -99,3 +99,8 @@ jobs:
           command: dotnet test "${{ env.WORKSPACE }}" --no-build -clp:NoSummary
           retry_on_exit_code: 1
           polling_interval_seconds: 5
+
+      # Show the Diver logs for debugging test failures or crashes
+      - if: ${{ always() }}
+        shell: pwsh
+        run: Get-Content $env:LOCALAPPDATA\MTGOSDK\Logs\*
