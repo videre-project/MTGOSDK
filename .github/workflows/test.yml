@@ -97,11 +97,11 @@ jobs:
           max_attempts: 3
           timeout_minutes: 10
           command: dotnet test "${{ env.WORKSPACE }}" --no-build -clp:NoSummary
+          # Cleanup the MTGO process if it's still running after a test failure
           on_retry_command: |
-            # Cleanup the MTGO process if it's running after a test failure
             Get-Process -Name "MTGO*" | Stop-Process -Force -ErrorAction SilentlyContinue
 
       # Show the Diver logs for debugging test failures or crashes
-      - if: ${{ always() }}
+      - if: ${{ failure() }}
         shell: pwsh
         run: Get-Content $env:LOCALAPPDATA\MTGOSDK\Logs\* -Tail 1000
