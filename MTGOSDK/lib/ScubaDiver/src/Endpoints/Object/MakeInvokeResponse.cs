@@ -142,11 +142,15 @@ public partial class Diver : IDisposable
     Log.Debug($"[Diver] Resolved method: {method.Name}({argsSummary}), Containing Type: {method.DeclaringType}");
 
     object results = null;
+    string[] suppressTypes = ["SecureString"];
     try
     {
       argsSummary = string.Join(", ", paramsList.Select(param => param?.ToString() ?? "null"));
       if (string.IsNullOrEmpty(argsSummary))
         argsSummary = "No Arguments";
+      else if (suppressTypes.Contains(method.DeclaringType.Name))
+        argsSummary = "*";
+
       Log.Debug($"[Diver] Invoking {method.Name} with those args (Count: {paramsList.Count}): `{argsSummary}`");
       results = method.Invoke(instance, paramsList.ToArray());
     }
