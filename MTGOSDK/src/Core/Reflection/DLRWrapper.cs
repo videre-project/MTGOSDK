@@ -410,6 +410,15 @@ public abstract class DLRWrapper
     }
   }
 
+  public static void Retry(
+    Action lambda,
+    int delay = 100,
+    int retries = 3,
+    bool raise = false)
+  {
+    Retry(() => { lambda(); return true; }, true, delay, retries, raise);
+  }
+
   /// <summary>
   /// Marks the retrieval of a DLRWrapper's instance as optional.
   /// </summary>

@@ -39,28 +39,15 @@ public static class WindowUtilities
   /// </exception>
   public static ICollection GetWindows()
   {
-    // This is a hack that caches the dispatcher's registered windows.
-    _ = Unbind(s_windowUtilities).AllWindows;
-    _ = s_windowUtilities.AllWindows;
-
     // Attempt to retrieve the updated window collection from client memory.
     Log.Trace("Getting window collection from client memory.");
-    for (var retries = 5; retries > 0; retries--)
+    dynamic collection = Retry(delegate
     {
-      try
-      {
-        var collection = RemoteClient
-          .GetInstances(new TypeProxy<WindowCollection>())
-          .LastOrDefault() ?? throw null;
+      return RemoteClient.GetInstances(new TypeProxy<WindowCollection>())
+        .LastOrDefault() ?? throw null;
+    }) ?? new InvalidOperationException("Failed to get window collection.");
 
-        return Bind<ICollection>(collection);
-      }
-      catch { }
-
-      Task.Delay(500).Wait();
-    }
-
-    throw new InvalidOperationException("Failed to get window collection.");
+    return Bind<ICollection<dynamic>>(collection);
   }
 
   /// <summary>
@@ -76,7 +63,7 @@ public static class WindowUtilities
       throw new InvalidOperationException("Cannot close dialogs in an interactive session.");
 
     Log.Information("Closing all dialog windows.");
-    foreach(var window in Retry<ICollection>(GetWindows, delay: 500, raise: true))
+    foreach(var window in GetWindows())
     {
       //
       // Sets the DialogResult property of the IClosableViewModel proxy object,
