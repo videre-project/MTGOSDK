@@ -8,7 +8,7 @@ namespace MTGOSDK.Tests;
 
 [TestFixture]
 [Parallelizable]
-public abstract class BaseFixture : SetupFixture.Shared
+public abstract class BaseFixture : Shared
 {
   public static void Write(string message) =>
     TestContext.WriteLine(message);

@@ -4,6 +4,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <LangVersion>Latest</LangVersion>
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);NUnit1033</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

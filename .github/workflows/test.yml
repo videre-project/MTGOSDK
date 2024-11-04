@@ -20,7 +20,6 @@ jobs:
   test:
     runs-on: windows-latest
     name: "Run SDK Tests"
-    timeout-minutes: 15
     steps:
       # Creates a dev drive using ReFS.
       #
@@ -88,13 +87,11 @@ jobs:
         working-directory: ${{ env.WORKSPACE }}
 
       # Run the test suite
-      #
-      # Run tests with a retry mechanism to handle transient test failures from
-      # slow Windows runners. This is a workaround for intermittent crashes
-      # caused by small Windows Server 2022 runners' service instability.
       - name: Run tests
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: dotnet test "${{ env.WORKSPACE }}" --no-build -clp:NoSummary
+        run: dotnet test --no-build -clp:NoSummary
+        working-directory: ${{ env.WORKSPACE }}
+
+      # Show the Diver logs for debugging test failures or crashes
+      - if: ${{ failure() }}
+        shell: pwsh
+        run: Get-Content $env:LOCALAPPDATA\MTGOSDK\Logs\* -Tail 1000

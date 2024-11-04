@@ -218,7 +218,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       if (Version > EULAVersion)
       {
         Log.Debug("Accepting EULA prompt for MTGO v{Version}.", Version);
-        WindowUtilities.CloseDialogs();
+        Retry(WindowUtilities.CloseDialogs, delay: 1000, raise: true);
       }
     }
 
