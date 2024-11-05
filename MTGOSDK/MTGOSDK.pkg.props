@@ -14,7 +14,7 @@
   <PropertyGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
-    <!-- <UseILLinkTrim>true</UseILLinkTrim> -->
+    <UseILLinkTrim>true</UseILLinkTrim>
     <SelfContained>false</SelfContained>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <MergeNugetDependencies>false</MergeNugetDependencies>
