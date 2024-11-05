@@ -7,8 +7,8 @@
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -29,11 +29,10 @@ public class CallbacksListener
   public IPAddress IP { get; set; }
   public int Port { get; set; }
 
-  private readonly JsonSerializerOptions _withErrors = new ()
+  private readonly JsonSerializerSettings _withErrors = new()
   {
-    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+    MissingMemberHandling = MissingMemberHandling.Error,
   };
-
   private readonly Dictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
   private readonly Dictionary<LocalEventCallback, int> _eventHandlersToToken = new();
   private readonly DiverCommunicator _communicator;
@@ -185,8 +184,7 @@ public class CallbacksListener
       {
         body = sr.ReadToEnd();
       }
-      var res = JsonSerializer.Deserialize<CallbackInvocationRequest>(body, _withErrors);
-
+      var res = JsonConvert.DeserializeObject<CallbackInvocationRequest>(body, _withErrors);
       if (_tokensToEventHandlers.TryGetValue(res.Token, out LocalEventCallback callbackFunction))
       {
         (bool voidReturnType, ObjectOrRemoteAddress callbackRes) = callbackFunction(res.Parameters.ToArray());
@@ -197,14 +195,14 @@ public class CallbacksListener
           ReturnedObjectOrAddress = voidReturnType ? null : callbackRes
         };
 
-        body = JsonSerializer.Serialize(ir, _withErrors);
+        body = JsonConvert.SerializeObject(ir);
       }
       else
       {
         // TODO: I'm not sure the usage of 'DiverError' here is good.
         //       It's sent from the Communicator's side to the Diver's side...
         DiverError errResults = new("Unknown Token", string.Empty);
-        body = JsonSerializer.Serialize(errResults, _withErrors);
+        body = JsonConvert.SerializeObject(errResults);
       }
     }
     else
@@ -212,7 +210,7 @@ public class CallbacksListener
       // TODO: I'm not sure the usage of 'DiverError' here is good.
       //       It's sent from the Communicator's side to the Diver's side...
       DiverError errResults = new("Unknown path in URL", string.Empty);
-      body = JsonSerializer.Serialize(errResults, _withErrors);
+      body = JsonConvert.SerializeObject(errResults);
     }
 
     byte[] buffer = System.Text.Encoding.UTF8.GetBytes(body);

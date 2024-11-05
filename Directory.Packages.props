@@ -29,8 +29,8 @@
                     Version="8.0.0" />
     <PackageVersion Include="ImpromptuInterface"
                     Version="8.0.4" />
-    <PackageVersion Include="System.Text.Json"
-                    Version="8.0.5" />
+    <PackageVersion Include="Newtonsoft.Json"
+                    Version="13.0.3" />
     <!-- MTGOSDK.Core -->
     <PackageVersion Include="System.Reflection.Emit.ILGeneration"
                     Version="4.7.0" />
@@ -48,9 +48,6 @@
     <!-- MTGOSDK/lib/Launcher -->
     <PackageVersion Include="FrameworkExtract.System.Deployment"
                     Version="4.0.30319" />
-    <!-- MTGOSDK/lib/ScubaDiver -->
-    <PackageVersion Include="Newtonsoft.Json"
-                    Version="13.0.3" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
                     Version="17.10.4" />

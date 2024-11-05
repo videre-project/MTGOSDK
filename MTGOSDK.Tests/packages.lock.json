@@ -224,7 +224,7 @@
           "Microsoft.CSharp": "[4.7.0, )",
           "Microsoft.Diagnostics.Runtime": "[3.1.512801, )",
           "Microsoft.Extensions.Logging": "[8.0.0, )",
-          "System.Text.Json": "[8.0.5, )"
+          "Newtonsoft.Json": "[13.0.3, )"
         }
       },
       "mtgosdk.win32": {
@@ -279,14 +279,8 @@
       "Newtonsoft.Json": {
         "type": "CentralTransitive",
         "requested": "[13.0.3, )",
-        "resolved": "13.0.1",
-        "contentHash": "ppPFpBcvxdsfUonNcvITKqLl3bqxWbDCZIzDWHzjpdAHRFfZe0Dw9HmA0+za13IdyrgJwpkDTDA9fHaxOrt20A=="
-      },
-      "System.Text.Json": {
-        "type": "CentralTransitive",
-        "requested": "[8.0.5, )",
-        "resolved": "8.0.5",
-        "contentHash": "0f1B50Ss7rqxXiaBJyzUu9bWFOO2/zSlifZ/UNMdiIpDYe4cY4LQQicP4nirK1OS31I43rn062UIJ1Q9bpmHpg=="
+        "resolved": "13.0.3",
+        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
       }
     }
   }

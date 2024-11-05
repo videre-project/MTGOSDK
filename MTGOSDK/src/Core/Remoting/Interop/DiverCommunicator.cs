@@ -9,16 +9,15 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Net;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Web;
+
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
-using Dynamitey;
 
 
 namespace MTGOSDK.Core.Remoting.Interop;
@@ -28,9 +27,9 @@ namespace MTGOSDK.Core.Remoting.Interop;
 /// </summary>
 public class DiverCommunicator
 {
-  private readonly JsonSerializerOptions _withErrors = new ()
+  private readonly JsonSerializerSettings _withErrors = new()
   {
-    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+    MissingMemberHandling = MissingMemberHandling.Error,
   };
 
   private readonly string _hostname;
@@ -85,7 +84,7 @@ public class DiverCommunicator
     if (body.StartsWith("{\"error\":", StringComparison.InvariantCultureIgnoreCase))
     {
       // Diver sent back an error. We parse it here and throwing a 'proxied' exception
-      var errMessage = JsonSerializer.Deserialize<DiverError>(body, _withErrors);
+      var errMessage = JsonConvert.DeserializeObject<DiverError>(body, _withErrors);
       if (errMessage != null)
         throw new RemoteException(errMessage.Error, errMessage.StackTrace);
     }
@@ -115,14 +114,14 @@ public class DiverCommunicator
     queryParams["dump_hashcodes"] = dumpHashcodes.ToString();
 
     string body = SendRequest("heap", queryParams);
-    HeapDump heapDump = JsonSerializer.Deserialize<HeapDump>(body, _withErrors)!;
+    HeapDump heapDump = JsonConvert.DeserializeObject<HeapDump>(body);
 
     return heapDump;
   }
   public DomainDump DumpDomain()
   {
     string body = SendRequest("domains", null);
-    DomainDump results = JsonSerializer.Deserialize<DomainDump>(body, _withErrors)!;
+    DomainDump results = JsonConvert.DeserializeObject<DomainDump>(body, _withErrors)!;
 
     return results;
   }
@@ -133,7 +132,7 @@ public class DiverCommunicator
     queryParams["assembly"] = assembly;
 
     string body = SendRequest("types", queryParams);
-    TypesDump results = JsonSerializer.Deserialize<TypesDump>(body, _withErrors)!;
+    TypesDump? results = JsonConvert.DeserializeObject<TypesDump>(body, _withErrors);
 
     return results;
   }
@@ -144,9 +143,9 @@ public class DiverCommunicator
     if (assembly != null)
       dumpRequest.Assembly = assembly;
 
-    var requestJsonBody = JsonSerializer.Serialize(dumpRequest);
+    var requestJsonBody = JsonConvert.SerializeObject(dumpRequest);
     string body = SendRequest("type", null, requestJsonBody);
-    TypeDump results = JsonSerializer.Deserialize<TypeDump>(body, _withErrors)!;
+    TypeDump? results = JsonConvert.DeserializeObject<TypeDump>(body, _withErrors);
 
     return results;
   }
@@ -181,7 +180,7 @@ public class DiverCommunicator
       throw new Exception("Diver failed to dump objet. Error: " + body);
     }
 
-    ObjectDump objectDump = JsonSerializer.Deserialize<ObjectDump>(body, _withErrors)!;
+    ObjectDump objectDump = JsonConvert.DeserializeObject<ObjectDump>(body);
 
     return objectDump;
   }
@@ -212,13 +211,13 @@ public class DiverCommunicator
       Parameters = args.ToList()
     };
 
-    var requestJsonBody = JsonSerializer.Serialize(invocReq);
+    var requestJsonBody = JsonConvert.SerializeObject(invocReq);
     var resJson = SendRequest("invoke", null, requestJsonBody);
 
     InvocationResults res;
     try
     {
-      res = JsonSerializer.Deserialize<InvocationResults>(resJson, _withErrors);
+      res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
     }
     catch
     {
@@ -289,12 +288,12 @@ public class DiverCommunicator
       Index = key
     };
 
-    var requestJsonBody = JsonSerializer.Serialize(indexedItemAccess);
+    var requestJsonBody = JsonConvert.SerializeObject(indexedItemAccess);
     var body = SendRequest("get_item", null, requestJsonBody);
     if (body.Contains("\"error\":"))
       throw new Exception("Diver failed to dump item of remote collection object. Error: " + body);
 
-    InvocationResults invokeRes = JsonSerializer.Deserialize<InvocationResults>(body, _withErrors)!;
+    InvocationResults invokeRes = JsonConvert.DeserializeObject<InvocationResults>(body);
 
     return invokeRes.ReturnedObjectOrAddress;
   }
@@ -322,9 +321,9 @@ public class DiverCommunicator
       Parameters = args.ToList()
     };
 
-    var requestJsonBody = JsonSerializer.Serialize(ctorInvocReq);
+    var requestJsonBody = JsonConvert.SerializeObject(ctorInvocReq);
     var resJson = SendRequest("create_object", null, requestJsonBody);
-    InvocationResults res = JsonSerializer.Deserialize<InvocationResults>(resJson, _withErrors);
+    InvocationResults res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
 
     return res;
   }
@@ -343,9 +342,9 @@ public class DiverCommunicator
       Value = newValue
     };
 
-    var requestJsonBody = JsonSerializer.Serialize(invocReq);
+    var requestJsonBody = JsonConvert.SerializeObject(invocReq);
     var resJson = SendRequest("set_field", null, requestJsonBody);
-    InvocationResults res = JsonSerializer.Deserialize<InvocationResults>(resJson, _withErrors);
+    InvocationResults res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
 
     return res;
   }
@@ -362,9 +361,9 @@ public class DiverCommunicator
       FieldName = fieldName,
     };
 
-    var requestJsonBody = JsonSerializer.Serialize(invocReq);
+    var requestJsonBody = JsonConvert.SerializeObject(invocReq);
     var resJson = SendRequest("get_field", null, requestJsonBody);
-    InvocationResults res = JsonSerializer.Deserialize<InvocationResults>(resJson, _withErrors);
+    InvocationResults res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
 
     return res;
   }
@@ -385,7 +384,7 @@ public class DiverCommunicator
       ["port"] = _listener.Port.ToString()
     };
     string body = SendRequest("event_subscribe", queryParams);
-    EventRegistrationResults regRes = JsonSerializer.Deserialize<EventRegistrationResults>(body, _withErrors)!;
+    EventRegistrationResults regRes = JsonConvert.DeserializeObject<EventRegistrationResults>(body);
     _listener.EventSubscribe(callback, regRes.Token);
   }
 
