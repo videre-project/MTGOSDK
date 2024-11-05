@@ -30,7 +30,7 @@
     <PackageVersion Include="ImpromptuInterface"
                     Version="8.0.4" />
     <PackageVersion Include="System.Text.Json"
-                    Version="8.0.4" />
+                    Version="8.0.5" />
     <!-- MTGOSDK.Core -->
     <PackageVersion Include="System.Reflection.Emit.ILGeneration"
                     Version="4.7.0" />
