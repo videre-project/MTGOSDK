@@ -7,7 +7,8 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Text.Json;
+
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
@@ -57,6 +58,6 @@ public partial class Diver : IDisposable
       OtherClientsAmount = remaining
     };
 
-    return JsonSerializer.Serialize(ucResponse);
+    return JsonConvert.SerializeObject(ucResponse);
   }
 }

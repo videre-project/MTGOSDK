@@ -7,7 +7,8 @@
 using System;
 using System.IO;
 using System.Net;
-using System.Text.Json;
+
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -28,7 +29,7 @@ public partial class Diver : IDisposable
       return QuickError("Missing body");
     }
 
-    var request = JsonSerializer.Deserialize<TypeDumpRequest>(body);
+    var request = JsonConvert.DeserializeObject<TypeDumpRequest>(body);
     if (request == null)
     {
       return QuickError("Failed to deserialize body");
@@ -56,7 +57,7 @@ public partial class Diver : IDisposable
     if (resolvedType != null)
     {
       TypeDump recursiveTypeDump = TypeDump.ParseType(resolvedType);
-      return JsonSerializer.Serialize(recursiveTypeDump);
+      return JsonConvert.SerializeObject(recursiveTypeDump);
     }
 
     return QuickError("Failed to find type in searched assemblies");

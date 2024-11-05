@@ -9,10 +9,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using Microsoft.Diagnostics.Runtime;
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -38,11 +37,6 @@ public partial class Diver : IDisposable
     }
 
     DomainDump domainDump = new(currentDomain, modules);
-    // return JsonSerializer.Serialize(domainDump);
-    // Allow parameters with null names to be serialized.
-    return JsonSerializer.Serialize(domainDump, new JsonSerializerOptions {
-      // IgnoreNullValues = true
-      DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    });
+    return JsonConvert.SerializeObject(domainDump);
   }
 }

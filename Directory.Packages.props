@@ -5,7 +5,7 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
+    <RestoreLockedMode>true</RestoreLockedMode>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
@@ -39,14 +39,18 @@
     <PackageVersion Include="Meziantou.Polyfill"
                     Version="1.0.39" />
     <!-- MTGOSDK/lib/ILLink -->
-    <!-- <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
-                    Version="8.0.0" /> -->
+    <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
+                    Version="8.0.0"
+                    Condition="'$(UseILLinkTrim)' == 'true'" />
     <!-- MTGOSDK/lib/ILRepack -->
     <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
                     Version="2.0.34.1" />
     <!-- MTGOSDK/lib/Launcher -->
     <PackageVersion Include="FrameworkExtract.System.Deployment"
                     Version="4.0.30319" />
+    <!-- MTGOSDK/lib/ScubaDiver -->
+    <PackageVersion Include="Newtonsoft.Json"
+                    Version="13.0.3" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
                     Version="17.10.4" />

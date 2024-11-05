@@ -10,11 +10,11 @@
   </PropertyGroup>
 
   <!-- ILLink trimmer -->
-  <!-- <PropertyGroup>
+  <PropertyGroup>
     <UseILLinkTrim>true</UseILLinkTrim>
   </PropertyGroup>
   <Import Project="..\ILLink\ILLink.targets"
-          Condition="'$(UseILLinkTrim)' == 'true'" /> -->
+          Condition="'$(UseILLinkTrim)' == 'true'" />
 
   <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
   <PropertyGroup>
@@ -25,14 +25,9 @@
     <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).dll</ILRepackOutput>
   </PropertyGroup>
 
-  <!-- Enables debug logging from the MTGO client to a separate console -->
-  <PropertyGroup>
-    <DefineConstants>$(DefineConstants);ENABLE_DEBUG_CONSOLE</DefineConstants>
-  </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="System.Text.Json" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
+    <PackageReference Include="Newtonsoft.Json" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>

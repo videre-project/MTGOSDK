@@ -9,7 +9,8 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text.Json;
+
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -33,7 +34,7 @@ public partial class Diver : IDisposable
     if (string.IsNullOrEmpty(body))
       return QuickError("Missing body");
 
-    var request = JsonSerializer.Deserialize<IndexedItemAccessRequest>(body);
+    var request = JsonConvert.DeserializeObject<IndexedItemAccessRequest>(body);
     if (request == null)
       return QuickError("Failed to deserialize body");
 
@@ -131,6 +132,6 @@ public partial class Diver : IDisposable
       ReturnedObjectOrAddress = res
     };
 
-    return JsonSerializer.Serialize(invokeRes);
+    return JsonConvert.SerializeObject(invokeRes);
   }
 }

@@ -7,7 +7,8 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Text.Json;
+
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -36,6 +37,8 @@ public partial class Diver : IDisposable
     }
 
     HeapDump hd = new() { Objects = objects };
-    return JsonSerializer.Serialize(hd);
+
+    var resJson = JsonConvert.SerializeObject(hd);
+    return resJson;
   }
 }

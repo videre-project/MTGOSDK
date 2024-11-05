@@ -6,8 +6,9 @@
 
 using System;
 using System.Net;
-using System.Text.Json;
 using System.Threading;
+
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -66,6 +67,6 @@ public partial class Diver : IDisposable
     if (od == null)
       return QuickError("Could not retrieve the remote object (used all retries).");
 
-    return JsonSerializer.Serialize(od);
+    return JsonConvert.SerializeObject(od);
   }
 }

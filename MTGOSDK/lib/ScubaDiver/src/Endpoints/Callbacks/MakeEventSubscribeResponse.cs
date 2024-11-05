@@ -7,8 +7,9 @@
 using System;
 using System.Net;
 using System.Reflection;
-using System.Text.Json;
 using System.Threading;
+
+using Newtonsoft.Json;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
@@ -153,6 +154,6 @@ public partial class Diver : IDisposable
     }
 
     EventRegistrationResults erResults = new() { Token = token };
-    return JsonSerializer.Serialize(erResults);
+    return JsonConvert.SerializeObject(erResults);
   }
 }
