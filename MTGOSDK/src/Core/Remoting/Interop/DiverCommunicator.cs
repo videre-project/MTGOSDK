@@ -10,6 +10,7 @@ using System.Net.Http;
 using System.Net;
 using System.Text;
 using System.Web;
+
 using Newtonsoft.Json;
 
 using MTGOSDK.Core.Exceptions;

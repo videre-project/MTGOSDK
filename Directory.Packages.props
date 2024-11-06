@@ -40,7 +40,8 @@
                     Version="1.0.39" />
     <!-- MTGOSDK/lib/ILLink -->
     <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
-                    Version="8.0.0" />
+                    Version="8.0.0"
+                    Condition="'$(UseILLinkTrim)' == 'true'" />
     <!-- MTGOSDK/lib/ILRepack -->
     <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
                     Version="2.0.34.1" />

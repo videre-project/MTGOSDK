@@ -6,6 +6,7 @@
 
 using System.Net;
 using System.Net.Http;
+
 using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions;

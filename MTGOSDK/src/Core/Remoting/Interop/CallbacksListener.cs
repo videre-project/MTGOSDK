@@ -7,6 +7,7 @@
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+
 using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions;
@@ -200,7 +201,7 @@ public class CallbacksListener
       {
         // TODO: I'm not sure the usage of 'DiverError' here is good.
         //       It's sent from the Communicator's side to the Diver's side...
-        DiverError errResults = new("Unknown Token", String.Empty);
+        DiverError errResults = new("Unknown Token", string.Empty);
         body = JsonConvert.SerializeObject(errResults);
       }
     }
@@ -208,7 +209,7 @@ public class CallbacksListener
     {
       // TODO: I'm not sure the usage of 'DiverError' here is good.
       //       It's sent from the Communicator's side to the Diver's side...
-      DiverError errResults = new("Unknown path in URL", String.Empty);
+      DiverError errResults = new("Unknown path in URL", string.Empty);
       body = JsonConvert.SerializeObject(errResults);
     }
 

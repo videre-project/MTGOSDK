@@ -25,13 +25,9 @@
     <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).dll</ILRepackOutput>
   </PropertyGroup>
 
-  <!-- Enables debug logging from the MTGO client to a separate console -->
-  <!-- <PropertyGroup>
-    <DefineConstants>$(DefineConstants);ENABLE_DEBUG_CONSOLE</DefineConstants>
-  </PropertyGroup> -->
-
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
+    <PackageReference Include="Newtonsoft.Json" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>
