@@ -1,3 +1,7 @@
+---
+# _layout: landing
+---
+
 # ![MTGOSDK Icon](/assets/icon_36h.png) MTGOSDK
 
 ![.NET](https://img.shields.io/badge/dynamic/yaml?label=.NET&labelColor=3f4551&color=8a2be2&prefix=v&query=$.sdk.version&url=https://raw.githubusercontent.com/videre-project/mtgo-sdk/main/global.json)
