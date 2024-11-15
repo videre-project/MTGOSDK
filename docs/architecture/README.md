@@ -6,5 +6,5 @@ Below is a list of sections in this directory:
 
 | Section | Description |
 | --- | --- |
-| [Overview](docs/architecture/overview.md) | Provides an overview of the SDK and its components. |
-| [Core Classes](docs/architecture/core-classes.md) | Describes the core classes of the SDK and their responsibilities. |
+| [Overview](overview.md) | Provides an overview of the SDK and its components. |
+| [Core Classes](core-classes.md) | Describes the core classes of the SDK and their responsibilities. |
