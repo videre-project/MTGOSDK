@@ -62,7 +62,8 @@ public static class ChannelManager
   /// The internal reference to the base chat manager.
   /// </summary>
   private static readonly IChatManager s_chatManager =
-    ObjectProvider.Get<IShellViewModel>().ChatManager;
+    Bind<IChatManager>(
+      ObjectProvider.Get<IShellViewModel>(false).ChatManager);
 
   internal static ChatSessionViewModel? GetChatForChannel(dynamic channel) =>
     Optional<ChatSessionViewModel>(
