@@ -4,7 +4,6 @@
 **/
 
 using MTGOSDK.API.Interface.ViewModels;
-using MTGOSDK.Core.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Shiny.Core.Interfaces;
@@ -63,7 +62,7 @@ public static class ChannelManager
   /// </summary>
   private static readonly IChatManager s_chatManager =
     Bind<IChatManager>(
-      ObjectProvider.Get<IShellViewModel>(false).ChatManager);
+      Unbind(ObjectProvider.Get<IShellViewModel>()).ChatManager);
 
   internal static ChatSessionViewModel? GetChatForChannel(dynamic channel) =>
     Optional<ChatSessionViewModel>(
