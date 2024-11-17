@@ -36,6 +36,9 @@ public static class ObjectProvider
   /// the created callback as the <see cref="Get"/> method will invoke this
   /// method when the <paramref name="useLazy"/> parameter is set to <c>true</c>.
   /// </remarks>
+  /// <exception cref="TypeInitializationException">
+  /// Thrown when the given type cannot be retrieved on invocation.
+  /// </exception>
   private static dynamic Defer(
     string queryPath,
     bool useCache = true,
@@ -44,7 +47,17 @@ public static class ObjectProvider
     Log.Trace("Creating lazy instance of type {Type}", queryPath);
     dynamic instance = new LazyRemoteObject();
     var resetter = instance.Set(new Func<dynamic>(() =>
-        Get(queryPath, useCache, useHeap, useLazy: false)));
+    {
+      try
+      {
+        return Get(queryPath, useCache, useHeap, useLazy: false);
+      }
+      catch (InvalidOperationException e)
+      {
+        throw new TypeInitializationException(
+          $"Failed to retrieve instance of type {queryPath}.", e);
+      }
+    }));
 
     // Store the resetter callback to reset the lazy instance when
     // the RemoteClient is disposed or the ObjectProvider cache is reset.
