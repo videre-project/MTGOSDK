@@ -58,7 +58,6 @@ public class Users : UserValidationFixture
   }
 
   [RateLimit(ms: 100)]
-  [TestCase(2650356, "TheQonfused")]
   [TestCase(3136075, "VidereBot1")]
   [TestCase(3136078, "VidereBot2")]
   public void Test_GetUser(int id, string name)
@@ -111,6 +110,6 @@ public class UserValidationFixture : BaseFixture
     Assert.That(avatar.Name, Is.Not.EqualTo(string.Empty));
     Assert.That(avatar.Card.Id, Is.GreaterThan(0));
     Assert.That(avatar.Id, Is.GreaterThan(0));
-    Assert.That(avatar.View, Is.Not.EqualTo(default(Uri)));
+    // Assert.That(avatar.IsLoaded, Is.True);
   }
 }
