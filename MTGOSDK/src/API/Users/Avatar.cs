@@ -62,5 +62,6 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// <remarks>
   /// This corresponds to the loading state of the card definition's visual
   /// resources, which may be fetched separately after an Avatar is obtained.
-  public bool IsLoaded => Try<bool>(@base.CardDefinition.m_resourceloaded);
+  public bool IsLoaded =>
+    Try<bool>(() => @base.CardDefinition.m_resourceloaded);
 }
