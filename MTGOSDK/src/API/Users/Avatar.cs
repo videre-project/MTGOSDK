@@ -27,12 +27,6 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// </summary>
   private readonly Card CardDefinition = new(avatar.CardDefinition);
 
-  /// <summary>
-  /// The associated visual resource for the Avatar.
-  /// </summary>
-  private readonly IVisualResource Image =
-    Bind<IVisualResource>(avatar.CardDefinition.Resource);
-
   //
   // IAvatar wrapper properties
   //
