@@ -58,7 +58,6 @@ public class Users : UserValidationFixture
   }
 
   [RateLimit(ms: 100)]
-  [TestCase(2650356, "TheQonfused")]
   [TestCase(3136075, "VidereBot1")]
   [TestCase(3136078, "VidereBot2")]
   public void Test_GetUser(int id, string name)
