@@ -25,11 +25,26 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// <summary>
   /// The associated visual resource for the Avatar.
   /// </summary>
-  private readonly IVisualResource Image = Bind<IVisualResource>(avatar.Image);
+  private readonly Card CardDefinition = new(avatar.CardDefinition);
+
+  /// <summary>
+  /// The associated visual resource for the Avatar.
+  /// </summary>
+  private readonly IVisualResource Image =
+    Bind<IVisualResource>(avatar.CardDefinition.Resource);
 
   //
   // IAvatar wrapper properties
   //
+
+  /// <summary>
+  /// The unique identifier of the Avatar resource.
+  /// </summary>
+  /// <remarks>
+  /// This corresponds to the ID of the associated card definition,
+  /// which can be fetched with the <see cref="Collection.CardManager"/> class.
+  /// </remarks>
+  public int Id => @base.Id;
 
   /// <summary>
   /// The name of the Avatar.
@@ -39,27 +54,13 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// <summary>
   /// The associated card definition.
   /// </summary>
-  public Card Card => new(@base.CardDefinition);
-
-  //
-  // IVisualResource wrapper properties
-  //
+  public Card Card => CardDefinition;
 
   /// <summary>
-  /// The unique identifier of the Avatar resource.
+  /// Whether the Avatar resource has been loaded.
   /// </summary>
-  [Default(-1)]
-  public int Id => Image.Id;
-
-  /// <summary>
-  /// The Uri of the Avatar resource.
-  /// </summary>
-  public Uri View => Cast<Uri>(Unbind(Image).View);
-
-  //
-  // IVisualResource wrapper events
-  //
-
-  public EventProxy ViewChanged =
-    new(/* IVisualResource */ avatar.Image, nameof(ViewChanged));
+  /// <remarks>
+  /// This corresponds to the loading state of the card definition's visual
+  /// resources, which may be fetched separately after an Avatar is obtained.
+  public bool IsLoaded => Try<bool>(@base.CardDefinition.m_resourceloaded);
 }
