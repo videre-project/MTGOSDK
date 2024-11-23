@@ -178,7 +178,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       // Starts a new MTGO client process.
       if (options.CreateProcess)
       {
-        if (!await IsOnline())
+        if (!options.SkipOnlineCheck && !await IsOnline())
           throw new ServerOfflineException("MTGO servers are currently offline.");
 
         // Close any existing MTGO processes.
