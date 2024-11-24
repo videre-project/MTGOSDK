@@ -12,7 +12,8 @@ if (-not $key) {
     ForEach-Object { $_.Matches.Groups[1].Value };
 }
 
-$packages = Get-ChildItem -Path publish -Filter *.nupkg, *.snupkg;
+$packages = Get-ChildItem -Path publish -Filter *.nupkg;
+$packages += Get-ChildItem -Path publish -Filter *.snupkg;
 foreach ($package in $packages) {
   dotnet nuget push $package.FullName `
     --api-key $key `
