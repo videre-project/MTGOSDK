@@ -28,4 +28,37 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
+  <!-- Publishing: Package Versioning -->
+  <PropertyGroup>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>preview.0</MinVerDefaultPreReleaseIdentifiers>
+    <!-- <MinVerIgnoreHeight>true</MinVerIgnoreHeight> -->
+  </PropertyGroup>
+
+  <!-- Include build metadata in the package version if it is present. -->
+  <Target Name="SetMinVerBuildMetadata"
+          AfterTargets="MinVer">
+    <!-- Compute the current build timestamp -->
+    <PropertyGroup>
+      <BuildDate>$([System.DateTime]::Now.ToString(`yyyyMMdd`))</BuildDate>
+    </PropertyGroup>
+
+    <!-- Reformat the package version with the build date -->
+    <PropertyGroup Condition="'$(MinVerPreRelease)' == ''">
+      <MinVerVersion>$(MinVerVersion)-$(BuildDate)</MinVerVersion>
+      <InformationalVersion>$(InformationalVersion)-$(BuildDate)</InformationalVersion>
+      <PackageVersion>$(PackageVersion)-$(BuildDate)</PackageVersion>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(MinVerPreRelease)' != ''">
+      <_MinVerPreRelease>$([System.Text.RegularExpressions.Regex]::Replace($(MinVerPreRelease), `(?%3C=[a-z]).\d+`, '-$(BuildDate)'))</_MinVerPreRelease>
+      <MinVerVersion>$([System.String]::Copy('$(MinVerVersion)').Replace('$(MinVerPreRelease)', '$(_MinVerPreRelease)'))</MinVerVersion>
+      <InformationalVersion>$([System.String]::Copy('$(InformationalVersion)').Replace('$(MinVerPreRelease)', '$(_MinVerPreRelease)'))</InformationalVersion>
+      <PackageVersion>$([System.String]::Copy('$(PackageVersion)').Replace('$(MinVerPreRelease)', '$(_MinVerPreRelease)'))</PackageVersion>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <Version>$(PackageVersion)</Version>
+    </PropertyGroup>
+  </Target>
+
 </Project>

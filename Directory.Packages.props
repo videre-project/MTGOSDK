@@ -120,8 +120,8 @@
   <!-- Use Nerdbank.GitVersioning for package SemVer -->
   <ItemGroup Condition="'$(IsPackable)' != 'false' And
                         '$(EnableSourceControlManagerQueries)' != 'false'">
-    <GlobalPackageReference Include="Nerdbank.GitVersioning"
-                            Version="3.6.139"
+    <GlobalPackageReference Include="MinVer"
+                            Version="6.0.0"
                             PrivateAssets="All" />
   </ItemGroup>
 
