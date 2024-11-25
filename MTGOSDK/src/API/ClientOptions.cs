@@ -34,15 +34,6 @@ public struct ClientOptions()
   public bool CloseOnExit { get; init; } = false;
 
   /// <summary>
-  /// Whether to skip checking for the current online status of the MTGO server.
-  /// </summary>
-  /// <remarks>
-  /// This can be useful when there is a separate outage or maintenance window
-  /// in the Daybreak Census API, as this does not impact MTGO functionality.
-  /// </remarks>
-  public bool SkipOnlineCheck { get; init; } = false;
-
-  /// <summary>
   /// Whether to accept the EULA prompt when starting the MTGO client.
   /// </summary>
   /// <remarks>

@@ -53,7 +53,7 @@ public class SetupFixture : Shared
         {
           CreateProcess = true,
           StartMinimized = true,
-          // DestroyOnExit = true,
+          // CloseOnExit = true,
           AcceptEULAPrompt = true
         },
         loggerProvider: new NUnitLoggerProvider(LogLevel.Trace)

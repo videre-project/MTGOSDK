@@ -178,9 +178,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       // Starts a new MTGO client process.
       if (options.CreateProcess)
       {
-        if (!options.SkipOnlineCheck && !await IsOnline())
-          throw new ServerOfflineException("MTGO servers are currently offline.");
-
         // Close any existing MTGO processes.
         if (!await WaitUntil(() => !RemoteClient.KillProcess(), delay: 10))
           throw new SetupFailureException("Unable to close existing MTGO processes.");
@@ -333,7 +330,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       Unbind(s_shellViewModel).ShowLoadDeckSplashScreen == false &&
       Unbind(s_shellViewModel).m_blockingProgressInstances.Count == 0 &&
       // Checks to see if the HomeSceneViewModel has finished initializing.
-      Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count > 0 &&
+      Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count >= 0 &&
       Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count >= 0 &&
       Unbind(s_shellViewModel.CurrentScene).JoinedEvents.Count >= 0,
       delay: 500, // in ms
