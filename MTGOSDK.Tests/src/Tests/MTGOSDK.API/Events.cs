@@ -61,10 +61,13 @@ public class Events : EventValidationFixture
         return false;
 
       // Ensure that any retrieved events have already started.
-      if (typeof(T) == typeof(Tournament))
-        return Try<bool>(() => (e as Tournament)!.State >= TournamentState.RoundInProgress);
+      if (typeof(T) == typeof(League))
+        return Try<bool>(() => (e as League)!.JoinedMembers > 0 &&
+                               (e as League)!.Leaderboard.Count >= 0);
       if (typeof(T) == typeof(Match))
         return Try<bool>(() => (e as Match)!.State >= MatchState.GameStarted);
+      if (typeof(T) == typeof(Tournament))
+        return Try<bool>(() => (e as Tournament)!.State >= TournamentState.RoundInProgress);
 
       return true;
     });
@@ -131,7 +134,7 @@ public class EventValidationFixture : BaseFixture
   {
     Assert.That(eventObj, Is.Not.Null);
     Assert.That(eventObj, Is.InstanceOf<T>());
-    Assert.That(eventObj.ToString(), Is.Not.Empty);
+    Assert.That(eventObj!.ToString(), Is.Not.Empty);
 
     // Test that event can be retrieved by ID or event token
     if (typeof(T) == typeof(League))
