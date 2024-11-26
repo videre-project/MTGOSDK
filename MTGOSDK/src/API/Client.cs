@@ -330,8 +330,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       Unbind(s_shellViewModel).ShowLoadDeckSplashScreen == false &&
       Unbind(s_shellViewModel).m_blockingProgressInstances.Count == 0 &&
       // Checks to see if the HomeSceneViewModel has finished initializing.
-      Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count >= 0 &&
-      Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count >= 0 &&
+      Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count > 0 &&
+      Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count > 0 &&
       Unbind(s_shellViewModel.CurrentScene).JoinedEvents.Count >= 0,
       delay: 500, // in ms
       retries: 60 // or 30 seconds
