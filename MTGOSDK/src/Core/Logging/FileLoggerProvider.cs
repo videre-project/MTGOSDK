@@ -3,14 +3,17 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Concurrent;
 using System.IO;
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+
+using MTGOSDK.Core.Reflection;
 
 
 namespace MTGOSDK.Core.Logging;
 
-public class FileLoggerProvider(FileLoggerOptions options) : ILoggerProvider
+public class FileLoggerProvider(FileLoggerOptions options)
+    : DLRWrapper, ILoggerProvider
 {
   private readonly ConcurrentDictionary<string, StreamWriter> _fileHandles = new();
 
@@ -42,9 +45,11 @@ public class FileLoggerProvider(FileLoggerOptions options) : ILoggerProvider
     {
       // Create a new log file if it does not exist
       if (!File.Exists(filePath))
+      {
         File.Create(filePath).Dispose();
+      }
 
-      file = new StreamWriter(filePath);
+      file = Retry(() => new StreamWriter(filePath));
       _ = _fileHandles.TryAdd(filePath, file);
     }
     return file;
