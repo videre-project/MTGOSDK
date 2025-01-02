@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
@@ -93,6 +94,18 @@ public static class EventManager
       ?? throw new KeyNotFoundException($"Event ({guid}) could not be found.");
 
     return FromPlayerEvent(playerEvent);
+  }
+
+  /// <summary>
+  /// Navigates to and opens the event in the client.
+  /// </summary>
+  /// <param name="id">The event ID to navigate to.</param>
+  public static void NavigateToEvent(int id)
+  {
+    var playerEvent = GetEvent(id);
+    using var viewModel = new BasicToastViewModel("", ""); // Dummy viewmodel
+    viewModel.SetNavigateToViewCommand(playerEvent);
+    Unbind(viewModel).NavigateToViewCommand.Execute();
   }
 
   internal static readonly Func<dynamic, Event> PlayerEventFactory =

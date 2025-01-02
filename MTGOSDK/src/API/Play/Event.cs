@@ -4,9 +4,7 @@
 **/
 
 using MTGOSDK.API.Collection;
-using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.API.Users;
-using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;

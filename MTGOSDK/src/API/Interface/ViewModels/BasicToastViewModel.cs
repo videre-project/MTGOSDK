@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play;
+
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
@@ -21,6 +23,12 @@ public sealed class BasicToastViewModel(dynamic basicToastViewModel)
   internal override dynamic obj => basicToastViewModel;
 
   /// <summary>
+  /// The main shell view currently displayed on the primary MTGO window.
+  /// </summary>
+  private static IToastRelatedView MainRelatedView =>
+    ObjectProvider.Get<IShellViewModel>().MainRelatedView;
+
+  /// <summary>
   /// Creates a new remote instance of the BasicToastViewModel class.
   /// </summary>
   private static BasicToastViewModel NewInstance(params dynamic[] args) =>
@@ -29,12 +37,15 @@ public sealed class BasicToastViewModel(dynamic basicToastViewModel)
       Unbind(args)
     ));
 
+  /// <summary>
+  /// Creates a new remote instance of the BasicToastViewModel class.
+  /// </summary>
   public BasicToastViewModel(
     string title,
     string text,
-    IToastRelatedView relatedView,
+    IToastRelatedView? relatedView = null,
     bool showForever = false)
-      : this(NewInstance(text, relatedView, title, showForever))
+      : this(NewInstance(text, relatedView ?? MainRelatedView, title, showForever))
   { }
 
   //
@@ -71,6 +82,13 @@ public sealed class BasicToastViewModel(dynamic basicToastViewModel)
   //
   // BasicToastViewModel wrapper methods
   //
+
+  /// <summary>
+  /// Sets the navigate to view command for the toast.
+  /// </summary>
+  /// <param name="playerEvent">The player event to navigate to.</param>
+  public void SetNavigateToViewCommand(Event playerEvent) =>
+    @base.SetNavigateToViewCommand(Unbind(playerEvent));
 
   public void Dispose() => @base.Dispose();
 }

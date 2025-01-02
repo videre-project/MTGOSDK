@@ -3,11 +3,11 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play;
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
-using Shiny.Core;
 using Shiny.Core.Interfaces;
 using WotC.MtGO.Client.Model;
 
@@ -37,12 +37,6 @@ public static class ToastViewManager
     ObjectProvider.Get<IToastViewManager>();
 
   /// <summary>
-  /// The main shell view currently displayed on the primary MTGO window.
-  /// </summary>
-  private static IToastRelatedView MainRelatedView =>
-    ObjectProvider.Get<IShellViewModel>().MainRelatedView;
-
-  /// <summary>
   /// Displays a toast notification on the MTGO client with the given title and text.
   /// </summary>
   /// <param name="title">The title of the toast notification.</param>
@@ -51,12 +45,26 @@ public static class ToastViewManager
   public static void ShowToast(string title, string text, Uri? uri=null)
   {
     Log.Information("Showing toast notification: {Title} - {Text}", title, text);
-    var relatedView = MainRelatedView;
     // if (uri is not null)
     //   RemoteClient.CreateInstance(/* IRelayCommand */, () =>
     //     s_toastController.WindowsShell.StartProcess(uri.OriginalString));
 
-    using var viewModel = new BasicToastViewModel(title, text, relatedView);
+    using var viewModel = new BasicToastViewModel(title, text);
+    Unbind(s_toastViewManager).DisplayToast(Unbind(viewModel));
+  }
+
+  /// <summary>
+  /// Displays a toast notification on the MTGO client with the given title and text.
+  /// </summary>
+  /// <param name="title">The title of the toast notification.</param>
+  /// <param name="text">The text to display in the toast notification.</param>
+  /// <param name="playerEvent">The player event to navigate to when the toast notification is clicked.</param>
+  public static void ShowToast(string title, string text, Event playerEvent)
+  {
+    Log.Information("Showing toast notification: {Title} - {Text}", title, text);
+
+    using var viewModel = new BasicToastViewModel(title, text);
+    viewModel.SetNavigateToViewCommand(playerEvent);
     Unbind(s_toastViewManager).DisplayToast(Unbind(viewModel));
   }
 
