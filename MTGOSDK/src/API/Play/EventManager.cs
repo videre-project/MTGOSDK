@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.API.Interface.ViewModels;
+using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
@@ -41,12 +42,34 @@ public static class EventManager
   /// <summary>
   /// All currently queryable events with GetEvent().
   /// </summary>
+  /// <remarks>
+  /// This property is a dynamic collection of all events, including matches,
+  /// tournaments, and queues. Traversing the whole collection may often take
+  /// 30 seconds to a minute to complete, depending on the number of events.
+  /// </remarks>
   public static IEnumerable<dynamic> Events =>
     Map<dynamic>(
       Filter(
         eventsById.Values,
         new Predicate(e => Try<bool>(() => e.EventId != -1))),
       PlayerEventFactory);
+
+  /// <summary>
+  /// All currently scheduled tournaments queryable with GetEvent().
+  /// </summary>
+  /// <remarks>
+  /// This property is a dynamic collection of all tournaments that are
+  /// currently scheduled. Traversing the whole collection may often take
+  /// 10-20 seconds to complete, depending on the number of tournaments.
+  /// </remarks>
+  public static IEnumerable<Tournament> FeaturedEvents =>
+    Map<Tournament>(s_playService.GetFeaturedFilterables(), f => new(f.PlayerEvent));
+
+  /// <summary>
+  /// All joined events that the player is currently participating in.
+  /// </summary>
+  public static IEnumerable<dynamic> JoinedEvents =>
+    Map<dynamic>(s_playService.JoinedEvents, PlayerEventFactory);
 
   //
   // IPlayerEvent wrapper methods
@@ -132,9 +155,9 @@ public static class EventManager
     // Map each event type to its corresponding wrapper class.
     switch (eventType)
     {
-      // case "FilterableLeague" or "League":
-      //   eventObject = new League(eventObject);
-      //   break;
+      case "FilterableLeague" or "League":
+        eventObject = new League(eventObject);
+        break;
       case "FilterableMatch" or "Match":
         eventObject = new Match(eventObject);
         break;
