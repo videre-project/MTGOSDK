@@ -186,7 +186,7 @@ public class EventValidationFixture : BaseFixture
     Assert.That(league.ClosedDate, Is.GreaterThan(league.ActiveDate));
     Assert.That(league.CompletedDate, Is.GreaterThanOrEqualTo(league.ClosedDate));
     Assert.That(league.JoinedMembers, Is.GreaterThanOrEqualTo(0));
-    Assert.That(league.Leaderboard.Count, Is.LessThanOrEqualTo(league.JoinedMembers));
+    Assert.That(league.Leaderboard.Count, Is.GreaterThanOrEqualTo(league.JoinedMembers));
     Assert.That(league.TotalMatches, Is.GreaterThanOrEqualTo(3));
     Assert.That(league.MinMatches, Is.GreaterThanOrEqualTo(1));
     Assert.That((bool?)league.IsPaused, Is.Not.Null);
