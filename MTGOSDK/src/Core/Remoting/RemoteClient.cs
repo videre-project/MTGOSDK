@@ -18,6 +18,7 @@ using MTGOSDK.Resources;
 using MTGOSDK.Win32.API;
 using MTGOSDK.Win32.Utilities;
 using MTGOSDK.Win32.Deployment;
+using MTGOSDK.Core.Remoting.Interop;
 
 
 namespace MTGOSDK.Core.Remoting;
@@ -319,8 +320,23 @@ public sealed class RemoteClient : DLRWrapper
       }
     };
 
+    // When the MTGO process exists, trigger the ProcessExited event
+    _clientProcess.Exited += (s, e) =>
+    {
+      Log.Debug("MTGO process exited with code {ExitCode}.", _clientProcess.ExitCode);
+      Dispose();
+      ProcessExited?.Invoke(null, EventArgs.Empty);
+    };
+
+    client.Communicator.ProcessCrashed += (s, e) =>
+    {
+      Log.Critical("MTGO process has crashed unexpectedly.");
+      Dispose();
+      ProcessExited?.Invoke(null, EventArgs.Empty);
+    };
+
     // Verify that the injected assembly is loaded and reponding
-    if (client.Communicator.CheckAliveness() is false)
+    if (!client.Communicator.CheckAliveness())
       throw new TimeoutException("Diver is not responding to requests.");
     else
       Log.Debug("Established a connection to the MTGO process.");
@@ -329,26 +345,45 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   /// <summary>
+  /// Checks the heartbeat of the MTGO process.
+  /// </summary>
+  /// <returns>True if the MTGO process is alive.</returns>
+  public static bool CheckHeartbeat()
+  {
+    if (!Retry(@client.Communicator.CheckAliveness))
+    {
+      Log.Debug("Could not establish a connection to the MTGO process.");
+      Dispose();
+      ProcessExited?.Invoke(null, EventArgs.Empty);
+      ProcessExited = null;
+
+      return false;
+    }
+
+    return true;
+  }
+
+  /// <summary>
   /// Disconnects from the target process and disposes of the client handle.
   /// </summary>
-  internal static void Dispose()
+  public static void Dispose()
   {
     // Prevent multiple calls to Dispose
     if (!IsInitialized) return;
 
     // Call all event subscribers first before disposing
     Log.Debug("Disposing RemoteClient.");
-    Disposed?.Invoke(null, EventArgs.Empty);
+    Try(() => Disposed?.Invoke(null, EventArgs.Empty));
     Disposed = null;
 
     // Cleanup all resources and dispose of the client handle
-    @client.Dispose();
+    Try(@client.Dispose);
     Port = null;
 
     // Kill the MTGO process if CloseOnExit is set
     if (CloseOnExit)
     {
-      @process.Kill();
+      Try(@process.Kill);
       CloseOnExit = false;
     }
 
@@ -356,6 +391,11 @@ public sealed class RemoteClient : DLRWrapper
     s_instance = new Lazy<RemoteClient>(() => new RemoteClient());
     Log.Trace("RemoteClient disposed.");
   }
+
+  /// <summary>
+  /// Event raised when the target process has exited.
+  /// </summary>
+  public static event EventHandler? ProcessExited;
 
   /// <summary>
   /// Event raised when the RemoteClient is disposed.

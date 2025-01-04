@@ -6,8 +6,9 @@
 
 using System.Collections.Specialized;
 using System.Diagnostics;
-using System.Net.Http;
 using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Text;
 using System.Web;
 
@@ -40,6 +41,11 @@ public class DiverCommunicator
   private static readonly object _listenerLock = new();
   private readonly HttpClient httpClient = new();
 
+  /// <summary>
+  /// Event raised when the target process has crashed and is no longer available
+  /// </summary>
+  public event EventHandler? ProcessCrashed;
+
   public DiverCommunicator(string hostname, int diverPort)
   {
     _hostname = hostname;
@@ -52,7 +58,8 @@ public class DiverCommunicator
   private string SendRequest(
     string path,
     Dictionary<string, string> queryParams = null,
-    string jsonBody = null)
+    string jsonBody = null,
+    bool allowRetry = true)
   {
     queryParams ??= new();
 
@@ -77,7 +84,21 @@ public class DiverCommunicator
     HttpResponseMessage res = null;
     lock (_listenerLock)
     {
-      res = httpClient.SendAsync(msg).Result;
+      try
+      {
+        res = httpClient.SendAsync(msg).Result;
+      }
+      catch (Exception)
+      // catch (AggregateException e)
+      {
+        // if (e.InnerException is HttpRequestException ||
+        //     e.InnerException is SocketException)
+        // {
+          ProcessCrashed?.Invoke(this, EventArgs.Empty);
+        // }
+        if (allowRetry)
+          return SendRequest(path, queryParams, jsonBody, false);
+      }
     }
 
     string body = res.Content.ReadAsStringAsync().Result;

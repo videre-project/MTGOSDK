@@ -4,6 +4,7 @@
 **/
 
 using System.Collections;
+using System.Diagnostics;
 
 using MTGOSDK.Core.Compiler;
 
@@ -332,6 +333,7 @@ public abstract class DLRWrapper
   /// </summary>
   /// <param name="lambdas">The functions to execute in order.</param>
   /// <returns>The result of the function or the fallback value.</returns>
+  [DebuggerHidden]
   public static dynamic Try(params Func<dynamic>[] lambdas)
   {
     foreach (var lambda in lambdas)
@@ -341,12 +343,24 @@ public abstract class DLRWrapper
     return null;
   }
 
+
+  /// <summary>
+  /// Safely executes a lambda function.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  [DebuggerHidden]
+  public static void Try(Action lambda)
+  {
+    Try(() => { lambda(); return true; });
+  }
+
   /// <summary>
   /// Safely executes a lambda function and returns the result or a fallback.
   /// </summary>
   /// <param name="lambda">The function to execute.</param>
   /// <param name="fallback">The fallback value to return (optional).</param>
   /// <returns>The result of the function or the fallback value.</returns>
+  [DebuggerHidden]
   public static dynamic Try(Func<dynamic> lambda, dynamic fallback = null) =>
     Try(lambda, () => fallback);
 
@@ -356,6 +370,7 @@ public abstract class DLRWrapper
   /// <typeparam name="T">The result type to use or fallback to.</typeparam>
   /// <param name="lambda">The function to execute.</param>
   /// <returns>The result of the function or the fallback value.</returns>
+  [DebuggerHidden]
   public static dynamic Try<T>(Func<dynamic> lambda) => Try(lambda, default(T));
 
   /// <summary>
@@ -365,6 +380,7 @@ public abstract class DLRWrapper
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
   /// <returns>True if the function executed successfully.</returns>
+  [DebuggerHidden]
   public static async Task<bool> WaitUntil(
     Func<bool> lambda,
     int delay = 250,
