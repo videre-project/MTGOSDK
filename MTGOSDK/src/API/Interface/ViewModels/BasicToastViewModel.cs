@@ -90,5 +90,11 @@ public sealed class BasicToastViewModel(dynamic basicToastViewModel)
   public void SetNavigateToViewCommand(Event playerEvent) =>
     @base.SetNavigateToViewCommand(Unbind(playerEvent));
 
+  /// <summary>
+  /// Executes the navigate to view command for the toast.
+  /// </summary>
+  public void ExecuteViewCommand() =>
+    @base.NavigateToViewCommand.Execute();
+
   public void Dispose() => @base.Dispose();
 }

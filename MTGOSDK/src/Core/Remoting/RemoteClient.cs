@@ -18,7 +18,6 @@ using MTGOSDK.Resources;
 using MTGOSDK.Win32.API;
 using MTGOSDK.Win32.Utilities;
 using MTGOSDK.Win32.Deployment;
-using MTGOSDK.Core.Remoting.Interop;
 
 
 namespace MTGOSDK.Core.Remoting;
@@ -277,6 +276,15 @@ public sealed class RemoteClient : DLRWrapper
     var handle = MTGOProcess().MainWindowHandle;
     bool hr = User32.ShowWindow(handle, ShowWindowFlags.SW_MINIMIZE);
     Log.Debug("Minimized MTGO window");
+
+    return hr;
+  }
+
+  public static bool FocusWindow()
+  {
+    var handle = MTGOProcess().MainWindowHandle;
+    bool hr = User32.SetForegroundWindow(handle);
+    Log.Debug("Focused MTGO window");
 
     return hr;
   }

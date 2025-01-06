@@ -128,7 +128,7 @@ public static class EventManager
     var playerEvent = GetEvent(id);
     using var viewModel = new BasicToastViewModel("", ""); // Dummy viewmodel
     viewModel.SetNavigateToViewCommand(playerEvent);
-    Unbind(viewModel).NavigateToViewCommand.Execute();
+    viewModel.ExecuteViewCommand();
   }
 
   internal static readonly Func<dynamic, Event> PlayerEventFactory =

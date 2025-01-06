@@ -59,12 +59,12 @@ public abstract class DLRWrapper
   /// <remarks>
   /// This method is a wrapper for the <see cref="Proxy{T}.From"/> method.
   /// </remarks>
-  public static dynamic Unbind(DLRWrapper obj)
+  public static dynamic Unbind(DLRWrapper dro)
   {
-    dynamic unbound_obj = Try(() => Unbind(obj.@base), () => obj.@base);
+    dynamic unbound_obj = Try(() => Unbind(dro.@base), () => dro.@base);
     if (TypeProxy<dynamic>.IsProxy(unbound_obj))
       throw new InvalidOperationException(
-          $"Unable to unbind types from {obj.GetType().Name}.");
+          $"Unable to unbind types from {dro.GetType().Name}.");
 
     return unbound_obj;
   }
@@ -106,7 +106,12 @@ public abstract class DLRWrapper
   {
     var unbound_objs = new dynamic[objs.Length];
     for (var i = 0; i < objs.Length; i++)
-      unbound_objs[i] = Unbind(objs[i]);
+    {
+      if (objs[i] is DLRWrapper dro)
+        unbound_objs[i] = Unbind(dro: dro);
+      else
+        unbound_objs[i] = Unbind(obj: objs[i]);
+    }
 
     return unbound_objs;
   }
