@@ -321,6 +321,7 @@ public sealed class RemoteClient : DLRWrapper
                        delay: 500, retries: 3, raise: true);
 
     // When the MTGO process exists, trigger the ProcessExited event
+    _clientProcess.EnableRaisingEvents = true;
     _clientProcess.Exited += (s, e) =>
     {
       Log.Debug("MTGO process exited with code {ExitCode}.", _clientProcess.ExitCode);
