@@ -15,6 +15,7 @@ using System.Web;
 using Newtonsoft.Json;
 
 using MTGOSDK.Core.Exceptions;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -35,6 +36,7 @@ public class DiverCommunicator
 
   private readonly string _hostname;
   public int DiverPort { get; private set; }
+  public bool IsConnected => _process_id.HasValue;
 
   private int? _process_id = null;
   private readonly CallbacksListener _listener;
@@ -58,8 +60,7 @@ public class DiverCommunicator
   private string SendRequest(
     string path,
     Dictionary<string, string> queryParams = null,
-    string jsonBody = null,
-    bool allowRetry = true)
+    string jsonBody = null)
   {
     queryParams ??= new();
 
@@ -88,16 +89,22 @@ public class DiverCommunicator
       {
         res = httpClient.SendAsync(msg).Result;
       }
-      catch (Exception)
-      // catch (AggregateException e)
+      catch (Exception ex)
       {
-        // if (e.InnerException is HttpRequestException ||
-        //     e.InnerException is SocketException)
-        // {
+        if (ex is AggregateException e0 &&
+            e0.InnerException is HttpRequestException e1 &&
+            e1.InnerException is SocketException e2)
+        {
+          // Log.Critical("Failed to send request to diver: " + e2.Message);
           ProcessCrashed?.Invoke(this, EventArgs.Empty);
-        // }
-        if (allowRetry)
-          return SendRequest(path, queryParams, jsonBody, false);
+          ProcessCrashed = null; // Non-recoverable error; unsubscribe listeners
+          var processException = new ProcessCrashedException(
+            "Diver process has crashed", _process_id.Value, e2);
+          _process_id = null;
+
+          throw processException;
+        }
+        throw;
       }
     }
 
@@ -115,8 +122,9 @@ public class DiverCommunicator
 
   public bool KillDiver()
   {
-    if (_process_id.HasValue)
-      UnregisterClient(_process_id.Value);
+    if (!IsConnected) return false;
+
+    UnregisterClient(_process_id.Value);
 
     string body = SendRequest("die");
     return body?.Contains("Goodbye") ?? false;

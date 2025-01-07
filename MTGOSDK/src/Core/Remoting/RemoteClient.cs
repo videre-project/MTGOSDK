@@ -34,6 +34,8 @@ public sealed class RemoteClient : DLRWrapper
   //
 
   private static Lazy<RemoteClient> s_instance = new(() => new RemoteClient());
+  private static bool _isDisposing = false;
+
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
   public static Process @process => @this._clientProcess;
@@ -235,7 +237,7 @@ public sealed class RemoteClient : DLRWrapper
       // The best we can do in this case is simply check if the window title is
       // unset to indicate that the application entrypoint has not finished.
       //
-      if (!string.IsNullOrEmpty(MTGOProcess().MainWindowTitle))
+      if (!string.IsNullOrEmpty(Try(() => MTGOProcess().MainWindowTitle)))
         throw new SetupFailureException("The MTGO process failed to initialize.");
     }
   }
@@ -318,16 +320,6 @@ public sealed class RemoteClient : DLRWrapper
                        // Retry connecting to avoid creating a race condition
                        delay: 500, retries: 3, raise: true);
 
-    // Teardown on fatal exception.
-    AppDomain.CurrentDomain.UnhandledException += (s, e) =>
-    {
-      if (!IsInitialized)
-      {
-        Log.Critical("Encountered a fatal exception. Cleaning up RemoteClient.");
-        Dispose();
-      }
-    };
-
     // When the MTGO process exists, trigger the ProcessExited event
     _clientProcess.Exited += (s, e) =>
     {
@@ -338,6 +330,8 @@ public sealed class RemoteClient : DLRWrapper
 
     client.Communicator.ProcessCrashed += (s, e) =>
     {
+      if (_isDisposing) return;
+
       Log.Critical("MTGO process has crashed unexpectedly.");
       Dispose();
       ProcessExited?.Invoke(null, EventArgs.Empty);
@@ -377,7 +371,8 @@ public sealed class RemoteClient : DLRWrapper
   public static void Dispose()
   {
     // Prevent multiple calls to Dispose
-    if (!IsInitialized) return;
+    if (!IsInitialized || _isDisposing) return;
+    _isDisposing = true;
 
     // Call all event subscribers first before disposing
     Log.Debug("Disposing RemoteClient.");
@@ -409,6 +404,18 @@ public sealed class RemoteClient : DLRWrapper
   /// Event raised when the RemoteClient is disposed.
   /// </summary>
   public static event EventHandler? Disposed;
+
+  /// <summary>
+  /// Waits for the RemoteClient to be disposed.
+  /// </summary>
+  public static async Task WaitForDisposeAsync()
+  {
+    if (!IsInitialized) return;
+
+    var tcs = new TaskCompletionSource<bool>();
+    Disposed += (s, e) => tcs.SetResult(true);
+    await tcs.Task;
+  }
 
   //
   // RemoteHandle wrapper methods

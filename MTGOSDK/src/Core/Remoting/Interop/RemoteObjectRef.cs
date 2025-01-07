@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -137,7 +138,19 @@ internal class RemoteObjectRef(
   /// </summary>
   public void RemoteRelease()
   {
-    creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
+    if (creatingCommunicator.IsConnected)
+    {
+      try
+      {
+        creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
+      }
+      catch
+      {
+        // If the remote object is already released, we can ignore the exception
+        if (!creatingCommunicator.IsConnected) return;
+        throw;
+      }
+    }
     _isReleased = true;
   }
 

@@ -294,7 +294,7 @@ public class RemoteHandle : IDisposable
   //
   public void Dispose()
   {
-    Communicator?.KillDiver();
+    _communicator?.KillDiver();
     _communicator = null;
     _procWithDiver = null;
 
