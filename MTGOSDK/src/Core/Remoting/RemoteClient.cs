@@ -579,12 +579,44 @@ public sealed class RemoteClient : DLRWrapper
   /// <param name="queryPath">The query path to the remote object.</param>
   /// <param name="methodName">The name of the method to hook.</param>
   /// <param name="callback">The local Harmony callback to use.</param>
-  public static void HookInstanceMethod(
+  public static void HookMethod(
     string queryPath,
     string methodName,
     HookAction callback)
   {
     MethodInfo method = GetInstanceMethod(queryPath, methodName);
     @client.Harmony.Patch(method, prefix: callback);
+  }
+
+  /// <summary>
+  /// Unhooks a remote object's method using a Harmony callback.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="methodName">The name of the method to unhook.</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
+  /// <returns>True if the method was successfully unhooked.</returns>
+  public static bool UnhookMethod(
+    string queryPath,
+    string methodName,
+    HookAction callback)
+  {
+    MethodInfo method = GetInstanceMethod(queryPath, methodName);
+    return @client.Harmony.UnhookMethod(method, callback);
+  }
+
+  /// <summary>
+  /// Checks if a remote object's method has a Harmony callback.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="methodName">The name of the method to check.</param>
+  /// <param name="callback">The local Harmony callback to check.</param>
+  /// <returns>True if the method has the Harmony callback.</returns>
+  public static bool MethodHasHook(
+    string queryPath,
+    string methodName,
+    HookAction callback)
+  {
+    MethodInfo method = GetInstanceMethod(queryPath, methodName);
+    return @client.Harmony.HasHook(method, callback);
   }
 }

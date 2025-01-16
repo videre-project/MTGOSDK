@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Threading.Tasks;
-
 
 namespace MTGOSDK.Core.Reflection;
 

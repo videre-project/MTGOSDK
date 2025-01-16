@@ -36,6 +36,12 @@ public partial class Diver : IDisposable
   {
     ReverseCommunicator reverseCommunicator = new(callbacksEndpoint);
 
+    if (!_remoteEventHandler.ContainsKey(token) &&
+        !_remoteHooks.ContainsKey(token))
+    {
+      return null;
+    }
+
     // Check if the client connection is still alive
     bool alive = reverseCommunicator.CheckIfAlive();
     if (!alive)

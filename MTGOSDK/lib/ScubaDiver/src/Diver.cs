@@ -117,14 +117,17 @@ public partial class Diver : IDisposable
       {
         endpoint = registeredMethodHookInfo.Value.Endpoint;
         ReverseCommunicator reverseCommunicator = new(endpoint);
-        Log.Debug($"[Diver] Checking if callback client at {endpoint} is alive. Token = {registeredMethodHookInfo.Key}. Type = Method Hook");
+        var token = registeredMethodHookInfo.Key;
+        Log.Debug($"[Diver] Checking if callback client at {endpoint} is alive. Token = {token}. Type = Method Hook");
         bool alive = reverseCommunicator.CheckIfAlive();
-        Log.Debug($"[Diver] Callback client at {endpoint} (Token = {registeredMethodHookInfo.Key}) is alive = {alive}");
+        Log.Debug($"[Diver] Callback client at {endpoint} (Token = {token}) is alive = {alive}");
         if (!alive)
         {
-          Log.Debug(
-            $"[Diver] Dead Callback client at {endpoint} (Token = {registeredMethodHookInfo.Key}) DROPPED!");
-          _remoteHooks.TryRemove(registeredMethodHookInfo.Key, out _);
+          Log.Debug($"[Diver] Dead Callback client at {endpoint} (Token = {token}) DROPPED!");
+          if (_remoteHooks.TryRemove(token, out RegisteredMethodHookInfo rmhi))
+          {
+            HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
+          }
         }
       }
       foreach (var registeredEventHandlerInfo in _remoteEventHandler)
@@ -136,8 +139,7 @@ public partial class Diver : IDisposable
         Log.Debug($"[Diver] Callback client at {endpoint} (Token = {registeredEventHandlerInfo.Key}) is alive = {alive}");
         if (!alive)
         {
-          Log.Debug(
-            $"[Diver] Dead Callback client at {endpoint} (Token = {registeredEventHandlerInfo.Key}) DROPPED!");
+          Log.Debug($"[Diver] Dead Callback client at {endpoint} (Token = {registeredEventHandlerInfo.Key}) DROPPED!");
           _remoteEventHandler.TryRemove(registeredEventHandlerInfo.Key, out _);
         }
       }

@@ -76,10 +76,22 @@ public partial class Diver : IDisposable
       return QuickError($"Failed to find method {methodName} in type {resolvedType.Name}");
     Log.Debug("[Diver] Hook Method - Resolved Method");
 
+    // See if any remoteHooks already hooked into this method (by MethodInfo object)
+    var existingHook = _remoteHooks
+      .FirstOrDefault(kvp => kvp.Value.OriginalHookedMethod == methodInfo);
+    if (existingHook.Value != null)
+    {
+      Log.Debug($"[Diver] Hook Method - Found existing hook for {methodName}");
+      _remoteHooks.TryRemove(existingHook.Key, out RegisteredMethodHookInfo rmhi);
+      HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
+      // return JsonConvert.SerializeObject(new EventRegistrationResults(){ Token = existingHook.Key });
+    }
+
     // We're all good regarding the signature!
     // assign subscriber unique id
     int token = AssignCallbackToken();
     Log.Debug($"[Diver] Hook Method - Assigned Token: {token}");
+
     // Preparing a proxy method that Harmony will invoke
     HarmonyWrapper.HookCallback patchCallback = (obj, args) =>
     {

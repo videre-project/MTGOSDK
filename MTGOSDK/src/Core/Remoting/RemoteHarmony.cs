@@ -187,4 +187,14 @@ public class RemoteHarmony
     }
     return true;
   }
+
+  public bool HasHook(MethodBase methodToHook, HookAction callback)
+  {
+    if (!_callbacksToProxies.TryGetValue(methodToHook, out MethodHooks hooks))
+    {
+      return false;
+    }
+
+    return hooks.ContainsKey(callback);
+  }
 }

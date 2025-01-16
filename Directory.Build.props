@@ -20,7 +20,7 @@
   <PropertyGroup Condition="'$(UseFullSDKPaths)' != 'false'">
     <UseFullSDKPaths>true</UseFullSDKPaths>
     <_MTGOSDKCoreTFM>net48</_MTGOSDKCoreTFM>
-    <_MTGOSDKCoreTarget>.NETFramework,Version=v4.8</_MTGOSDKCoreTarget>
+    <_MTGOSDKCoreTarget>.NETFramework4.8</_MTGOSDKCoreTarget>
     <_MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
     <NuGetExePath>$(SolutionDir)\NuGet.exe</NuGetExePath>
   </PropertyGroup>
