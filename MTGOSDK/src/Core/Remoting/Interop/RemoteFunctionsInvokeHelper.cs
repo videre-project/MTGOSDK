@@ -138,9 +138,19 @@ public static class RemoteFunctionsInvokeHelper
     else
     {
       // obj is NOT null. Make sure it's a RemoteObject.
-      if (!(obj is RemoteObject ro))
+      RemoteObject ro;
+      if (obj is RemoteObject remoteObj)
+      {
+        ro = remoteObj;
+      }
+      else if (obj is DynamicRemoteObject dro)
+      {
+        ro = dro.__ro;
+      }
+      else
       {
         throw new NotImplementedException(
+          $"Provided type was {obj.GetType().FullName}. " +
           $"{nameof(RemoteMethodInfo)}.{nameof(Invoke)} only supports {nameof(RemoteObject)} targets at the moment.");
       }
       (hasResults, oora) = ro.InvokeMethod(funcName, genericArgsFullNames, remoteParams);

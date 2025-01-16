@@ -8,6 +8,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using System.Reflection;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Resources;
@@ -17,6 +18,23 @@ namespace ScubaDiver;
 
 public class DllEntry
 {
+  private static void UseAssemblyLoadHook()
+  {
+    // Add a hook to load assemblies next to the current assembly's filepath.
+    AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+    {
+      string assemblyPath = Path.Combine(
+        Path.GetDirectoryName(typeof(DllEntry).Assembly.Location),
+        new AssemblyName(args.Name).Name + ".dll"
+      );
+
+      if (File.Exists(assemblyPath))
+        return Assembly.LoadFrom(assemblyPath);
+
+      return null;
+    };
+  }
+
   private static void DiverHost(object pwzArgument)
   {
     try
@@ -42,6 +60,9 @@ public class DllEntry
         Log.Error("[DiverHost] Unhandled exception occurred.");
         Log.Error(e.ExceptionObject.ToString());
       };
+
+      // Load any dependencies that are not in the GAC.
+      UseAssemblyLoadHook();
 
       // Start the diver instance and block the thread until it exits.
       Diver _instance = new();
@@ -70,6 +91,7 @@ public class DllEntry
     // so we handle that case in the <see cref="DiverHost"/> function.
     diverHostThread.Join();
 
+    // Signal to the launcher that the diver has finished bootstrapping.
     return 0;
   }
 }

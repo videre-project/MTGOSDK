@@ -197,6 +197,8 @@ public abstract class DLRWrapper
   /// </summary>
   public static Func<dynamic> Lambda(Func<dynamic> lambda) => lambda;
 
+  public static Func<dynamic, T> Lambda<T>(Func<dynamic, T> lambda) => lambda;
+
   /// <summary>
   /// Provides a default type mapper based on the given reference type.
   /// </summary>
@@ -327,6 +329,13 @@ public abstract class DLRWrapper
   {
     foreach (var item in obj)
       if (predicate(item)) yield return item;
+  }
+
+  public static T Filter<T>(dynamic obj, Predicate predicate)
+  {
+    foreach (var item in obj)
+      if (predicate(item)) return item;
+    return default(T);
   }
 
   //

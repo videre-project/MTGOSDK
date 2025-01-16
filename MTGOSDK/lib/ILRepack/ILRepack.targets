@@ -3,7 +3,7 @@
   <Import Project="ILRepack.Config.props" />
 
   <!-- Merge the main assembly with any copied reference assemblies -->
-  <Target Name="MergeReferenceAssemblies"
+  <Target Name="ComputeInputAssemblies"
           AfterTargets="AfterBuild"
           Condition="'$(OutputFilesModified)' == 'true' And
                      '$(UseILRepack)' == 'true'">
@@ -21,7 +21,13 @@
     <PropertyGroup Condition="'$(ILRepackOutput)' == ''">
       <ILRepackOutput>$(OutputPath)$(ILRepackTarget).dll</ILRepackOutput>
     </PropertyGroup>
+  </Target>
 
+  <!-- Merge the main assembly with any copied reference assemblies -->
+  <Target Name="MergeReferenceAssemblies"
+          AfterTargets="ComputeInputAssemblies"
+          Condition="@(InputAssemblies) != '' And
+                     '$(UseILRepack)' == 'true'">
     <!-- Merge all reference assemblies into the main assembly -->
     <ILRepack
       Union="true"

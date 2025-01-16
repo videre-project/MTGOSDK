@@ -7,4 +7,7 @@
   <assembly fullname="Newtonsoft.Json">
     <namespace fullname="Newtonsoft.Json.Serialization"        preserve="all" />
   </assembly>
+  <assembly fullname="0Harmony">
+    <type fullname="HarmonyLib.*"                              preserve="all" />
+  </assembly>
 </linker>

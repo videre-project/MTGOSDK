@@ -106,6 +106,11 @@ public static class Bootstrapper
     // Check if injector or bootstrap resources differ from copies on disk
     OverrideFileIfChanged(diverPath, diverResource);
 
+    // Update all diver dependencies
+    byte[] harmonyResource = GetBinaryResource(@"Resources\0Harmony.dll");
+    string harmonyPath = Path.Combine(AppDataDir, "0Harmony.dll");
+    OverrideFileIfChanged(harmonyPath, harmonyResource);
+
     var injector = new InjectorBase();
     injector.Inject(target, diverPath, "ScubaDiver.DllEntry", "EntryPoint");
 #endif

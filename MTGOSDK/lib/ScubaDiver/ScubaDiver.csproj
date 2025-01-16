@@ -10,24 +10,35 @@
   </PropertyGroup>
 
   <!-- ILLink trimmer -->
-  <PropertyGroup>
+  <!-- <PropertyGroup>
     <UseILLinkTrim>true</UseILLinkTrim>
   </PropertyGroup>
   <Import Project="..\ILLink\ILLink.targets"
-          Condition="'$(UseILLinkTrim)' == 'true'" />
+          Condition="'$(UseILLinkTrim)' == 'true'" /> -->
 
   <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
   <PropertyGroup>
-    <ILRepackTargetsFile>
-      $(MSBuildThisFileDirectory)..\ILRepack\ILRepack.targets
-    </ILRepackTargetsFile>
+    <ILRepackTargetsFile>$(MSBuildThisFileDirectory)..\ILRepack\ILRepack.targets</ILRepackTargetsFile>
     <ILRepackTarget>Microsoft.Diagnostics.Runtime</ILRepackTarget>
+    <HarmonyAssembly>bin\$(Configuration)\$(_MTGOSDKCoreTFM)\0Harmony.dll</HarmonyAssembly>
     <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).dll</ILRepackOutput>
   </PropertyGroup>
+
+  <!-- Export the Harmony assembly to the output directory for packing -->
+  <Target Name="PackHarmonyLib"
+          AfterTargets="ComputeInputAssemblies"
+          BeforeTargets="MergeReferenceAssemblies">
+    <ItemGroup>
+      <InputAssemblies Remove="$(HarmonyAssembly)" />
+    </ItemGroup>
+    <Copy SourceFiles="$(HarmonyAssembly)"
+          DestinationFolder="$(SolutionDir)dist\$(Configuration)" />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Lib.Harmony" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>

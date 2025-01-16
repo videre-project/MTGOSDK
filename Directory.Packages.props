@@ -5,7 +5,7 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <RestoreLockedMode>true</RestoreLockedMode>
+    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
@@ -48,6 +48,9 @@
     <!-- MTGOSDK/lib/Launcher -->
     <PackageVersion Include="FrameworkExtract.System.Deployment"
                     Version="4.0.30319" />
+    <!-- MTGOSDK/lib/ScubaDiver -->
+    <PackageVersion Include="Lib.Harmony"
+                    Version="2.3.3" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
                     Version="17.10.4" />
@@ -77,6 +80,18 @@
 
   <!-- .NET Standard 2.0 -->
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <!-- Use API polyfills to help write .NET 5.0+ compatible code -->
+    <PackageReference Include="Meziantou.Polyfill"
+                      PrivateAssets="all"
+                      Condition="'$(EnablePolyfills)' != 'false'" />
+  </ItemGroup>
+
+  <!-- .NET Framework 2.0+ -->
+  <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789.`))' == 'net'">
+    <!-- Prefer reference assemblies to help produce deterministic builds -->
+    <GlobalPackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                            Version="1.0.3"
+                            PrivateAssets="all" />
     <!-- Use API polyfills to help write .NET 5.0+ compatible code -->
     <PackageReference Include="Meziantou.Polyfill"
                       PrivateAssets="all"

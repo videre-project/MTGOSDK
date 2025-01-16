@@ -113,6 +113,7 @@ public class RemoteHandle : IDisposable
 
   public Process Process => _procWithDiver;
   public RemoteActivator Activator { get; private set; }
+  public RemoteHarmony Harmony { get; private set; }
 
   private static DiverCommunicator _communicator;
   public DiverCommunicator Communicator => _communicator;
@@ -130,6 +131,7 @@ public class RemoteHandle : IDisposable
     }
     _remoteObjects = new RemoteObjectsCollection(this);
     Activator = new RemoteActivator(communicator, this);
+    Harmony = new RemoteHarmony(this);
   }
 
   //

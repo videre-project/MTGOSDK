@@ -41,6 +41,7 @@ public partial class Diver : IDisposable
     if (!alive)
     {
       _remoteEventHandler.TryRemove(token, out _);
+      _remoteHooks.TryRemove(token, out _);
       return null;
     }
 

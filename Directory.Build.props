@@ -1,5 +1,10 @@
 <Project>
 
+  <!-- Project Properties -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);NU1702</NoWarn>
+  </PropertyGroup>
+
   <!-- Project Directories -->
   <PropertyGroup>
     <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
@@ -14,8 +19,8 @@
   <!-- Internal SDK Paths -->
   <PropertyGroup Condition="'$(UseFullSDKPaths)' != 'false'">
     <UseFullSDKPaths>true</UseFullSDKPaths>
-    <_MTGOSDKCoreTFM>netstandard2.0</_MTGOSDKCoreTFM>
-    <_MTGOSDKCoreTarget>.NETStandard2.0</_MTGOSDKCoreTarget>
+    <_MTGOSDKCoreTFM>net48</_MTGOSDKCoreTFM>
+    <_MTGOSDKCoreTarget>.NETFramework,Version=v4.8</_MTGOSDKCoreTarget>
     <_MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
     <NuGetExePath>$(SolutionDir)\NuGet.exe</NuGetExePath>
   </PropertyGroup>

@@ -568,4 +568,23 @@ public sealed class RemoteClient : DLRWrapper
     var remoteMethod = GetMethod(queryPath, methodName, genericTypes);
     return remoteMethod!.Invoke(null, args);
   }
+
+  //
+  // RemoteHarmony wrapper methods
+  //
+
+  /// <summary>
+  /// Hooks a remote object's method using a Harmony callback.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="methodName">The name of the method to hook.</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
+  public static void HookInstanceMethod(
+    string queryPath,
+    string methodName,
+    HookAction callback)
+  {
+    MethodInfo method = GetInstanceMethod(queryPath, methodName);
+    @client.Harmony.Patch(method, prefix: callback);
+  }
 }

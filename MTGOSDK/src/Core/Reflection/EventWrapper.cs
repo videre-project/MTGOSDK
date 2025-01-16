@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Threading.Tasks;
+
 
 namespace MTGOSDK.Core.Reflection;
 
@@ -16,8 +18,12 @@ public class EventWrapper<T>(EventHandler handler) where T : EventArgs
   /// <summary>
   /// The handler method to be invoked when the event is raised.
   /// </summary>
+  /// <remarks>
+  /// This method is wrapped in a Task.Run to ensure that the event handler does
+  /// not block the event source (e.g. a network socket or a UI control).
+  /// </remarks>
   public void Handle(object sender, T args)
   {
-    handler.Invoke(sender, args);
+    Task.Run(() => handler.Invoke(sender, args));
   }
 }
