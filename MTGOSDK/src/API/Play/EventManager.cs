@@ -63,13 +63,14 @@ public static class EventManager
   /// 10-20 seconds to complete, depending on the number of tournaments.
   /// </remarks>
   public static IEnumerable<Tournament> FeaturedEvents =>
-    Map<Tournament>(s_playService.GetFeaturedFilterables(), f => new(f.PlayerEvent));
+    Map<Tournament>(Unbind(s_playService).GetFeaturedFilterables(),
+                    Lambda<Tournament>(f => new(f.PlayerEvent)));
 
   /// <summary>
   /// All joined events that the player is currently participating in.
   /// </summary>
   public static IEnumerable<dynamic> JoinedEvents =>
-    Map<dynamic>(s_playService.JoinedEvents, PlayerEventFactory);
+    Map<dynamic>(Unbind(s_playService).JoinedEvents, PlayerEventFactory);
 
   //
   // IPlayerEvent wrapper methods
@@ -131,7 +132,7 @@ public static class EventManager
     viewModel.ExecuteViewCommand();
   }
 
-  internal static readonly Func<dynamic, Event> PlayerEventFactory =
+  public static readonly Func<dynamic, Event> PlayerEventFactory =
     new(FromPlayerEvent);
 
   private static Event FromPlayerEvent(dynamic playerEvent)
