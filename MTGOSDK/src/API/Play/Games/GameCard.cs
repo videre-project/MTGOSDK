@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Reflection;
 
@@ -19,52 +21,16 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// </summary>
   internal override dynamic obj => Bind<IGameCard>(gameCard);
 
-  /// <summary>
-  /// Represents a game action performed by a card.
-  /// </summary>
-  public struct CardAction
+  private struct OrderedCombatParticipant(dynamic orderedCombatParticipant)
   {
-    /// <summary>
-    /// The source card for the action.
-    /// </summary>
-    public GameCard Card { get; init; }
-
-    /// <summary>
-    /// The game action performed by the card.
-    /// </summary>
-    public GameAction Action { get; init; }
-
-    public CardAction(dynamic cardAction)
-    {
-      Card = new(cardAction.Card);
-      Action = new(cardAction.Action);
-    }
+    public int Order = orderedCombatParticipant.Order;
+    public GameCard Target = new(orderedCombatParticipant.Target);
   }
 
-  /// <summary>
-  /// Represents a card association (e.g. Target, Attacker, Effect source, etc.)
-  /// </summary>
-  public struct GameCardAssociation
-  {
-    /// <summary>
-    /// Represents a card association (e.g. ChosenPlayer, TriggeringSource, etc.).
-    /// </summary>
-    /// <remarks>
-    /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
-    /// </remarks>
-    public CardAssociation Association { get; init; }
+  // DigitalMagicObject -> CardRelationshipData -> DuelSceneCardViewModel
+  private readonly dynamic cardModel = gameCard.Tag.CardViewModel;
 
-    /// <summary>
-    /// The ID of the associated target.
-    /// </summary>
-    public int TargetId { get; init; }
-
-    public GameCardAssociation(dynamic gameCardAssociation)
-    {
-      Association = Cast<CardAssociation>(Unbind(gameCardAssociation).Value);
-      TargetId = gameCardAssociation.AssociatedTarget.Id;
-    }
-  }
+  public bool IsDisposed => gameCard.Tag == null;
 
   //
   // IGameCard wrapper properties
@@ -74,6 +40,11 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// The unique identifier for this card instance.
   /// </summary>
   public int Id => Unbind(@base).Id;
+
+  /// <summary>
+  /// The unique card texture number for the card object.
+  /// </summary>
+  public int CTN => Unbind(@base).CTN;
 
   /// <summary>
   /// The source ID or 'thing' number of the card.
@@ -90,45 +61,53 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// </summary>
   public Card Definition => new(Unbind(@base).Definition);
 
+  /// <summary>
+  /// The latest interaction timestamp associated with the card.
+  /// </summary>
+  /// <remarks>
+  /// This timestamp is updated whenever the interaction state of the game
+  /// advances. Note that this timestamp does not necessarily increment with
+  /// each game action.
+  /// </remarks>
   public int Timestamp => @base.Timestamp;
 
   public GameZone Zone => new(@base.Zone);
 
+  // IsExiledOnBattlefield
+  // IsMutatedOnBattlefield
+  // IsAbilityOnTheStack
   public GameZone ActualZone => new(@base.ActualZone);
 
   public GameZone PreviousZone => new(@base.PreviousZone);
 
-  public IEnumerable<CardAction> Actions =>
-    Map<CardAction>(Unbind(@base).Actions);
+  public IList<CardAction> Actions =>
+    Map<IList, CardAction>(@base.Actions);
 
-  public IEnumerable<GameCard> PendingTargets =>
-    Map<GameCard>(Unbind(@base).PendingTargets);
+  public IList<CardAction> PendingTargets =>
+    Map<IList, CardAction>(@base.PendingTargets);
 
   public IEnumerable<GameCardAssociation> Associations =>
     Map<GameCardAssociation>(@base.Associations);
 
-  // public IEnumerable<GameCard> AttackingOrders =>
-  //   Map<GameCard>(Unbind(@base).AttackingOrders,
-  //     new Func<dynamic, GameCard>((item) => new(item.Target)));
+  public IEnumerable<GameCard> AttackingOrders =>
+    ((IEnumerable<OrderedCombatParticipant>)
+     Map<OrderedCombatParticipant>(Unbind(@base).AttackingOrders))
+      .OrderBy(item => item.Order)
+      .Select(item => item.Target);
 
-	// public IEnumerable<GameCard> BlockingOrders =>
-  //   Map<GameCard>(Unbind(@base).BlockingOrders,
-  //     new Func<dynamic, GameCard>((item) => new(item.Target)));
+  public IEnumerable<GameCard> BlockingOrders =>
+    ((IEnumerable<OrderedCombatParticipant>)
+     Map<OrderedCombatParticipant>(Unbind(@base).BlockingOrders))
+      .OrderBy(item => item.Order)
+      .Select(item => item.Target);
 
-  /// <summary>
-  /// The card's current counters.
-  /// </summary>
-  /// <remarks>
-  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
-  /// </remarks>
-  public IEnumerable<Counter> Counters =>
-    Map<Counter>(Unbind(@base).Counters,
-      new Func<dynamic, Counter>((item) => Cast<Counter>(item)));
+  public IEnumerable<CardCounter> Counters =>
+    Map<CardCounter>(Unbind(@base).Counters,
+      new Func<dynamic, CardCounter>(Cast<CardCounter>));
 
   public GamePlayer Owner => new(@base.Owner);
 
-  // TODO: Derive this from the 'DuelSceneCardViewModel' instance.
-  // public GamePlayer Controller => ???
+  public GamePlayer Controller => new(@base.Controller);
 
   public GamePlayer Protector => new(@base.Protector);
 
@@ -177,6 +156,13 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   public bool IsYieldAbility => @base.IsYieldAbility;
 
   public bool HasAutoTargets => @base.HasAutoTargets;
+
+  //
+  // DuelSceneCardViewModel properties
+  //
+
+  // public EventProxy ActionMouseEnterCommand =
+  //   new(/* DuelSceneCardViewModel */ cardModel, nameof(ActionMouseEnterCommand));
 
   //
   // IGameCard wrapper events

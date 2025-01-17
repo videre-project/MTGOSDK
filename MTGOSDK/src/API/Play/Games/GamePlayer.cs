@@ -6,7 +6,6 @@
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
-using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Play;
 
 
@@ -22,34 +21,6 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   /// Stores an internal reference to the IGamePlayer object.
   /// </summary>
   internal override dynamic obj => Bind<IGamePlayer>(gamePlayer);
-
-  /// <summary>
-  /// Represents an item in the player's mana pool.
-  /// </summary>
-  public struct Mana
-  {
-    /// <summary>
-    /// The unique identifier for the given mana type.
-    /// </summary>
-    public int Id { get; init; }
-
-    /// <summary>
-    /// The type of color(s) the mana represents.
-    /// </summary>
-    public MagicColors Color { get; init; }
-
-    /// <summary>
-    /// The amount of the given mana type in the player's mana pool.
-    /// </summary>
-    public int Amount { get; init; }
-
-    public Mana(IManaPoolItem manaItem)
-    {
-      Id = manaItem.ID;
-      Color = Cast<MagicColors>(Unbind(manaItem).Color);
-      Amount = manaItem.Amount;
-    }
-  }
 
   //
   // IGamePlayer wrapper properties

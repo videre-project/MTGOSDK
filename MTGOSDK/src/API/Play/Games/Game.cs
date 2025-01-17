@@ -63,6 +63,11 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public GameState State => Cast<GameState>(Unbind(@base).GameState);
 
   /// <summary>
+  /// Whether the current game is a replay of a previous game.
+  /// </summary>
+  public bool IsReplay => @base.IsReplay;
+
+  /// <summary>
   /// The chat channel between all players.
   /// </summary>
   public Channel ChatChannel => new(@base.ChatChannel);
@@ -167,7 +172,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     foreach(var zoneEntry in Unbind(@base).m_playerZones[playerKey])
     {
       // Cast enum values to avoid boxing remote key values
-      if(Cast<CardZone>(zoneEntry.Key) == cardZone)
+      if (Cast<CardZone>(zoneEntry.Key) == cardZone)
         return new GameZone(zoneEntry.Value);
     }
 
@@ -187,7 +192,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     foreach(var zoneEntry in Unbind(@base).m_sharedZones)
     {
       // Cast enum values to avoid boxing remote key values
-      if(Cast<CardZone>(zoneEntry.Key) == cardZone)
+      if (Cast<CardZone>(zoneEntry.Key) == cardZone)
         return new GameZone(zoneEntry.Value);
     }
 
@@ -226,4 +231,25 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
 
   public EventProxy<GameEventArgs> CurrentTurnChanged =
     new(/* IGame */ game, nameof(CurrentTurnChanged));
+
+  public EventHookWrapper<GameAction> OnGameAction =
+    new(GameActionPerformed, new Filter<GameAction>((s,_) => s.Id == game.Id));
+
+  //
+  // IGame static events
+  //
+
+  public static EventHookProxy<Game, GameAction> GameActionPerformed =
+    new(
+      "WotC.MtGO.Client.Model.Play.Actions.GameAction",
+      "Execute",
+      new EventHook((dynamic instance, dynamic[] args) =>
+      {
+        var action = GameAction.GameActionFactory(instance);
+        if (action == null) return null; // Ignore unknown actions.
+        var game = new Game(args[0]);
+
+        return (game, action); // Return a tuple of (Game, GameAction).
+      })
+    );
 }

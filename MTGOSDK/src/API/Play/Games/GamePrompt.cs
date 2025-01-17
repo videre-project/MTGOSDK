@@ -30,6 +30,11 @@ public sealed class GamePrompt(dynamic gamePrompt) : DLRWrapper<IGamePrompt>
   public string Text => @base.Text;
 
   /// <summary>
+  /// The current interaction timestamp of the game.
+  /// </summary>
+  public uint Timestamp => Unbind(@base).Timestamp;
+
+  /// <summary>
   /// Whether the prompt is a mulligan prompt.
   /// </summary>
   public bool IsMulligan => @base.IsMulligan;

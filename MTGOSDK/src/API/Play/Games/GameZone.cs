@@ -11,6 +11,9 @@ using WotC.MtGO.Client.Model.Play;
 namespace MTGOSDK.API.Play.Games;
 using static MTGOSDK.API.Events;
 
+/// <summary>
+/// Represents a card zone in the game.
+/// </summary>
 public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
 {
   /// <summary>
@@ -28,6 +31,11 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   public string Name => Unbind(@base).CardZone.ToString();
 
   /// <summary>
+  /// The number of cards in the zone.
+  /// </summary>
+  public int Count => @base.Count;
+
+  /// <summary>
   /// The cards contained in the zone.
   /// </summary>
   public IEnumerable<GameCard> Cards => Map<GameCard>(@base);
@@ -35,9 +43,6 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// <summary>
   /// The enum value of the zone.
   /// </summary>
-  /// <remarks>
-  /// Requires the <c>WotC.MtGO.Client.Model.Play</c> reference assembly.
-  /// </remarks>
   public CardZone Zone => Cast<CardZone>(Unbind(@base).CardZone);
 
   /// <summary>
@@ -52,6 +57,6 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// <summary>
   /// Event triggered when a card is added, removed, or cleared from the zone.
   /// </summary>
-  public EventProxy<GameZone, GameZoneEventArgs> CollectionChanged =
+  public EventProxy<GameZoneEventArgs> CollectionChanged =
     new(/* ICardZone */ cardZone, nameof(CollectionChanged));
 }
