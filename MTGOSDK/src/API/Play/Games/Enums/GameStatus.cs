@@ -6,7 +6,8 @@
 
 namespace MTGOSDK.API.Play.Games;
 
-public enum GameState
+//WotC.MtGO.Client.Model.Play.GameState
+public enum GameStatus
 {
   Invalid,
   NotStarted,

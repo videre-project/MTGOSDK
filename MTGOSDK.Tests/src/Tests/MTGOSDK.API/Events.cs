@@ -279,9 +279,9 @@ public class EventValidationFixture : BaseFixture
         foreach(GameStandingRecord game in match.GameStandingRecords)
         {
           Assert.That(game.Id, Is.GreaterThan(0));
-          Assert.That(game.GameState, Is.Not.EqualTo(GameState.Invalid));
+          Assert.That(game.GameStatus, Is.Not.EqualTo(GameStatus.Invalid));
           Assert.That(game.CompletedDuration,
-            game.GameState == GameState.Finished
+            game.GameStatus == GameStatus.Finished
               ? Is.GreaterThan(TimeSpan.Zero)
               : Is.AnyOf(Is.Null, TimeSpan.Zero));
           Assert.That(game.WinnerIds.Count, Is.LessThanOrEqualTo(1));
@@ -336,7 +336,7 @@ public class EventValidationFixture : BaseFixture
     {
       Assert.That(game.Id, Is.GreaterThan(0));
       Assert.That(game.ServerGuid, Is.Not.EqualTo(Guid.Empty));
-      Assert.That(game.State, Is.Not.EqualTo(GameState.Invalid));
+      Assert.That(game.Status, Is.Not.EqualTo(GameStatus.Invalid));
     }
   }
 

@@ -58,9 +58,9 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public Guid ServerGuid => Cast<Guid>(Unbind(@base).ServerGuid);
 
   /// <summary>
-  /// The game's state (e.g. NotStarted, Started, Finished, etc.).
+  /// The game's completion status (e.g. NotStarted, Started, Finished, etc.).
   /// </summary>
-  public GameState State => Cast<GameState>(Unbind(@base).GameState);
+  public GameStatus Status => Cast<GameStatus>(Unbind(@base).GameState);
 
   /// <summary>
   /// Whether the current game is a replay of a previous game.
@@ -211,27 +211,50 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   // IGame wrapper events
   //
 
+  /// <summary>
+  /// Event triggered when the current game prompt changes.
+  /// </summary>
   public EventProxy<GameEventArgs> PromptChanged =
     new(/* IGame */ game, nameof(PromptChanged));
 
+  /// <summary>
+  /// Event triggered when the current game state changes.
+  /// </summary>
   public EventProxy<GameEventArgs> GameChanged =
     new(/* IGame */ game, nameof(GameChanged));
 
-  public EventProxy<GameStateEventArgs> GameStateChanged =
-    new(/* IGame */ game, nameof(GameStateChanged));
+  /// <summary>
+  /// Event triggered when the game completion status changes.
+  public EventProxy<GameStatusEventArgs> GameStatusChanged =
+    new(/* IGame */ game, "GameStateChanged");
 
+  /// <summary>
+  /// Event triggered when the player whose turn it is changes.
+  /// </summary>
   public EventProxy<GameEventArgs> ActivePlayerChanged =
     new(/* IGame */ game, nameof(ActivePlayerChanged));
 
+  /// <summary>
+  /// Event triggered when the player who can take actions changes.
+  /// </summary>
   public EventProxy<GameEventArgs> PriorityPlayerChanged =
     new(/* IGame */ game, nameof(PriorityPlayerChanged));
 
+  /// <summary>
+  /// Event triggered when the game phase for the current turn.
+  /// </summary>
   public EventProxy<GameEventArgs> CurrentPhaseChanged =
     new(/* IGame */ game, nameof(CurrentPhaseChanged));
 
+  /// <summary>
+  /// Event triggered when the current turn number changes.
+  /// </summary>
   public EventProxy<GameEventArgs> CurrentTurnChanged =
     new(/* IGame */ game, nameof(CurrentTurnChanged));
 
+  /// <summary>
+  /// Event triggered when a game action is performed.
+  /// </summary>
   public EventHookWrapper<GameAction> OnGameAction =
     new(GameActionPerformed, new Filter<GameAction>((s,_) => s.Id == game.Id));
 
@@ -239,6 +262,9 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   // IGame static events
   //
 
+  /// <summary>
+  /// Event triggered when a game action in any active game is performed.
+  /// </summary>
   public static EventHookProxy<Game, GameAction> GameActionPerformed =
     new(
       "WotC.MtGO.Client.Model.Play.Actions.GameAction",

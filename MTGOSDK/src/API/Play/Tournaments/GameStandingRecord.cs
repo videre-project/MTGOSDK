@@ -33,8 +33,8 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <summary>
   /// The game's current completion (i.e. "NotStarted", "Started", "Finished")
   /// </summary>
-  public GameState GameState =>
-    Retry(() => Cast<GameState>(Unbind(@base).GameState), GameState.Invalid);
+  public GameStatus GameStatus =>
+    Retry(() => Cast<GameStatus>(Unbind(@base).GameState), GameStatus.Invalid);
 
   /// <summary>
   /// The elapsed time to completion since the game started.

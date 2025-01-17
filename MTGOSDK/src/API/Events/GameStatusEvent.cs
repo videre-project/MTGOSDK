@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using WotC.MtGO.Client.Model.Play;
+using MTGOSDK.API.Play.Games;
 
 
 namespace MTGOSDK.API;
@@ -23,29 +23,29 @@ public sealed partial class Events
   //
 
   /// <summary>
-  /// Delegate type for subscribing to Game events updating the game state.
+  /// Delegate type for subscribing to Game events updating the game status.
   /// </summary>
-  public delegate void GameStateEventCallback(GameStateEventArgs args);
+  public delegate void GameStatusEventCallback(GameStatusEventArgs args);
 
   //
   // EventHandler argument types
   //
 
   /// <summary>
-  /// Event args triggered on Game events updating the game state.
+  /// Event args triggered on Game events updating the game status.
   /// </summary>
-  public class GameStateEventArgs(dynamic args) : GameEventArgs(null)
+  public class GameStatusEventArgs(dynamic args) : GameEventArgs(null)
   {
     internal override dynamic obj => args;
 
     /// <summary>
-    /// The previous game state.
+    /// The previous game status.
     /// </summary>
-    public GameState OldState => Cast<GameState>(@base.GameState);
+    public GameStatus OldStatus => Cast<GameStatus>(@base.GameState);
 
     /// <summary>
-    /// The new game state.
+    /// The new game status.
     /// </summary>
-    public GameState NewState => Cast<GameState>(@base.GameState);
+    public GameStatus NewStatus => Cast<GameStatus>(@base.GameState);
   }
 }
