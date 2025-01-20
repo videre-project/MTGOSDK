@@ -25,7 +25,7 @@ public partial class Diver : IDisposable
     if (matchingAssembly == null)
       return QuickError($"No assemblies found matching the query '{assembly}'");
 
-    List<TypesDump.TypeIdentifiers> types = new List<TypesDump.TypeIdentifiers>();
+    List<TypesDump.TypeIdentifiers> types = new();
     foreach (Type type in matchingAssembly.GetTypes())
     {
       types.Add(new TypesDump.TypeIdentifiers() { TypeName = type.FullName });

@@ -7,6 +7,7 @@
 using System.Diagnostics;
 using System.IO;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -127,7 +128,15 @@ public class RemoteHandle : IDisposable
     _currentDomain = communicator.DumpDomain();
     foreach (string assembly in _currentDomain.Modules)
     {
-      _remoteTypes.Add(assembly, communicator.DumpTypes(assembly));
+      try
+      {
+        _remoteTypes.Add(assembly, communicator.DumpTypes(assembly));
+      }
+      catch (Exception e)
+      {
+        Log.Error("Failed to dump types for assembly '{Assembly}': {Message}",
+          assembly, e.Message);
+      }
     }
     _remoteObjects = new RemoteObjectsCollection(this);
     Activator = new RemoteActivator(communicator, this);
@@ -191,6 +200,9 @@ public class RemoteHandle : IDisposable
   {
     foreach (string assembly in _currentDomain.Modules)
     {
+      if (!_remoteTypes.ContainsKey(assembly))
+        continue;
+
       foreach (TypesDump.TypeIdentifiers type in _remoteTypes[assembly].Types)
       {
         if (type.TypeName == typeFullName)
