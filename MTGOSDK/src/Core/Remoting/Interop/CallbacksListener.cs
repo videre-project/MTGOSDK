@@ -10,6 +10,7 @@ using System.Net.Sockets;
 
 using Newtonsoft.Json;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -73,12 +74,7 @@ public class CallbacksListener
       _listener.Prefixes.Add(listeningUrl);
       _listener.Start();
       _src = new CancellationTokenSource();
-      _listenTask = Task.Run(() => Dispatcher(_listener), _src.Token);
-      _listenTask = Task.Factory.StartNew(() =>
-          Dispatcher(_listener),
-          _src.Token,
-          TaskCreationOptions.AttachedToParent,
-          TaskScheduler.Default);
+      _listenTask = Task.Run(async () => await Dispatcher(_listener), _src.Token);
       IsOpen = true;
     }
   }
@@ -102,63 +98,30 @@ public class CallbacksListener
     }
   }
 
-  private void Dispatcher(HttpListener listener)
+  private async Task Dispatcher(HttpListener listener)
   {
     while (_src != null && !_src.IsCancellationRequested)
     {
-      void ListenerCallback(IAsyncResult result)
+      try
       {
-        HttpListener listener = (HttpListener)result.AsyncState;
-        HttpListenerContext context;
-        try
-        {
-          context = listener.EndGetContext(result);
-        }
-        catch (ObjectDisposedException)
-        {
-          return;
-        }
-        catch (System.Net.HttpListenerException)
-        {
-          // Sometimes happen at teardown. Maybe there's a race condition here and waiting on something
-          // can prevent this but I don't really care
-          return;
-        }
-
-        try
-        {
-          HandleDispatchedRequest(context);
-        }
-        catch
-        {
-        }
+        HttpListenerContext context = await listener.GetContextAsync();
+        HandleDispatchedRequest(context);
       }
-      IAsyncResult asyncOperation = listener.BeginGetContext(ListenerCallback, listener);
-
-      while (true)
+      catch (HttpListenerException e)
       {
-        if (asyncOperation.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(100)))
+        if (e.ErrorCode == 995)
         {
-          // Async operation started! We can move on to next request
+          // The listener was closed
           break;
         }
         else
         {
-          // Async event still awaiting new HTTP requests... It's a good time to check
-          // if we were signalled to die
-          if (_src.Token.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(100)))
-          {
-            // Time to die.
-            // Leaving the inner loop will get us to the outter loop where _src is checked (again)
-            // and then it that loop will stop as well.
-            break;
-          }
-          else
-          {
-            // No signal of die command. We can continue waiting
-            continue;
-          }
+          Log.Error($"HttpListenerException: {e}");
         }
+      }
+      catch (Exception e)
+      {
+        Log.Error($"Exception: {e}");
       }
     }
   }
@@ -191,58 +154,44 @@ public class CallbacksListener
         body = sr.ReadToEnd();
       }
       var res = JsonConvert.DeserializeObject<CallbackInvocationRequest>(body, _withErrors);
-      if (_tokensToEventHandlers.TryGetValue(res.Token, out LocalEventCallback callbackFunction))
+
+      // Send a response back to the Diver immediately
+      body = JsonConvert.SerializeObject(new InvocationResults()
       {
-        (bool voidReturnType, ObjectOrRemoteAddress callbackRes) = callbackFunction(res.Parameters.ToArray());
+        VoidReturnType = true,
+        ReturnedObjectOrAddress = null
+      });
+      byte[] buffer = System.Text.Encoding.UTF8.GetBytes(body);
+      // Get a response stream and write the response to it.
+      response.ContentLength64 = buffer.Length;
+      response.ContentType = "application/json";
+      Stream output = response.OutputStream;
+      output.Write(buffer, 0, buffer.Length);
+      // You must close the output stream.
+      output.Close();
 
-        InvocationResults ir = new()
-        {
-          VoidReturnType = voidReturnType,
-          ReturnedObjectOrAddress = voidReturnType ? null : callbackRes
-        };
+      if (_tokensToEventHandlers.TryGetValue(res.Token, out LocalEventCallback callback))
+      {
+        // Task.Run(() =>
+        //   callback(res.Parameters.ToArray()));
 
-        body = JsonConvert.SerializeObject(ir);
+        SyncThread.Enqueue(() =>
+            callback(res.Parameters.ToArray()));
       }
       else if (_tokensToHookCallbacks.TryGetValue(res.Token, out LocalHookCallback hook))
       {
-        HookContext hookContext = new(res.StackTrace);
+        // Task.Run(() =>
+        //   hook(new HookContext(res.StackTrace),
+        //     res.Parameters.FirstOrDefault(),
+        //     res.Parameters.Skip(1).ToArray()));
 
-        // Run hook. No results expected directly (it might alter variables inside the hook)
-        hook(hookContext, res.Parameters.FirstOrDefault(), res.Parameters.Skip(1).ToArray());
-
-        // Report back whether to call the original function or not (Harmony wants this as the return value)
-        InvocationResults ir = new()
-        {
-          VoidReturnType = false,
-          ReturnedObjectOrAddress = ObjectOrRemoteAddress.FromObj(hookContext.CallOriginal)
-        };
-
-        body = JsonConvert.SerializeObject(ir);
+        SyncThread.Enqueue(() =>
+            hook(new HookContext(res.StackTrace),
+                res.Parameters.FirstOrDefault(),
+                res.Parameters.Skip(1).ToArray()));
       }
-      else
-      {
-        // TODO: I'm not sure the usage of 'DiverError' here is good.
-        //       It's sent from the Communicator's side to the Diver's side...
-        DiverError errResults = new("Unknown Token", string.Empty);
-        body = JsonConvert.SerializeObject(errResults);
-      }
+      return;
     }
-    else
-    {
-      // TODO: I'm not sure the usage of 'DiverError' here is good.
-      //       It's sent from the Communicator's side to the Diver's side...
-      DiverError errResults = new("Unknown path in URL", string.Empty);
-      body = JsonConvert.SerializeObject(errResults);
-    }
-
-    byte[] buffer = System.Text.Encoding.UTF8.GetBytes(body);
-    // Get a response stream and write the response to it.
-    response.ContentLength64 = buffer.Length;
-    response.ContentType = "application/json";
-    Stream output = response.OutputStream;
-    output.Write(buffer, 0, buffer.Length);
-    // You must close the output stream.
-    output.Close();
   }
 
   public void EventSubscribe(LocalEventCallback callback, int token)

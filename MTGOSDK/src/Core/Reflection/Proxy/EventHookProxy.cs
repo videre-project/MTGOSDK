@@ -51,7 +51,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
       try
       {
-        _eventHook?.Invoke((I)res?.Item1, (T)res?.Item2);
+        _eventHook?.Invoke(res?.Item1, res?.Item2);
       }
       catch (Exception e)
       {

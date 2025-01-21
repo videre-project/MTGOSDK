@@ -3,7 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-
 namespace MTGOSDK.Core.Reflection;
 
 /// <summary>
@@ -22,6 +21,8 @@ public class EventWrapper<T>(EventHandler handler) where T : EventArgs
   /// </remarks>
   public void Handle(object sender, T args)
   {
-    Task.Run(() => handler.Invoke(sender, args));
+    Action callback = () => handler.Invoke(sender, args);
+    // Task.Run(callback);
+    SyncThread.Enqueue(callback);
   }
 }

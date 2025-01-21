@@ -12,13 +12,11 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
 using MTGOSDK.Core.Compiler.Snapshot;
 using MTGOSDK.Core.Logging;
-using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
@@ -36,9 +34,8 @@ public partial class Diver : IDisposable
   private readonly Dictionary<string, Func<HttpListenerRequest, string>> _responseBodyCreators;
 
   // Callbacks Endpoint of the Controller process
-  private bool _monitorEndpoints = true;
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
-    private readonly ConcurrentDictionary<int, RegisteredMethodHookInfo> _remoteHooks;
+  private readonly ConcurrentDictionary<int, RegisteredMethodHookInfo> _remoteHooks;
 
   private readonly ManualResetEvent _stayAlive = new(true);
 
@@ -84,66 +81,22 @@ public partial class Diver : IDisposable
     HttpListener listener = new();
     string listeningUrl = $"http://127.0.0.1:{listenPort}/";
     listener.Prefixes.Add(listeningUrl);
+
     // Set timeout
     var manager = listener.TimeoutManager;
     manager.IdleConnection = TimeSpan.FromSeconds(5);
     listener.Start();
     Log.Debug($"[Diver] Listening on {listeningUrl}...");
-
-    Task endpointsMonitor = Task.Run(CallbacksEndpointsMonitor);
     Dispatcher(listener);
-    Log.Debug("[Diver] Stopping Callback Endpoints Monitor");
-    _monitorEndpoints = false;
-    try { endpointsMonitor.Wait(); } catch { }
 
     Log.Debug("[Diver] Closing listener");
     listener.Stop();
     listener.Close();
+
     Log.Debug("[Diver] Closing ClrMD runtime and snapshot");
+    this.Dispose();
 
-    Log.Debug("[Diver] Unpinning objects");
-    Log.Debug("[Diver] Unpinning finished");
-
-    Log.Debug("[Diver] Dispatcher returned, Start is complete.");
-  }
-
-  private void CallbacksEndpointsMonitor()
-  {
-    while (_monitorEndpoints)
-    {
-      Thread.Sleep(TimeSpan.FromSeconds(1));
-      IPEndPoint endpoint;
-      foreach (var registeredMethodHookInfo in _remoteHooks)
-      {
-        endpoint = registeredMethodHookInfo.Value.Endpoint;
-        ReverseCommunicator reverseCommunicator = new(endpoint);
-        var token = registeredMethodHookInfo.Key;
-        Log.Debug($"[Diver] Checking if callback client at {endpoint} is alive. Token = {token}. Type = Method Hook");
-        bool alive = reverseCommunicator.CheckIfAlive();
-        Log.Debug($"[Diver] Callback client at {endpoint} (Token = {token}) is alive = {alive}");
-        if (!alive)
-        {
-          Log.Debug($"[Diver] Dead Callback client at {endpoint} (Token = {token}) DROPPED!");
-          if (_remoteHooks.TryRemove(token, out RegisteredMethodHookInfo rmhi))
-          {
-            HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
-          }
-        }
-      }
-      foreach (var registeredEventHandlerInfo in _remoteEventHandler)
-      {
-        endpoint = registeredEventHandlerInfo.Value.Endpoint;
-        ReverseCommunicator reverseCommunicator = new(endpoint);
-        Log.Debug($"[Diver] Checking if callback client at {endpoint} is alive. Token = {registeredEventHandlerInfo.Key}. Type = Event");
-        bool alive = reverseCommunicator.CheckIfAlive();
-        Log.Debug($"[Diver] Callback client at {endpoint} (Token = {registeredEventHandlerInfo.Key}) is alive = {alive}");
-        if (!alive)
-        {
-          Log.Debug($"[Diver] Dead Callback client at {endpoint} (Token = {registeredEventHandlerInfo.Key}) DROPPED!");
-          _remoteEventHandler.TryRemove(registeredEventHandlerInfo.Key, out _);
-        }
-      }
-    }
+    Log.Debug("[Diver] Exiting");
   }
 
   public string QuickError(string error, string stackTrace = null)
@@ -198,9 +151,9 @@ public partial class Diver : IDisposable
     {
       void ListenerCallback(IAsyncResult result)
       {
-        try
-        {
-          HarmonyWrapper.Instance.UnregisterFrameworkThread(Thread.CurrentThread.ManagedThreadId);
+        // try
+        // {
+        //   HarmonyWrapper.Instance.UnregisterFrameworkThread(Thread.CurrentThread.ManagedThreadId);
 
           HttpListener listener = (HttpListener)result.AsyncState;
           HttpListenerContext context;
@@ -231,11 +184,11 @@ public partial class Diver : IDisposable
           {
             Log.Debug("[Diver] Task faulted! Exception: " + e.ToString());
           }
-        }
-        finally
-        {
-          HarmonyWrapper.Instance.UnregisterFrameworkThread(Thread.CurrentThread.ManagedThreadId);
-        }
+        // }
+        // finally
+        // {
+        //   HarmonyWrapper.Instance.UnregisterFrameworkThread(Thread.CurrentThread.ManagedThreadId);
+        // }
       }
       IAsyncResult asyncOperation = listener.BeginGetContext(ListenerCallback, listener);
 

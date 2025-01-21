@@ -9,11 +9,12 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 
 using HarmonyLib;
 
+using MTGOSDK.Core;
 using MTGOSDK.Core.Remoting.Hooking;
-using System.Threading.Tasks;
 
 
 namespace ScubaDiver.Hooking;
@@ -54,7 +55,7 @@ public class HarmonyWrapper
 
   private HarmonyWrapper()
   {
-    _harmony = new Harmony("com.videre.mtgoinjector");
+    _harmony = new Harmony("com.videre.mtgosdk");
     _psHooks = new Dictionary<string, MethodInfo>();
     var methods = typeof(HarmonyWrapper).GetMethods((BindingFlags)0xffffff);
     foreach (MethodInfo method in methods)
@@ -209,30 +210,14 @@ public class HarmonyWrapper
 
   private static void SinglePrefixHook(MethodBase __originalMethod, object __instance, params object[] args)
   {
-    new Task(() =>
+    string uniqueId = __originalMethod.DeclaringType.FullName + ":"
+                    + __originalMethod.Name;
+    if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
     {
-      // // Avoid patching a ScubaDiver framework method to avoid infinite recursion.
-      // SmartLocksDict<MethodBase>.AcquireResults res = _locksDict.Acquire(__originalMethod);
-      // if(res == SmartLocksDict<MethodBase>.AcquireResults.AlreadyAcquireByCurrentThread ||
-      //   res == SmartLocksDict<MethodBase>.AcquireResults.ThreadNotAllowedToLock)
-      // {
-      //   return; // Don't skip original
-      // }
-
-      try
-      {
-        string uniqueId = __originalMethod.DeclaringType.FullName + ":" + __originalMethod.Name;
-        if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
-        {
-          // Logger.Debug($"[HarmonyWrapper][SinglePrefixHook] Invoking hook for method {uniqueId}");
-          funcHook(__instance, args);
-        }
-      }
-      finally
-      {
-        // _locksDict.Release(__originalMethod);
-      }
-    }).Start();
+      Action callback = () => funcHook(__instance, args);
+      // Task.Run(callback);
+      SyncThread.Enqueue(callback);
+    }
   }
 
 #pragma warning disable IDE0051 // Remove unused private members

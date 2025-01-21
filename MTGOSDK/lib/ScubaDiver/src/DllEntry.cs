@@ -18,21 +18,24 @@ namespace ScubaDiver;
 
 public class DllEntry
 {
+  private static Assembly LoadAssembly(string name)
+  {
+    string assemblyPath = Path.Combine(
+      Path.GetDirectoryName(typeof(DllEntry).Assembly.Location),
+      name + ".dll"
+    );
+
+    if (File.Exists(assemblyPath))
+      return Assembly.LoadFrom(assemblyPath);
+
+    return null;
+  }
+
   private static void UseAssemblyLoadHook()
   {
     // Add a hook to load assemblies next to the current assembly's filepath.
-    AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
-    {
-      string assemblyPath = Path.Combine(
-        Path.GetDirectoryName(typeof(DllEntry).Assembly.Location),
-        new AssemblyName(args.Name).Name + ".dll"
-      );
-
-      if (File.Exists(assemblyPath))
-        return Assembly.LoadFrom(assemblyPath);
-
-      return null;
-    };
+    AppDomain.CurrentDomain.AssemblyResolve += (s, e) =>
+      LoadAssembly(new AssemblyName(e.Name).Name);
   }
 
   private static void DiverHost(object pwzArgument)
@@ -83,7 +86,11 @@ public class DllEntry
     // The bootstrapper is expecting to call a C# function with this signature,
     // so we use it to start a new thread to host the diver in it's own thread.
     ParameterizedThreadStart func = DiverHost;
-    Thread diverHostThread = new(func);
+    Thread diverHostThread = new(func)
+    {
+      IsBackground = true,
+      Name = "DiverHostThread",
+    };
     diverHostThread.Start(pwzArgument);
 
     // Block the thread until the diver has exited.
