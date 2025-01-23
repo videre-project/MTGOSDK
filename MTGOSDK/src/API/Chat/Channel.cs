@@ -112,6 +112,18 @@ public sealed class Channel(dynamic chatChannel)
   public bool CanSendMessage => @base.CanSendMessage;
 
   //
+  // ILoggableChatChannel wrapper properties
+  //
+
+  private IHistoricalChatChannel m_historicalChatChannel =>
+    Bind<IHistoricalChatChannel>(Unbind(@base).HistoricalChatChannel);
+
+  /// <summary>
+  /// The local file name of the chat log.
+  /// </summary>
+  public string LocalFileName => m_historicalChatChannel.LocalFileName;
+
+  //
   // IChatChannel wrapper events
   //
 

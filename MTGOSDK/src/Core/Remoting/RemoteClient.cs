@@ -517,6 +517,24 @@ public sealed class RemoteClient : DLRWrapper
     return queryObject.Dynamify();
   }
 
+  /// <summary>
+  /// Creates a new instance of a remote enum object from the given query path.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote enum object.</param>
+  /// <param name="valueName">The name of the enum value to create.</param>
+  /// <returns>A dynamic wrapper around the remote enum value.</returns>
+  public static dynamic CreateEnum(
+    string queryPath,
+    string valueName)
+  {
+    var enumType = GetInstanceType(queryPath);
+    var enumValue = enumType
+      .GetField(valueName)
+      .GetValue(null);
+
+    return enumValue;
+  }
+
   //
   // Reflection wrapper methods
   //

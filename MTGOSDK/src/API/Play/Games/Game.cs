@@ -7,6 +7,7 @@ using System.Collections;
 
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Interface.ViewModels;
+using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
@@ -85,7 +86,6 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The game phase of the current turn (e.g. Untap, Upkeep, Draw, etc.).
   /// </summary>
-  [Default(GamePhase.Invalid)]
   public GamePhase CurrentPhase => Cast<GamePhase>(Unbind(@base).CurrentPhase);
 
   /// <summary>
@@ -168,13 +168,21 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </exception>
   public GameZone GetGameZone(GamePlayer player, CardZone cardZone)
   {
+    var key = RemoteClient.CreateEnum(
+      "WotC.MtGO.Client.Model.Play.CardZone",
+      Enum.GetName(typeof(CardZone), cardZone));
+
     var playerKey = Unbind(player);
-    foreach(var zoneEntry in Unbind(@base).m_playerZones[playerKey])
-    {
-      // Cast enum values to avoid boxing remote key values
-      if (Cast<CardZone>(zoneEntry.Key) == cardZone)
-        return new GameZone(zoneEntry.Value);
-    }
+    var zoneEntry = Unbind(@base).m_playerZones[playerKey][key];
+    if (zoneEntry != null)
+      return new GameZone(zoneEntry);
+
+    // foreach(var zoneEntry in Unbind(@base).m_playerZones[playerKey])
+    // {
+    //   // Cast enum values to avoid boxing remote key values
+    //   if (Cast<CardZone>(zoneEntry.Key) == cardZone)
+    //     return new GameZone(zoneEntry.Value);
+    // }
 
     throw new KeyNotFoundException($"Could not find {cardZone}.");
   }
@@ -189,12 +197,20 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </exception>
   public GameZone GetGameZone(CardZone cardZone)
   {
-    foreach(var zoneEntry in Unbind(@base).m_sharedZones)
-    {
-      // Cast enum values to avoid boxing remote key values
-      if (Cast<CardZone>(zoneEntry.Key) == cardZone)
-        return new GameZone(zoneEntry.Value);
-    }
+    var key = RemoteClient.CreateEnum(
+      "WotC.MtGO.Client.Model.Play.CardZone",
+      Enum.GetName(typeof(CardZone), cardZone));
+
+    var zoneEntry = Unbind(@base).m_sharedZones[key];
+    if (zoneEntry != null)
+      return new GameZone(zoneEntry);
+
+    // foreach(var zoneEntry in Unbind(@base).m_sharedZones)
+    // {
+    //   // Cast enum values to avoid boxing remote key values
+    //   if (Cast<CardZone>(zoneEntry.Key) == cardZone)
+    //     return new GameZone(zoneEntry.Value);
+    // }
 
     throw new KeyNotFoundException($"Could not find {cardZone}.");
   }
@@ -258,6 +274,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public EventHookWrapper<GameAction> OnGameAction =
     new(GameActionPerformed, new Filter<GameAction>((s,_) => s.Id == game.Id));
 
+  /// <summary>
+  /// Event triggered when a log message is received.
+  /// </summary>
+  public EventHookWrapper<Message> OnLogMessage =
+    new(LogMessageReceived, new Filter<Message>((s,_) => s.LocalFileName == game.LogChannel.HistoricalChatChannel.LocalFileName));
+
   //
   // IGame static events
   //
@@ -271,11 +293,31 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       "Execute",
       new EventHook((dynamic instance, dynamic[] args) =>
       {
-        var action = GameAction.GameActionFactory(instance);
+        GameAction action = GameAction.GameActionFactory(instance);
         if (action == null) return null; // Ignore unknown actions.
-        var game = new Game(args[0]);
+        Game game = new(args[0]);
 
         return (game, action); // Return a tuple of (Game, GameAction).
+      })
+    );
+
+  /// <summary>
+  /// Event triggered when a game action in any active game is performed.
+  /// </summary>
+  public static EventHookProxy<dynamic, Message> LogMessageReceived =
+    new(
+      "WotC.MtGO.Client.Model.Chat.HistoricalChatChannel",
+      "AppendMessage",
+      new EventHook((dynamic instance, dynamic[] args) =>
+      {
+        Message message = new(new
+        {
+          Timestamp = args[0],
+          Message = args[1],
+          FromUser = new User(instance.GetUser(args[2])),
+        });
+
+        return (instance, message);
       })
     );
 }
