@@ -7,6 +7,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
+using static MTGOSDK.Core.Reflection.DLRWrapper;
+
 
 namespace MTGOSDK.Core;
 
@@ -14,11 +16,15 @@ namespace MTGOSDK.Core;
 /// A task scheduler that ensures a limited degree of concurrency.
 /// </summary>
 public class ConcurrentTaskScheduler(
-  int maxDegreeOfParallelism,
-  CancellationToken cancellationToken) : TaskScheduler
+    int minDegreeOfParallelism,
+    int maxDegreeOfParallelism,
+    CancellationToken cancellationToken) : TaskScheduler
 {
+  private readonly List<object> _jobs = new();
   private readonly LinkedList<Task> _tasks = new();
   private readonly SemaphoreSlim _semaphore = new(maxDegreeOfParallelism);
+
+  private readonly bool _reserveThreads = minDegreeOfParallelism > 0;
 
   protected override IEnumerable<Task> GetScheduledTasks()
   {
@@ -37,23 +43,36 @@ public class ConcurrentTaskScheduler(
     }
   }
 
-  private void NotifyThreadPoolOfPendingWork()
+  private async void ExecuteTaskQueue(object? state)
   {
-    // Skip propagating the CAS restrictions of the current thread to quickly
-    // dispatch the work item to another thread in the thread pool.
-    ThreadPool.UnsafeQueueUserWorkItem(async _ =>
+    try
     {
-      try
+      await _semaphore.WaitAsync(cancellationToken);
+      lock (_jobs)
       {
-        await _semaphore.WaitAsync(cancellationToken);
+        _jobs.Add(state);
+      }
 
-        while (true)
+      while (!cancellationToken.IsCancellationRequested)
+      {
+        // Wait up to 2 seconds for a task to be queued.
+        if (_reserveThreads && !await WaitUntil(() => _tasks.Any(), delay: 100))
+        {
+          lock (_jobs)
+          {
+            if (_jobs.Count > minDegreeOfParallelism) break;
+          }
+        }
+        else
         {
           Task item;
           lock (_tasks)
           {
             if (_tasks.Count == 0)
+            {
+              if (_reserveThreads) continue;
               break;
+            }
 
             item = _tasks.First.Value;
             _tasks.RemoveFirst();
@@ -61,18 +80,40 @@ public class ConcurrentTaskScheduler(
           base.TryExecuteTask(item);
         }
       }
-      finally
+    }
+    finally
+    {
+      lock (_jobs)
       {
-        _semaphore.Release();
+        _jobs.Remove(state);
       }
-    }, null);
+      _semaphore.Release();
+    }
   }
 
-  protected override bool TryExecuteTaskInline(
-    Task task,
-    bool taskWasPreviouslyQueued)
+  private void NotifyThreadPoolOfPendingWork()
   {
-    if (taskWasPreviouslyQueued)
+    lock (_jobs)
+    {
+      // If we have reached the maximum degree of parallelism allowed, do not
+      // queue any more jobs and instead wait for the current jobs to complete.
+      if (_jobs.Count == maxDegreeOfParallelism) return;
+
+      lock (_tasks)
+      {
+        // If there are no more tasks to execute, do not queue any more jobs.
+        if (_jobs.Count >= _tasks.Count) return;
+      }
+    }
+
+    // Skip propagating the CAS restrictions of the current thread to quickly
+    // dispatch the work item to another thread in the thread pool.
+    ThreadPool.UnsafeQueueUserWorkItem(ExecuteTaskQueue, null);
+  }
+
+  protected override bool TryExecuteTaskInline(Task task, bool previouslyQueued)
+  {
+    if (previouslyQueued)
     {
       if (TryDequeue(task))
       {

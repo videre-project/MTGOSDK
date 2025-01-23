@@ -22,10 +22,11 @@ public static class SyncThread
   private static readonly CancellationToken s_cancellationToken =
     s_cancellationTokenSource.Token;
 
-  private static readonly int s_maxDegreeOfParallelism =
-    Environment.ProcessorCount;
+  private static readonly int s_minJobThreads = Environment.ProcessorCount >= 2 ? 2 : 1;
+  private static readonly int s_maxJobThreads = Environment.ProcessorCount;
   private static readonly ConcurrentTaskScheduler s_taskScheduler =
-    new(s_maxDegreeOfParallelism, s_cancellationToken);
+    new(s_minJobThreads, s_maxJobThreads, s_cancellationToken);
+
   private static readonly TaskFactory s_taskFactory = new(s_taskScheduler);
 
   private static Action WrapCallback(Action callback) => () =>
