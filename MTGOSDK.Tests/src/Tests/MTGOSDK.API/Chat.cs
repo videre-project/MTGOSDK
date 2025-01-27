@@ -57,7 +57,7 @@ public class ChatValidationFixture : BaseFixture
     }
 
     // IChatChannel properties
-    Assert.That((string?)channel.Type, Is.Not.Null);
+    Assert.That(Enum.IsDefined(typeof(ChannelType), channel.Type), Is.True);
     Assert.That((bool?)channel.CanSendMessage, Is.Not.Null);
 
     // IChatSessionViewModel properties
