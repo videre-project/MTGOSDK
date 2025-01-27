@@ -10,6 +10,7 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API.Users;
 
+[NonSerializable]
 public sealed class User(dynamic user) : DLRWrapper<IUser>
 {
   /// <summary>
@@ -32,7 +33,7 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   /// The Login ID of the user.
   /// </summary>
   [Default(-1)]
-  public int Id => @base.Id;
+  public int Id => Unbind(@base).Id;
 
   /// <summary>
   /// The display name of the user.

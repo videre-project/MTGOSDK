@@ -47,7 +47,7 @@ public sealed class Tournament(dynamic tournament) : Event
     {
       DateTime endTime = StartTime.AddMinutes(
         // Minutes per round + 2 minutes between rounds.
-        ((2 * Unbind(@base).MatchTimeLimit) * TotalRounds) +
+        (2 * Unbind(@base).MatchTimeLimit * TotalRounds) +
         (2 * (TotalRounds - 1)) +
         // Minutes for deckbuilding.
         Try<int>(() => Unbind(@base).MinutesForDeckbuilding)
@@ -62,10 +62,12 @@ public sealed class Tournament(dynamic tournament) : Event
   /// The number of rounds in the tournament.
   /// </summary>
   public int TotalRounds =>
-    EliminationStyle == TournamentEliminationStyle.Swiss
-      ? Math.Max(@base.TotalRounds, Math.Max(GetNumberOfRounds(TotalPlayers),
-                                             GetNumberOfRounds(MinimumPlayers)))
-      : @base.TotalRounds;
+    Try<int>(() =>
+      EliminationStyle == TournamentEliminationStyle.Swiss
+        ? Math.Max(Try<int>(() => @base.TotalRounds),
+                   Math.Max(GetNumberOfRounds(TotalPlayers),
+                            GetNumberOfRounds(MinimumPlayers)))
+        : @base.TotalRounds);
 
   //
   // ITournament wrapper properties
@@ -113,12 +115,14 @@ public sealed class Tournament(dynamic tournament) : Event
   /// <summary>
   /// The tournament's detailed round information.
   /// </summary>
+  [NonSerializable]
   public IList<TournamentRound> Rounds =>
     Map<IList, TournamentRound>(@base.CurrentTournamentPart.Rounds);
 
   /// <summary>
   /// Standings for each player in the tournament.
   /// </summary>
+  [NonSerializable]
   public IList<StandingRecord> Standings =>
     ((IEnumerable<StandingRecord>)Map<StandingRecord>(@base.Standings))
       .OrderByDescending(s => s.Rank)

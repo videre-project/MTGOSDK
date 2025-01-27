@@ -7,7 +7,6 @@ using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
-using WotC.MtGO.Client.Model.ResourceManagement;
 
 
 namespace MTGOSDK.API.Users;
@@ -49,6 +48,7 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// <summary>
   /// The associated card definition.
   /// </summary>
+  [NonSerializable]
   public Card Card => new(CardDefinition);
 
   /// <summary>

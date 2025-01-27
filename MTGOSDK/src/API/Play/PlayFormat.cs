@@ -11,6 +11,7 @@ using WotC.MtGO.Client.Model.Collection;
 
 namespace MTGOSDK.API.Play;
 
+[NonSerializable]
 public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
 {
   /// <summary>

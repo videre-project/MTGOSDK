@@ -10,6 +10,7 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API.Collection;
 
+[NonSerializable]
 public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
 {
   /// <summary>

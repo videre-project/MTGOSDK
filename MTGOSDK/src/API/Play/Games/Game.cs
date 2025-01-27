@@ -71,11 +71,13 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The chat channel between all players.
   /// </summary>
+  [NonSerializable]
   public Channel ChatChannel => new(@base.ChatChannel);
 
   /// <summary>
   /// The log channel for all game actions.
   /// </summary>
+  [NonSerializable]
   public Channel LogChannel => new(@base.LogChannel);
 
   /// <summary>
@@ -86,22 +88,22 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The game phase of the current turn (e.g. Untap, Upkeep, Draw, etc.).
   /// </summary>
-  public GamePhase CurrentPhase => Cast<GamePhase>(Unbind(@base).CurrentPhase);
+  public GamePhase CurrentPhase => Cast(Unbind(@base).CurrentPhase);
 
   /// <summary>
   /// The player whose turn it is.
   /// </summary>
-  public GamePlayer ActivePlayer => new(@base.ActivePlayer);
+  public GamePlayer? ActivePlayer => Optional(@base.ActivePlayer);
 
   /// <summary>
   /// The player who has priority.
   /// </summary>
-  public GamePlayer PriorityPlayer => new(@base.PriorityPlayer);
+  public GamePlayer? PriorityPlayer => Optional(@base.PriorityPlayer);
 
   /// <summary>
   /// The current prompt (e.g. "Choose a card to discard", etc.).
   /// </summary>
-  public GamePrompt Prompt => new(@base.Prompt);
+  public GamePrompt? Prompt => Optional(@base.Prompt);
 
   /// <summary>
   /// The game's players.
@@ -130,8 +132,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// The total duration of the game.
   /// </summary>
   [Default(null)]
-  public TimeSpan? CompletedDuration =>
-    Cast<TimeSpan>(Unbind(@base).CompletedDuration);
+  public TimeSpan? CompletedDuration => Cast(Unbind(@base).CompletedDuration);
 
   //
   // IGame wrapper methods
@@ -177,13 +178,6 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     if (zoneEntry != null)
       return new GameZone(zoneEntry);
 
-    // foreach(var zoneEntry in Unbind(@base).m_playerZones[playerKey])
-    // {
-    //   // Cast enum values to avoid boxing remote key values
-    //   if (Cast<CardZone>(zoneEntry.Key) == cardZone)
-    //     return new GameZone(zoneEntry.Value);
-    // }
-
     throw new KeyNotFoundException($"Could not find {cardZone}.");
   }
 
@@ -204,13 +198,6 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     var zoneEntry = Unbind(@base).m_sharedZones[key];
     if (zoneEntry != null)
       return new GameZone(zoneEntry);
-
-    // foreach(var zoneEntry in Unbind(@base).m_sharedZones)
-    // {
-    //   // Cast enum values to avoid boxing remote key values
-    //   if (Cast<CardZone>(zoneEntry.Key) == cardZone)
-    //     return new GameZone(zoneEntry.Value);
-    // }
 
     throw new KeyNotFoundException($"Could not find {cardZone}.");
   }

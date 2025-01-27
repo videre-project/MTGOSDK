@@ -7,6 +7,7 @@ using System.Collections;
 using System.Diagnostics;
 
 using MTGOSDK.Core.Compiler;
+using MTGOSDK.Core.Reflection.Serialization;
 
 
 namespace MTGOSDK.Core.Reflection;
@@ -20,7 +21,7 @@ namespace MTGOSDK.Core.Reflection;
 /// to defer dynamic dispatching when comparing or casting their underlying
 /// captured dynamic objects.
 /// </remarks>
-public abstract class DLRWrapper
+public abstract class DLRWrapper : JsonSerializableBase
 {
   /// <summary>
   /// Internal unwrapped reference to any captured dynamic objects.

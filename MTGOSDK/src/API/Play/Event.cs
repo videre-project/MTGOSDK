@@ -51,7 +51,7 @@ public abstract class Event : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The current players registered for the event.
   /// </summary>
-  public IEnumerable<User> Players => Map<User>(@base.JoinedUsers);
+  public IEnumerable<User> Players => Map<User>(Unbind(@base).JoinedUsers);
 
   /// <summary>
   /// The user's registered deck for the event.
