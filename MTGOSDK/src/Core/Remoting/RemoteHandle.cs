@@ -130,6 +130,7 @@ public class RemoteHandle : IDisposable
     {
       try
       {
+        if (_remoteTypes.ContainsKey(assembly)) continue;
         _remoteTypes.Add(assembly, communicator.DumpTypes(assembly));
       }
       catch (Exception e)
