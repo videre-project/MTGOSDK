@@ -5,8 +5,8 @@
 ![Tests](https://img.shields.io/github/actions/workflow/status/videre-project/MTGOSDK/test.yml?label=Tests&labelColor=3f4551)
 ![Dependencies](https://img.shields.io/librariesio/github/videre-project/MTGOSDK?label=Dependencies&labelColor=3f4551)
 
-<a href="#overview">Overview</a> |
 <a href="#documentation">Documentation</a> |
+<a href="#overview">Overview</a> |
 <a href="#installation">Installation</a> |
 <a href="#building-this-project">Building</a> |
 <a href="#license">License</a> |
@@ -20,25 +20,22 @@
 
 ## What is MTGOSDK?
 
-**MTGOSDK** is a collection of C# libraries for interfacing with the **Magic: The Gathering Online (MTGO)** client. It provides common APIs for reading from and interacting with the MTGO client in real-time, enabling developers to build tools and applications that can interact with any running instance of MTGO.
+**MTGOSDK** is a collection of .NET/C# libraries for interfacing with the **Magic: The Gathering Online (MTGO)** client. It provides common APIs for reading from and interacting with the MTGO client in real-time, enabling developers to build tools and applications that can interact with any running instance of MTGO.
 
-These APIs cover a wide range of functionality of the MTGO client, including:
-
-- **Chat**: Stream and read chat messages and game logs from any channel.
-- **Collection**: Query the MTGO collection for cards, decks, binders, etc.
-- **Events**: Subscribe to and read state changes and events from the MTGO client.
-- **Interface**: Interact with and mock MTGO client's user interface elements.
-- **Play**: Query events and read the current game state, including from replays.
-- **Settings**: Read, export, and import user preferences and settings.
-- **Trade**: Query trade offers, trade history, and any current trade sessions.
-- **Users**: Query user profiles, including friends and other players.
-- and more...
-
-You can also check out the [FAQ](/docs/FAQ.md) for common questions about the SDK, and the project's [examples](/examples) for demo applications built with the SDK.
-
-## Overview
+MTGOSDK was originally developed to support the [Videre Tracker](https://github.com/videre-project/tracker) project, a real-time game tracker for MTGO. However, the SDK has been designed to be general-purpose and can be used to build a wide variety of applications that interact with MTGO.
 
 This SDK contains several lightweight packages (with minimal dependencies outside of the .NET runtime) designed to be easy to use and integrate into existing applications. They are built entirely in C# on top of the .NET Core runtime and are compatible with .NET 5.0 and later.
+
+## Documentation
+
+The [SDK documentation](/docs/README.md) is organized into the following sections:
+- [Getting Started](/docs/getting-started.md) — a quick guide to getting started with the SDK.
+- [API Reference](/docs/api-reference.md) — a detailed reference of the SDK's APIs and classes.
+- [Architecture](/docs/architecture/README.md) — an overview of the SDK's design and architecture.
+
+Refer to the [FAQ](/docs/FAQ.md) for common questions about the SDK, and the project's [examples](/examples) for demo applications built with the SDK.
+
+## Overview
 
 Below is a brief overview of the packages included in the SDK:
 
@@ -46,19 +43,7 @@ Below is a brief overview of the packages included in the SDK:
 
 [**MTGOSDK.MSBuild**](https://www.nuget.org/packages/MTGOSDK.MSBuild/ "Download MTGOSDK.MSBuild from NuGet.org") — a MSBuild library that manages the code-generation of the SDK. This is used to generate the SDK's API bindings and reference assemblies for the latest builds of MTGO. At design-time, this builds reference assemblies containing only the public types and members from the MTGO client. These assemblies can be regenerated as the MTGO client is updated to provide the latest API definitions for use in the SDK.
 
-[**MTGOSDK.Win32**](https://www.nuget.org/packages/MTGOSDK.Win32/ "Download MTGOSDK.Win32 from NuGet.org") — a library containing Win32 API definitions and helper functions used by the SDK. These are used to provide a more idiomatic C# API for Win32 functions and to ensure consistent API behavior across different Windows versions. Additionally, this library serves as a reference for using Win32 APIs that are not yet implemented as part of the .NET Framework. This library is not intended to be used directly by consumers of the SDK.
-
-## Documentation
-
-Refer to the [SDK documentation](/docs/README.md) for more in-depth information about the SDK's APIs.
-
-The documentation is organized into the following sections:
-- [Getting Started](/docs/GettingStarted.md) — a quick guide to getting started with the SDK.
-- [API Reference](/docs/APIReference.md) — a detailed reference of the SDK's APIs and classes.
-- [Examples](/examples) — a collection of example applications built with the SDK.
-- [FAQ](/docs/FAQ.md) — frequently asked questions about the SDK.
-
-For more information on the SDK's design and architecture, see the [architecture](/docs/architecture/README.md) docs.
+[**MTGOSDK.Win32**](https://www.nuget.org/packages/MTGOSDK.Win32/ "Download MTGOSDK.Win32 from NuGet.org") — a library containing Win32 API definitions and helper functions used by the SDK. These are used to provide a more idiomatic C# API for Win32 functions and to ensure consistent API behavior across different Windows versions. Additionally, this library serves as a reference for using Win32 APIs that are not yet implemented as part of .NET.
 
 ## Installation
 
@@ -131,6 +116,9 @@ To reference these packages, you can use the `*` wildcard specifier in your proj
                   Version="*" />
 ```
 
+If using centralized package management, you can also use `1.2.3.0-preview` to
+reference local builds for `1.2.3` without using a floating version specifier.
+
 ## Building this Project
 
 > [!NOTE]
@@ -163,7 +151,7 @@ This will also pick up changes to dependent **MTGOSDK.MSBuild** and **MTGOSDK.Wi
 
 MTGOSDK's snapshot runtime uses the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library under the hood. We're grateful to the ClrMD maintainers for their support and their work in providing a powerful library for inspecting and debugging .NET applications.
 
-MTGOSDK's remoting API is also based on an early version of [RemoteNET](https://github.com/theXappy/RemoteNET), which forms the backbone of the SDK's client-server architecture.
+MTGOSDK's remoting API is also based on an early version of [RemoteNET](https://github.com/theXappy/RemoteNET), which forms the backbone of the SDK's client-server architecture. Together with the [ImpromptuInterface](https://github.com/ekonbenefits/impromptu-interface) library creates fully-typed dynamic proxies for remote objects in the MTGO client.
 
 ## License
 
