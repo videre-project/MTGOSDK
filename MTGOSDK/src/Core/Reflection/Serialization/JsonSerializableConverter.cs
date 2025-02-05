@@ -13,7 +13,7 @@ namespace MTGOSDK.Core.Reflection.Serialization;
 
 #if !MTGOSDKCORE
 public class JsonSerializableConverter<T> : JsonConverter<T>
-    where T : JsonSerializableBase
+    where T : IJsonSerializable
 {
   public override T Read(
     ref Utf8JsonReader reader,
@@ -30,7 +30,7 @@ public class JsonSerializableConverter<T> : JsonConverter<T>
 public class JsonSerializableConverter : JsonConverterFactory
 {
   public override bool CanConvert(Type typeToConvert) =>
-    typeof(JsonSerializableBase).IsAssignableFrom(typeToConvert);
+    typeof(IJsonSerializable).IsAssignableFrom(typeToConvert);
 
   public override JsonConverter CreateConverter(
     Type typeToConvert,
