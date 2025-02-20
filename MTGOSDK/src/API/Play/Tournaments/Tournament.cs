@@ -29,6 +29,18 @@ public sealed class Tournament(dynamic tournament) : Event
   //
 
   /// <summary>
+  /// The available entry fee options for the tournament.
+  /// </summary>
+  public IList<EntryFeeSuite.EntryFee> EntryFee =>
+    new EntryFeeSuite(Unbind(@base).EntrySuite).EntryFees;
+
+  /// <summary>
+  /// The available prizes for the tournament, bracketed by final placement.
+  /// </summary>
+  public IDictionary<string, IList<EventPrize>> Prizes =>
+    EventPrize.FromPrizeStructure(@base.Prizes, HasPlayoffs);
+
+  /// <summary>
   /// The time the event is scheduled to start.
   /// </summary>
   public DateTime StartTime => @base.ScheduledStartTime;
@@ -45,10 +57,11 @@ public sealed class Tournament(dynamic tournament) : Event
   {
     get
     {
+      int realTotalRounds = TotalRounds + (HasPlayoffs ? 3 : 0);
       DateTime endTime = StartTime.AddMinutes(
         // Minutes per round + 2 minutes between rounds.
-        (2 * Unbind(@base).MatchTimeLimit * TotalRounds) +
-        (2 * (TotalRounds - 1)) +
+        (2 * Unbind(@base).MatchTimeLimit * realTotalRounds) +
+        (2 * (realTotalRounds - 1)) +
         // Minutes for deckbuilding.
         Try<int>(() => Unbind(@base).MinutesForDeckbuilding)
       );
@@ -67,7 +80,9 @@ public sealed class Tournament(dynamic tournament) : Event
         ? Math.Max(Try<int>(() => @base.TotalRounds),
                    Math.Max(GetNumberOfRounds(TotalPlayers),
                             GetNumberOfRounds(MinimumPlayers)))
-        : @base.TotalRounds);
+        : @base.TotalRounds)
+    // Remove the top 8 rounds from the swiss count.
+    - ((HasPlayoffs && InPlayoffs) ? 3 : 0);
 
   //
   // ITournament wrapper properties
@@ -78,7 +93,8 @@ public sealed class Tournament(dynamic tournament) : Event
   /// (i.e. "WaitingToStart", "RoundInProgress", etc.)
   /// </summary>
   public TournamentState State =>
-    Cast<TournamentState>(Unbind(@base).State);
+    Try(() => Cast<TournamentState>(Unbind(@base).State),
+        fallback: TournamentState.NotSet);
 
   /// <summary>
   /// The kind of elimination style used in the tournament
@@ -113,6 +129,11 @@ public sealed class Tournament(dynamic tournament) : Event
   public bool InPlayoffs => @base.IsInPlayoffs;
 
   /// <summary>
+  /// Whether the tournament has playoffs (i.e. Top-8) or concludes after swiss.
+  /// </summary>
+  public bool HasPlayoffs => Unbind(@base).m_playoffs.Count > 0;
+
+  /// <summary>
   /// The tournament's detailed round information.
   /// </summary>
   [NonSerializable]
@@ -125,7 +146,7 @@ public sealed class Tournament(dynamic tournament) : Event
   [NonSerializable]
   public IList<StandingRecord> Standings =>
     ((IEnumerable<StandingRecord>)Map<StandingRecord>(@base.Standings))
-      .OrderByDescending(s => s.Rank)
+      .OrderBy(s => s.Rank)
       .ToList();
 
   //

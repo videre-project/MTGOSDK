@@ -29,11 +29,6 @@ public abstract class Event : DLRWrapper<IPlayerEvent>
   public Guid Token => Cast<Guid>(Unbind(@base).EventToken);
 
   /// <summary>
-  /// The event type (e.g. League, Tournament, Match, etc.).
-  /// </summary>
-  public string EventType => this.GetType().Name;
-
-  /// <summary>
   /// A class describing the event format (e.g. Standard, Modern, Legacy, etc.).
   /// </summary>
   public PlayFormat Format => new(@base.PlayFormat);

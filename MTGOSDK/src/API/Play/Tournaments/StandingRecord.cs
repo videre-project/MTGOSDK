@@ -41,6 +41,41 @@ public sealed class StandingRecord(dynamic standingRecord)
   public int Points => @base.Points;
 
   /// <summary>
+  /// The current record of the player.
+  /// </summary>
+  /// <remarks>
+  /// The record is formatted as "W-L-D" (i.e. "3-1-0").
+  /// </remarks>
+  public string Record
+  {
+    get
+    {
+      int wins = 0;
+      int losses = 0;
+      int draws = 0;
+
+      int playerId = Unbind(@base.User).Id;
+      foreach (var match in this.PreviousMatches)
+      {
+        if (match.WinningPlayerIds.Contains(playerId) || match.HasBye)
+        {
+          wins++;
+        }
+        else if (match.LosingPlayerIds.Contains(playerId))
+        {
+          losses++;
+        }
+        else if (match.State.HasFlag(MatchState.MatchCompleted))
+        {
+          draws++;
+        }
+      }
+
+      return string.Format("{0}-{1}-{2}", wins, losses, draws);
+    }
+  }
+
+  /// <summary>
   /// The average match win percentage of the player's opponents.
   /// </summary>
   public string OpponentMatchWinPercentage => @base.OpponentMatchWinPercentage;
@@ -58,6 +93,7 @@ public sealed class StandingRecord(dynamic standingRecord)
   /// <summary>
   /// The match history of the player.
   /// </summary>
+  // [NonSerializable]
   public IList<MatchStandingRecord> PreviousMatches =>
     Map<IList, MatchStandingRecord>(@base.PreviousMatches);
 }

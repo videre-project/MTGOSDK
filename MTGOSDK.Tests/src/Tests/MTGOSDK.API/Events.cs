@@ -155,7 +155,6 @@ public class EventValidationFixture : BaseFixture
     // IEvent properties
     Assert.That(eventObj.Id, Is.GreaterThan(0));
     Assert.That(eventObj.Token, Is.Not.EqualTo(Guid.Empty));
-    Assert.That(eventObj.EventType, Is.EqualTo(typeof(T).Name));
     ValidatePlayFormat(eventObj.Format);
     Assert.That(eventObj.Description, Is.Not.Empty);
     Assert.That(eventObj.TotalPlayers, Is.GreaterThanOrEqualTo(0));

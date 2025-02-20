@@ -50,6 +50,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The user objects of both players.
   /// </summary>
+  [NonSerializable]
   public IList<User> Players =>
     Map<IList, User>(Unbind(@base).Users,
         new Func<dynamic, User>(player => new User(player.Name)));

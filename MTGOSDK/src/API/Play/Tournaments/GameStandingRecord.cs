@@ -45,5 +45,5 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinnerIds => Map<IList, int>(@base.WinnerIds);
+  public IList<int> WinnerIds => Map<IList, int>(Unbind(@base).WinnerIds);
 }
