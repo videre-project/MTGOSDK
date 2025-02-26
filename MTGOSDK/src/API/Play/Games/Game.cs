@@ -301,11 +301,16 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       "AppendMessage",
       new EventHook((dynamic instance, dynamic[] args) =>
       {
+        DateTime timestamp = args[0];
+        string text = args[1];
+        string username = args[2];
+
         Message message = new(new
         {
-          Timestamp = args[0],
-          Message = args[1],
-          FromUser = new User(instance.GetUser(args[2])),
+          Timestamp = timestamp,
+          Message = text,
+          FromUser = Optional<User>(instance.GetUser(username),
+                                    string.IsNullOrEmpty(username))
         });
 
         return (instance, message);
