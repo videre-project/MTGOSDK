@@ -88,22 +88,26 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The game phase of the current turn (e.g. Untap, Upkeep, Draw, etc.).
   /// </summary>
-  public GamePhase CurrentPhase => Cast(Unbind(@base).CurrentPhase);
+  public GamePhase CurrentPhase =>
+    Cast<GamePhase>(Unbind(@base).CurrentPhase);
 
   /// <summary>
   /// The player whose turn it is.
   /// </summary>
-  public GamePlayer? ActivePlayer => Optional(@base.ActivePlayer);
+  public GamePlayer? ActivePlayer =>
+    Optional<GamePlayer>(@base.ActivePlayer);
 
   /// <summary>
   /// The player who has priority.
   /// </summary>
-  public GamePlayer? PriorityPlayer => Optional(@base.PriorityPlayer);
+  public GamePlayer? PriorityPlayer =>
+    Optional<GamePlayer>(@base.PriorityPlayer);
 
   /// <summary>
   /// The current prompt (e.g. "Choose a card to discard", etc.).
   /// </summary>
-  public GamePrompt? Prompt => Optional(@base.Prompt);
+  public GamePrompt? Prompt =>
+    Optional<GamePrompt>(@base.Prompt);
 
   /// <summary>
   /// The game's players.
