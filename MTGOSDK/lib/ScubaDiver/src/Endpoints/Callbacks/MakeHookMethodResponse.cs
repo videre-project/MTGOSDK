@@ -8,6 +8,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Linq;
 using System.Reflection;
 
@@ -74,21 +75,68 @@ public partial class Diver : IDisposable
       : resolvedType.GetMethodRecursive(methodName, paramTypes);
     if (methodInfo == null)
       return QuickError($"Failed to find method {methodName} in type {resolvedType.Name}");
-    Log.Debug("[Diver] Hook Method - Resolved Method");
+    Log.Debug($"[Diver] Hook Method - Resolved Method {methodInfo.Name}");
 
     // See if any remoteHooks already hooked into this method (by MethodInfo object)
     var existingHook = _remoteHooks
       .FirstOrDefault(kvp => kvp.Value.OriginalHookedMethod == methodInfo);
-    if (existingHook.Value != null)
+    string uniqueId = HarmonyWrapper.GetUniqueId(typeFullName, methodName);
+    bool hasCallback = HarmonyWrapper.HasCallback(uniqueId);
+    if (existingHook.Value != null || hasCallback)
     {
       Log.Debug($"[Diver] Hook Method - Found existing hook for {methodName}");
-      _remoteHooks.TryRemove(existingHook.Key, out RegisteredMethodHookInfo rmhi);
-      HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
-      // return JsonConvert.SerializeObject(new EventRegistrationResults(){ Token = existingHook.Key });
+      if (_remoteHooks.TryGetValue(existingHook.Key, out RegisteredMethodHookInfo rmhi))
+      {
+        // If the endpoint is the same, we don't need to re-hook
+        if (rmhi.Endpoint.Equals(endpoint))
+        {
+          Log.Debug($"[Diver] Hook Method - Endpoint is the same, not re-hooking");
+          return JsonConvert.SerializeObject(new EventRegistrationResults() { Token = existingHook.Key });
+        }
+
+        // Check if the endpoint's port is still being used
+        int existingPort = rmhi.Endpoint.Port;
+        bool portInUse = true;
+        try
+        {
+          using (TcpClient tcpClient = new TcpClient())
+          {
+            tcpClient.Connect(rmhi.Endpoint);
+            portInUse = false;
+          }
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.ConnectionRefused)
+        {
+          portInUse = false;
+        }
+        catch (Exception ex)
+        {
+          portInUse = false;
+          Log.Debug($"[Diver] Hook Method - Failed to connect to existing endpoint {rmhi.Endpoint}. Exception: {ex}");
+        }
+
+        Log.Debug($"[Diver] Hook Method - Port in use: {portInUse}");
+        if (!portInUse)
+        {
+          Log.Debug($"[Diver] Hook Method - Removing old hook for {methodName}");
+          _remoteHooks.TryRemove(existingHook.Key, out _);
+          HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
+        }
+      }
+      //
+      // The callback is registered but with no associated endpoint.
+      //
+      // This will trigger multiple callbacks to be fired for each listener,
+      // so we opt to remove the callback and re-hook it.
+      //
+      {
+        Log.Debug($"[Diver] Hook Method - Method {methodName} is already hooked, but no endpoint is associated with it.");
+        Log.Debug($"[Diver] Hook Method - Removing old hook for {methodName}");
+        HarmonyWrapper.Instance.RemovePrefix(methodInfo);
+      }
     }
 
-    // We're all good regarding the signature!
-    // assign subscriber unique id
+    // Assign a token to this callback so we can identify it later
     int token = AssignCallbackToken();
     Log.Debug($"[Diver] Hook Method - Assigned Token: {token}");
 

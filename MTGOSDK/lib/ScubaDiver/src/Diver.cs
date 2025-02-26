@@ -124,7 +124,8 @@ public partial class Diver : IDisposable
       }
       catch (Exception ex)
       {
-        Log.Debug("[Diver] Exception in handler: " + ex.ToString());
+        Log.Error("[Diver] Exception occurred in handler.", ex);
+        Log.Debug("[Diver] Stack trace: " + ex.StackTrace);
         body = QuickError(ex.Message, ex.StackTrace);
       }
     }

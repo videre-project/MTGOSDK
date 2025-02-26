@@ -68,6 +68,18 @@ public class HarmonyWrapper
     }
   }
 
+  public static string GetUniqueId(MethodBase target) =>
+    GetUniqueId(target.DeclaringType.FullName, target.Name);
+
+  public static string GetUniqueId(string fullName, string methodName) =>
+    fullName + ":" + methodName;
+
+  public static bool HasCallback(MethodBase target) =>
+    _actualHooks.ContainsKey(GetUniqueId(target));
+
+  public static bool HasCallback(string uniqueId) =>
+    _actualHooks.ContainsKey(uniqueId);
+
   /// <summary>
   /// A "Framework Thread" is a thread currently used to invoke ScubaDiver
   /// framework code. It's important for us to mark those threads because if
@@ -135,9 +147,9 @@ public class HarmonyWrapper
     }
 
     //
-    // Save a side the patch callback to invoke when the target is called
+    // Save the patch callback to invoke when the target is called
     //
-    string uniqueId = target.DeclaringType.FullName + ":" + target.Name;
+    string uniqueId = GetUniqueId(target);
     _actualHooks[uniqueId] = patch;
 
     //
