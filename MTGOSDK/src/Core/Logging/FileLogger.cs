@@ -34,7 +34,7 @@ public class FileLogger(
     Exception exception,
     Func<TState, Exception, string> formatter)
   {
-    if (!IsEnabled(logLevel)) return;
+    if (!IsEnabled(logLevel) || logFile == null) return;
 
     // Get the formatted log message
     string message = formatter(state, exception);
