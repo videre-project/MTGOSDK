@@ -24,6 +24,8 @@ public class ObjectOrRemoteAddress
   public string EncodedObject { get; set; }
   public bool IsNull => IsRemoteAddress && RemoteAddress == 0;
 
+  public DateTime Timestamp = DateTime.Now;
+
   public static ObjectOrRemoteAddress FromObj(object o) =>
     new() {
       EncodedObject = PrimitivesEncoder.Encode(o),

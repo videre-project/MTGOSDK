@@ -7,8 +7,8 @@
 namespace MTGOSDK.Core.Remoting.Hooking;
 
 
-public class HookContext(string stackTrace)
+public class HookContext(DateTime timestamp)
 {
-  public string StackTrace => stackTrace;
+  public DateTime Timestamp => timestamp;
   public bool CallOriginal => true;
 }

@@ -9,7 +9,7 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 public class CallbackInvocationRequest
 {
-  public string StackTrace { get; set; }
+  public DateTime Timestamp { get; set; }
   public int Token { get; set; }
   public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
 }

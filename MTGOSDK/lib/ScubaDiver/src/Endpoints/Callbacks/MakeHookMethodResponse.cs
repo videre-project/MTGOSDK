@@ -143,7 +143,8 @@ public partial class Diver : IDisposable
     // Preparing a proxy method that Harmony will invoke
     HarmonyWrapper.HookCallback patchCallback = (obj, args) =>
     {
-      InvokeControllerCallback(endpoint, token, new StackTrace().ToString(), obj, args);
+      DateTime timestamp = DateTime.Now;
+      InvokeControllerCallback(endpoint, token, timestamp, obj, args);
     };
 
     Log.Debug($"[Diver] Hooking function {methodName}...");

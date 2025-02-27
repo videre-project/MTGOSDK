@@ -6,7 +6,6 @@
 
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
-using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
 namespace MTGOSDK.Core.Remoting.Types;
@@ -88,6 +87,7 @@ public class RemoteObject
       {
         RemoteObject ro = _app.GetRemoteObject(args[i].RemoteAddress, args[i].Type);
         DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
+        dro.__timestamp = args[i].Timestamp;
 
         droParameters[i] = dro;
       }

@@ -162,31 +162,39 @@ public class CallbacksListener
         ReturnedObjectOrAddress = null
       });
       byte[] buffer = System.Text.Encoding.UTF8.GetBytes(body);
+
       // Get a response stream and write the response to it.
       response.ContentLength64 = buffer.Length;
       response.ContentType = "application/json";
       Stream output = response.OutputStream;
       output.Write(buffer, 0, buffer.Length);
-      // You must close the output stream.
       output.Close();
+
+      //
+      // Set the timestamp for the sender to the callback timestamp as we've
+      // already pinned the sender object before processing the callback, and
+      // thus no additional processing was required to obtain the timestamp.
+      //
+      res.Parameters[0].Timestamp = res.Timestamp;
 
       if (_tokensToEventHandlers.TryGetValue(res.Token, out LocalEventCallback callback))
       {
-        // Task.Run(() =>
-        //   callback(res.Parameters.ToArray()));
+        //
+        // If the callback is an event handler w/ event args, they will also
+        // need to have their timestamps set to the callback timestamp as well.
+        //
+        if (res.Parameters.Count > 1)
+        {
+          res.Parameters[1].Timestamp = res.Timestamp;
+        }
 
         SyncThread.Enqueue(() =>
             callback(res.Parameters.ToArray()));
       }
       else if (_tokensToHookCallbacks.TryGetValue(res.Token, out LocalHookCallback hook))
       {
-        // Task.Run(() =>
-        //   hook(new HookContext(res.StackTrace),
-        //     res.Parameters.FirstOrDefault(),
-        //     res.Parameters.Skip(1).ToArray()));
-
         SyncThread.Enqueue(() =>
-            hook(new HookContext(res.StackTrace),
+            hook(new HookContext(res.Timestamp),
                 res.Parameters.FirstOrDefault(),
                 res.Parameters.Skip(1).ToArray()));
       }

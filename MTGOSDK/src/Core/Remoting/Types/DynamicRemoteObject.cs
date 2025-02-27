@@ -32,10 +32,10 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 {
   public class DynamicRemoteMethod : DynamicObject
   {
-    string _name;
-    List<RemoteMethodInfo> _methods;
-    DynamicRemoteObject _parent;
-    Type[] _genericArguments;
+    private readonly string _name;
+    private readonly List<RemoteMethodInfo> _methods;
+    private readonly DynamicRemoteObject _parent;
+    private readonly Type[] _genericArguments;
 
     public DynamicRemoteMethod(
       string name,
@@ -172,6 +172,9 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   public virtual RemoteType __type { get => m_type; set => m_type = value; }
   private RemoteType m_type = null!;
 
+  public virtual DateTime __timestamp { get => m_timestamp; set => m_timestamp = value; }
+  private DateTime m_timestamp = DateTime.Now;
+
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
   private List<MemberInfo> __membersInner = null;
@@ -182,6 +185,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     __ra = ra;
     __ro = ro;
     __type = ro.GetType() as RemoteType;
+    __timestamp = DateTime.Now;
     if (__type == null && ro.GetType() != null)
     {
       throw new ArgumentException("Can only create DynamicRemoteObjects of RemoteObjects with Remote Types. (As returned from GetType())");
@@ -546,7 +550,11 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       }
       else if (item.IsRemoteAddress)
       {
-        return this.__ra.GetRemoteObject(item.RemoteAddress, item.Type).Dynamify();
+        var remoteObject = this.__ra.GetRemoteObject(item.RemoteAddress, item.Type);
+        dynamic dro = remoteObject.Dynamify();
+        dro.__timestamp = item.Timestamp;
+
+        return dro;
       }
       else
       {

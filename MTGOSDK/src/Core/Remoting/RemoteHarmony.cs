@@ -101,6 +101,7 @@ public class RemoteHarmony
       {
         RemoteObject roInstance = this._app.GetRemoteObject(instance.RemoteAddress, instance.Type);
         droInstance = roInstance.Dynamify();
+        droInstance.__timestamp = context.Timestamp; // Preserve oora timestamp
       }
 
       // Converting args to DROs/raw primitive types
@@ -118,15 +119,9 @@ public class RemoteHarmony
       }
 
       int len = 0;
-      try
-      {
-        len = (int)dro.Length;
-      }
+      try { len = (int)dro.Length; }
       catch { }
-      // catch (Exception e)
-      // {
-      //   Logger.Debug("ERROR ACCESSING ARRAY LEN: " + e);
-      // }
+
       object[] decodedParameters = new object[len];
       for (int i = 0; i < len; i++)
       {
@@ -134,10 +129,15 @@ public class RemoteHarmony
         // acceess causes a 'GetItem' function call and retrieval of the remote object at the position
         dynamic item = dro[i];
         decodedParameters[i] = item;
+        // (decodedParameters as dynamic)[i].__timestamp = args[i].Timestamp;
+        if (item is DynamicRemoteObject droItem)
+        {
+          droItem.__timestamp = args[0].Timestamp;
+        }
       }
 
       // Call the callback with the proxied parameters (using DynamicRemoteObjects)
-      callback.DynamicInvoke(new object[3] { context, droInstance, decodedParameters });
+      callback.DynamicInvoke(context, droInstance, decodedParameters);
     };
     return hookProxy;
   }

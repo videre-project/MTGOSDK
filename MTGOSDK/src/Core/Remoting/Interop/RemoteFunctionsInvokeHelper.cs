@@ -169,7 +169,10 @@ public static class RemoteFunctionsInvokeHelper
     else
     {
       RemoteObject ro = app.GetRemoteObject(oora.RemoteAddress, oora.Type);
-      return ro.Dynamify();
+      dynamic dro = ro.Dynamify();
+      dro.__timestamp = oora.Timestamp;
+
+      return dro;
     }
   }
 }

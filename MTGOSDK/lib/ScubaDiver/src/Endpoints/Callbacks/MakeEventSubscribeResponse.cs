@@ -31,7 +31,7 @@ public partial class Diver : IDisposable
   public ObjectOrRemoteAddress InvokeControllerCallback(
     IPEndPoint callbacksEndpoint,
     int token,
-    string stackTrace,
+    DateTime timestamp,
     params object[] parameters)
   {
     ReverseCommunicator reverseCommunicator = new(callbacksEndpoint);
@@ -75,7 +75,7 @@ public partial class Diver : IDisposable
     {
       InvocationResults callbackResults = reverseCommunicator.InvokeCallback(
         token,
-        stackTrace,
+        timestamp,
         remoteParams
       );
 
@@ -134,7 +134,12 @@ public partial class Diver : IDisposable
 
     int token = AssignCallbackToken();
     EventHandler eventHandler = (obj, args) =>
-      InvokeControllerCallback(endpoint, token, "UNUSED", new object[2] { obj, args });
+    {
+      // Get current timestamp
+      DateTime timestamp = DateTime.Now;
+      InvokeControllerCallback(endpoint, token, timestamp, new object[2] { obj, args });
+    };
+
     try
     {
       Type eventArgsType = paramInfos[1].ParameterType;

@@ -43,7 +43,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     this._methodName = methodName;
     this._hook = hook;
 
-    this._hookAction = new((HookContext _, dynamic instance, dynamic[] args) =>
+    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
     {
       (dynamic, dynamic)? res = hook(instance, args);
       if (!(res?.Item1 is I && res?.Item2 is T))

@@ -90,12 +90,12 @@ public class ReverseCommunicator
 
   public InvocationResults InvokeCallback(
     int token,
-    string stackTrace,
+    DateTime timestamp,
     params ObjectOrRemoteAddress[] args)
   {
     CallbackInvocationRequest invocReq = new()
     {
-      StackTrace = stackTrace,
+      Timestamp = timestamp,
       Token = token,
       Parameters = args.ToList()
     };
