@@ -25,13 +25,6 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
  	/// </summary>
   internal override dynamic obj => Unbind(@ref);
 
-  /// <summary>
-  /// Internal reference to the remote object handle.
-  /// </summary>
-  private dynamic @ro => Try(() => Unbind(@base).__ro, () => @base.__ro)
-    ?? throw new InvalidOperationException(
-        $"{type.Name} type does not implement DynamicRemoteObject.");
-
   private void EventSubscribe(string eventName, Delegate callback) =>
     @ro.EventSubscribe(eventName, callback);
 

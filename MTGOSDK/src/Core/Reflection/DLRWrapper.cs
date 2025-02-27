@@ -8,6 +8,7 @@ using System.Diagnostics;
 
 using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Reflection.Serialization;
+using MTGOSDK.Core.Remoting.Types;
 
 
 namespace MTGOSDK.Core.Reflection;
@@ -27,6 +28,13 @@ public abstract class DLRWrapper : IJsonSerializable
   /// Internal unwrapped reference to any captured dynamic objects.
   /// </summary>
   internal virtual dynamic @base { get; }
+
+  /// <summary>
+  /// Internal reference to the remote object handle.
+  /// </summary>
+  internal RemoteObject @ro => Try(() => Unbind(@base).__ro, () => @base.__ro)
+    ?? throw new InvalidOperationException(
+        $"{Unbind(@base)} type does not implement DynamicRemoteObject.");
 
   //
   // Wrapper methods for type casting and dynamic dispatching.
@@ -580,12 +588,12 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
         ?? throw new ArgumentException(
             $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
 
-      // Return a DynamicProxy wrapper with a default value, if present.
-      if (DefaultAttribute.TryGetCallerAttribute(out var defaultAttribute))
-      {
-        DynamicProxy proxy = new(baseObj, defaultAttribute.Value);
-        return Rebind(baseObj, proxy);
-      }
+      // // Return a DynamicProxy wrapper with a default value, if present.
+      // if (DefaultAttribute.TryGetCallerAttribute(out var defaultAttribute))
+      // {
+      //   DynamicProxy proxy = new(baseObj, defaultAttribute.Value);
+      //   return Rebind(baseObj, proxy);
+      // }
 
       return baseObj;
     }
