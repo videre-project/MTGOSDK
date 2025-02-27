@@ -102,13 +102,13 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// The type of chat channel (e.g. "System", "GameChat", "GameLog", etc.)
   /// </summary>
-  [Default(ChannelType.System)]
-  public ChannelType Type => Cast<ChannelType>(Unbind(@base).ChannelType);
+  public ChannelType Type =>
+    Try(() => Cast<ChannelType>(Unbind(@base).ChannelType),
+        fallback: ChannelType.System);
 
   /// <summary>
   /// Whether the current user can send messages to the channel.
   /// </summary>
-  [Default(false)]
   public bool CanSendMessage => @base.CanSendMessage;
 
   //
