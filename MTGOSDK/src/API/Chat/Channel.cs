@@ -109,7 +109,7 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// Whether the current user can send messages to the channel.
   /// </summary>
-  public bool CanSendMessage => @base.CanSendMessage;
+  public bool CanSendMessage => Try<bool>(() => @base.CanSendMessage);
 
   //
   // ILoggableChatChannel wrapper properties
