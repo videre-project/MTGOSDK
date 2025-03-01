@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.API.Interface.ViewModels;
+using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
@@ -121,6 +122,43 @@ public static class EventManager
   }
 
   /// <summary>
+  /// Retrieves the parent event of a game from a collection of event objects.
+  /// </summary>
+  /// <param name="events">The collection of event objects to search.</param>
+  /// <param name="game">The game object to find the parent event for.</param>
+  /// <returns>The parent event of the game, or null if not found.</returns>
+  public static Event? FindParentEvent(IEnumerable<dynamic> events, Game game)
+  {
+    int matchId = Unbind(game).Match.MatchId;
+
+    foreach(var playerEvent in events)
+    {
+      switch (playerEvent)
+      {
+        case League league:
+          if (league.GameHistory.Any(e => e.MatchId == matchId))
+            return league;
+          break;
+        case Tournament tournament:
+          foreach (var round in tournament.Rounds)
+          {
+            if (round.Matches.Any(m => m.MatchId == matchId))
+              return tournament;
+          }
+          break;
+        case Match matchEvent:
+          if (matchEvent.MatchId == matchId)
+            return matchEvent;
+          break;
+        case Queue queue:
+          break;
+      }
+    }
+
+    return null;
+  }
+
+  /// <summary>
   /// Navigates to and opens the event in the client.
   /// </summary>
   /// <param name="id">The event ID to navigate to.</param>
@@ -192,4 +230,51 @@ public static class EventManager
 
   public static EventProxy<ReplayErrorEventArgs> ReplayError =
     new(s_playerEventManager, nameof(ReplayError));
+
+  //
+  // IPlayService static events
+  //
+
+  /// <summary>
+  /// Event triggered when a new event is joined by the user.
+  /// </summary>
+  public static EventHookProxy<dynamic, object> EventJoined =
+    new(
+      "WotC.MtGO.Client.Model.Play.PlayService",
+      "AddJoinedEvent",
+      new((_, args) =>
+      {
+        dynamic joinedEvent = args[0];
+        if (joinedEvent == null || !joinedEvent.IsLocalUserJoined)
+          return null; // Ignore no-op or duplicate events.
+
+        var playerEvent = PlayerEventFactory(joinedEvent);
+        return (playerEvent, null); // Return a tuple of (Event, null).
+      })
+    );
+
+  /// <summary>
+  /// Event triggered when a new game is joined by the user.
+  /// </summary>
+  /// <remarks>
+  /// This event is triggered when the user joins a game (or a new game starts).
+  /// </remarks>
+  public static EventHookProxy<Event, Game> GameJoined =
+    new(
+      "WotC.MtGO.Client.Model.Play.PlayService",
+      "OnGameStarted",
+      new((_, args) =>
+      {
+        GameEventArgs gameArgs = new(args[0]);
+        Game game = gameArgs.Game;
+        if (Unbind(game) == null)
+          return null; // Ignore no-op or invalid events.
+
+        Event? playerEvent = FindParentEvent(JoinedEvents, game);
+        if (playerEvent == null)
+          return null; // Ignore no-op or invalid events.
+
+        return (playerEvent, game); // Return a tuple of (Event, Game).
+      })
+    );
 }
