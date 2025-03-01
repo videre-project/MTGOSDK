@@ -46,8 +46,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
     {
       (dynamic, dynamic)? res = hook(instance, args);
-      if (!(res?.Item1 is I && res?.Item2 is T))
-        return; // Skip if the hook returns null or invalid types.
+      if (res == null) return; // Skip if the hook returns null.
 
       try
       {
