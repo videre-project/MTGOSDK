@@ -10,6 +10,7 @@ using WotC.MtGO.Client.Model;
 
 namespace MTGOSDK.API.Collection;
 
+[NonSerializable]
 public sealed class Card(dynamic card)
     // We override the base instance with the ICardDefinition interface.
     : CollectionItem<Card>(null)
@@ -122,7 +123,9 @@ public sealed class Card(dynamic card)
   // ICardDefinition wrapper methods
   //
 
+  public override string ToString() => this.Name;
+
   public static implicit operator int(Card card) => card.Id;
 
-  public static implicit operator string(Card card) => card.Name;
+  public static implicit operator string(Card card) => card.ToString();
 }
