@@ -54,7 +54,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
       }
       catch (Exception e)
       {
-        Log.Error("Error invoking event hook: {0}", e.Message);
+        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
       }
     });
   }
@@ -63,7 +63,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   // EventHandler wrapper methods.
   //
 
-  public string Name => _methodName;
+  public override string Name => _methodName;
 
   public static EventHookProxy<I,T> operator +(EventHookProxy<I,T> e, Delegate c)
   {

@@ -10,6 +10,8 @@ public abstract class EventProxyBase<I, T> : DLRWrapper<I>
     where I : class
     where T : class
 {
+  public virtual string Name { get; }
+
   public Delegate ProxyTypedDelegate(Delegate c) =>
     new Action<dynamic, dynamic>((dynamic obj, dynamic args) =>
     {

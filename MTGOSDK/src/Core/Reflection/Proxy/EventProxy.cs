@@ -35,7 +35,7 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
   // EventHandler wrapper methods.
   //
 
-  public string Name => name;
+  public override string Name => name;
 
   public static EventProxy<I,T> operator +(EventProxy<I,T> e, Delegate c)
   {
