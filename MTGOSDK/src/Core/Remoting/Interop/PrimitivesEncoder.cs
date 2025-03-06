@@ -27,6 +27,12 @@ public static class PrimitivesEncoder
       return $"\"{toEncode}\"";
     }
 
+    // Use a higher precision format to encode date objects
+    if (t == typeof(DateTime))
+    {
+      return ((DateTime)toEncode).ToString("O");
+    }
+
     if (t.IsPrimitiveEtc() || t.IsStringCoercible() || t.IsEnum)
     {
       // These types can just be ".Parse()"-ed back
