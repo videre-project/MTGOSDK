@@ -122,15 +122,14 @@ public static class EventManager
   }
 
   /// <summary>
-  /// Retrieves the parent event of a game from a collection of event objects.
+  /// Retrieves the parent event of a match from a collection of event objects.
   /// </summary>
   /// <param name="events">The collection of event objects to search.</param>
-  /// <param name="game">The game object to find the parent event for.</param>
+  /// <param name="match">The match object to find the parent event for.</param>
   /// <returns>The parent event of the game, or null if not found.</returns>
-  public static Event? FindParentEvent(IEnumerable<dynamic> events, Game game)
+  public static Event? FindParentEvent(IEnumerable<dynamic> events, Match match)
   {
-    int matchId = Unbind(game).Match.MatchId;
-
+    int matchId = match.MatchId;
     foreach(var playerEvent in events)
     {
       switch (playerEvent)
@@ -238,7 +237,7 @@ public static class EventManager
   /// <summary>
   /// Event triggered when a new event is joined by the user.
   /// </summary>
-  public static EventHookProxy<dynamic, object> EventJoined =
+  public static EventHookProxy<Event, object> EventJoined =
     new(
       "WotC.MtGO.Client.Model.Play.PlayService",
       "AddJoinedEvent",
@@ -270,7 +269,8 @@ public static class EventManager
         if (Unbind(game) == null)
           return null; // Ignore no-op or invalid events.
 
-        Event? playerEvent = FindParentEvent(JoinedEvents, game);
+        Match match = game.Match;
+        Event? playerEvent = FindParentEvent(JoinedEvents, match);
         if (playerEvent == null)
           return null; // Ignore no-op or invalid events.
 
