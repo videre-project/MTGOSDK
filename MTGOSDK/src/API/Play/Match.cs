@@ -111,12 +111,14 @@ public sealed class Match(dynamic match) : Event
   /// <summary>
   /// The player(s) who won the match.
   /// </summary>
-  public IList<User> WinningPlayers => Map<IList, User>(@base.WinningPlayers);
+  public IList<User> WinningPlayers =>
+    Map<IList, User>(Unbind(@base.WinningPlayers));
 
   /// <summary>
   /// The player(s) who lost the match.
   /// </summary>
-  public IList<User> LosingPlayers => Map<IList, User>(@base.LosingPlayers);
+  public IList<User> LosingPlayers =>
+    Map<IList, User>(Unbind(@base.LosingPlayers));
 
   //
   // IMatch wrapper events
