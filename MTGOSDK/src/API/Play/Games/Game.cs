@@ -143,6 +143,15 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   [Default(null)]
   public TimeSpan? CompletedDuration => Cast(Unbind(@base).CompletedDuration);
 
+  public IList<GameZone> SharedZones =>
+    Map<IList, GameZone>(Unbind(@base).m_sharedZones.Values);
+
+  public DictionaryProxy<GamePlayer, IList<GameZone>> PlayerZones =>
+    new(Unbind(@base).m_playerZones,
+        keyMapper: Lambda<GamePlayer>(p => new GamePlayer(p)),
+        valueMapper: Lambda<IList<GameZone>>(z =>
+            Map<IList, GameZone>(z.Values)));
+
   //
   // IGame wrapper methods
   //
@@ -150,19 +159,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   // private void TwitchLogging();
 
   /// <summary>
-  /// Executes a game action from the current game.
-  /// </summary>
-  /// <param name="action">The game action to execute.</param>
-  public void ExecuteAction(GameAction action) =>
-    Unbind(@base).ExecuteAction(Unbind(action));
-
-  /// <summary>
   /// Gets a game card by the given card ID.
   /// </summary>
   /// <param name="cardId">The card ID to retrieve.</param>
   /// <returns>A new GameCard instance.</returns>
-  public GameCard GetGameCard(int cardId) =>
-    new(Unbind(@base).FindGameCard(cardId));
+  public GameCard? GetGameCard(int cardId) =>
+    Optional<GameCard>(Unbind(@base).FindGameCard(cardId));
 
   // public GameCard GetGameCard(int thingNumber) =>
   //   new(@base.ResolveDigitalThingAsGameCard(thingNumber));
@@ -264,6 +266,9 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public EventProxy<GameEventArgs> CurrentTurnChanged =
     new(/* IGame */ game, nameof(CurrentTurnChanged));
 
+  public EventHookWrapper<GameCard> OnZoneChange =
+    new(CardZoneChanged, new Filter<GameCard>((s,_) => s.Id == game.Id));
+
   /// <summary>
   /// Event triggered when a game action is performed.
   /// </summary>
@@ -281,16 +286,35 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   //
 
   /// <summary>
+  /// Event triggered when a card from any game changes zones.
+  /// </summary>
+  public static EventHookProxy<Game, GameCard> CardZoneChanged =
+    new(
+      "WotC.MtGO.Client.Model.Play.GameCard",
+      "OnZoneChanged",
+      new((instance, _) =>
+      {
+        GameCard card = new(instance);
+        if (card.SourceId == -1) return null; // Ignore invalid events.
+        Game game = card.GameInterface;
+
+        // Return a tuple of (Game, GameCard)
+        return (game, card);
+      })
+    );
+
+  /// <summary>
   /// Event triggered when a game action in any active game is performed.
   /// </summary>
   public static EventHookProxy<Game, GameAction> GameActionPerformed =
     new(
       "WotC.MtGO.Client.Model.Play.Actions.GameAction",
       "Execute",
-      new EventHook((dynamic instance, dynamic[] args) =>
+      new((instance, args) =>
       {
         GameAction action = GameAction.GameActionFactory(instance);
         if (action == null) return null; // Ignore unknown actions.
+        if (action.IsLocal) return null; // Ignore local actions.
         Game game = new(args[0]);
 
         return (game, action); // Return a tuple of (Game, GameAction).
@@ -304,7 +328,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     new(
       "WotC.MtGO.Client.Model.Chat.HistoricalChatChannel",
       "AppendMessage",
-      new EventHook((dynamic instance, dynamic[] args) =>
+      new((instance, args) =>
       {
         DateTime timestamp = args[0];
         string text = args[1];
