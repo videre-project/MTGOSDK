@@ -24,6 +24,9 @@ public abstract class GameAction : DLRWrapper<IGameAction>
 
   public int ActionId => (int)Unbind(@base).ActionFlags;
 
+  /// <summary>
+  /// The interaction timestamp of the game action.
+  /// </summary>
   public uint Timestamp => Unbind(@base).Timestamp;
 
   /// <summary>
@@ -35,24 +38,47 @@ public abstract class GameAction : DLRWrapper<IGameAction>
   /// <summary>
   /// The bound hotkey for the game action.
   /// </summary>
+  [NonSerializable]
   public uint HotKey => Unbind(@base).HotKey;
 
   /// <summary>
   /// The available modifiers for yielding priority (e.g. YieldThroughTurn, etc.).
   /// </summary>
+  [NonSerializable]
   public ActionModifiers AvailableModifiers =>
     Cast<ActionModifiers>(Unbind(@base).AvailableModifiers);
 
   /// <summary>
   /// The selected priority modifiers applied to the game action.
   /// </summary>
+  [NonSerializable]
   public ActionModifiers SelectedModifiers =>
     Cast<ActionModifiers>(Unbind(@base).SelectedModifiers);
 
   /// <summary>
   /// Whether the game action is the default selectable action.
   /// </summary>
+  [NonSerializable]
   public bool IsDefault => Unbind(@base).IsDefault;
+
+  /// <summary>
+  /// Whether the game action is a local action client-side.
+  /// </summary>
+  [NonSerializable]
+  public bool IsLocal
+  {
+    get
+    {
+      if (this.GetType() == typeof(CardAction) &&
+          (this.Name.StartsWith("Always yield to ") ||
+           this.Name.StartsWith("Yield to ")))
+      {
+        return true;
+      }
+
+      return false;
+    }
+  }
 
   // public EventProxy ModifiersChanged =
   //   new(/* IGameAction */ gameAction, nameof(ModifiersChanged));
@@ -132,8 +158,8 @@ public abstract class GameAction : DLRWrapper<IGameAction>
       // default:
       //   throw new InvalidOperationException($"Unknown action type: {actionType}");
     }
-    Log.Trace("Created new {Type} object for '{ActionObject}'.",
-        actionType.GetType().Name, actionObject);
+    // Log.Trace("Created new {Type} object for '{ActionObject}'.",
+    //     actionType.GetType().Name, actionObject);
 
     return actionObject;
   }

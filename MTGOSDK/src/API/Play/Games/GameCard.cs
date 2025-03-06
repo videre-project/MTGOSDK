@@ -14,6 +14,7 @@ using WotC.MtGO.Client.Model.Play;
 namespace MTGOSDK.API.Play.Games;
 using static MTGOSDK.API.Events;
 
+[NonSerializable]
 public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 {
   /// <summary>
@@ -27,9 +28,12 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
     public GameCard Target = new(orderedCombatParticipant.Target);
   }
 
-  // DigitalMagicObject -> CardRelationshipData -> DuelSceneCardViewModel
-  private readonly dynamic cardModel = gameCard.Tag.CardViewModel;
+  internal Game GameInterface => new(@base.GameInterface);
 
+  // DigitalMagicObject -> CardRelationshipData -> DuelSceneCardViewModel
+  // private readonly dynamic cardModel = gameCard.Tag.CardViewModel;
+
+  [NonSerializable]
   public bool IsDisposed => gameCard.Tag == null;
 
   //
@@ -39,6 +43,9 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// <summary>
   /// The unique identifier for this card instance.
   /// </summary>
+  /// <remarks>
+  /// Retrieved from the <c>MagicProperty.THINGNUMBER</c> property.
+  /// </remarks>
   public int Id => Unbind(@base).Id;
 
   /// <summary>
@@ -54,11 +61,15 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// </remarks>
   public int SourceId => @base.SourceId;
 
+  /// <summary>
+  /// The card name.
+  /// </summary>
   public string Name => @base.Name;
 
   /// <summary>
   /// The associated card definition.
   /// </summary>
+  [NonSerializable]
   public Card Definition => new(Unbind(@base).Definition);
 
   /// <summary>
@@ -71,14 +82,26 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// </remarks>
   public int Timestamp => @base.Timestamp;
 
-  public GameZone Zone => new(@base.Zone);
+  /// <summary>
+  /// The zone in which the card is currently located.
+  /// </summary>
+  public GameZone? Zone => Optional<GameZone>(@base.Zone);
 
   // IsExiledOnBattlefield
   // IsMutatedOnBattlefield
   // IsAbilityOnTheStack
-  public GameZone ActualZone => new(@base.ActualZone);
+  // public GameZone ActualZone => new(@base.ActualZone);
 
-  public GameZone PreviousZone => new(@base.PreviousZone);
+  /// <summary>
+  /// The previous zone in which the card was located.
+  /// </summary>
+  /// <remarks>
+  /// The card's <c>Id</c> and <c>SourceId</c> properties are updated whenever
+  /// the card moves between zones. This property is used to track the card's
+  /// previous zone, where the card's <c>Id</c> becomes the new <c>SourceId</c>
+  /// to track the card's movement history.
+  /// </remarks>
+  public GameZone? PreviousZone => Optional<GameZone>(@base.PreviousZone);
 
   public IList<CardAction> Actions =>
     Map<IList, CardAction>(@base.Actions);
@@ -102,16 +125,15 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
       .Select(item => item.Target);
 
   public IEnumerable<CardCounter> Counters =>
-    Map<CardCounter>(Unbind(@base).Counters,
-      new Func<dynamic, CardCounter>(Cast<CardCounter>));
+    Map<IList, CardCounter>(Unbind(@base).Counters);
 
   public GamePlayer Owner => new(@base.Owner);
 
   public GamePlayer Controller => new(@base.Controller);
 
-  public GamePlayer Protector => new(@base.Protector);
+  public GamePlayer? Protector => Optional<GamePlayer>(@base.Protector);
 
-  public GameCard OtherFace => new(@base.OtherFace);
+  public GameCard? OtherFace => Optional<GameCard>(@base.OtherFace);
 
   public int Power => @base.Power;
 
@@ -163,6 +185,13 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   // public EventProxy ActionMouseEnterCommand =
   //   new(/* DuelSceneCardViewModel */ cardModel, nameof(ActionMouseEnterCommand));
+
+  //
+  // IGameCard wrapper methods
+  //
+
+  public override string ToString() =>
+    string.Format("{0} (ID: {1}, SourceId: {2})", Name, Id, SourceId);
 
   //
   // IGameCard wrapper events

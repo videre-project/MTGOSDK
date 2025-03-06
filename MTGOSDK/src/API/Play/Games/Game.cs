@@ -50,7 +50,6 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The unique ID for this game.
   /// </summary>
-  [Default(-1)]
   public int Id => @base.Id;
 
   /// <summary>
@@ -79,6 +78,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   [NonSerializable]
   public Channel LogChannel => new(@base.LogChannel);
+
+  /// <summary>
+  /// The match this game is a part of.
+  /// </summary>
+  [NonSerializable]
+  public Match Match => new(@base.Match);
 
   /// <summary>
   /// The current turn number.

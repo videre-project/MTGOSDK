@@ -21,6 +21,8 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// </summary>
   internal override dynamic obj => Bind<ICardZone>(cardZone);
 
+  private readonly dynamic m_cardZone = Retry(() => Unbind(cardZone).CardZone);
+
   //
   // ICardZone wrapper properties
   //
@@ -28,7 +30,7 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// <summary>
   /// The name of the zone.
   /// </summary>
-  public string Name => Unbind(@base).CardZone.ToString();
+  public string Name => m_cardZone.ToString();
 
   /// <summary>
   /// The number of cards in the zone.
@@ -43,7 +45,7 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// <summary>
   /// The enum value of the zone.
   /// </summary>
-  public CardZone Zone => Cast<CardZone>(Unbind(@base).CardZone);
+  public CardZone Zone => Cast<CardZone>(m_cardZone);
 
   /// <summary>
   /// The player this zone belongs to.

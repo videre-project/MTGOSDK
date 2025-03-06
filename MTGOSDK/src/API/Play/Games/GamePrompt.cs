@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
@@ -35,13 +37,9 @@ public sealed class GamePrompt(dynamic gamePrompt) : DLRWrapper<IGamePrompt>
   public uint Timestamp => Unbind(@base).Timestamp;
 
   /// <summary>
-  /// Whether the prompt is a mulligan prompt.
-  /// </summary>
-  public bool IsMulligan => @base.IsMulligan;
-
-  /// <summary>
   /// The available game actions for the prompt.
   /// </summary>
-  public IEnumerable<GameAction> Options =>
-    Map<GameAction>(@base.Options.Values);
+  public IList<GameAction>? Options =>
+    Optional(Map<IList, GameAction>(@base.Options.Values),
+            Lambda<bool>((_) => @base.Options.Count > 0));
 }

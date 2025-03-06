@@ -15,6 +15,8 @@ using static MTGOSDK.API.Events;
 /// <summary>
 /// Represents a player in a game.
 /// </summary>
+
+[NonSerializable]
 public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
 {
   /// <summary>
@@ -81,6 +83,12 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   /// The player's mana pool.
   /// </summary>
   public IEnumerable<Mana> ManaPool => Map<Mana>(@base.ManaPool);
+
+  //
+  // IGamePlayer wrapper methods
+  //
+
+  public override string ToString() => this.User.Name;
 
   //
   // IGamePlayer wrapper events
