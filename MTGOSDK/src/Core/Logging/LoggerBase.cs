@@ -47,6 +47,17 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   /// </remarks>
   private static readonly ConcurrentDictionary<Type, Type> s_callerTypes = new();
 
+  private static ILogger s_anonymousLogger
+  {
+    get
+    {
+      if (s_provider != null)
+        return s_provider.CreateLogger("Unknown");
+      else
+        return s_factory.CreateLogger("Unknown");
+    }
+  }
+
   /// <summary>
   /// Represents a type used to perform logging.
   /// </summary>
@@ -55,29 +66,38 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   {
     get
     {
-      // If logging is suppressed and the caller type is a suppressed type,
-      // return a null logger to prevent logging from suppressed sources.
-      if (SuppressionContext.IsSuppressedCallerType())
-        return s_nulllogger;
-
-      // Get the caller type of the calling method or class.
-      Type callerType;
-      int depth = 3;
-      do { callerType = GetCallerType(depth); depth++; }
-      while (callerType.FullName.StartsWith("System.") ||
-             callerType.FullName.StartsWith("MTGOSDK.Core.Logging."));
-
-      // Fetch the base type if the caller is a compiler-generated type
-      // (e.g. lambda expressions, async state machines, etc.).
-      if (!s_loggers.ContainsKey(callerType) && callerType.IsCompilerGenerated())
+      try
       {
-        if (!s_callerTypes.TryGetValue(callerType, out Type? baseType))
-          baseType = callerType.GetBaseType();
+        // If logging is suppressed and the caller type is a suppressed type,
+        // return a null logger to prevent logging from suppressed sources.
+        if (SuppressionContext.IsSuppressedCallerType())
+          return s_nulllogger;
 
-        callerType = baseType;
+        // Get the caller type of the calling method or class.
+        Type callerType;
+        int depth = 3;
+        do { callerType = GetCallerType(depth); depth++; }
+        while (callerType.FullName.StartsWith("System.") ||
+               callerType.FullName.StartsWith("MTGOSDK.Core.Logging.") ||
+               callerType.FullName.StartsWith("MTGOSDK.Core.Reflection.EventHookWrapper") ||
+               callerType.FullName.StartsWith("MTGOSDK.Core.Reflection.Proxy.EventHookProxy"));
+
+        // Fetch the base type if the caller is a compiler-generated type
+        // (e.g. lambda expressions, async state machines, etc.).
+        if (!s_loggers.ContainsKey(callerType) && callerType.IsCompilerGenerated())
+        {
+          if (!s_callerTypes.TryGetValue(callerType, out Type? baseType))
+            baseType = callerType.GetBaseType();
+
+          callerType = baseType;
+        }
+
+        return s_loggers.GetOrAdd(callerType, CreateLogger(callerType));
       }
-
-      return s_loggers.GetOrAdd(callerType, CreateLogger(callerType));
+      catch (Exception)
+      {
+        return s_anonymousLogger;
+      }
     }
   }
 
