@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Linq;
 
 using MTGOSDK.API.Collection;
+using MTGOSDK.Core.Logging;
 
 
 namespace MTGOSDK.Tests.MTGOSDK_API;
@@ -39,6 +40,7 @@ public class Collection : CollectionValidationFixture
   public void Test_Decks()
   {
     var deck = CollectionManager.Decks.First();
+    Log.Debug("Got deck: {Name} ({Id})", deck.Name, deck.Id);
     ValidateDeck(deck);
     ValidateDeck(CollectionManager.GetDeck(deck.Id));
   }
