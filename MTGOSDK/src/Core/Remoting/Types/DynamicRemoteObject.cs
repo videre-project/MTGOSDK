@@ -401,7 +401,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
     DynamicRemoteMethod drm = GetMethodProxy(binder.Name);
     Type binderType = binder.GetType();
-    System.Reflection.PropertyInfo TypeArgumentsPropInfo = binderType.GetProperty("TypeArguments");
+    PropertyInfo TypeArgumentsPropInfo = binderType.GetProperty("TypeArguments");
     if (TypeArgumentsPropInfo != null)
     {
       // We got ourself a binder which implemented .NET's internal
@@ -528,10 +528,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   public override int GetHashCode() => InvokeMethod<int>(nameof(GetHashCode));
 
-  public override bool Equals(object obj)
-  {
-    throw new NotImplementedException($"Can not call `Equals` on {nameof(DynamicRemoteObject)} instances");
-  }
+  public override bool Equals(object obj) => InvokeMethod<bool>(nameof(Equals), obj);
   #endregion
 
   /// <summary>
@@ -541,7 +538,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   {
     get
     {
-
       ObjectOrRemoteAddress ooraKey = RemoteFunctionsInvokeHelper.CreateRemoteParameter(key);
       ObjectOrRemoteAddress item = __ro.GetItem(ooraKey);
       if (item.IsNull)

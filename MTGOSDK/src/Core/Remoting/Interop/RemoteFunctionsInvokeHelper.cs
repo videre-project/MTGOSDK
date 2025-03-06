@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Reflection;
@@ -38,6 +39,13 @@ public static class RemoteFunctionsInvokeHelper
     else if (parameter is DynamicRemoteObject dro)
     {
       RemoteObject originRemoteObject = dro.__ro;
+      return ObjectOrRemoteAddress
+        .FromToken(originRemoteObject.RemoteToken,
+                  originRemoteObject.GetType().FullName);
+    }
+    else if (parameter is DLRWrapper wrapper)
+    {
+      RemoteObject originRemoteObject = wrapper.@ro;
       return ObjectOrRemoteAddress
         .FromToken(originRemoteObject.RemoteToken,
                   originRemoteObject.GetType().FullName);
