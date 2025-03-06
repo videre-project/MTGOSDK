@@ -20,6 +20,8 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
+  private ClrAppDomain _currentDomain = null;
+
   private string MakeDomainsResponse(HttpListenerRequest req)
   {
     // Extract the names of all available modules from the current AppDomain.
@@ -27,10 +29,10 @@ public partial class Diver : IDisposable
     string currentDomain = AppDomain.CurrentDomain.FriendlyName;
     lock (_runtime.clrLock)
     {
-      ClrAppDomain clrAppDomain = _runtime.GetClrAppDomains()
+      _currentDomain ??= _runtime.GetClrAppDomains()
         .FirstOrDefault(ad => ad.Name == currentDomain);
 
-      modules = clrAppDomain.Modules
+      modules = _currentDomain.Modules
         .Select(m => Path.GetFileNameWithoutExtension(m.Name))
         .Where(m => !string.IsNullOrWhiteSpace(m))
         .ToList();
