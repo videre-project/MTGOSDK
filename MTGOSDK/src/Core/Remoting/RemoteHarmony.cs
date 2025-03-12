@@ -5,6 +5,7 @@
 **/
 
 using System.Reflection;
+using System.Linq;
 
 
 using MTGOSDK.Core.Remoting.Hooking;
@@ -28,7 +29,7 @@ public class RemoteHarmony
   private class PositionedLocalHook
   {
     public HookAction HookAction { get; set; }
-    public LocalHookCallback WrappedHookAction { get; private set; }
+    public LocalHookCallback WrappedHookAction { get; set; }
     public HarmonyPatchPosition Position { get; private set; }
     public PositionedLocalHook(HookAction action, LocalHookCallback callback, HarmonyPatchPosition pos)
     {
@@ -51,34 +52,46 @@ public class RemoteHarmony
 
   public bool HookMethod(MethodBase methodToHook, HarmonyPatchPosition pos, HookAction hookAction)
   {
+    // Look for MethodHooks object for the given REMOTE OBJECT
+    bool hasHooks = _callbacksToProxies.ContainsKey(methodToHook);
+    MethodHooks methodHooks = hasHooks ? _callbacksToProxies[methodToHook] : new();
+
+    // Handle multiple hooks on the same method
+    LocalHookCallback wrappedHook = null!;
+    if (hasHooks)
+    {
+      // Enumerate all method hooks registered to find any matches based on position
+      var existingHook = methodHooks.Values.First(hook => hook.Position == pos);
+      // Merge the HookedAction delegate and re-wrap it
+      HookAction mergedHook = Delegate.Combine(existingHook.HookAction, hookAction) as HookAction;
+      wrappedHook = WrapCallback(mergedHook);
+
+      // Update the existing entry
+      existingHook.HookAction = mergedHook;
+      existingHook.WrappedHookAction = wrappedHook;
+
+      // Create a new entry that references the existing one
+      methodHooks.Add(hookAction, existingHook);
+
+      return true;
+    }
+
     // Wrapping the callback which uses `dynamic`s in a callback that handles `ObjectOrRemoteAddresses`
     // and converts them to DROs
-    LocalHookCallback wrappedHook = WrapCallback(hookAction);
-
-    // Look for MethodHooks object for the given REMOTE OBJECT
-    if (!_callbacksToProxies.ContainsKey(methodToHook))
-    {
-      _callbacksToProxies[methodToHook] = new MethodHooks();
-    }
-    else
-    {
-      throw new NotImplementedException("Setting multiple hooks on the same method is not implemented");
-    }
-    MethodHooks methodHooks = _callbacksToProxies[methodToHook];
-
-    //
     if(!methodHooks.ContainsKey(hookAction))
     {
+      wrappedHook = WrapCallback(hookAction);
       methodHooks.Add(hookAction, new PositionedLocalHook(hookAction, wrappedHook, pos));
     }
     else
     {
-      throw new NotImplementedException("Shouldn't use same hook for 2 patches of the same method");
+      throw new InvalidOperationException("Hook already exists on another patch type.");
     }
 
     var parametersTypeFullNames = methodToHook.GetParameters()
       .Select(prm => prm.ParameterType.FullName)
       .ToList();
+
     return _app.Communicator.HookMethod(
         methodToHook.DeclaringType.FullName,
         methodToHook.Name,
@@ -178,7 +191,19 @@ public class RemoteHarmony
       return false;
     }
 
-    _app.Communicator.UnhookMethod(positionedHookWrapper.WrappedHookAction);
+    // Check if there are multiple delegates in the callback's invocation list
+    if (positionedHookWrapper.HookAction.GetInvocationList().Length > 1)
+    {
+      // Remove the delegate from the invocation list
+      var previousHook = Delegate.Remove(positionedHookWrapper.HookAction, callback) as HookAction;
+      positionedHookWrapper.HookAction = previousHook;
+    }
+    // Otherwise, remove the entire hook
+    else
+    {
+      _app.Communicator.UnhookMethod(positionedHookWrapper.WrappedHookAction);
+    }
+
     hooks.Remove(callback);
     if (hooks.Count == 0)
     {
