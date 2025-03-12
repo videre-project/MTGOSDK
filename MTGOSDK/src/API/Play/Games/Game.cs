@@ -266,6 +266,15 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public EventProxy<GameEventArgs> CurrentTurnChanged =
     new(/* IGame */ game, nameof(CurrentTurnChanged));
 
+  /// <summary>
+  /// Event triggered when a new instance of a game card is created.
+  /// </summary>
+  public EventHookWrapper<GameCard> OnCardCreated =
+    new(GameCardCreated, new Filter<GameCard>((s,_) => s.Id == game.Id));
+
+  /// <summary>
+  /// Event triggered when any cards are added or removed from a zone.
+  /// </summary>
   public EventHookWrapper<GameCard> OnZoneChange =
     new(CardZoneChanged, new Filter<GameCard>((s,_) => s.Id == game.Id));
 
@@ -276,6 +285,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     new(GameActionPerformed, new Filter<GameAction>((s,_) => s.Id == game.Id));
 
   /// <summary>
+  /// Event triggered when a player's life total changes.
+  /// </summary>
+  public EventHookWrapper<GamePlayer> OnLifeChange =
+    new(PlayerLifeChanged, new Filter<GamePlayer>((s,_) => s.Id == game.Id));
+
+  /// <summary>
   /// Event triggered when a log message is received.
   /// </summary>
   public EventHookWrapper<Message> OnLogMessage =
@@ -284,6 +299,20 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   //
   // IGame static events
   //
+
+  public static EventHookProxy<Game, GameCard> GameCardCreated =
+    new(
+      "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
+      "CreateDigitalObject",
+      new((instance, args) =>
+      {
+        Game game = new(instance);
+        int id = args[0];
+        GameCard newCard = game.GetGameCard(id);
+
+        return (game, newCard); // Return a tuple of (Game, GameCard)
+      })
+    );
 
   /// <summary>
   /// Event triggered when a card from any game changes zones.
@@ -318,6 +347,24 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         Game game = new(args[0]);
 
         return (game, action); // Return a tuple of (Game, GameAction).
+      })
+    );
+
+  /// <summary>
+  /// Event triggered when a player's life total changes in any active game.
+  /// </summary>
+  public static EventHookProxy<Game, GamePlayer> PlayerLifeChanged =
+    new(
+      "WotC.MtGO.Client.Model.Play.GamePlayer",
+      "OnLifeChanged",
+      new((instance, _) =>
+      {
+        GamePlayer player = new(instance);
+        if (player.User.Id == -1) return null; // Ignore invalid user objects.
+        Game game = player.GameInterface;
+
+        // Return a tuple of (Game, GamePlayer)
+        return (game, player);
       })
     );
 
