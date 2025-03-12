@@ -199,7 +199,9 @@ public static class UserManager
   /// <param name="id">The Login ID of the user.</param>
   /// <returns>The display name of the user.</returns>
   public static string GetUserName(int id) =>
-    Unbind(s_userManager).GetUserName(id);
+    // Use a fallback to the user cache if the method fails.
+    Try(() => s_userManager.GetUserName(id),
+        () => UsersById[id]?.Name);
 
   /// <summary>
   /// Retrieves the Login ID of a user by their username.
@@ -207,7 +209,7 @@ public static class UserManager
   /// <param name="name">The display name of the user.</param>
   /// <returns>The Login ID of the user.</returns>
   public static int? GetUserId(string name) =>
-    Unbind(s_userManager).GetUserId(name);
+    s_userManager.GetUserId(name);
 
   //
   // IBuddyUsersList wrapper methods
