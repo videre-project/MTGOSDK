@@ -36,7 +36,14 @@ public class FileLoggerProvider(FileLoggerOptions options)
       {
         if (File.GetCreationTime(oldFile) < DateTime.Now - options.MaxAge)
         {
-          File.Delete(oldFile);
+          try
+          {
+            File.Delete(oldFile);
+          }
+          catch (IOException)
+          {
+            // Ignore error if the file is locked by another process
+          }
         }
       }
     }
