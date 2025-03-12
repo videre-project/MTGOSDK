@@ -90,7 +90,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   // IsExiledOnBattlefield
   // IsMutatedOnBattlefield
   // IsAbilityOnTheStack
-  // public GameZone ActualZone => new(@base.ActualZone);
+  public GameZone? ActualZone => Optional<GameZone>(@base.ActualZone);
 
   /// <summary>
   /// The previous zone in which the card was located.

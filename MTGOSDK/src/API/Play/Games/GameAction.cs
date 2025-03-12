@@ -27,6 +27,7 @@ public abstract class GameAction : DLRWrapper<IGameAction>
   /// <summary>
   /// The interaction timestamp of the game action.
   /// </summary>
+  [NonSerializable]
   public uint Timestamp => Unbind(@base).Timestamp;
 
   /// <summary>

@@ -14,6 +14,7 @@ using static MTGOSDK.API.Events;
 /// <summary>
 /// Represents a card zone in the game.
 /// </summary>
+[NonSerializable]
 public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
 {
   /// <summary>
@@ -35,22 +36,31 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// <summary>
   /// The number of cards in the zone.
   /// </summary>
+  [NonSerializable]
   public int Count => @base.Count;
 
   /// <summary>
   /// The cards contained in the zone.
   /// </summary>
+  [NonSerializable]
   public IEnumerable<GameCard> Cards => Map<GameCard>(@base);
 
   /// <summary>
   /// The enum value of the zone.
   /// </summary>
+  [NonSerializable]
   public CardZone Zone => Cast<CardZone>(m_cardZone);
 
   /// <summary>
   /// The player this zone belongs to.
   /// </summary>
   public GamePlayer Player => new(@base.Player);
+
+  //
+  // ICardZone wrapper methods
+  //
+
+  public override string ToString() => this.Name;
 
   //
   // ICardZone wrapper events
