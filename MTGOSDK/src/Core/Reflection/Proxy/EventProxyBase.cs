@@ -6,6 +6,7 @@
 
 namespace MTGOSDK.Core.Reflection.Proxy;
 
+[NonSerializable]
 public abstract class EventProxyBase<I, T> : DLRWrapper<I>
     where I : class
     where T : class
