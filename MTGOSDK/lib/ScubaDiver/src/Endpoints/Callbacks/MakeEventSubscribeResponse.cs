@@ -144,7 +144,14 @@ public partial class Diver : IDisposable
     {
       Type eventArgsType = paramInfos[1].ParameterType;
       var wrapperType = typeof(EventWrapper<>).MakeGenericType(eventArgsType);
-      var wrapperInstance = Activator.CreateInstance(wrapperType, eventHandler);
+
+      // Pass the target object and event name to the wrapper
+      var wrapperInstance = Activator.CreateInstance(
+        wrapperType,
+        eventHandler,
+        target,      // The source object where the event is defined
+        eventName);  // The name of the event
+
       Delegate my_delegate = Delegate.CreateDelegate(eventDelegateType, wrapperInstance, "Handle");
 
       Log.Debug($"[Diver] Adding event handler to event {eventName}...");

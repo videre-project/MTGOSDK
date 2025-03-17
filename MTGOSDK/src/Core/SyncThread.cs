@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -28,9 +29,12 @@ public static class SyncThread
     new(s_minJobThreads, s_maxJobThreads, s_cancellationToken);
 
   private static readonly TaskFactory s_taskFactory = new(s_taskScheduler);
+  private static readonly ConcurrentDictionary<string, Task> s_groupTasks = new();
 
   private static Action WrapCallback(Action callback) => () =>
   {
+    if (s_cancellationToken.IsCancellationRequested) return;
+
     try
     {
       callback();
@@ -38,12 +42,62 @@ public static class SyncThread
     catch (Exception ex)
     {
       Log.Error(ex, "An error occurred while executing a callback.");
+
+      // Loop through all inner exceptions
+      while (ex.InnerException != null)
+      {
+        Log.Error(ex.InnerException, "Inner exception: {0}", ex.InnerException.Message + "\n" + ex.InnerException.StackTrace);
+        ex = ex.InnerException;
+      }
     }
   };
 
   public static void Enqueue(Action callback)
   {
     s_taskFactory.StartNew(WrapCallback(callback), s_cancellationToken);
+  }
+
+  public static void Enqueue(Action callback, string groupId)
+  {
+    if (string.IsNullOrEmpty(groupId))
+    {
+      // Fall back to the non-grouped version
+      Enqueue(callback);
+      return;
+    }
+
+    Task newTask;
+    if (s_groupTasks.TryGetValue(groupId, out var existingTask) &&
+        !existingTask.IsCompleted && !existingTask.IsFaulted && !existingTask.IsCanceled)
+    {
+      // Continue from previous task in this group
+      newTask = existingTask.ContinueWith(
+        _ => WrapCallback(callback)(),
+        s_cancellationToken,
+        TaskContinuationOptions.None,
+        s_taskScheduler);
+    }
+    else
+    {
+      // Create a new task as no valid task exists for this group
+      newTask = s_taskFactory.StartNew(WrapCallback(callback), s_cancellationToken);
+    }
+
+    // Update the group dictionary
+    s_groupTasks[groupId] = newTask;
+
+    // Occasionally clean up completed tasks
+    if (s_groupTasks.Count > 1000)
+    {
+      foreach (var key in s_groupTasks.Keys)
+      {
+        if (s_groupTasks.TryGetValue(key, out var task) &&
+            (task.IsCompleted || task.IsCanceled || task.IsFaulted))
+        {
+          s_groupTasks.TryRemove(key, out _);
+        }
+      }
+    }
   }
 
   public static void Stop()

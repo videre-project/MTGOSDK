@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 
 using HarmonyLib;
 
@@ -227,7 +226,6 @@ public class HarmonyWrapper
     if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
     {
       Action callback = () => funcHook(__instance, args);
-      // Task.Run(callback);
       SyncThread.Enqueue(callback);
     }
   }

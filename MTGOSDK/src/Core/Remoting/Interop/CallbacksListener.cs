@@ -177,6 +177,7 @@ public class CallbacksListener
       //
       res.Parameters[0].Timestamp = res.Timestamp;
 
+      string groupId = $"Callback:{res.Token}";
       if (_tokensToEventHandlers.TryGetValue(res.Token, out LocalEventCallback callback))
       {
         //
@@ -188,15 +189,17 @@ public class CallbacksListener
           res.Parameters[1].Timestamp = res.Timestamp;
         }
 
-        SyncThread.Enqueue(() =>
-            callback(res.Parameters.ToArray()));
+        SyncThread.Enqueue(
+          () => callback(res.Parameters.ToArray()),
+          groupId);
       }
       else if (_tokensToHookCallbacks.TryGetValue(res.Token, out LocalHookCallback hook))
       {
-        SyncThread.Enqueue(() =>
-            hook(new HookContext(res.Timestamp),
-                res.Parameters.FirstOrDefault(),
-                res.Parameters.Skip(1).ToArray()));
+        SyncThread.Enqueue(
+          () => hook(new HookContext(res.Timestamp),
+              res.Parameters.FirstOrDefault(),
+              res.Parameters.Skip(1).ToArray()),
+          groupId);
       }
       return;
     }
