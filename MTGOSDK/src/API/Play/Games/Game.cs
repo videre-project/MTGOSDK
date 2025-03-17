@@ -353,7 +353,9 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         GameAction action = GameAction.GameActionFactory(instance);
         if (action == null) return null; // Ignore unknown actions.
         if (action.IsLocal) return null; // Ignore local actions.
+
         Game game = new(args[0]);
+        if (action.Timestamp == 0) action.SetTimestamp(game.Prompt!.Timestamp);
 
         return (game, action); // Return a tuple of (Game, GameAction).
       })

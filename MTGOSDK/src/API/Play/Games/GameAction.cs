@@ -13,6 +13,8 @@ namespace MTGOSDK.API.Play.Games;
 
 public abstract class GameAction : DLRWrapper<IGameAction>
 {
+  private uint _timestamp = 0;
+
   //
   // IGameAction wrapper properties
   //
@@ -28,7 +30,8 @@ public abstract class GameAction : DLRWrapper<IGameAction>
   /// The interaction timestamp of the game action.
   /// </summary>
   [NonSerializable]
-  public uint Timestamp => Unbind(@base).Timestamp;
+  public uint Timestamp =>
+    _timestamp > 0 ? _timestamp : Unbind(@base).Timestamp;
 
   /// <summary>
   /// The type of game action (e.g. ChooseOption, OrderTargets, PayMana, etc.).
@@ -87,6 +90,8 @@ public abstract class GameAction : DLRWrapper<IGameAction>
   //
   // GameAction factory methods
   //
+
+  public void SetTimestamp(uint timestamp) => this._timestamp = timestamp;
 
   public static readonly Func<dynamic, GameAction> GameActionFactory =
     new(FromGameAction);
