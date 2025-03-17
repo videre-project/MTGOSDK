@@ -157,7 +157,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
 
   public DictionaryProxy<GamePlayer, IList<GameZone>> PlayerZones =>
     new(Unbind(@base).m_playerZones,
-        keyMapper: Lambda<GamePlayer>(p => new GamePlayer(p)),
+        keyMapper: Lambda<GamePlayer>(p => new(p)),
         valueMapper: Lambda<IList<GameZone>>(z =>
             Map<IList, GameZone>(z.Values)));
 
@@ -316,10 +316,10 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       new((instance, args) =>
       {
         Game game = new(instance);
-        int id = args[0];
-        GameCard newCard = game.GetGameCard(id);
+        GameCard gamecard = game.GetGameCard(args[0]);
+        if (gamecard.SourceId == -1) return null; // Ignore invalid events.
 
-        return (game, newCard); // Return a tuple of (Game, GameCard)
+        return (game, gamecard); // Return a tuple of (Game, GameCard)
       })
     );
 
