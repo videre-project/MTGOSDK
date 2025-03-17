@@ -57,58 +57,36 @@ public class DiverCommunicator
   public DiverCommunicator(IPAddress ipa, int diverPort) : this(ipa.ToString(), diverPort) { }
   public DiverCommunicator(IPEndPoint ipe) : this(ipe.Address, ipe.Port) { }
 
-  private string SendRequest(
-    string path,
-    Dictionary<string, string> queryParams = null,
-    string jsonBody = null)
+private async Task<string> SendRequestAsync(
+  string path,
+  Dictionary<string, string> queryParams = null,
+  string jsonBody = null)
+{
+  queryParams ??= new();
+
+  NameValueCollection queryString = HttpUtility.ParseQueryString(string.Empty);
+  foreach (KeyValuePair<string, string> kvp in queryParams)
   {
-    queryParams ??= new();
+    queryString.Add(kvp.Key, kvp.Value);
+  }
 
-    NameValueCollection queryString = HttpUtility.ParseQueryString(string.Empty);
-    foreach (KeyValuePair<string, string> kvp in queryParams)
-    {
-      queryString.Add(kvp.Key, kvp.Value);
-    }
+  string url = $"http://{_hostname}:{DiverPort}/{path}?{queryString}";
+  HttpRequestMessage msg;
+  if (jsonBody == null)
+  {
+    msg = new HttpRequestMessage(HttpMethod.Get, url);
+  }
+  else
+  {
+    msg = new HttpRequestMessage(HttpMethod.Post, url);
+    msg.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+  }
 
-    string url = $"http://{_hostname}:{DiverPort}/{path}?{queryString}";
-    HttpRequestMessage msg;
-    if (jsonBody == null)
-    {
-      msg = new HttpRequestMessage(HttpMethod.Get, url);
-    }
-    else
-    {
-      msg = new HttpRequestMessage(HttpMethod.Post, url);
-      msg.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-    }
+  try
+  {
+    HttpResponseMessage res = await httpClient.SendAsync(msg);
+    string body = await res.Content.ReadAsStringAsync();
 
-    HttpResponseMessage res = null;
-    lock (_listenerLock)
-    {
-      try
-      {
-        res = httpClient.SendAsync(msg).Result;
-      }
-      catch (Exception ex)
-      {
-        if (ex is AggregateException e0 &&
-            e0.InnerException is HttpRequestException e1 &&
-            e1.InnerException is SocketException e2)
-        {
-          // Log.Critical("Failed to send request to diver: " + e2.Message);
-          ProcessCrashed?.Invoke(this, EventArgs.Empty);
-          ProcessCrashed = null; // Non-recoverable error; unsubscribe listeners
-          var processException = new ProcessCrashedException(
-            "Diver process has crashed", _process_id.Value, e2);
-          _process_id = null;
-
-          throw processException;
-        }
-        throw;
-      }
-    }
-
-    string body = res.Content.ReadAsStringAsync().Result;
     if (body.StartsWith("{\"error\":", StringComparison.InvariantCultureIgnoreCase))
     {
       // Diver sent back an error. We parse it here and throwing a 'proxied' exception
@@ -119,7 +97,30 @@ public class DiverCommunicator
 
     return body;
   }
+  catch (Exception ex)
+  {
+    if (ex is HttpRequestException e1 && e1.InnerException is SocketException e2)
+    {
+      ProcessCrashed?.Invoke(this, EventArgs.Empty);
+      ProcessCrashed = null; // Non-recoverable error; unsubscribe listeners
+      var processException = new ProcessCrashedException(
+        "Diver process has crashed", _process_id.Value, e2);
+      _process_id = null;
 
+      throw processException;
+    }
+    throw;
+  }
+}
+
+// Keep the synchronous version for backward compatibility
+private string SendRequest(
+  string path,
+  Dictionary<string, string> queryParams = null,
+  string jsonBody = null)
+{
+  return SendRequestAsync(path, queryParams, jsonBody).GetAwaiter().GetResult();
+}
   public bool KillDiver()
   {
     if (!IsConnected) return false;

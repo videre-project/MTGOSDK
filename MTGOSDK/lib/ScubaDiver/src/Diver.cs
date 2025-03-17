@@ -15,6 +15,7 @@ using System.Threading;
 
 using Newtonsoft.Json;
 
+using MTGOSDK.Core;
 using MTGOSDK.Core.Compiler.Snapshot;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
@@ -110,11 +111,11 @@ public partial class Diver : IDisposable
   }
 
   #region HTTP Dispatching
-  private void HandleDispatchedRequest(HttpListenerContext requestContext)
+  private async void HandleDispatchedRequestAsync(HttpListenerContext requestContext)
   {
     HttpListenerRequest request = requestContext.Request;
-
     var response = requestContext.Response;
+
     string body;
     if (_responseBodyCreators.TryGetValue(request.Url.AbsolutePath, out var respBodyGenerator))
     {
@@ -135,32 +136,47 @@ public partial class Diver : IDisposable
     }
 
     byte[] buffer = Encoding.UTF8.GetBytes(body);
-    // Get a response stream and write the response to it.
+
+    // Set response properties
     response.ContentLength64 = buffer.Length;
     response.ContentType = "application/json";
-    Stream output = response.OutputStream;
-      output.Write(buffer, 0, buffer.Length);
-    // You must close the output stream.
-    output.Close();
+
+    try
+    {
+      // Write asynchronously to avoid blocking
+      await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+    }
+    catch (Exception ex)
+    {
+      Log.Error("[Diver] Failed to write response", ex);
+    }
+    finally
+    {
+      // Always close the output stream
+      response.OutputStream.Close();
+    }
   }
 
   private void Dispatcher(HttpListener listener)
   {
     // Using a timeout we can make sure not to block if the
     // 'stayAlive' state changes to "reset" (which means we should die)
+    int pendingRequests = 0;
+
     while (_stayAlive.WaitOne(TimeSpan.FromMilliseconds(100)))
     {
-      void ListenerCallback(IAsyncResult result)
+      try
       {
-        // try
-        // {
-        //   HarmonyWrapper.Instance.UnregisterFrameworkThread(Thread.CurrentThread.ManagedThreadId);
+        // Begin accepting a new request - this is non-blocking
+        IAsyncResult asyncOperation = listener.BeginGetContext(result =>
+        {
+          Interlocked.Decrement(ref pendingRequests);
 
-          HttpListener listener = (HttpListener)result.AsyncState;
+          HttpListener listenerObj = (HttpListener)result.AsyncState;
           HttpListenerContext context;
           try
           {
-            context = listener.EndGetContext(result);
+            context = listenerObj.EndGetContext(result);
           }
           catch (ObjectDisposedException)
           {
@@ -177,49 +193,49 @@ public partial class Diver : IDisposable
             throw;
           }
 
-          try
+          SyncThread.Enqueue(() =>
           {
-            HandleDispatchedRequest(context);
-          }
-          catch (Exception e)
-          {
-            Log.Debug("[Diver] Task faulted! Exception: " + e.ToString());
-          }
-        // }
-        // finally
-        // {
-        //   HarmonyWrapper.Instance.UnregisterFrameworkThread(Thread.CurrentThread.ManagedThreadId);
-        // }
-      }
-      IAsyncResult asyncOperation = listener.BeginGetContext(ListenerCallback, listener);
+            try
+            {
+              // Fire and forget the async task - SyncThread will manage concurrency
+              HandleDispatchedRequestAsync(context);
+            }
+            catch (Exception e)
+            {
+              Log.Debug("[Diver] Request handling failed! Exception: " + e.ToString());
+            }
+          });
+        }, listener);
 
-      while (true)
-      {
-        if (asyncOperation.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(100)))
+        Interlocked.Increment(ref pendingRequests);
+
+        // Only sleep if we're accepting requests too quickly
+        // This prevents tight CPU looping while still being responsive
+        if (pendingRequests > Environment.ProcessorCount * 2)
         {
-          // Async operation started! We can move on to next request
+          Thread.Sleep(10);
+        }
+
+        // Check if we should terminate
+        if (!_stayAlive.WaitOne(0))
           break;
-        }
-        else
-        {
-          // Async event still awaiting new HTTP requests.
-          // It's a good time to check if we were signaled to die
-          if (!_stayAlive.WaitOne(TimeSpan.FromMilliseconds(100)))
-          {
-            // Time to die.
-            // Leaving the inner loop will get us to the outer loop where _stayAlive is checked (again)
-            // and then it that loop will stop as well.
-            break;
-          }
-          else
-          {
-            // No signal of die command. We can continue waiting
-            continue;
-          }
-        }
+      }
+      catch (Exception ex)
+      {
+        Log.Error("[Diver] Error in dispatcher loop", ex);
+        // Short pause before retry
+        Thread.Sleep(100);
       }
     }
 
+    // Wait for pending requests to complete with a timeout
+    int timeout = 5000; // 5 seconds max wait
+    int waited = 0;
+    while (pendingRequests > 0 && waited < timeout)
+    {
+      Thread.Sleep(100);
+      waited += 100;
+    }
     Log.Debug("[Diver] HTTP Loop ended. Cleaning up");
 
     Log.Debug("[Diver] Removing all event subscriptions and hooks");
