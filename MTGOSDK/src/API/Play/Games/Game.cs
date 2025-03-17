@@ -97,6 +97,15 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     Cast<GamePhase>(Unbind(@base).CurrentPhase);
 
   /// <summary>
+  /// Whether the game is in the pre-game phase.
+  /// </summary>
+  /// <remarks>
+  /// The pre-game phase is the period before the game starts, where players
+  /// can mulligan, choose starting hands, etc.
+  /// </remarks>
+  public bool IsPreGame => CurrentPhase >= GamePhase.PreGame1;
+
+  /// <summary>
   /// The player whose turn it is.
   /// </summary>
   public GamePlayer? ActivePlayer =>

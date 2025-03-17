@@ -20,5 +20,8 @@ public enum GamePhase
   EndOfCombat,
   PostCombatMain,
   EndOfTurn,
-  Cleanup
+  Cleanup,
+  // These are not in the original enum but are still values used in the client
+  PreGame1,
+  PreGame2,
 }
