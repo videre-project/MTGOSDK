@@ -5,6 +5,7 @@
 **/
 
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Dynamic;
 using System.Reflection;
@@ -16,6 +17,7 @@ using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Reflection;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace MTGOSDK.Core.Remoting.Types;
@@ -195,7 +197,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   public DynamicRemoteObject() { } // For avoiding overriding reference type
 
   /// <summary>
-  /// Gets the type of the proxied remote object, in the remote app. (This does not reutrn `typeof(DynamicRemoteMethod)`)
+  /// Gets the type of the proxied remote object, in the remote app.
   /// </summary>
   public new Type GetType() => __type;
 
@@ -204,8 +206,9 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     Type lastType = __type;
     Type nextType = __type;
 
-    // We use this dictionary to make sure overides from subclasses don't get exported twice (for the parent as well)
-    Dictionary<string, List<MethodBase>> _processedOverloads = new Dictionary<string, List<MethodBase>>();
+    // We use this dictionary to make sure overides from subclasses don't get
+    // exported twice (for the parent as well)
+    var _processedOverloads = new ConcurrentDictionary<string, List<MethodBase>>();
     do
     {
       var members = nextType.GetMembers((BindingFlags)0xffff);
@@ -213,16 +216,19 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       {
         if (member is MethodBase newMethods)
         {
-          if (!_processedOverloads.ContainsKey(member.Name))
+          if (!_processedOverloads.TryGetValue(member.Name, out _))
+          {
             _processedOverloads[member.Name] = new List<MethodBase>();
+          }
           List<MethodBase> oldMethods = _processedOverloads[member.Name];
 
           bool overridden = oldMethods.Any(oldMethod => oldMethod.SignatureEquals(newMethods));
           if (overridden)
+          {
             continue;
+          }
 
           _processedOverloads[member.Name].Add(newMethods);
-
         }
         yield return member;
       }
@@ -313,13 +319,10 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     switch (type)
     {
       case MemberTypes.Field:
-        // if (!singleMatch)
-        // {
-        //   throw new ArgumentException($"Multiple members were found for the name `{name}` and at least one of them was a field");
-        // }
         try
         {
-          result = ((FieldInfo)firstMember).GetValue(__ro);
+          result = Retry(() => ((FieldInfo)firstMember).GetValue(__ro),
+                         delay: 0, raise: true);
         }
         catch (Exception ex)
         {
@@ -327,13 +330,10 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         }
         break;
       case MemberTypes.Property:
-        // if (!singleMatch)
-        // {
-        //   throw new ArgumentException($"Multiple members were found for the name `{name}` and at least one of them was a property");
-        // }
         try
         {
-          result = ((PropertyInfo)firstMember).GetValue(__ro);
+          result = Retry(() => ((PropertyInfo)firstMember).GetValue(__ro),
+                         delay: 0, raise: true);
         }
         catch (Exception ex)
         {
@@ -425,7 +425,11 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         }
       }
     }
-    return drm.TryInvoke(args, out result);
+
+    object obj = null;
+    bool success = Retry(() => drm.TryInvoke(args, out obj), raise: true);
+    result = obj;
+    return success;
   }
 
   public bool HasMember(string name) =>
