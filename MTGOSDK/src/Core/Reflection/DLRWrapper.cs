@@ -8,6 +8,7 @@ using System.Diagnostics;
 
 using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Reflection.Serialization;
+using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -597,5 +598,41 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
 
       return baseObj;
     }
+  }
+
+  //
+  // Object methods for equality and reference checks.
+  //
+
+  public override int GetHashCode() => Unbind(@base).GetHashCode();
+
+  /// <summary>
+  /// Performs an equality check, i.e. <c>Object.Equals()</c>, on two dynamic
+  /// remote objects.
+  /// </summary>
+  /// <param name="obj1">The first object to compare.</param>
+  /// <param name="obj2">The second object to compare.</param>
+  /// <returns>True if the objects are equal; otherwise, false.</returns>
+  public static new bool Equals(dynamic obj1, dynamic obj2)
+  {
+    return Unbind(obj1).GetHashCode() == Unbind(obj2).GetHashCode();
+    // TypeProxy r1_type = new(Unbind(obj1).GetType());
+    // TypeProxy r_type = new(typeof(object));
+    // object[] r_params = new object[] { Unbind(obj1), Unbind(obj2) };
+    // return RemoteClient.InvokeMethod(r_type, "Equals", null, r_params);
+  }
+
+  /// <summary>
+  /// Performs a reference check, i.e. <c>Object.ReferenceEquals()</c>, on two
+  /// dynamic remote objects.
+  /// </summary>
+  /// <param name="obj1">The first object to compare.</param>
+  /// <param name="obj2">The second object to compare.</param>
+  /// <returns>True if the objects are the same instance; otherwise, false.</returns>
+  public static new bool ReferenceEquals(dynamic obj1, dynamic obj2)
+  {
+    TypeProxy r_type = new(typeof(object));
+    object[] r_params = new object[] { Unbind(obj1), Unbind(obj2) };
+    return RemoteClient.InvokeMethod(r_type, "ReferenceEquals", null, r_params);
   }
 }
