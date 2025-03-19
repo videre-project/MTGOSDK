@@ -138,7 +138,9 @@ public class CardAction(dynamic cardAction) : GameAction, IDisposable
 
     filter = new((action, targetSet) =>
     {
-      if (action.Card.Id != this.Card.Id ||
+      if (!Try<bool>(() =>
+            action.Card.Id == this.Card.Id ||
+            action.Card.SourceId == this.Card.SourceId) ||
           action.Name != this.Name ||
           action.Timestamp > this.Timestamp)
       {
