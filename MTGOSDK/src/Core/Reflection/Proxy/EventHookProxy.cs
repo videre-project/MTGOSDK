@@ -59,6 +59,15 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     });
   }
 
+  public void EnsureInitialize()
+  {
+    // If the method is not already hooked, hook it.
+    if (!RemoteClient.MethodHasHook(_typeName, _methodName, _hookAction))
+    {
+      RemoteClient.HookMethod(_typeName, _methodName, _hookAction);
+    }
+  }
+
   //
   // EventHandler wrapper methods.
   //
@@ -71,10 +80,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     e._eventHook += (Action<I,T>)c;
 
     // If the method is not already hooked, hook it.
-    if (!RemoteClient.MethodHasHook(e._typeName, e._methodName, e._hookAction))
-    {
-      RemoteClient.HookMethod(e._typeName, e._methodName, e._hookAction);
-    }
+    e.EnsureInitialize();
 
     return e;
   }

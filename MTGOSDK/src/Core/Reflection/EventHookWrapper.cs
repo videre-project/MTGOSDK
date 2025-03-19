@@ -17,6 +17,14 @@ public class EventHookWrapper<I>(EventHookProxy<dynamic, I> handler, Filter<I> h
   private readonly Filter<I> _hook = hook;
   private Action<dynamic, I> _instanceHook = null;
 
+  public void Clear()
+  {
+    _instanceHandler = null;
+    _handler -= _instanceHook;
+  }
+
+  ~EventHookWrapper() => Clear();
+
   public static EventHookWrapper<I> operator +(EventHookWrapper<I> e, Delegate c)
   {
     if (e._instanceHandler == null)
