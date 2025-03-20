@@ -5,6 +5,7 @@
 
 using System.Collections;
 using System.Diagnostics;
+using System.Reflection;
 
 using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Reflection.Serialization;
@@ -597,6 +598,37 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
       // }
 
       return baseObj;
+    }
+  }
+
+  //
+  // Proxy methods for event and method binding.
+  //
+
+  public void ClearEvents()
+  {
+    // Clear all event proxy fields in the current instance of the class.
+    IEnumerable<FieldInfo> fields = this.GetType()
+      .GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+      .Where(f => f.FieldType.IsSubclassOf(typeof(EventProxyBase<,>)));
+    foreach (FieldInfo field in fields)
+    {
+      EventProxyBase<I, dynamic> proxy = (EventProxyBase<I, dynamic>)field.GetValue(this);
+      proxy.Clear();
+    }
+
+    // Get all event fields in the current instance of the class.
+    fields = this.GetType()
+      .GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+      .Where(f => f.FieldType.IsSubclassOf(typeof(Delegate)));
+    foreach (FieldInfo field in fields)
+    {
+      Delegate? del = (Delegate?)field.GetValue(this);
+      if (del != null)
+      {
+        foreach (Delegate handler in del.GetInvocationList())
+          field.SetValue(this, (Delegate?)Delegate.Remove(del, handler));
+      }
     }
   }
 

@@ -7,11 +7,15 @@
 namespace MTGOSDK.Core.Reflection.Proxy;
 
 [NonSerializable]
-public abstract class EventProxyBase<I, T> : DLRWrapper<I>
+public abstract class EventProxyBase<I, T> : DLRWrapper<I>, IDisposable
     where I : class
     where T : class
 {
   public virtual string Name { get; }
+
+  public abstract void Clear();
+
+  public virtual void Dispose() => Clear();
 
   public Delegate ProxyTypedDelegate(Delegate c) =>
     new Action<dynamic, dynamic>((dynamic obj, dynamic args) =>

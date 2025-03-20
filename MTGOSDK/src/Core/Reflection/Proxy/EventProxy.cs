@@ -31,6 +31,17 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
   private void EventUnsubscribe(string eventName, Delegate callback) =>
     @ro.EventUnsubscribe(eventName, callback);
 
+  private readonly List<Delegate> _delegates = new();
+
+  public override void Clear()
+  {
+    foreach (var d in _delegates)
+    {
+      EventUnsubscribe(Name, d);
+    }
+    _delegates.Clear();
+  }
+
   //
   // EventHandler wrapper methods.
   //
@@ -39,13 +50,17 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
 
   public static EventProxy<I,T> operator +(EventProxy<I,T> e, Delegate c)
   {
-    e.EventSubscribe(e.Name, e.ProxyTypedDelegate(c));
+    var d = e.ProxyTypedDelegate(c);
+    e.EventSubscribe(e.Name, d);
+    e._delegates.Add(d);
     return e;
   }
 
   public static EventProxy<I,T> operator -(EventProxy<I,T> e, Delegate c)
   {
-    e.EventUnsubscribe(e.Name, e.ProxyTypedDelegate(c));
+    var d = e.ProxyTypedDelegate(c);
+    e._delegates.Remove(d);
+    e.EventUnsubscribe(e.Name, d);
     return e;
   }
 

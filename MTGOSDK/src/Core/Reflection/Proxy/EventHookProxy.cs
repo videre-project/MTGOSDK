@@ -68,6 +68,12 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     }
   }
 
+  public override void Clear()
+  {
+    _eventHook = null;
+    RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);
+  }
+
   //
   // EventHandler wrapper methods.
   //
