@@ -6,10 +6,11 @@
 
 using System.Net;
 using System.Net.Http;
+using System.Text;
 
 using Newtonsoft.Json;
 
-using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 namespace MTGOSDK.Core.Remoting.Interop;
@@ -20,13 +21,13 @@ namespace MTGOSDK.Core.Remoting.Interop;
 /// </summary>
 public class ReverseCommunicator
 {
-  private readonly JsonSerializerSettings _withErrors = new()
-  {
-    MissingMemberHandling = MissingMemberHandling.Error,
-  };
-
   private readonly string _hostname;
   private readonly int _port;
+
+  private static readonly HttpClient _client = new()
+  {
+    Timeout = TimeSpan.FromSeconds(5)
+  };
 
   public ReverseCommunicator(string hostname, int port)
   {
@@ -36,10 +37,13 @@ public class ReverseCommunicator
   public ReverseCommunicator(IPAddress ipa, int port) : this(ipa.ToString(), port) {}
   public ReverseCommunicator(IPEndPoint ipe) : this(ipe.Address, ipe.Port) {}
 
-  private string SendRequest(
+  public static void Dispose() => _client.Dispose();
+
+  private async Task<string?> SendRequestAsync(
     string path,
     Dictionary<string, string> queryParams = null,
-    string jsonBody = null)
+    string jsonBody = null,
+    bool ignoreResponse = false)
   {
     queryParams ??= new();
 
@@ -61,22 +65,38 @@ public class ReverseCommunicator
     {
       msg = new HttpRequestMessage(HttpMethod.Post, url)
       {
-        Content = new StringContent(jsonBody)
+        Content = new StringContent(jsonBody, Encoding.UTF8, "application/json")
       };
     }
 
-    HttpClient c = new();
-    HttpResponseMessage res = c.SendAsync(msg).Result;
-    string body = res.Content.ReadAsStringAsync().Result;
+    try
+    {
+      HttpResponseMessage res = await _client.SendAsync(msg);
 
-    return body;
+      if (!ignoreResponse)
+      {
+        // Read the response body only if not ignoring the response
+        return await res.Content.ReadAsStringAsync();
+      }
+    }
+    catch (Exception ex)
+    {
+      // Log the exception if needed
+      Log.Error($"Failed to send request: {ex.Message}");
+      if (!ignoreResponse)
+      {
+        throw; // Re-throw the exception if the response is required
+      }
+    }
+
+    return null;
   }
 
   public bool CheckIfAlive()
   {
     try
     {
-      var resJson = SendRequest("ping");
+      var resJson = SendRequestAsync("ping").GetAwaiter().GetResult();
       if (resJson == null)
         return false;
 
@@ -88,7 +108,7 @@ public class ReverseCommunicator
     }
   }
 
-  public InvocationResults InvokeCallback(
+  public void InvokeCallback(
     int token,
     DateTime timestamp,
     params ObjectOrRemoteAddress[] args)
@@ -101,17 +121,6 @@ public class ReverseCommunicator
     };
 
     var requestJsonBody = JsonConvert.SerializeObject(invocReq);
-    try
-    {
-      string resJson = SendRequest("invoke_callback", null, requestJsonBody);
-      if(resJson.Contains("\"error\":"))
-        return null;
-
-      return JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
-    }
-    catch
-    {
-      return null;
-    }
+    _ = SendRequestAsync("invoke_callback", null, requestJsonBody, true);
   }
 }

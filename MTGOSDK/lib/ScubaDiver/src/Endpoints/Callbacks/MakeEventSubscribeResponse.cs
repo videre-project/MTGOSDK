@@ -15,7 +15,6 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
-using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 
@@ -28,7 +27,7 @@ public partial class Diver : IDisposable
   public int AssignCallbackToken() =>
     Interlocked.Increment(ref _nextAvailableCallbackToken);
 
-  public ObjectOrRemoteAddress InvokeControllerCallback(
+  public void InvokeControllerCallback(
     IPEndPoint callbacksEndpoint,
     int token,
     DateTime timestamp,
@@ -39,7 +38,7 @@ public partial class Diver : IDisposable
     if (!_remoteEventHandler.ContainsKey(token) &&
         !_remoteHooks.ContainsKey(token))
     {
-      return null;
+      return;
     }
 
     // Check if the client connection is still alive
@@ -48,7 +47,7 @@ public partial class Diver : IDisposable
     {
       _remoteEventHandler.TryRemove(token, out _);
       _remoteHooks.TryRemove(token, out _);
-      return null;
+      return;
     }
 
     var remoteParams = new ObjectOrRemoteAddress[parameters.Length];
@@ -73,17 +72,9 @@ public partial class Diver : IDisposable
     // Call callback at controller
     try
     {
-      InvocationResults callbackResults = reverseCommunicator.InvokeCallback(
-        token,
-        timestamp,
-        remoteParams
-      );
-
-      return callbackResults.ReturnedObjectOrAddress;
+      reverseCommunicator.InvokeCallback(token, timestamp, remoteParams);
     }
     catch (NullReferenceException) { }
-
-    return null;
   }
 
   private string MakeEventSubscribeResponse(HttpListenerRequest arg)

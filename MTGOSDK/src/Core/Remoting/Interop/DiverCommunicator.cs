@@ -40,7 +40,6 @@ public class DiverCommunicator
 
   private int? _process_id = null;
   private readonly CallbacksListener _listener;
-  private static readonly object _listenerLock = new();
   private readonly HttpClient httpClient = new();
 
   /// <summary>
@@ -57,70 +56,70 @@ public class DiverCommunicator
   public DiverCommunicator(IPAddress ipa, int diverPort) : this(ipa.ToString(), diverPort) { }
   public DiverCommunicator(IPEndPoint ipe) : this(ipe.Address, ipe.Port) { }
 
-private async Task<string> SendRequestAsync(
-  string path,
-  Dictionary<string, string> queryParams = null,
-  string jsonBody = null)
-{
-  queryParams ??= new();
-
-  NameValueCollection queryString = HttpUtility.ParseQueryString(string.Empty);
-  foreach (KeyValuePair<string, string> kvp in queryParams)
+  private async Task<string> SendRequestAsync(
+    string path,
+    Dictionary<string, string> queryParams = null,
+    string jsonBody = null)
   {
-    queryString.Add(kvp.Key, kvp.Value);
-  }
+    queryParams ??= new();
 
-  string url = $"http://{_hostname}:{DiverPort}/{path}?{queryString}";
-  HttpRequestMessage msg;
-  if (jsonBody == null)
-  {
-    msg = new HttpRequestMessage(HttpMethod.Get, url);
-  }
-  else
-  {
-    msg = new HttpRequestMessage(HttpMethod.Post, url);
-    msg.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-  }
-
-  try
-  {
-    HttpResponseMessage res = await httpClient.SendAsync(msg);
-    string body = await res.Content.ReadAsStringAsync();
-
-    if (body.StartsWith("{\"error\":", StringComparison.InvariantCultureIgnoreCase))
+    NameValueCollection queryString = HttpUtility.ParseQueryString(string.Empty);
+    foreach (KeyValuePair<string, string> kvp in queryParams)
     {
-      // Diver sent back an error. We parse it here and throwing a 'proxied' exception
-      var errMessage = JsonConvert.DeserializeObject<DiverError>(body, _withErrors);
-      if (errMessage != null)
-        throw new RemoteException(errMessage.Error, errMessage.StackTrace);
+      queryString.Add(kvp.Key, kvp.Value);
     }
 
-    return body;
-  }
-  catch (Exception ex)
-  {
-    if (ex is HttpRequestException e1 && e1.InnerException is SocketException e2)
+    string url = $"http://{_hostname}:{DiverPort}/{path}?{queryString}";
+    HttpRequestMessage msg;
+    if (jsonBody == null)
     {
-      ProcessCrashed?.Invoke(this, EventArgs.Empty);
-      ProcessCrashed = null; // Non-recoverable error; unsubscribe listeners
-      var processException = new ProcessCrashedException(
-        "Diver process has crashed", _process_id.Value, e2);
-      _process_id = null;
-
-      throw processException;
+      msg = new HttpRequestMessage(HttpMethod.Get, url);
     }
-    throw;
-  }
-}
+    else
+    {
+      msg = new HttpRequestMessage(HttpMethod.Post, url);
+      msg.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+    }
 
-// Keep the synchronous version for backward compatibility
-private string SendRequest(
-  string path,
-  Dictionary<string, string> queryParams = null,
-  string jsonBody = null)
-{
-  return SendRequestAsync(path, queryParams, jsonBody).GetAwaiter().GetResult();
-}
+    try
+    {
+      HttpResponseMessage res = await httpClient.SendAsync(msg);
+      string body = await res.Content.ReadAsStringAsync();
+
+      if (body.StartsWith("{\"error\":", StringComparison.InvariantCultureIgnoreCase))
+      {
+        // Diver sent back an error. We parse it here and throwing a 'proxied' exception
+        var errMessage = JsonConvert.DeserializeObject<DiverError>(body, _withErrors);
+        if (errMessage != null)
+          throw new RemoteException(errMessage.Error, errMessage.StackTrace);
+      }
+
+      return body;
+    }
+    catch (Exception ex)
+    {
+      if (ex is HttpRequestException e1 && e1.InnerException is SocketException e2)
+      {
+        ProcessCrashed?.Invoke(this, EventArgs.Empty);
+        ProcessCrashed = null; // Non-recoverable error; unsubscribe listeners
+        var processException = new ProcessCrashedException(
+          "Diver process has crashed", _process_id.Value, e2);
+        _process_id = null;
+
+        throw processException;
+      }
+      throw;
+    }
+  }
+
+  private string SendRequest(
+    string path,
+    Dictionary<string, string> queryParams = null,
+    string jsonBody = null)
+  {
+    return SendRequestAsync(path, queryParams, jsonBody).GetAwaiter().GetResult();
+  }
+
   public bool KillDiver()
   {
     if (!IsConnected) return false;
@@ -483,5 +482,5 @@ private string SendRequest(
       _listener.Close();
   }
 
-  public delegate (bool voidReturnType, ObjectOrRemoteAddress res) LocalEventCallback(ObjectOrRemoteAddress[] args);
+  public delegate void LocalEventCallback(ObjectOrRemoteAddress[] args);
 }

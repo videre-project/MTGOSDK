@@ -18,6 +18,7 @@ using Newtonsoft.Json;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Compiler.Snapshot;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
@@ -257,5 +258,6 @@ public partial class Diver : IDisposable
   public void Dispose()
   {
     _runtime?.Dispose();
+    ReverseCommunicator.Dispose(); // Cleanup the shared HttpClient instance.
   }
 }

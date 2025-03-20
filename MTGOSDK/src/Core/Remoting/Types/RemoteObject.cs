@@ -80,7 +80,7 @@ public class RemoteObject
     // TODO: Add a check for amount of parameters and types (need to be dynamics)
     // See implementation inside DynamicEventProxy
 
-    (bool voidReturnType, ObjectOrRemoteAddress res) callbackProxy(ObjectOrRemoteAddress[] args)
+    void callbackProxy(ObjectOrRemoteAddress[] args)
     {
       DynamicRemoteObject[] droParameters = new DynamicRemoteObject[args.Length];
       for (int i = 0; i < args.Length; i++)
@@ -94,9 +94,6 @@ public class RemoteObject
 
       // Call the callback with the proxied parameters (using DynamicRemoteObjects)
       callback.DynamicInvoke(droParameters);
-
-      // TODO: Return the result of the callback
-      return (true, null);
     }
 
     _eventCallbacksAndProxies[callback] = callbackProxy;
@@ -116,6 +113,6 @@ public class RemoteObject
 
   internal ObjectOrRemoteAddress GetItem(ObjectOrRemoteAddress key)
   {
-    return  _ref.GetItem(key);
+    return _ref.GetItem(key);
   }
 }

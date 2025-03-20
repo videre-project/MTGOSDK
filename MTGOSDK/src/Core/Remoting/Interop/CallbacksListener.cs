@@ -7,6 +7,7 @@
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 using Newtonsoft.Json;
 
@@ -98,6 +99,8 @@ public class CallbacksListener
     }
   }
 
+  private readonly SemaphoreSlim _semaphore = new(2 * Environment.ProcessorCount);
+
   private async Task Dispatcher(HttpListener listener)
   {
     while (_src != null && !_src.IsCancellationRequested)
@@ -105,7 +108,8 @@ public class CallbacksListener
       try
       {
         HttpListenerContext context = await listener.GetContextAsync();
-        HandleDispatchedRequest(context);
+        await _semaphore.WaitAsync();
+        _ = HandleDispatchedRequestAsync(context).ContinueWith(_ => _semaphore.Release());
       }
       catch (HttpListenerException e)
       {
@@ -126,24 +130,23 @@ public class CallbacksListener
     }
   }
 
-  private void HandleDispatchedRequest(HttpListenerContext context)
+  private async Task HandleDispatchedRequestAsync(HttpListenerContext context)
   {
     HttpListenerRequest request = context.Request;
+    HttpListenerResponse response = context.Response;
 
-    var response = context.Response;
     string body = null;
 
     if (request.Url.AbsolutePath == "/ping")
     {
       string pongRes = "{\"status\":\"pong\"}";
-      byte[] pongResBytes = System.Text.Encoding.UTF8.GetBytes(pongRes);
-      // Get a response stream and write the response to it.
+      byte[] pongResBytes = Encoding.UTF8.GetBytes(pongRes);
+
       response.ContentLength64 = pongResBytes.Length;
       response.ContentType = "application/json";
-      Stream outputStream = response.OutputStream;
-      outputStream.Write(pongResBytes, 0, pongResBytes.Length);
-      // You must close the output stream.
-      outputStream.Close();
+      await response.OutputStream.WriteAsync(pongResBytes);
+      response.Close();
+
       return;
     }
 
@@ -151,24 +154,11 @@ public class CallbacksListener
     {
       using (StreamReader sr = new(request.InputStream))
       {
-        body = sr.ReadToEnd();
+        body = await sr.ReadToEndAsync();
       }
       var res = JsonConvert.DeserializeObject<CallbackInvocationRequest>(body, _withErrors);
-
-      // Send a response back to the Diver immediately
-      body = JsonConvert.SerializeObject(new InvocationResults()
-      {
-        VoidReturnType = true,
-        ReturnedObjectOrAddress = null
-      });
-      byte[] buffer = System.Text.Encoding.UTF8.GetBytes(body);
-
-      // Get a response stream and write the response to it.
-      response.ContentLength64 = buffer.Length;
-      response.ContentType = "application/json";
-      Stream output = response.OutputStream;
-      output.Write(buffer, 0, buffer.Length);
-      output.Close();
+      context.Response.StatusCode = (int)HttpStatusCode.OK;
+      context.Response.Close();
 
       //
       // Set the timestamp for the sender to the callback timestamp as we've
@@ -177,7 +167,6 @@ public class CallbacksListener
       //
       res.Parameters[0].Timestamp = res.Timestamp;
 
-      string groupId = $"Callback:{res.Token}";
       if (_tokensToEventHandlers.TryGetValue(res.Token, out LocalEventCallback callback))
       {
         //
@@ -189,17 +178,13 @@ public class CallbacksListener
           res.Parameters[1].Timestamp = res.Timestamp;
         }
 
-        SyncThread.Enqueue(
-          () => callback(res.Parameters.ToArray()),
-          groupId);
+        callback([.. res.Parameters]);
       }
       else if (_tokensToHookCallbacks.TryGetValue(res.Token, out LocalHookCallback hook))
       {
-        SyncThread.Enqueue(
-          () => hook(new HookContext(res.Timestamp),
-              res.Parameters.FirstOrDefault(),
-              res.Parameters.Skip(1).ToArray()),
-          groupId);
+        hook(new HookContext(res.Timestamp),
+             res.Parameters.FirstOrDefault(),
+             [.. res.Parameters.Skip(1)]);
       }
       return;
     }
