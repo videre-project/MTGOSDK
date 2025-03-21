@@ -209,7 +209,9 @@ public static class UserManager
   /// <param name="name">The display name of the user.</param>
   /// <returns>The Login ID of the user.</returns>
   public static int? GetUserId(string name) =>
-    s_userManager.GetUserId(name);
+    // Use a fallback to the user cache if the method fails.
+    Try(() => s_userManager.GetUserId(name),
+        () => s_userManager.GetUser(name, false)?.Id);
 
   //
   // IBuddyUsersList wrapper methods
