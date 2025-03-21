@@ -24,7 +24,10 @@ public class ReverseCommunicator
   private readonly string _hostname;
   private readonly int _port;
 
-  private static readonly HttpClient _client = new()
+  private static readonly SemaphoreSlim s_semaphore =
+    new(2 * Environment.ProcessorCount);
+
+  private static readonly HttpClient s_client = new()
   {
     Timeout = TimeSpan.FromSeconds(5)
   };
@@ -37,7 +40,7 @@ public class ReverseCommunicator
   public ReverseCommunicator(IPAddress ipa, int port) : this(ipa.ToString(), port) {}
   public ReverseCommunicator(IPEndPoint ipe) : this(ipe.Address, ipe.Port) {}
 
-  public static void Dispose() => _client.Dispose();
+  public static void Dispose() => s_client.Dispose();
 
   private async Task<string?> SendRequestAsync(
     string path,
@@ -71,7 +74,8 @@ public class ReverseCommunicator
 
     try
     {
-      HttpResponseMessage res = await _client.SendAsync(msg);
+      await s_semaphore.WaitAsync();
+      HttpResponseMessage res = await s_client.SendAsync(msg);
 
       if (!ignoreResponse)
       {
@@ -87,6 +91,10 @@ public class ReverseCommunicator
       {
         throw; // Re-throw the exception if the response is required
       }
+    }
+    finally
+    {
+      s_semaphore.Release();
     }
 
     return null;
