@@ -27,14 +27,12 @@ public partial class Diver : IDisposable
   public int AssignCallbackToken() =>
     Interlocked.Increment(ref _nextAvailableCallbackToken);
 
-  public void InvokeControllerCallback(
+  public async void InvokeControllerCallback(
     IPEndPoint callbacksEndpoint,
     int token,
     DateTime timestamp,
     params object[] parameters)
   {
-    ReverseCommunicator reverseCommunicator = new(callbacksEndpoint);
-
     if (!_remoteEventHandler.ContainsKey(token) &&
         !_remoteHooks.ContainsKey(token))
     {
@@ -42,7 +40,8 @@ public partial class Diver : IDisposable
     }
 
     // Check if the client connection is still alive
-    bool alive = reverseCommunicator.CheckIfAlive();
+    ReverseCommunicator reverseCommunicator = new(callbacksEndpoint);
+    bool alive = await reverseCommunicator.CheckIfAlive();
     if (!alive)
     {
       _remoteEventHandler.TryRemove(token, out _);

@@ -10,5 +10,4 @@ namespace MTGOSDK.Core.Remoting.Hooking;
 public class HookContext(DateTime timestamp)
 {
   public DateTime Timestamp => timestamp;
-  public bool CallOriginal => true;
 }

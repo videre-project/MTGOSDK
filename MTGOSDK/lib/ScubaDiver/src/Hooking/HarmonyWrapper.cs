@@ -226,7 +226,7 @@ public class HarmonyWrapper
     if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
     {
       Action callback = () => funcHook(__instance, args);
-      SyncThread.Enqueue(callback);
+      SyncThread.Enqueue(callback, uniqueId);
     }
   }
 

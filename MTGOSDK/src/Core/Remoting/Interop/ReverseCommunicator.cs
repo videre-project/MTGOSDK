@@ -92,11 +92,11 @@ public class ReverseCommunicator
     return null;
   }
 
-  public bool CheckIfAlive()
+  public async Task<bool> CheckIfAlive()
   {
     try
     {
-      var resJson = SendRequestAsync("ping").GetAwaiter().GetResult();
+      var resJson = await SendRequestAsync("ping");
       if (resJson == null)
         return false;
 
