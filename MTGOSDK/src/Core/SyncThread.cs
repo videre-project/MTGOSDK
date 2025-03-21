@@ -31,6 +31,9 @@ public static class SyncThread
   private static readonly TaskFactory s_taskFactory = new(s_taskScheduler);
   private static readonly ConcurrentDictionary<string, Task> s_groupTasks = new();
 
+  private static DateTime _lastCleanup = DateTime.UtcNow;
+  private static readonly TimeSpan CleanupInterval = TimeSpan.FromSeconds(30);
+
   private static Action WrapCallback(Action callback) => () =>
   {
     if (s_cancellationToken.IsCancellationRequested) return;
@@ -74,7 +77,9 @@ public static class SyncThread
       newTask = existingTask.ContinueWith(
         _ => WrapCallback(callback)(),
         s_cancellationToken,
-        TaskContinuationOptions.None,
+        // Attempt to run the continuation on the same thread if the antecedant
+        // task is already completed to avoid unnecessary context switching.
+        TaskContinuationOptions.ExecuteSynchronously,
         s_taskScheduler);
     }
     else
@@ -87,15 +92,21 @@ public static class SyncThread
     s_groupTasks[groupId] = newTask;
 
     // Occasionally clean up completed tasks
-    if (s_groupTasks.Count > 1000)
+    if (s_groupTasks.Count > 10 || DateTime.UtcNow - _lastCleanup > CleanupInterval)
     {
-      foreach (var key in s_groupTasks.Keys)
+      CleanUpCompletedTasks();
+      _lastCleanup = DateTime.UtcNow;
+    }
+  }
+
+  private static void CleanUpCompletedTasks()
+  {
+    foreach (var key in s_groupTasks.Keys)
+    {
+      if (s_groupTasks.TryGetValue(key, out var task) &&
+          (task.IsCompleted || task.IsCanceled || task.IsFaulted))
       {
-        if (s_groupTasks.TryGetValue(key, out var task) &&
-            (task.IsCompleted || task.IsCanceled || task.IsFaulted))
-        {
-          s_groupTasks.TryRemove(key, out _);
-        }
+        s_groupTasks.TryRemove(key, out _);
       }
     }
   }
