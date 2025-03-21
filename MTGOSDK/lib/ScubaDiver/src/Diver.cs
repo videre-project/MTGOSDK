@@ -194,18 +194,14 @@ public partial class Diver : IDisposable
             throw;
           }
 
-          SyncThread.Enqueue(() =>
+          try
           {
-            try
-            {
-              // Fire and forget the async task - SyncThread will manage concurrency
-              HandleDispatchedRequestAsync(context);
-            }
-            catch (Exception e)
-            {
-              Log.Debug("[Diver] Request handling failed! Exception: " + e.ToString());
-            }
-          });
+            HandleDispatchedRequestAsync(context);
+          }
+          catch (Exception e)
+          {
+            Log.Debug("[Diver] Request handling failed! Exception: " + e.ToString());
+          }
         }, listener);
 
         Interlocked.Increment(ref pendingRequests);
