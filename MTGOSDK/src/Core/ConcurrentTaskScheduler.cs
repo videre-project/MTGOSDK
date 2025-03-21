@@ -4,6 +4,7 @@
 **/
 
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -20,103 +21,96 @@ public class ConcurrentTaskScheduler(
     int maxDegreeOfParallelism,
     CancellationToken cancellationToken) : TaskScheduler
 {
-  private readonly List<object> _jobs = new();
-  private readonly LinkedList<Task> _tasks = new();
+  private readonly ConcurrentBag<object> _jobs = new();
+  private readonly ConcurrentQueue<Task> _tasks = new();
+  private readonly ConcurrentDictionary<Task, bool> _dequeuedTasks = new();
   private readonly SemaphoreSlim _semaphore = new(maxDegreeOfParallelism);
 
   private readonly bool _reserveThreads = minDegreeOfParallelism > 0;
 
   protected override IEnumerable<Task> GetScheduledTasks()
   {
-    lock (_tasks)
-    {
-      return _tasks.ToArray();
-    }
+    return _tasks.ToArray();
   }
 
   protected override void QueueTask(Task task)
   {
-    lock (_tasks)
-    {
-      _tasks.AddLast(task);
-      NotifyThreadPoolOfPendingWork();
-    }
+    _tasks.Enqueue(task);
+    NotifyThreadPoolOfPendingWork();
   }
 
   private async void ExecuteTaskQueue(object? state)
   {
     try
     {
+      // If the cancellation token is already canceled, return immediately.
+      if (cancellationToken.IsCancellationRequested) return;
+
       await _semaphore.WaitAsync(cancellationToken);
-      lock (_jobs)
-      {
-        _jobs.Add(state);
-      }
+      _jobs.Add(state);
 
       while (!cancellationToken.IsCancellationRequested)
       {
         // Wait up to 2 seconds for a task to be queued.
-        if (_reserveThreads && !await WaitUntil(() => _tasks.Any(), delay: 100))
+        if (_reserveThreads && !await WaitUntil(
+          () => !_tasks.IsEmpty || cancellationToken.IsCancellationRequested,
+          delay: 100))
         {
-          lock (_jobs)
-          {
-            if (_jobs.Count > minDegreeOfParallelism) break;
-          }
+          if (_jobs.Count > minDegreeOfParallelism) break;
         }
         else
         {
-          Task item;
-          lock (_tasks)
+          if (_tasks.TryDequeue(out Task? item))
           {
-            if (_tasks.Count == 0)
+            // Check if the task was logically dequeued
+            if (!_dequeuedTasks.ContainsKey(item))
             {
-              if (_reserveThreads) continue;
-              break;
+              try
+              {
+                base.TryExecuteTask(item);
+              }
+              finally
+              {
+                // Remove the task from the dictionary after execution
+                _dequeuedTasks.TryRemove(item, out _);
+              }
             }
-
-            item = _tasks.First.Value;
-            _tasks.RemoveFirst();
+            // Task was already dequeued, so skip it
+            else
+            {
+              continue;
+            }
           }
-          base.TryExecuteTask(item);
+          else
+          {
+            if (_reserveThreads) continue;
+            break;
+          }
         }
       }
     }
     finally
     {
-      lock (_jobs)
-      {
-        _jobs.Remove(state);
-      }
+      _jobs.TryTake(out _);
       _semaphore.Release();
     }
   }
 
   private void NotifyThreadPoolOfPendingWork()
   {
-    lock (_jobs)
+    if (_jobs.Count < maxDegreeOfParallelism || !_tasks.IsEmpty)
     {
-      // If we have reached the maximum degree of parallelism allowed, do not
-      // queue any more jobs and instead wait for the current jobs to complete.
-      if (_jobs.Count == maxDegreeOfParallelism) return;
-
-      lock (_tasks)
-      {
-        // If there are no more tasks to execute, do not queue any more jobs.
-        if (_jobs.Count >= _tasks.Count) return;
-      }
+      ThreadPool.UnsafeQueueUserWorkItem(ExecuteTaskQueue, null);
     }
-
-    // Skip propagating the CAS restrictions of the current thread to quickly
-    // dispatch the work item to another thread in the thread pool.
-    ThreadPool.UnsafeQueueUserWorkItem(ExecuteTaskQueue, null);
   }
 
   protected override bool TryExecuteTaskInline(Task task, bool previouslyQueued)
   {
     if (previouslyQueued)
     {
-      if (TryDequeue(task))
+      if (!_dequeuedTasks.ContainsKey(task))
       {
+        _dequeuedTasks.TryAdd(task, true);
         return base.TryExecuteTask(task);
       }
       else
@@ -132,9 +126,7 @@ public class ConcurrentTaskScheduler(
 
   protected override bool TryDequeue(Task task)
   {
-    lock (_tasks)
-    {
-      return _tasks.Remove(task);
-    }
+    // Logically dequeue the task by adding it to the dictionary
+    return _dequeuedTasks.TryAdd(task, true);
   }
 }
