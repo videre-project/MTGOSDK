@@ -46,39 +46,31 @@ public class ReverseCommunicator
 
   private async Task<string?> SendRequestAsync(
     string path,
-    Dictionary<string, string> queryParams = null,
     string jsonBody = null,
     bool ignoreResponse = false)
   {
-    queryParams ??= new();
-
-    string query = "";
-    bool firstParam = true;
-    foreach (KeyValuePair<string, string> kvp in queryParams)
-    {
-      query += $"{(firstParam ? "?" : "&")}{kvp.Key}={kvp.Value}";
-      firstParam = false;
-    }
-
-    string url = $"http://{_hostname}:{_port}/{path}" + query;
-    HttpRequestMessage msg;
-    if (jsonBody == null)
-    {
-      msg = new HttpRequestMessage(HttpMethod.Get, url);
-    }
-    else
-    {
-      msg = new HttpRequestMessage(HttpMethod.Post, url)
-      {
-        Content = new StringContent(jsonBody, Encoding.UTF8, "application/json")
-      };
-    }
-
+    string url = $"http://{_hostname}:{_port}/{path}";
     try
     {
       await s_semaphore.WaitAsync();
       HttpResponseMessage res = await RetryAsync(
-        async () => await s_client.SendAsync(msg),
+        async () =>
+        {
+          // Create a new HttpRequestMessage for each attempt
+          using var msg = new HttpRequestMessage(
+            jsonBody == null ? HttpMethod.Get : HttpMethod.Post,
+            url);
+
+          if (jsonBody != null)
+          {
+            msg.Content = new StringContent(
+              jsonBody,
+              Encoding.UTF8,
+              "application/json");
+          }
+
+          return await s_client.SendAsync(msg);
+        },
         delay: 10,
         raise: true);
 
@@ -91,12 +83,14 @@ public class ReverseCommunicator
     catch (TaskCanceledException ex)
     {
       Log.Error($"Request timed out: {ex.Message}");
+      Log.Debug(ex.StackTrace);
       if (!ignoreResponse) throw;
     }
     catch (Exception ex)
     {
       // Log the exception if needed
       Log.Error($"Failed to send request: {ex.Message}");
+      Log.Debug(ex.StackTrace);
       if (!ignoreResponse) throw;
     }
     finally
@@ -136,6 +130,6 @@ public class ReverseCommunicator
     };
 
     var requestJsonBody = JsonConvert.SerializeObject(invocReq);
-    await SendRequestAsync("invoke_callback", null, requestJsonBody, true);
+    _ = await SendRequestAsync("invoke_callback", requestJsonBody, true);
   }
 }

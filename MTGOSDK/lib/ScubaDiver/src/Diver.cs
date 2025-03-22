@@ -72,6 +72,8 @@ public partial class Diver : IDisposable
     };
     _remoteEventHandler = new ConcurrentDictionary<int, RegisteredEventHandlerInfo>();
     _remoteHooks = new ConcurrentDictionary<int, RegisteredMethodHookInfo>();
+    _portStatusRefreshTimer = new Timer(RefreshPortStatus, null,
+        PORT_CACHE_DURATION_MS, PORT_CACHE_DURATION_MS);
   }
 
   public void Start(ushort listenPort)
@@ -254,6 +256,7 @@ public partial class Diver : IDisposable
   public void Dispose()
   {
     _runtime?.Dispose();
+    _portStatusRefreshTimer?.Dispose();
     ReverseCommunicator.Dispose(); // Cleanup the shared HttpClient instance.
   }
 }

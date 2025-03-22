@@ -4,6 +4,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
+
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 
@@ -12,8 +14,40 @@ namespace MTGOSDK.Core.Remoting.Types;
 
 public class RemoteObject
 {
+  private static readonly ConcurrentQueue<WeakReference<RemoteObject>> s_cleanupQueue = new();
+  private static readonly Timer s_cleanupTimer;
+
+  static RemoteObject()
+  {
+    // Run cleanup every 30 seconds
+    s_cleanupTimer = new(CleanupCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+  }
+
+  private static void CleanupCallback(object? state)
+  {
+    while (s_cleanupQueue.TryDequeue(out var weakRef))
+    {
+      if (weakRef.TryGetTarget(out var obj))
+      {
+        // Object still alive, requeue for later
+        s_cleanupQueue.Enqueue(weakRef);
+      }
+      else
+      {
+        // Object ready for cleanup
+        obj?._ref?.RemoteRelease();
+      }
+    }
+  }
+
+  ~RemoteObject()
+  {
+    // Add to cleanup queue instead of immediate release
+    s_cleanupQueue.Enqueue(new WeakReference<RemoteObject>(this));
+  }
+
   private readonly RemoteHandle _app;
-  private RemoteObjectRef _ref;
+  private readonly RemoteObjectRef _ref;
   private Type _type = null;
 
   private readonly Dictionary<Delegate, DiverCommunicator.LocalEventCallback> _eventCallbacksAndProxies = new();
@@ -57,12 +91,6 @@ public class RemoteObject
   }
 
   public dynamic Dynamify() => new DynamicRemoteObject(_app, this);
-
-  ~RemoteObject()
-  {
-    _ref?.RemoteRelease();
-    _ref = null;
-  }
 
   public override string ToString()
   {

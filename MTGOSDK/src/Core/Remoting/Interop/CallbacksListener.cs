@@ -13,7 +13,6 @@ using Newtonsoft.Json;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Hooking;
-using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using static MTGOSDK.Core.Remoting.Interop.DiverCommunicator;
 

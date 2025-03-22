@@ -4,7 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MTGOSDK.Core.Exceptions;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -133,34 +133,63 @@ internal class RemoteObjectRef(
     creatingCommunicator.EventUnsubscribe(callbackProxy);
   }
 
+  public override string ToString() =>
+    string.Format(
+      "RemoteObjectRef. Address: {0}, TypeFullName: {1}",
+      remoteObjectInfo.PinnedAddress,
+      typeInfo.Type);
+
+  internal ObjectOrRemoteAddress GetItem(ObjectOrRemoteAddress key)
+  {
+    return creatingCommunicator.GetItem(Token, key);
+  }
+
+  private static readonly Random _random = new Random();
+  private static readonly TimeSpan _minDelay = TimeSpan.FromSeconds(1);
+  private static readonly TimeSpan _maxDelay = TimeSpan.FromSeconds(30);
+
   /// <summary>
   /// Releases hold of the remote object in the remote process and the local proxy.
   /// </summary>
   public void RemoteRelease()
   {
-    if (creatingCommunicator.IsConnected)
+    // Check if already released to avoid redundant calls
+    if (_isReleased) return;
+
+    // Guard against disconnected communicator
+    if (creatingCommunicator is null || !creatingCommunicator.IsConnected)
     {
-      try
-      {
-        creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
-      }
-      catch
-      {
-        // If the remote object is already released, we can ignore the exception
-        if (!creatingCommunicator.IsConnected) return;
-        throw;
-      }
+      _isReleased = true;
+      return;
     }
-    _isReleased = true;
-  }
 
-  public override string ToString()
-  {
-    return $"RemoteObjectRef. Address: {remoteObjectInfo.PinnedAddress}, TypeFullName: {typeInfo.Type}";
-  }
+    try
+    {
+      // Calculate exponential backoff with jitter
+      var baseDelay = Math.Min(
+        _maxDelay.TotalMilliseconds,
+        _minDelay.TotalMilliseconds * (1 + _random.NextDouble())
+      );
 
-  internal ObjectOrRemoteAddress GetItem(ObjectOrRemoteAddress key)
-  {
-    return creatingCommunicator.GetItem(Token, key);
+      // Add jitter between 80-120% of base delay
+      var jitteredDelay = (int)(baseDelay * (0.8 + (_random.NextDouble() * 0.4)));
+
+      // Use Task.Delay instead of Thread.Sleep to avoid blocking
+      Task.Delay(jitteredDelay).Wait();
+
+      creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
+    }
+    catch (NullReferenceException)
+    {
+      // Ignore null reference exceptions
+    }
+    catch (Exception ex)
+    {
+      Log.Error(ex, "Failed to release remote object");
+    }
+    finally
+    {
+      _isReleased = true;
+    }
   }
 }

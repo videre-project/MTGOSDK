@@ -6,9 +6,12 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
@@ -17,8 +20,6 @@ using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
-using System.Threading.Tasks;
-
 
 namespace ScubaDiver;
 
@@ -30,6 +31,41 @@ public partial class Diver : IDisposable
     Interlocked.Increment(ref _nextAvailableCallbackToken);
 
   private readonly ConcurrentDictionary<IPEndPoint, ReverseCommunicator> _reverseCommunicators = new();
+
+  private readonly ConcurrentDictionary<int, bool> _portStatusCache = new();
+  private readonly Timer _portStatusRefreshTimer;
+  private const int PORT_CACHE_DURATION_MS = 1000; // Refresh every second
+
+  private void RefreshPortStatus(object state)
+  {
+    var ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
+    var activePorts = ipGlobalProperties.GetActiveTcpListeners()
+        .Select(x => x.Port)
+        .ToHashSet();
+
+    // Update cache
+    foreach (var port in _portStatusCache.Keys.ToList())
+    {
+      _portStatusCache[port] = activePorts.Contains(port);
+    }
+  }
+
+  private bool IsPortOpen(int port)
+  {
+    return _portStatusCache.GetOrAdd(port, p =>
+    {
+      try
+      {
+        var ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
+        var tcpListeners = ipGlobalProperties.GetActiveTcpListeners();
+        return tcpListeners.Any(endpoint => endpoint.Port == p);
+      }
+      catch
+      {
+        return false;
+      }
+    });
+  }
 
   public async Task InvokeControllerCallback(
     IPEndPoint callbacksEndpoint,
@@ -72,8 +108,9 @@ public partial class Diver : IDisposable
     }
     catch (Exception)
     {
-      bool alive = await reverseCommunicator.CheckIfAlive();
-      if (!alive)
+      // If the port is closed or the controller is dead, remove the callback.
+      if (!IsPortOpen(callbacksEndpoint.Port) ||
+          !await reverseCommunicator.CheckIfAlive())
       {
         _remoteEventHandler.TryRemove(token, out _);
         _remoteHooks.TryRemove(token, out _);
