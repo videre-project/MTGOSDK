@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 namespace MTGOSDK.Core.Remoting.Interop;
 
@@ -29,7 +30,8 @@ public class ReverseCommunicator
 
   private static readonly HttpClient s_client = new()
   {
-    Timeout = TimeSpan.FromSeconds(5)
+    Timeout = TimeSpan.FromSeconds(5),
+    DefaultRequestHeaders = { ConnectionClose = false }
   };
 
   public ReverseCommunicator(string hostname, int port)
@@ -75,7 +77,10 @@ public class ReverseCommunicator
     try
     {
       await s_semaphore.WaitAsync();
-      HttpResponseMessage res = await s_client.SendAsync(msg);
+      HttpResponseMessage res = await RetryAsync(
+        async () => await s_client.SendAsync(msg),
+        delay: 10,
+        raise: true);
 
       if (!ignoreResponse)
       {
@@ -83,14 +88,16 @@ public class ReverseCommunicator
         return await res.Content.ReadAsStringAsync();
       }
     }
+    catch (TaskCanceledException ex)
+    {
+      Log.Error($"Request timed out: {ex.Message}");
+      if (!ignoreResponse) throw;
+    }
     catch (Exception ex)
     {
       // Log the exception if needed
       Log.Error($"Failed to send request: {ex.Message}");
-      if (!ignoreResponse)
-      {
-        throw; // Re-throw the exception if the response is required
-      }
+      if (!ignoreResponse) throw;
     }
     finally
     {
@@ -116,7 +123,7 @@ public class ReverseCommunicator
     }
   }
 
-  public void InvokeCallback(
+  public async Task InvokeCallback(
     int token,
     DateTime timestamp,
     params ObjectOrRemoteAddress[] args)
@@ -129,6 +136,6 @@ public class ReverseCommunicator
     };
 
     var requestJsonBody = JsonConvert.SerializeObject(invocReq);
-    _ = SendRequestAsync("invoke_callback", null, requestJsonBody, true);
+    await SendRequestAsync("invoke_callback", null, requestJsonBody, true);
   }
 }

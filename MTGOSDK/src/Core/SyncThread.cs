@@ -73,13 +73,13 @@ public static class SyncThread
     if (s_groupTasks.TryGetValue(groupId, out var existingTask) &&
         !existingTask.IsCompleted && !existingTask.IsFaulted && !existingTask.IsCanceled)
     {
-      // Continue from previous task in this group
+      // Continue from previous task in this group to ensure order
       newTask = existingTask.ContinueWith(
         _ => WrapCallback(callback)(),
         s_cancellationToken,
-        // Attempt to run the continuation on the same thread if the antecedant
-        // task is already completed to avoid unnecessary context switching.
-        TaskContinuationOptions.ExecuteSynchronously,
+        // Defers continuation to the current synchronization context and does
+        // not allow for the continuation to be scheduled on a different thread.
+        TaskContinuationOptions.None,
         s_taskScheduler);
     }
     else
@@ -97,6 +97,64 @@ public static class SyncThread
       CleanUpCompletedTasks();
       _lastCleanup = DateTime.UtcNow;
     }
+  }
+
+  private static Func<Task> WrapCallbackAsync(Func<Task> callback) => async () =>
+  {
+    if (s_cancellationToken.IsCancellationRequested) return;
+
+    try
+    {
+      await callback();
+    }
+    catch (Exception ex)
+    {
+      Log.Error(ex, "An error occurred while executing a callback.");
+
+      while (ex.InnerException != null)
+      {
+        Log.Error(ex.InnerException, "Inner exception: {0}", ex.InnerException.Message + "\n" + ex.InnerException.StackTrace);
+        ex = ex.InnerException;
+      }
+    }
+  };
+
+  public static Task EnqueueAsync(Func<Task> callback)
+  {
+    return s_taskFactory.StartNew(async () => await WrapCallbackAsync(callback)(), s_cancellationToken).Unwrap();
+  }
+
+  public static Task EnqueueAsync(Func<Task> callback, string groupId)
+  {
+    if (string.IsNullOrEmpty(groupId))
+    {
+      return EnqueueAsync(callback);
+    }
+
+    Task newTask;
+    if (s_groupTasks.TryGetValue(groupId, out var existingTask) &&
+        !existingTask.IsCompleted && !existingTask.IsFaulted && !existingTask.IsCanceled)
+    {
+      newTask = existingTask.ContinueWith(
+        async _ => await WrapCallbackAsync(callback)(),
+        s_cancellationToken,
+        TaskContinuationOptions.None,
+        s_taskScheduler).Unwrap();
+    }
+    else
+    {
+      newTask = s_taskFactory.StartNew(async () => await WrapCallbackAsync(callback)(), s_cancellationToken).Unwrap();
+    }
+
+    s_groupTasks[groupId] = newTask;
+
+    if (s_groupTasks.Count > 10 || DateTime.UtcNow - _lastCleanup > CleanupInterval)
+    {
+      CleanUpCompletedTasks();
+      _lastCleanup = DateTime.UtcNow;
+    }
+
+    return newTask;
   }
 
   private static void CleanUpCompletedTasks()

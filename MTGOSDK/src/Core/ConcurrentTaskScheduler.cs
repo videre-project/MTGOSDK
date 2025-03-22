@@ -54,7 +54,8 @@ public class ConcurrentTaskScheduler(
         // Wait up to 2 seconds for a task to be queued.
         if (_reserveThreads && !await WaitUntil(
           () => !_tasks.IsEmpty || cancellationToken.IsCancellationRequested,
-          delay: 100))
+          delay: 10,
+          retries: 200))
         {
           if (_jobs.Count > minDegreeOfParallelism) break;
         }

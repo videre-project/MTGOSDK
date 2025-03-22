@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 
 using HarmonyLib;
 
@@ -74,7 +75,7 @@ public class HarmonyWrapper
   public static bool HasCallback(string uniqueId) =>
     _actualHooks.ContainsKey(uniqueId);
 
-  public delegate void HookCallback(object instance, object[] args);
+  public delegate Task HookCallback(object instance, object[] args);
 
   public void AddHook(MethodBase target, HarmonyPatchPosition pos, HookCallback patch)
   {
@@ -175,18 +176,17 @@ public class HarmonyWrapper
     _actualHooks.TryRemove(uniqueId, out _);
   }
 
-  private static void SinglePrefixHook(MethodBase __originalMethod, object __instance, params object[] args)
+  private static async Task SinglePrefixHook(MethodBase __originalMethod, object __instance, params object[] args)
   {
     string uniqueId = __originalMethod.DeclaringType.FullName + ":"
                     + __originalMethod.Name;
     if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
     {
-      Action callback = () => funcHook(__instance, args);
-      SyncThread.Enqueue(callback, uniqueId);
+      await SyncThread.EnqueueAsync(() => funcHook(__instance, args), uniqueId);
     }
   }
 
-#pragma warning disable IDE0051 // Remove unused private members
+#pragma warning disable IDE0051, CS4014
   // ReSharper disable UnusedMember.Local
   private static void UnifiedHook_ctor(MethodBase __originalMethod) =>
     SinglePrefixHook(__originalMethod, new object());
@@ -221,5 +221,5 @@ public class HarmonyWrapper
   private static void UnifiedHook_1111111111(MethodBase __originalMethod, object __instance, object __0, object __1, object __2, object __3, object __4, object __5, object __6, object __7, object __8, object __9) =>
     SinglePrefixHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6, __7, __8, __9);
   // ReSharper restore UnusedMember.Local
-#pragma warning restore IDE0051 // Remove unused private members
+#pragma warning restore IDE0051, CS4014
 }

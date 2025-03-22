@@ -5,6 +5,7 @@
 **/
 
 using System;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Reflection;
 using System.Threading;
@@ -16,6 +17,7 @@ using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using System.Threading.Tasks;
 
 
 namespace ScubaDiver;
@@ -27,7 +29,9 @@ public partial class Diver : IDisposable
   public int AssignCallbackToken() =>
     Interlocked.Increment(ref _nextAvailableCallbackToken);
 
-  public async void InvokeControllerCallback(
+  private readonly ConcurrentDictionary<IPEndPoint, ReverseCommunicator> _reverseCommunicators = new();
+
+  public async Task InvokeControllerCallback(
     IPEndPoint callbacksEndpoint,
     int token,
     DateTime timestamp,
@@ -36,16 +40,6 @@ public partial class Diver : IDisposable
     if (!_remoteEventHandler.ContainsKey(token) &&
         !_remoteHooks.ContainsKey(token))
     {
-      return;
-    }
-
-    // Check if the client connection is still alive
-    ReverseCommunicator reverseCommunicator = new(callbacksEndpoint);
-    bool alive = await reverseCommunicator.CheckIfAlive();
-    if (!alive)
-    {
-      _remoteEventHandler.TryRemove(token, out _);
-      _remoteHooks.TryRemove(token, out _);
       return;
     }
 
@@ -69,11 +63,24 @@ public partial class Diver : IDisposable
     }
 
     // Call callback at controller
+    ReverseCommunicator reverseCommunicator = _reverseCommunicators
+      .GetOrAdd(callbacksEndpoint,
+        endpoint => new ReverseCommunicator(endpoint));
     try
     {
-      reverseCommunicator.InvokeCallback(token, timestamp, remoteParams);
+      await reverseCommunicator.InvokeCallback(token, timestamp, remoteParams);
     }
-    catch (NullReferenceException) { }
+    catch (Exception)
+    {
+      bool alive = await reverseCommunicator.CheckIfAlive();
+      if (!alive)
+      {
+        _remoteEventHandler.TryRemove(token, out _);
+        _remoteHooks.TryRemove(token, out _);
+        _reverseCommunicators.TryRemove(callbacksEndpoint, out _);
+        return;
+      }
+    }
   }
 
   private string MakeEventSubscribeResponse(HttpListenerRequest arg)
@@ -127,7 +134,7 @@ public partial class Diver : IDisposable
     {
       // Get current timestamp
       DateTime timestamp = DateTime.Now;
-      InvokeControllerCallback(endpoint, token, timestamp, new object[2] { obj, args });
+      _ = InvokeControllerCallback(endpoint, token, timestamp, [obj, args]);
     };
 
     try

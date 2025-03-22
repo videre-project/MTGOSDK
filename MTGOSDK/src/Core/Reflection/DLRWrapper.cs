@@ -469,6 +469,70 @@ public abstract class DLRWrapper : IJsonSerializable
   }
 
   /// <summary>
+  /// Safely executes a lambda function with a given number of retries.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="delay">The delay in ms between retries (optional).</param>
+  /// <param name="retries">The number of times to retry (optional).</param>
+  /// <returns>The result of the function, otherwise an exception is thrown.</returns>
+  /// <remarks>
+  /// This method is a wrapper for the <see cref="Retry{T}"/> method.
+  /// </remarks>
+  public static async Task<T> RetryAsync<T>(
+    Func<Task<T>> lambda,
+    int delay = 100,
+    int retries = 3,
+    bool raise = false)
+  {
+    while (true)
+    {
+      try { return await lambda(); }
+      catch
+      {
+        retries--;
+        if (retries <= 0)
+        {
+          if (raise) throw;
+          return default;
+        }
+        await Task.Delay(delay);
+      }
+    }
+  }
+
+  /// <summary>
+  /// Safely executes a lambda function with a given number of retries.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="delay">The delay in ms between retries (optional).</param>
+  /// <param name="retries">The number of times to retry (optional).</param>
+  /// <returns>The result of the function, otherwise an exception is thrown.</returns>
+  /// <remarks>
+  /// This method is a wrapper for the <see cref="Retry{T}"/> method.
+  /// </remarks>
+  public static async Task RetryAsync(
+    Action lambda,
+    int delay = 100,
+    int retries = 3,
+    bool raise = false)
+  {
+    while (true)
+    {
+      try { lambda(); return; }
+      catch
+      {
+        retries--;
+        if (retries <= 0)
+        {
+          if (raise) throw;
+          return;
+        }
+        await Task.Delay(delay);
+      }
+    }
+  }
+
+  /// <summary>
   /// Marks the retrieval of a DLRWrapper's instance as optional.
   /// </summary>
   /// <typeparam name="T">The class type to instantiate.</typeparam>

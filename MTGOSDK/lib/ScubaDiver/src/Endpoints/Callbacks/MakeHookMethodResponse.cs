@@ -141,10 +141,10 @@ public partial class Diver : IDisposable
     Log.Debug($"[Diver] Hook Method - Assigned Token: {token}");
 
     // Preparing a proxy method that Harmony will invoke
-    HarmonyWrapper.HookCallback patchCallback = (obj, args) =>
+    HarmonyWrapper.HookCallback patchCallback = async (obj, args) =>
     {
       DateTime timestamp = DateTime.Now;
-      InvokeControllerCallback(endpoint, token, timestamp, obj, args);
+      await InvokeControllerCallback(endpoint, token, timestamp, obj, args);
     };
 
     Log.Debug($"[Diver] Hooking function {methodName}...");
