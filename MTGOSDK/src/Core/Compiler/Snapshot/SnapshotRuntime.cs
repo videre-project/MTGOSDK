@@ -8,6 +8,8 @@ using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.InteropServices;
+
 using Microsoft.Diagnostics.Runtime;
 
 using MTGOSDK.Core.Remoting.Interop;
@@ -24,8 +26,9 @@ namespace MTGOSDK.Core.Compiler.Snapshot;
 /// </summary>
 public class SnapshotRuntime : IDisposable
 {
-  internal static readonly object _clrMdLock = new();          // static
-  public virtual object clrLock => SnapshotRuntime._clrMdLock; // non-static
+  private static readonly ReaderWriterLockSlim _lock =
+    new(LockRecursionPolicy.SupportsRecursion);
+  public virtual object clrLock => _lock;
 
   // Internal ClrMD runtime and data target objects to manage the snapshot.
   private DataTarget _dt;
@@ -44,7 +47,7 @@ public class SnapshotRuntime : IDisposable
   /// <summary>
   /// The collection of frozen (pinned) objects.
   /// </summary>
-  private readonly FrozenObjectsCollection _freezer = new();
+  private readonly FrozenObjectCollection _freezer = new();
 
   public SnapshotRuntime(bool useDomainSearch = false)
   {
@@ -58,25 +61,40 @@ public class SnapshotRuntime : IDisposable
 
   public Assembly ResolveAssembly(string assemblyName)
   {
-    lock (_clrMdLock)
+    _lock.EnterReadLock();
+    try
     {
       return _unifiedAppDomain.GetAssembly(assemblyName);
+    }
+    finally
+    {
+      _lock.ExitReadLock();
     }
   }
 
   public Type ResolveType(string typeFullName, string assemblyName = null)
   {
-    lock (_clrMdLock)
+    _lock.EnterReadLock();
+    try
     {
       return _unifiedAppDomain.ResolveType(typeFullName, assemblyName);
+    }
+    finally
+    {
+      _lock.ExitReadLock();
     }
   }
 
   public TypesDump ResolveTypes(string assemblyName)
   {
-    lock (_clrMdLock)
+    _lock.EnterReadLock();
+    try
     {
       return _unifiedAppDomain.ResolveTypes(assemblyName);
+    }
+    finally
+    {
+      _lock.ExitReadLock();
     }
   }
 
@@ -162,12 +180,17 @@ public class SnapshotRuntime : IDisposable
   /// </remarks>
   public void CreateRuntime()
   {
-    lock (_clrMdLock)
+    _lock.EnterWriteLock();
+    try
     {
       // NOTE: This subprocess inherits handles to DLLs in the current process
       //       so it might "lock" both the Bootstrapper and ScubaDiver dlls.
       _dt = DataTarget.CreateSnapshotAndAttach(Process.GetCurrentProcess().Id);
       _runtime = _dt.ClrVersions.Single().CreateRuntime();
+    }
+    finally
+    {
+      _lock.ExitWriteLock();
     }
   }
 
@@ -179,7 +202,8 @@ public class SnapshotRuntime : IDisposable
   /// </remarks>
   public void DisposeRuntime()
   {
-    lock (_clrMdLock)
+    _lock.EnterWriteLock();
+    try
     {
       _runtime?.Dispose();
       _runtime = null;
@@ -258,6 +282,10 @@ public class SnapshotRuntime : IDisposable
         _dt = null;
       }
     }
+    finally
+    {
+      _lock.ExitWriteLock();
+    }
   }
 
   /// <summary>
@@ -273,10 +301,15 @@ public class SnapshotRuntime : IDisposable
   /// </remarks>
   public void RefreshRuntime()
   {
-    lock (_clrMdLock)
+    _lock.EnterWriteLock();
+    try
     {
       DisposeRuntime();
       CreateRuntime();
+    }
+    finally
+    {
+      _lock.ExitWriteLock();
     }
   }
 
@@ -284,25 +317,69 @@ public class SnapshotRuntime : IDisposable
   {
     DisposeRuntime();
     _freezer.UnpinAll();
+
+    if (_lock != null)
+    {
+      _lock.Dispose();
+    }
   }
 
   //
   // ClrMD object methods
   //
 
+  public ulong GetObjectAddress(object obj)
+  {
+    //
+    // Pin the object to prevent GC movement during the operation.
+    //
+    // Note: The pinned address from GCHandle represents the current location in
+    // managed memory, while the returned ClrObject.Address represents ClrMD's
+    // view of the object in its snapshot.
+    //
+    // These addresses may differ as ClrMD maintains its own mapping.
+    //
+    GCHandle handle = GCHandle.Alloc(obj, GCHandleType.Pinned);
+    _lock.EnterReadLock();
+    try
+    {
+      // Get current memory location
+      IntPtr ptr = handle.AddrOfPinnedObject();
+
+      // Translate to ClrMD's view of the object address in its snapshot
+      ClrObject clrObj = GetClrObject((ulong)ptr);
+      return clrObj.Address;
+    }
+    finally
+    {
+      _lock.ExitReadLock();
+      handle.Free();
+    }
+  }
+
   public ClrObject GetClrObject(ulong objAddr)
   {
-    lock (_clrMdLock)
+    _lock.EnterReadLock();
+    try
     {
       return _runtime.Heap.GetObject(objAddr);
+    }
+    finally
+    {
+      _lock.ExitReadLock();
     }
   }
 
   public ImmutableArray<ClrAppDomain> GetClrAppDomains()
   {
-    lock (_clrMdLock)
+    _lock.EnterReadLock();
+    try
     {
       return _runtime.AppDomains;
+    }
+    finally
+    {
+      _lock.ExitReadLock();
     }
   }
 
@@ -344,11 +421,7 @@ public class SnapshotRuntime : IDisposable
     // The object is not pinned, so falling back to the last dumped runtime can
     // help ensure we can find the object by it's type information if it moves.
     //
-    ClrObject lastKnownClrObj = default;
-    lock (_clrMdLock)
-    {
-      lastKnownClrObj = _runtime.Heap.GetObject(objAddr);
-    }
+    ClrObject lastKnownClrObj = GetClrObject(objAddr);
     if (lastKnownClrObj == default)
     {
       throw new Exception("No object in this address. Try finding it's address again and dumping again.");
@@ -356,11 +429,7 @@ public class SnapshotRuntime : IDisposable
 
     // Make sure it's still in place by refreshing the runtime
     RefreshRuntime();
-    ClrObject clrObj = default;
-    lock (_clrMdLock)
-    {
-      clrObj = _runtime.Heap.GetObject(objAddr);
-    }
+    ClrObject clrObj = GetClrObject(objAddr);
 
     //
     // Figuring out the Method Table value and the actual Object's address
@@ -475,84 +544,92 @@ public class SnapshotRuntime : IDisposable
   {
     List<HeapDump.HeapObject> objects = [];
     bool anyErrors = false;
-    // Trying several times to dump all candidates
-    for (int i = 0; i < 10; i++)
-    {
-      // Logger.Debug($"Trying to dump heap objects. Try #{i + 1}");
-      // Clearing leftovers from last trial
-      objects.Clear();
-      anyErrors = false;
 
+    // Take a write lock since we'll modify runtime state
+    _lock.EnterWriteLock();
+    try
+    {
+      // Refresh runtime while holding write lock
       RefreshRuntime();
-      lock (_clrMdLock)
+
+      bool noGcSuccess = false;
+      try
       {
+        // Suspend GC while enumerating objects
+        noGcSuccess = GC.TryStartNoGCRegion(16 * 1024 * 1024);
+
+        // Now downgrade to read lock for enumeration
+        _lock.ExitWriteLock();
+        _lock.EnterReadLock();
+
         foreach (ClrObject clrObj in _runtime.Heap.EnumerateObjects())
         {
-          if (clrObj.IsFree)
+          if (clrObj.IsFree || clrObj.Type == null)
             continue;
 
-          string objType = clrObj.Type?.Name ?? "Unknown";
-          if (filter(objType))
+          string objType = clrObj.Type.Name;
+          if (!filter(objType))
+            continue;
+
+          ulong mt = clrObj.Type.MethodTable;
+          int hashCode = 0;
+
+          if (dumpHashcodes)
           {
-            ulong mt = clrObj.Type.MethodTable;
-            int hashCode = 0;
-
-            if (dumpHashcodes)
+            try
             {
-              object instance = null;
-              try
+              // Get instance and hash code atomically
+              object instance = Compile(clrObj.Address, mt);
+              if (instance != null)
               {
-                instance = Compile(clrObj.Address, mt);
-              }
-              catch (Exception)
-              {
-                // Exit heap enumeration and signal that the trial has failed.
-                anyErrors = true;
-                break;
-              }
-
-              //
-              // We got the object so we haven't spotted a GC collection.
-              //
-              // Getting the hashcode is a challenge since objects might throw
-              // exceptions on this call (e.g. System.Reflection.Emit.SignatureHelper).
-              //
-              // We don't REALLY care if we don't get a hash code. It just means
-              // those objects would be a bit more hard to grab later.
-              //
-              try
-              {
-                hashCode = instance.GetHashCode();
-              }
-              catch
-              {
-                // TODO: Maybe we need a boolean in HeapObject to indicate we
-                //       couldn't get the hashcode...
-                hashCode = 0;
+                try { hashCode = instance.GetHashCode(); }
+                catch { /* Ignore hash code errors */ }
               }
             }
-
-            objects.Add(new HeapDump.HeapObject()
+            catch (Exception)
             {
-              Address = clrObj.Address,
-              MethodTable = clrObj.Type.MethodTable,
-              Type = objType,
-              HashCode = hashCode
-            });
+              anyErrors = true;
+              continue;
+            }
           }
+
+          objects.Add(new HeapDump.HeapObject()
+          {
+            Address = clrObj.Address,
+            MethodTable = mt,
+            Type = objType,
+            HashCode = hashCode
+          });
         }
       }
-      if (!anyErrors)
+      finally
       {
-        // Success, dumped every instance there is to dump!
-        break;
+        // Ensure we end NoGC region before releasing locks
+        if (noGcSuccess)
+        {
+          try { GC.EndNoGCRegion(); }
+          catch { /* Ignore if GC was triggered anyway */ }
+        }
+
+        // Release the read lock we acquired after downgrading
+        if (_lock.IsReadLockHeld)
+          _lock.ExitReadLock();
+
+        // Reacquire write lock if we downgraded
+        if (!_lock.IsWriteLockHeld)
+          _lock.EnterWriteLock();
       }
     }
-    if (anyErrors)
+    finally
     {
-      // Logger.Debug($"Failed to dump heap objects. Aborting.");
-      objects.Clear();
+      // Always release the write lock
+      if (_lock.IsWriteLockHeld)
+        _lock.ExitWriteLock();
     }
+
+    if (anyErrors && objects.Count == 0)
+      return (true, []);
+
     return (anyErrors, objects);
   }
 }

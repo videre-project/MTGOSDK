@@ -42,7 +42,7 @@ public class Converter<T>
   /// The dynamic method trick is discussed originally by Alois Kraus here:
   /// https://social.microsoft.com/Forums/windows/en-US/06ac44b0-30d8-44a1-86a4-1716dc431c62/how-to-convert-an-intptr-to-an-object-in-c?forum=clr
   /// </remarks>
-  static void GenerateDynamicMethod()
+  private static void GenerateDynamicMethod()
   {
     if (myConverter == null)
     {

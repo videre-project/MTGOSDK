@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Buffers;
 
 namespace MTGOSDK.Core.Compiler;
 
@@ -16,10 +17,15 @@ namespace MTGOSDK.Core.Compiler;
 /// moving objects in memory or for preserving pointers or references to objects
 /// that are passed to unmanaged code.
 /// </remarks>
-public class FrozenObjectsCollection
+public class FrozenObjectCollection
 {
-  private readonly object _lock = new object();
+  private readonly ReaderWriterLockSlim _lock =
+    new(LockRecursionPolicy.SupportsRecursion);
+
   private readonly Dictionary<object, ulong> _frozenObjects = new();
+  private readonly ArrayPool<object> _arrayPool = ArrayPool<object>.Shared;
+  private readonly ArrayPool<ulong> _addressPool = ArrayPool<ulong>.Shared;
+
   private Task _freezerTask = null!;
   private ManualResetEvent _unfreezeRequested = null!;
 
@@ -29,9 +35,14 @@ public class FrozenObjectsCollection
   /// <returns>True if it was pinned, False if it wasn't</returns>
   public bool TryGetPinningAddress(object o, out ulong addr)
   {
-    lock (_lock)
+    _lock.EnterReadLock();
+    try
     {
       return _frozenObjects.TryGetValue(o, out addr);
+    }
+    finally
+    {
+      _lock.ExitReadLock();
     }
   }
 
@@ -40,7 +51,8 @@ public class FrozenObjectsCollection
   /// </summary>
   private void PinInternal(object[] newfrozenObjects)
   {
-    lock (_lock)
+    _lock.EnterWriteLock();
+    try
     {
       if (newfrozenObjects.Length == 0)
       {
@@ -48,32 +60,43 @@ public class FrozenObjectsCollection
         return;
       }
 
-      ulong[] addresses = new ulong[newfrozenObjects.Length];
-      ManualResetEvent frozenFeedback = new ManualResetEvent(false);
-      ManualResetEvent unfreezeRequested = new ManualResetEvent(false);
-
-      // Call freeze
-      var func = FreezeFuncsFactory.Generate(newfrozenObjects.Length);
-      Task freezerTask = Task.Run(() =>
-          func(newfrozenObjects, addresses, frozenFeedback, unfreezeRequested));
-
-      // Wait for the freezer task to signal to us
-      frozenFeedback.WaitOne();
-
-      // Dispose of last Freezer
-      _unfreezeRequested?.Set();
-      _freezerTask?.Wait();
-
-      // Save new Task & event
-      _unfreezeRequested = unfreezeRequested;
-      _freezerTask = freezerTask;
-
-      // Now all addresses are set in the array. Re-create dict
-      _frozenObjects.Clear();
-      for (int i = 0; i < newfrozenObjects.Length; i++)
+      ulong[] addresses = _addressPool.Rent(newfrozenObjects.Length);
+      try
       {
-        _frozenObjects[newfrozenObjects[i]] = addresses[i];
+        ManualResetEvent frozenFeedback = new ManualResetEvent(false);
+        ManualResetEvent unfreezeRequested = new ManualResetEvent(false);
+
+        // Call freeze
+        var func = FreezeFuncsFactory.Generate(newfrozenObjects.Length);
+        Task freezerTask = Task.Run(() =>
+            func(newfrozenObjects, addresses, frozenFeedback, unfreezeRequested));
+
+        // Wait for the freezer task to signal to us
+        frozenFeedback.WaitOne();
+
+        // Dispose of last Freezer
+        _unfreezeRequested?.Set();
+        _freezerTask?.Wait();
+
+        // Save new Task & event
+        _unfreezeRequested = unfreezeRequested;
+        _freezerTask = freezerTask;
+
+        // Now all addresses are set in the array. Re-create dict
+        _frozenObjects.Clear();
+        for (int i = 0; i < newfrozenObjects.Length; i++)
+        {
+          _frozenObjects[newfrozenObjects[i]] = addresses[i];
+        }
       }
+      finally
+      {
+        _addressPool.Return(addresses);
+      }
+    }
+    finally
+    {
+      _lock.ExitWriteLock();
     }
   }
 
@@ -87,16 +110,38 @@ public class FrozenObjectsCollection
   /// </remarks>
   public ulong Pin(object o)
   {
-    lock (_lock)
+    _lock.EnterUpgradeableReadLock();
+    try
     {
       // If the object is already pinned, return it's address.
       if (_frozenObjects.TryGetValue(o, out ulong addr)) return addr;
 
-      // Prepare parameters
-      object[] objs = _frozenObjects.Keys.Concat(new object[] { o }).ToArray();
-      PinInternal(objs);
+      _lock.EnterWriteLock();
+      try
+      {
+        // Rent array from pool
+        object[] objs = _arrayPool.Rent(_frozenObjects.Count + 1);
+        try
+        {
+          _frozenObjects.Keys.CopyTo(objs, 0);
+          objs[_frozenObjects.Count] = o;
+          PinInternal(objs.AsSpan(0, _frozenObjects.Count + 1).ToArray());
+        }
+        finally
+        {
+          _arrayPool.Return(objs);
+        }
 
-      return _frozenObjects[o];
+        return _frozenObjects[o];
+      }
+      finally
+      {
+        _lock.ExitWriteLock();
+      }
+    }
+    finally
+    {
+      _lock.ExitUpgradeableReadLock();
     }
   }
 
@@ -106,19 +151,23 @@ public class FrozenObjectsCollection
   /// <returns>True if the object was found, false if not.</returns>
   public bool TryGetPinnedObject(ulong addr, out object? o)
   {
-    lock (_lock)
+    _lock.EnterReadLock();
+    try
     {
-      foreach (var frozenObject in _frozenObjects)
+      foreach (var kvp in _frozenObjects)
       {
-        if (frozenObject.Value == addr)
+        if (kvp.Value == addr)
         {
-          o = frozenObject.Key;
+          o = kvp.Key;
           return true;
         }
       }
-
       o = null;
       return false;
+    }
+    finally
+    {
+      _lock.ExitReadLock();
     }
   }
 
@@ -128,24 +177,40 @@ public class FrozenObjectsCollection
   /// <returns>True if it was pinned, false if not.</returns>
   public bool Unpin(ulong objAddress)
   {
-    lock (_lock)
+    _lock.EnterWriteLock();
+    try
     {
-      object[] objs = _frozenObjects
-        .Where(kvp => kvp.Value != objAddress)
-        .Select(kvp => kvp.Key)
-        .ToArray();
+      // Rent array from pool
+      object[] objs = _arrayPool.Rent(_frozenObjects.Count);
+      try
+      {
+        int count = 0;
+        foreach (var kvp in _frozenObjects)
+        {
+          if (kvp.Value != objAddress)
+          {
+            objs[count++] = kvp.Key;
+          }
+        }
 
-      // Making sure that address was even in the dictionary.
-      // Otherwise, we don't need to re-pin all objects.
-      // Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Unpinning another object. New Num Pinned: {objs.Length}");
-      if (objs.Length == _frozenObjects.Count)
-        return false;
+        // If no object was removed, return false
+        if (count == _frozenObjects.Count)
+        {
+          return false;
+        }
 
-      // Re-pin all objects
-      PinInternal(objs);
-
-      // Logger.Debug($"[{nameof(FrozenObjectsCollection)}] Unpinned another object. Final Num Pinned: {_frozenObjects.Count}");
-      return true;
+        // Re-pin remaining objects
+        PinInternal(objs.AsSpan(0, count).ToArray());
+        return true;
+      }
+      finally
+      {
+        _arrayPool.Return(objs);
+      }
+    }
+    finally
+    {
+      _lock.ExitWriteLock();
     }
   }
 
@@ -154,7 +219,8 @@ public class FrozenObjectsCollection
   /// </summary>
   public void UnpinAll()
   {
-    lock (_lock)
+    _lock.EnterWriteLock();
+    try
     {
       // Dispose of last Freezer
       _unfreezeRequested?.Set();
@@ -163,6 +229,10 @@ public class FrozenObjectsCollection
       _freezerTask = null;
 
       _frozenObjects.Clear();
+    }
+    finally
+    {
+      _lock.ExitWriteLock();
     }
   }
 }
