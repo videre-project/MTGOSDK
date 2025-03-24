@@ -47,7 +47,7 @@ public sealed class LogOptionsProvider<TLogger, TConfiguration>
 
   private TLogger CreateLoggerInstance(string category) =>
     (TLogger)
-    InstanceFactory.CreateInstance(typeof(TLogger), category, GetCurrentConfig);
+    ObjectFactory.CreateInstance(typeof(TLogger), category, GetCurrentConfig);
 
   /// <summary>
   /// Disposes of the provider and all loggers.

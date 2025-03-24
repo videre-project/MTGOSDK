@@ -17,7 +17,7 @@ namespace MTGOSDK.Core.Compiler;
 /// <remarks>
 /// Adapted from https://stackoverflow.com/a/53959282/21190716 by trenki.
 /// </remarks>
-public static class InstanceFactory
+public static class ObjectFactory
 {
   private delegate object CreateDelegate(
     Type type,
@@ -31,22 +31,22 @@ public static class InstanceFactory
 
   public static object CreateInstance(Type type)
   {
-    return InstanceFactoryGeneric<TypeStub, TypeStub, TypeStub>.CreateInstance(type, null, null, null);
+    return ObjectFactoryGeneric<TypeStub, TypeStub, TypeStub>.CreateInstance(type, null, null, null);
   }
 
   public static object CreateInstance<TArg1>(Type type, TArg1 arg1)
   {
-    return InstanceFactoryGeneric<TArg1, TypeStub, TypeStub>.CreateInstance(type, arg1, null, null);
+    return ObjectFactoryGeneric<TArg1, TypeStub, TypeStub>.CreateInstance(type, arg1, null, null);
   }
 
   public static object CreateInstance<TArg1, TArg2>(Type type, TArg1 arg1, TArg2 arg2)
   {
-    return InstanceFactoryGeneric<TArg1, TArg2, TypeStub>.CreateInstance(type, arg1, arg2, null);
+    return ObjectFactoryGeneric<TArg1, TArg2, TypeStub>.CreateInstance(type, arg1, arg2, null);
   }
 
   public static object CreateInstance<TArg1, TArg2, TArg3>(Type type, TArg1 arg1, TArg2 arg2, TArg3 arg3)
   {
-    return InstanceFactoryGeneric<TArg1, TArg2, TArg3>.CreateInstance(type, arg1, arg2, arg3);
+    return ObjectFactoryGeneric<TArg1, TArg2, TArg3>.CreateInstance(type, arg1, arg2, arg3);
   }
 
   public static object CreateInstance(Type type, params object[] args)
@@ -81,7 +81,7 @@ public static class InstanceFactory
   private static CreateDelegate CacheFunc(Tuple<Type, Type, Type, Type> key)
   {
     var types = new Type[] { key.Item1, key.Item2, key.Item3, key.Item4 };
-    var method = typeof(InstanceFactory).GetMethods()
+    var method = typeof(ObjectFactory).GetMethods()
                                         .Where(m => m.Name == "CreateInstance")
                                         .Where(m => m.GetParameters().Count() == 4).Single();
     var generic = method.MakeGenericMethod(new Type[] { key.Item2, key.Item3, key.Item4 });
@@ -105,7 +105,7 @@ public static class InstanceFactory
   }
 }
 
-public static class InstanceFactoryGeneric<TArg1, TArg2, TArg3>
+public static class ObjectFactoryGeneric<TArg1, TArg2, TArg3>
 {
   private static readonly ConcurrentDictionary<Type, Func<TArg1, TArg2, TArg3, object>> s_cachedFuncs =
     new ConcurrentDictionary<Type, Func<TArg1, TArg2, TArg3, object>>();

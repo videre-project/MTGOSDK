@@ -190,9 +190,9 @@ public abstract class DLRWrapper : IJsonSerializable
     catch { }
 
     // Fallback to creating a new instance assuming a DLRWrapper type.
-    try { return (T)(InstanceFactory.CreateInstance(typeof(T), obj)); }
+    try { return (T)(ObjectFactory.CreateInstance(typeof(T), obj)); }
     catch { }
-    try { return (T)(InstanceFactory.CreateInstance(typeof(T), obj.ToString())); }
+    try { return (T)(ObjectFactory.CreateInstance(typeof(T), obj.ToString())); }
     catch { }
 
     // Return the object if it is already of the given type.
@@ -222,7 +222,7 @@ public abstract class DLRWrapper : IJsonSerializable
       typeof(T2).GetConstructors().Length == 0
         ? Cast<T2>(item)
         : Cast<T2>(Try(
-          () => InstanceFactory.CreateInstance(typeof(T2), item),
+          () => ObjectFactory.CreateInstance(typeof(T2), item),
           () => item)));
   }
 
@@ -311,7 +311,7 @@ public abstract class DLRWrapper : IJsonSerializable
     // Otherwise allocate a local list object and map the items to the new type.
     IList<T> newList = Try(
       // Attempt to create a new instance of the 'L' list type.
-      () => InstanceFactory.CreateInstance(typeof(L)),
+      () => ObjectFactory.CreateInstance(typeof(L)),
       // Otherwise fallback to a generic list implementation
       // (i.e. when the provided type is abstract or has no constructor).
       () => new List<T>());
@@ -552,7 +552,7 @@ public abstract class DLRWrapper : IJsonSerializable
       return null;
 
     if (typeof(T).IsSubclassOf(typeof(DLRWrapper)))
-      return (T)InstanceFactory.CreateInstance(typeof(T), obj);
+      return (T)ObjectFactory.CreateInstance(typeof(T), obj);
     else
       return Cast<T>(obj);
   }
