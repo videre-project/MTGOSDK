@@ -34,25 +34,6 @@ public class RemoteTypesFactory(TypeResolver resolver,
     string assembly,
     string type)
   {
-    if (type.Length > 200)
-    {
-      if (type.Contains("[][][][][][]"))
-      {
-        throw new Exception("Nestered self arrays types was detected and avoided.");
-      }
-    }
-    if (type.Length > 500)
-    {
-      // Too long for any reasonable type
-      throw new Exception("Incredibly long type names aren't supported.");
-    }
-    if (type.Contains("JetBrains.DataFlow.PropertyChangedEventArgs") && type.Length > 100)
-    {
-      // Too long for any reasonable type
-      throw new Exception("Incredibly long type names aren't supported.");
-    }
-
-
     Type paramType = resolver.Resolve(assembly, type);
     if (paramType != null)
     {

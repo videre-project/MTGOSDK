@@ -27,107 +27,48 @@ namespace MTGOSDK.Core.Remoting.Interop;
 /// <summary>
 /// Communicates with a diver in a remote process
 /// </summary>
-public class DiverCommunicator
+public class DiverCommunicator : BaseCommunicator
 {
   private readonly JsonSerializerSettings _withErrors = new()
   {
     MissingMemberHandling = MissingMemberHandling.Error,
   };
 
-  private readonly string _hostname;
-  public int DiverPort { get; private set; }
-  public bool IsConnected => _process_id.HasValue;
-
   private int? _process_id = null;
   private readonly CallbacksListener _listener;
-  private readonly HttpClient httpClient = new();
 
-  /// <summary>
-  /// Event raised when the target process has crashed and is no longer available
-  /// </summary>
-  public event EventHandler? ProcessCrashed;
+  public bool IsConnected => _process_id.HasValue;
 
-  public DiverCommunicator(string hostname, int diverPort)
+  public DiverCommunicator(
+    string hostname,
+    int diverPort,
+    CancellationTokenSource? cts = null)
+      : base(hostname, diverPort, cts)
   {
-    _hostname = hostname;
-    DiverPort = diverPort;
     _listener = new CallbacksListener(this);
   }
-  public DiverCommunicator(IPAddress ipa, int diverPort) : this(ipa.ToString(), diverPort) { }
-  public DiverCommunicator(IPEndPoint ipe) : this(ipe.Address, ipe.Port) { }
+  public DiverCommunicator(IPAddress ipa, int diverPort)
+    : this(ipa.ToString(), diverPort, null) { }
+  public DiverCommunicator(IPEndPoint ipe)
+    : this(ipe.Address, ipe.Port) { }
 
-  private async Task<string> SendRequestAsync(
-    string path,
-    Dictionary<string, string> queryParams = null,
-    string jsonBody = null)
+  protected override string HandleResponse(string body)
   {
-    queryParams ??= new();
-
-    NameValueCollection queryString = HttpUtility.ParseQueryString(string.Empty);
-    foreach (KeyValuePair<string, string> kvp in queryParams)
+    if (body.StartsWith("{\"error\":", StringComparison.InvariantCultureIgnoreCase))
     {
-      queryString.Add(kvp.Key, kvp.Value);
+      // Diver sent back an error. We parse it here and throwing a 'proxied' exception
+      var errMessage = JsonConvert.DeserializeObject<DiverError>(body, _withErrors);
+      if (errMessage != null)
+        throw new RemoteException(errMessage.Error, errMessage.StackTrace);
     }
-
-    string url = $"http://{_hostname}:{DiverPort}/{path}?{queryString}";
-    HttpRequestMessage msg;
-    if (jsonBody == null)
-    {
-      msg = new HttpRequestMessage(HttpMethod.Get, url);
-    }
-    else
-    {
-      msg = new HttpRequestMessage(HttpMethod.Post, url);
-      msg.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-    }
-
-    try
-    {
-      HttpResponseMessage res = await httpClient.SendAsync(msg);
-      string body = await res.Content.ReadAsStringAsync();
-
-      if (body.StartsWith("{\"error\":", StringComparison.InvariantCultureIgnoreCase))
-      {
-        // Diver sent back an error. We parse it here and throwing a 'proxied' exception
-        var errMessage = JsonConvert.DeserializeObject<DiverError>(body, _withErrors);
-        if (errMessage != null)
-          throw new RemoteException(errMessage.Error, errMessage.StackTrace);
-      }
-
-      return body;
-    }
-    catch (Exception ex)
-    {
-      if (ex is HttpRequestException e1 && e1.InnerException is SocketException e2)
-      {
-        ProcessCrashed?.Invoke(this, EventArgs.Empty);
-        ProcessCrashed = null; // Non-recoverable error; unsubscribe listeners
-        var processException = new ProcessCrashedException(
-          "Diver process has crashed", _process_id.Value, e2);
-        _process_id = null;
-
-        throw processException;
-      }
-      throw;
-    }
+    return body;
   }
 
-  private string SendRequest(
-    string path,
-    Dictionary<string, string> queryParams = null,
-    string jsonBody = null)
-  {
-    return SendRequestAsync(path, queryParams, jsonBody).GetAwaiter().GetResult();
-  }
-
-  public bool KillDiver()
+  public bool Disconnect()
   {
     if (!IsConnected) return false;
 
-    UnregisterClient(_process_id.Value);
-
-    string body = SendRequest("die");
-    return body?.Contains("Goodbye") ?? false;
+    return UnregisterClient(_process_id.Value);
   }
 
   /// <summary>

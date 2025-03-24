@@ -19,7 +19,7 @@ using MTGOSDK.Resources;
 
 namespace MTGOSDK.Core.Remoting;
 
-public class RemoteHandle : IDisposable
+public class RemoteHandle : DLRWrapper, IDisposable
 {
   internal class RemoteObjectsCollection
   {
@@ -40,17 +40,20 @@ public class RemoteHandle : IDisposable
       string typeName,
       int? hashCode = null)
     {
-      ObjectDump od;
-      TypeDump td;
-      try
+      ObjectDump od = null!;
+      TypeDump td = null!;
+      Retry(() =>
       {
-        od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
-        td = _app.Communicator.DumpType(od.Type);
-      }
-      catch (Exception e)
-      {
-        throw new Exception("Could not dump remote object/type.", e);
-      }
+        try
+        {
+          od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
+          td = _app.Communicator.DumpType(od.Type);
+        }
+        catch (Exception e)
+        {
+          throw new Exception("Could not dump remote object/type.", e);
+        }
+      }, raise: true);
 
       var remoteObject = new RemoteObject(
           new RemoteObjectRef(od, td, _app.Communicator), _app);
@@ -158,7 +161,10 @@ public class RemoteHandle : IDisposable
     return Connect(target, (ushort)target.Id);
   }
 
-  public static RemoteHandle Connect(Process target, ushort diverPort)
+  public static RemoteHandle Connect(
+    Process target,
+    ushort diverPort,
+    CancellationTokenSource? cts = null)
   {
     // Use discovery to check for existing diver
     string diverAddr = "127.0.0.1";
@@ -186,7 +192,7 @@ public class RemoteHandle : IDisposable
     }
 
     // Now register our program as a "client" of the diver
-    DiverCommunicator com = new DiverCommunicator(diverAddr, diverPort);
+    DiverCommunicator com = new DiverCommunicator(diverAddr, diverPort, cts);
     if (com.RegisterClient() == false)
       throw new Exception("Registering as a client in the Diver failed.");
 
@@ -309,7 +315,7 @@ public class RemoteHandle : IDisposable
   //
   public void Dispose()
   {
-    _communicator?.KillDiver();
+    _communicator?.Disconnect();
     _communicator = null;
     _procWithDiver = null;
 

@@ -20,6 +20,7 @@ using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core;
 
 namespace ScubaDiver;
 
@@ -73,11 +74,8 @@ public partial class Diver : IDisposable
     DateTime timestamp,
     params object[] parameters)
   {
-    if (!_remoteEventHandler.ContainsKey(token) &&
-        !_remoteHooks.ContainsKey(token))
-    {
+    if (!_callbackTokens.TryGetValue(token, out var cts))
       return;
-    }
 
     var remoteParams = new ObjectOrRemoteAddress[parameters.Length];
     for (int i = 0; i < parameters.Length; i++)
@@ -101,7 +99,7 @@ public partial class Diver : IDisposable
     // Call callback at controller
     ReverseCommunicator reverseCommunicator = _reverseCommunicators
       .GetOrAdd(callbacksEndpoint,
-        endpoint => new ReverseCommunicator(endpoint));
+        endpoint => new ReverseCommunicator(endpoint, cts));
     try
     {
       await reverseCommunicator.InvokeCallback(token, timestamp, remoteParams);
@@ -167,11 +165,32 @@ public partial class Diver : IDisposable
     }
 
     int token = AssignCallbackToken();
+    _callbackTokens[token] = new CancellationTokenSource();
+
+    // Associate the token with the client port
+    int clientPort = arg.RemoteEndPoint.Port;
+    lock (_registeredPidsLock)
+    {
+      if (_clientCallbacks.TryGetValue(clientPort, out var tokens))
+      {
+        tokens.Add(token);
+      }
+    }
+
+    string groupId = $"Event:{resolvedType.FullName}.{eventName}";
     EventHandler eventHandler = (obj, args) =>
     {
       // Get current timestamp
       DateTime timestamp = DateTime.Now;
-      _ = InvokeControllerCallback(endpoint, token, timestamp, [obj, args]);
+      _ = SyncThread.EnqueueAsync(
+          async () => await InvokeControllerCallback(endpoint, token, timestamp, [obj, args]),
+          groupId,
+          TimeSpan.FromSeconds(5))
+        .ContinueWith(t =>
+        {
+          if (t.IsFaulted)
+              Log.Error($"Failed to process event {eventName}: {t.Exception}");
+        }, TaskContinuationOptions.OnlyOnFaulted);
     };
 
     try
@@ -182,9 +201,7 @@ public partial class Diver : IDisposable
       // Pass the target object and event name to the wrapper
       var wrapperInstance = Activator.CreateInstance(
         wrapperType,
-        eventHandler,
-        target,      // The source object where the event is defined
-        eventName);  // The name of the event
+        eventHandler);
 
       Delegate my_delegate = Delegate.CreateDelegate(eventDelegateType, wrapperInstance, "Handle");
 

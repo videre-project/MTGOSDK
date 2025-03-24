@@ -26,11 +26,19 @@ public partial class Diver : IDisposable
       return QuickError("Missing parameter 'address'");
     }
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Called! Token: {token}");
+
     if (_remoteHooks.TryRemove(token, out RegisteredMethodHookInfo rmhi))
     {
+      if (_callbackTokens.TryRemove(token, out var tokenSource))
+      {
+        tokenSource.Cancel();
+        tokenSource.Dispose();
+      }
       HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
+
       return "{\"status\":\"OK\"}";
     }
+
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Unknown token for event callback subscription. Token: {token}");
     return QuickError("Unknown token for event callback subscription");
   }

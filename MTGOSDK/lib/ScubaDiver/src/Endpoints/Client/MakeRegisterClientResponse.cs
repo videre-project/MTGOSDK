@@ -10,6 +10,7 @@ using System.Net;
 
 using Newtonsoft.Json;
 
+using ScubaDiver.Hooking;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 
@@ -31,6 +32,7 @@ public partial class Diver : IDisposable
     lock (_registeredPidsLock)
     {
       _registeredPids.Add(pid);
+      _clientCallbacks.TryAdd(pid, new HashSet<int>());
     }
     Log.Debug("[Diver] New client registered. ID = " + pid);
     return "{\"status\":\"OK'\"}";
@@ -49,6 +51,28 @@ public partial class Diver : IDisposable
     {
       removed = _registeredPids.Remove(pid);
       remaining = _registeredPids.Count;
+
+      // Clean up all callbacks associated with this client
+      if (_clientCallbacks.TryRemove(pid, out var tokens))
+      {
+        foreach (var token in tokens)
+        {
+          // Cancel token and dispose
+          if (_callbackTokens.TryRemove(token, out var cts))
+          {
+            cts.Cancel();
+            cts.Dispose();
+          }
+
+          // Remove event handlers
+          if (_remoteEventHandler.TryRemove(token, out var eventInfo))
+            eventInfo.EventInfo.RemoveEventHandler(eventInfo.Target, eventInfo.RegisteredProxy);
+
+          // Remove method hooks
+          if (_remoteHooks.TryRemove(token, out var hookInfo))
+            HarmonyWrapper.Instance.RemovePrefix(hookInfo.OriginalHookedMethod);
+        }
+      }
     }
     Log.Debug("[Diver] Client unregistered. ID = " + pid);
 

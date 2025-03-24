@@ -3,12 +3,12 @@
   Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
+#pragma warning disable CS8500
 
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 using Microsoft.Diagnostics.Runtime;
 
@@ -330,30 +330,20 @@ public class SnapshotRuntime : IDisposable
 
   public ulong GetObjectAddress(object obj)
   {
-    //
-    // Pin the object to prevent GC movement during the operation.
-    //
-    // Note: The pinned address from GCHandle represents the current location in
-    // managed memory, while the returned ClrObject.Address represents ClrMD's
-    // view of the object in its snapshot.
-    //
-    // These addresses may differ as ClrMD maintains its own mapping.
-    //
-    GCHandle handle = GCHandle.Alloc(obj, GCHandleType.Pinned);
     _lock.EnterReadLock();
     try
     {
-      // Get current memory location
-      IntPtr ptr = handle.AddrOfPinnedObject();
+      unsafe
+      {
+        TypedReference tr = __makeref(obj);
+        IntPtr ptr = *(IntPtr*)(&tr);
 
-      // Translate to ClrMD's view of the object address in its snapshot
-      ClrObject clrObj = GetClrObject((ulong)ptr);
-      return clrObj.Address;
+        return (ulong)ptr.ToInt64();
+      }
     }
     finally
     {
       _lock.ExitReadLock();
-      handle.Free();
     }
   }
 

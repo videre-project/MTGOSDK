@@ -300,6 +300,8 @@ public sealed class RemoteClient : DLRWrapper
   /// </summary>
   private readonly RemoteHandle _clientHandle;
 
+  private readonly CancellationTokenSource _cts = new();
+
   /// <summary>
   /// The native process handle to the MTGO client.
   /// </summary>
@@ -316,7 +318,7 @@ public sealed class RemoteClient : DLRWrapper
     // Connect to the MTGO process
     ushort port = Port ??= Cast<ushort>(_clientProcess.Id);
     Log.Trace("Connecting to MTGO process on port {Port}", port);
-    var client = Retry(() => RemoteHandle.Connect(_clientProcess, port),
+    var client = Retry(() => RemoteHandle.Connect(_clientProcess, port, _cts),
                        // Retry connecting to avoid creating a race condition
                        delay: 500, retries: 3, raise: true);
 
@@ -325,15 +327,6 @@ public sealed class RemoteClient : DLRWrapper
     _clientProcess.Exited += (s, e) =>
     {
       Log.Debug("MTGO process exited with code {ExitCode}.", _clientProcess.ExitCode);
-      Dispose();
-      ProcessExited?.Invoke(null, EventArgs.Empty);
-    };
-
-    client.Communicator.ProcessCrashed += (s, e) =>
-    {
-      if (_isDisposing) return;
-
-      Log.Critical("MTGO process has crashed unexpectedly.");
       Dispose();
       ProcessExited?.Invoke(null, EventArgs.Empty);
     };
@@ -383,6 +376,10 @@ public sealed class RemoteClient : DLRWrapper
     // Cleanup all resources and dispose of the client handle
     Try(@client.Dispose);
     Port = null;
+
+    // Cancel the heartbeat check and dispose of the cancellation token
+    @this._cts.Cancel();
+    @this._cts.Dispose();
 
     // Kill the MTGO process if CloseOnExit is set
     if (CloseOnExit)

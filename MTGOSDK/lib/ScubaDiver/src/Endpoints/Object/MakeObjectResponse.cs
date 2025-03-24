@@ -42,30 +42,21 @@ public partial class Diver : IDisposable
     }
 
     // Attempt to dump the object and remote type
-    ObjectDump od = null;
-    int retries = 10;
-    while (--retries > 0)
+    ObjectDump od = null!;
+    try
     {
-      try
-      {
-        (object instance, ulong pinnedAddress) = _runtime.GetHeapObject(
-          objAddr,
-          pinningRequested,
-          typeName,
-          hashCodeFallback ? userHashcode : null
-        );
-        od = ObjectDumpFactory.Create(instance, objAddr, pinnedAddress);
-        break;
-      }
-      catch (Exception e)
-      {
-        if (retries == 0)
-          return QuickError("Failed to retrieve the remote object. Error: " + e.Message);
-        Thread.Sleep(100);
-      }
+      (object instance, ulong pinnedAddress) = _runtime.GetHeapObject(
+        objAddr,
+        pinningRequested,
+        typeName,
+        hashCodeFallback ? userHashcode : null
+      );
+      od = ObjectDumpFactory.Create(instance, objAddr, pinnedAddress);
     }
-    if (od == null)
-      return QuickError("Could not retrieve the remote object (used all retries).");
+    catch (Exception e)
+    {
+      return QuickError("Failed to retrieve the remote object. Error: " + e.Message);
+    }
 
     return JsonConvert.SerializeObject(od);
   }

@@ -182,7 +182,10 @@ public class HarmonyWrapper
                     + __originalMethod.Name;
     if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
     {
-      await SyncThread.EnqueueAsync(() => funcHook(__instance, args), uniqueId);
+      await SyncThread.EnqueueAsync(
+        async () => await funcHook(__instance, args),
+        uniqueId,
+        TimeSpan.FromSeconds(5));
     }
   }
 

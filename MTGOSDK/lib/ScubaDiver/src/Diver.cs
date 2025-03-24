@@ -41,13 +41,15 @@ public partial class Diver : IDisposable
 
   private readonly ManualResetEvent _stayAlive = new(true);
 
+  private readonly ConcurrentDictionary<int, HashSet<int>> _clientCallbacks = new();
+  private readonly ConcurrentDictionary<int, CancellationTokenSource> _callbackTokens = new();
+
   public Diver()
   {
     _responseBodyCreators = new Dictionary<string, Func<HttpListenerRequest, string>>()
     {
       // Diver maintenance
       {"/ping", MakePingResponse},
-      {"/die", MakeDieResponse},
       {"/register_client", MakeRegisterClientResponse},
       {"/unregister_client", MakeUnregisterClientResponse},
       // Dumping
@@ -129,7 +131,7 @@ public partial class Diver : IDisposable
       catch (Exception ex)
       {
         Log.Error("[Diver] Exception occurred in handler.", ex);
-        Log.Debug("[Diver] Stack trace: " + ex.StackTrace);
+        Log.Debug("[Diver] Stack trace: " + ex.Message + "\n" + ex.StackTrace);
         body = QuickError(ex.Message, ex.StackTrace);
       }
     }
@@ -257,6 +259,9 @@ public partial class Diver : IDisposable
   {
     _runtime?.Dispose();
     _portStatusRefreshTimer?.Dispose();
+    _stayAlive.Reset();
+    _stayAlive.Dispose();
+    _clientCallbacks.Clear();
     ReverseCommunicator.Dispose(); // Cleanup the shared HttpClient instance.
   }
 }

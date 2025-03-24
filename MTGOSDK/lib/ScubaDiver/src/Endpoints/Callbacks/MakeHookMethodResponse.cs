@@ -5,12 +5,12 @@
 **/
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 
 using Newtonsoft.Json;
 
@@ -138,7 +138,18 @@ public partial class Diver : IDisposable
 
     // Assign a token to this callback so we can identify it later
     int token = AssignCallbackToken();
+    _callbackTokens[token] = new CancellationTokenSource();
     Log.Debug($"[Diver] Hook Method - Assigned Token: {token}");
+
+    // Associate the token with the client port (which is not the endpoint port)
+    int clientPort = arg.RemoteEndPoint.Port;
+    lock (_registeredPidsLock)
+    {
+      if (_clientCallbacks.TryGetValue(clientPort, out var tokens))
+      {
+        tokens.Add(token);
+      }
+    }
 
     // Preparing a proxy method that Harmony will invoke
     HarmonyWrapper.HookCallback patchCallback = async (obj, args) =>

@@ -4,8 +4,6 @@
 **/
 
 using System.Collections.Concurrent;
-using System.Threading;
-using System.Threading.Tasks;
 
 using MTGOSDK.Core.Logging;
 
@@ -19,6 +17,9 @@ namespace MTGOSDK.Core;
 /// <param name="handler">The method to be wrapped.</param>
 public static class SyncThread
 {
+  private static readonly int s_maxQueueSize = Environment.ProcessorCount * 100;
+  private static readonly SemaphoreSlim s_queueSemaphore = new(s_maxQueueSize, s_maxQueueSize);
+
   private static readonly CancellationTokenSource s_cancellationTokenSource = new();
   private static readonly CancellationToken s_cancellationToken =
     s_cancellationTokenSource.Token;
@@ -31,8 +32,34 @@ public static class SyncThread
   private static readonly TaskFactory s_taskFactory = new(s_taskScheduler);
   private static readonly ConcurrentDictionary<string, Task> s_groupTasks = new();
 
-  private static DateTime _lastCleanup = DateTime.UtcNow;
-  private static readonly TimeSpan CleanupInterval = TimeSpan.FromSeconds(30);
+  private static readonly Timer s_cleanupTimer;
+  private static readonly TimeSpan s_cleanupInterval = TimeSpan.FromSeconds(30);
+
+  static SyncThread()
+  {
+    // Run cleanup every 30 seconds
+    s_cleanupTimer = new(CleanupCallback, null, TimeSpan.Zero, s_cleanupInterval);
+  }
+
+  private static void CleanupCallback(object? state)
+  {
+    try
+    {
+      foreach (var key in s_groupTasks.Keys.ToList())
+      {
+        if (s_groupTasks.TryGetValue(key, out var task) &&
+            (task.IsCompleted || task.IsCanceled || task.IsFaulted))
+        {
+          // Only remove if the task is still in the same state
+          s_groupTasks.TryRemove(key, out _);
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      Log.Error(ex, "Failed to clean up completed tasks");
+    }
+  }
 
   private static Action WrapCallback(Action callback) => () =>
   {
@@ -91,12 +118,12 @@ public static class SyncThread
     // Update the group dictionary
     s_groupTasks[groupId] = newTask;
 
-    // Occasionally clean up completed tasks
-    if (s_groupTasks.Count > 10 || DateTime.UtcNow - _lastCleanup > CleanupInterval)
-    {
-      CleanUpCompletedTasks();
-      _lastCleanup = DateTime.UtcNow;
-    }
+    // // Occasionally clean up completed tasks
+    // if (s_groupTasks.Count > 10 || DateTime.UtcNow - _lastCleanup > CleanupInterval)
+    // {
+    //   CleanUpCompletedTasks();
+    //   _lastCleanup = DateTime.UtcNow;
+    // }
   }
 
   private static Func<Task> WrapCallbackAsync(Func<Task> callback) => async () =>
@@ -119,58 +146,116 @@ public static class SyncThread
     }
   };
 
-  public static Task EnqueueAsync(Func<Task> callback)
+  public static async Task EnqueueAsync(
+    Func<Task> callback,
+    TimeSpan? timeout = null)
   {
-    return s_taskFactory.StartNew(async () => await WrapCallbackAsync(callback)(), s_cancellationToken).Unwrap();
-  }
+    if (s_cancellationToken.IsCancellationRequested)
+      return;
 
-  public static Task EnqueueAsync(Func<Task> callback, string groupId)
-  {
-    if (string.IsNullOrEmpty(groupId))
+    // Wait for queue space with optional timeout
+    if (timeout.HasValue)
     {
-      return EnqueueAsync(callback);
-    }
-
-    Task newTask;
-    if (s_groupTasks.TryGetValue(groupId, out var existingTask) &&
-        !existingTask.IsCompleted && !existingTask.IsFaulted && !existingTask.IsCanceled)
-    {
-      newTask = existingTask.ContinueWith(
-        async _ => await WrapCallbackAsync(callback)(),
-        s_cancellationToken,
-        TaskContinuationOptions.None,
-        s_taskScheduler).Unwrap();
+      if (!await s_queueSemaphore.WaitAsync(timeout.Value, s_cancellationToken))
+        throw new TimeoutException("Task queue is full");
     }
     else
     {
-      newTask = s_taskFactory.StartNew(async () => await WrapCallbackAsync(callback)(), s_cancellationToken).Unwrap();
+      await s_queueSemaphore.WaitAsync(s_cancellationToken);
     }
 
-    s_groupTasks[groupId] = newTask;
-
-    if (s_groupTasks.Count > 10 || DateTime.UtcNow - _lastCleanup > CleanupInterval)
+    try
     {
-      CleanUpCompletedTasks();
-      _lastCleanup = DateTime.UtcNow;
+      await s_taskFactory.StartNew(WrapCallbackAsync(async () =>
+      {
+        try
+        {
+          await callback();
+        }
+        finally
+        {
+          s_queueSemaphore.Release();
+        }
+      }), s_cancellationToken);
     }
-
-    return newTask;
+    catch
+    {
+      s_queueSemaphore.Release();
+      throw;
+    }
   }
 
-  private static void CleanUpCompletedTasks()
+  public static async Task EnqueueAsync(Func<Task> callback, string groupId, TimeSpan? timeout = null)
   {
-    foreach (var key in s_groupTasks.Keys)
+    if (string.IsNullOrEmpty(groupId))
     {
-      if (s_groupTasks.TryGetValue(key, out var task) &&
-          (task.IsCompleted || task.IsCanceled || task.IsFaulted))
+      await EnqueueAsync(callback);
+      return;
+    }
+
+    if (s_cancellationToken.IsCancellationRequested)
+      return;
+
+    // Wait for queue space
+    if (timeout.HasValue)
+    {
+      if (!await s_queueSemaphore.WaitAsync(timeout.Value, s_cancellationToken))
+          throw new TimeoutException("Task queue is full");
+    }
+    else
+    {
+      await s_queueSemaphore.WaitAsync(s_cancellationToken);
+    }
+
+    try
+    {
+      Task newTask;
+      if (s_groupTasks.TryGetValue(groupId, out var existingTask) &&
+          !existingTask.IsCompleted && !existingTask.IsFaulted && !existingTask.IsCanceled)
       {
-        s_groupTasks.TryRemove(key, out _);
+        newTask = existingTask.ContinueWith(
+          _ => WrapCallbackAsync(async () =>
+          {
+            try
+            {
+              await callback();
+            }
+            finally
+            {
+              s_queueSemaphore.Release();
+            }
+          })(),
+          s_cancellationToken,
+          TaskContinuationOptions.None,
+          s_taskScheduler);
       }
+      else
+      {
+        newTask = s_taskFactory.StartNew(WrapCallbackAsync(async () =>
+        {
+          try
+          {
+            await callback();
+          }
+          finally
+          {
+            s_queueSemaphore.Release();
+          }
+        }), s_cancellationToken);
+      }
+
+      s_groupTasks[groupId] = newTask;
+    }
+    catch
+    {
+      s_queueSemaphore.Release();
+      throw;
     }
   }
 
   public static void Stop()
   {
     s_cancellationTokenSource.Cancel();
+    s_cleanupTimer?.Dispose();
   }
 }

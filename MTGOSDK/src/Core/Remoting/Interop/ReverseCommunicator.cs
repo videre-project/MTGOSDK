@@ -5,14 +5,10 @@
 **/
 
 using System.Net;
-using System.Net.Http;
-using System.Text;
 
 using Newtonsoft.Json;
 
-using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 namespace MTGOSDK.Core.Remoting.Interop;
 
@@ -20,96 +16,42 @@ namespace MTGOSDK.Core.Remoting.Interop;
 /// The reverse communicator is used by the Diver to communicate back with its
 /// controller regarding callbacks invocations
 /// </summary>
-public class ReverseCommunicator
+public class ReverseCommunicator : BaseCommunicator
 {
-  private readonly string _hostname;
-  private readonly int _port;
-
-  private static readonly SemaphoreSlim s_semaphore =
-    new(2 * Environment.ProcessorCount);
-
-  private static readonly HttpClient s_client = new()
+  private static readonly JsonSerializerSettings s_jsonSettings = new()
   {
-    Timeout = TimeSpan.FromSeconds(5),
-    DefaultRequestHeaders = { ConnectionClose = false }
+    TypeNameHandling = TypeNameHandling.None,
+    DefaultValueHandling = DefaultValueHandling.Ignore
   };
 
-  public ReverseCommunicator(string hostname, int port)
-  {
-    _hostname = hostname;
-    _port = port;
-  }
-  public ReverseCommunicator(IPAddress ipa, int port) : this(ipa.ToString(), port) {}
-  public ReverseCommunicator(IPEndPoint ipe) : this(ipe.Address, ipe.Port) {}
+  public ReverseCommunicator(
+    string hostname,
+    int port,
+    CancellationTokenSource cancellationTokenSource = null)
+    : base(hostname, port, cancellationTokenSource) { }
 
-  public static void Dispose() => s_client.Dispose();
+  public ReverseCommunicator(
+    IPAddress ipa,
+    int port,
+    CancellationTokenSource cancellationTokenSource = null)
+    : this(ipa.ToString(), port, cancellationTokenSource) { }
 
-  private async Task<string?> SendRequestAsync(
-    string path,
-    string jsonBody = null,
-    bool ignoreResponse = false)
-  {
-    string url = $"http://{_hostname}:{_port}/{path}";
-    try
-    {
-      await s_semaphore.WaitAsync();
-      HttpResponseMessage res = await RetryAsync(
-        async () =>
-        {
-          // Create a new HttpRequestMessage for each attempt
-          using var msg = new HttpRequestMessage(
-            jsonBody == null ? HttpMethod.Get : HttpMethod.Post,
-            url);
-
-          if (jsonBody != null)
-          {
-            msg.Content = new StringContent(
-              jsonBody,
-              Encoding.UTF8,
-              "application/json");
-          }
-
-          return await s_client.SendAsync(msg);
-        },
-        delay: 10,
-        raise: true);
-
-      if (!ignoreResponse)
-      {
-        // Read the response body only if not ignoring the response
-        return await res.Content.ReadAsStringAsync();
-      }
-    }
-    catch (TaskCanceledException ex)
-    {
-      Log.Error($"Request timed out: {ex.Message}");
-      Log.Debug(ex.StackTrace);
-      if (!ignoreResponse) throw;
-    }
-    catch (Exception ex)
-    {
-      // Log the exception if needed
-      Log.Error($"Failed to send request: {ex.Message}");
-      Log.Debug(ex.StackTrace);
-      if (!ignoreResponse) throw;
-    }
-    finally
-    {
-      s_semaphore.Release();
-    }
-
-    return null;
-  }
+  public ReverseCommunicator(
+    IPEndPoint ipe,
+    CancellationTokenSource cancellationTokenSource = null)
+    : this(ipe.Address, ipe.Port, cancellationTokenSource) { }
 
   public async Task<bool> CheckIfAlive()
   {
     try
     {
-      var resJson = await SendRequestAsync("ping");
-      if (resJson == null)
-        return false;
+      using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+      using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+        _cancellationTokenSource.Token,
+        timeoutCts.Token);
 
-      return resJson.Contains("pong");
+      var resJson = await SendRequestAsync("ping", cancellationToken: linkedCts.Token);
+      return resJson?.Contains("pong") == true;
     }
     catch
     {
@@ -117,19 +59,19 @@ public class ReverseCommunicator
     }
   }
 
-  public async Task InvokeCallback(
+  public Task InvokeCallback(
     int token,
     DateTime timestamp,
     params ObjectOrRemoteAddress[] args)
   {
-    CallbackInvocationRequest invocReq = new()
+    var invocReq = new CallbackInvocationRequest
     {
       Timestamp = timestamp,
       Token = token,
       Parameters = args.ToList()
     };
 
-    var requestJsonBody = JsonConvert.SerializeObject(invocReq);
-    _ = await SendRequestAsync("invoke_callback", requestJsonBody, true);
+    var requestJsonBody = JsonConvert.SerializeObject(invocReq, s_jsonSettings);
+    return SendRequestAsync("invoke_callback", null, requestJsonBody, true);
   }
 }
