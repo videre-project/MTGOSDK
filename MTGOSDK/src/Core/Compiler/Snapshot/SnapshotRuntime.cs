@@ -47,7 +47,7 @@ public class SnapshotRuntime : IDisposable
   /// <summary>
   /// The collection of frozen (pinned) objects.
   /// </summary>
-  private readonly FrozenObjectCollection _freezer = new();
+  private readonly ObjectFreezer _freezer = new();
 
   public SnapshotRuntime(bool useDomainSearch = false)
   {
@@ -138,7 +138,8 @@ public class SnapshotRuntime : IDisposable
     if (!_freezer.TryGetPinningAddress(instance, out ulong objAddress))
     {
       // Pin and mark for unpinning later
-      objAddress = _freezer.Pin(instance);
+      IntPtr ptr = _freezer.Pin(instance);
+      objAddress = (ulong)ptr.ToInt64();
     }
 
     return objAddress;
@@ -150,7 +151,8 @@ public class SnapshotRuntime : IDisposable
     if (!_freezer.TryGetPinnedObject(objAddress, out _))
       return false;
 
-    return _freezer.Unpin(objAddress);
+    _freezer.Unpin(objAddress);
+    return true;
   }
 
   //
@@ -316,7 +318,7 @@ public class SnapshotRuntime : IDisposable
   public void Dispose()
   {
     DisposeRuntime();
-    _freezer.UnpinAll();
+    _freezer.Dispose();
 
     if (_lock != null)
     {
