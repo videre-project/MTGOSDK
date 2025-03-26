@@ -91,6 +91,7 @@ public class ObjectFreezer: IDisposable
     catch (Exception ex)
     {
       Log.Error("Error during pinning: {0}", ex.Message);
+      Log.Debug("Stacktrace: ", ex.StackTrace);
       return IntPtr.Zero;
     }
   }
@@ -126,14 +127,13 @@ public class ObjectFreezer: IDisposable
     // Get the IL generator for the dynamic method.
     ILGenerator il = pinMethod.GetILGenerator();
 
-    // Declare local variables for the pinned object and its address.
-    LocalBuilder pinnedLocal = il.DeclareLocal(type.MakeByRefType(), pinned: true);
+    // Declare local variables for the pinned object reference and its address.
+    LocalBuilder pinnedLocal = il.DeclareLocal(typeof(object).MakeByRefType(), pinned: true);
     LocalBuilder addressLocal = il.DeclareLocal(typeof(IntPtr));
 
-    // Pins the object and return its address.
+    // Pins the object reference and return its address.
     il.Emit(OpCodes.Ldarg_0);             // stack: obj
-    il.Emit(OpCodes.Castclass, type);     // stack: (Type)obj
-    il.Emit(OpCodes.Stloc, pinnedLocal);  // pinnedLocal = (Type)obj;
+    il.Emit(OpCodes.Stloc, pinnedLocal);  // pinnedLocal = obj;
     il.Emit(OpCodes.Ldloc, pinnedLocal);  // stack: &pinnedLocal
     il.Emit(OpCodes.Conv_U);              // stack: (IntPtr)&pinnedLocal
     il.Emit(OpCodes.Stloc, addressLocal); // addressLocal = (IntPtr)&pinnedLocal;
