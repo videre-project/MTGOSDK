@@ -215,7 +215,22 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       if (Version > EULAVersion)
       {
         Log.Debug("Accepting EULA prompt for MTGO v{Version}.", Version);
-        Retry(WindowUtilities.CloseDialogs, delay: 1000, raise: true);
+        s_loginManager.HighestVersionEulaAgreedTo = Version.ToString();
+
+        // Restart the MTGO process with the updated EULA version.
+        Log.Debug("Restarting the MTGO process with the updated EULA version.");
+        RemoteClient.Dispose();
+        Task.Run(async () =>
+        {
+          // Close any existing MTGO processes.
+          if (!await WaitUntil(() => !RemoteClient.KillProcess(), delay: 10))
+            throw new SetupFailureException("Unable to restart MTGO.");
+
+          // Start a new MTGO process.
+          await RemoteClient.StartProcess();
+        }).Wait();
+        RemoteClient.EnsureInitialize();
+        Log.Debug("Restarted the MTGO process with the updated EULA version.");
       }
     }
 

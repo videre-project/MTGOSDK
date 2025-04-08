@@ -125,4 +125,16 @@ public static class SettingsService
   /// </exception>
   public static object GetDefaultSetting(Setting key) =>
     GetDefaultSetting<object>(key);
+
+  public static void SetSetting(Setting key, object value)
+  {
+    dynamic remoteKey = GetSettingKey(key);
+    var obj = Unbind(s_settingsService).GetSetting(remoteKey)
+      ?? throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the client settings.");
+
+    obj.Value = value;
+  }
+
+  internal static void Save() => Unbind(s_settingsService).Save();
 }

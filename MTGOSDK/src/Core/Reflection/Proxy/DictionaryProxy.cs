@@ -38,11 +38,11 @@ public class DictionaryProxy<TKey, TValue>(
 
   private bool CompareKeys(TKey key, dynamic remoteKey) =>
     Try(() => key.ToString() == remoteKey.ToString(),
-        () => key.Equals(_keyTypeMapper(remoteKey)));
+        () => key.Equals(_keyTypeMapper(remoteKey))) ?? false;
 
   private bool CompareValues(TValue value, dynamic remoteValue) =>
     Try(() => value.ToString() == remoteValue.ToString(),
-        () => value.Equals(_valueTypeMapper(remoteValue)));
+        () => value.Equals(_valueTypeMapper(remoteValue))) ?? false;
 
   /// <summary>
   /// Stores a reference to the remote keys collection.

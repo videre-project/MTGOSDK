@@ -41,11 +41,12 @@ public static class WindowUtilities
   {
     // Attempt to retrieve the updated window collection from client memory.
     Log.Trace("Getting window collection from client memory.");
+    TypeProxy<WindowCollection> t_windowCollection = new();
     dynamic collection = Retry(delegate
     {
-      return RemoteClient.GetInstances(new TypeProxy<WindowCollection>())
-        .LastOrDefault() ?? throw null;
-    }) ?? new InvalidOperationException("Failed to get window collection.");
+      return RemoteClient.GetInstances(t_windowCollection).LastOrDefault()
+        ?? throw new InvalidOperationException("Failed to get window collection.");
+    }, raise: true);
 
     return Bind<ICollection<dynamic>>(collection);
   }
