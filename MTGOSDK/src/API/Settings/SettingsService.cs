@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Remoting;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 // Alias for the settings storage dictionary type.
@@ -33,7 +34,7 @@ public static class SettingsService
   /// <remarks>
   /// Reads from the client's <c>user_settings</c> file.
   /// </remarks>
-  public static SettingsStore UserSettings =
+  public static SettingsStore UserSettings =>
     new(Unbind(s_settingsService).m_userSettingsStorage);
 
   /// <summary>
@@ -42,7 +43,7 @@ public static class SettingsService
   /// <remarks>
   /// Reads from the client's <c>application_settings</c> file.
   /// </remarks>
-  public static SettingsStore ApplicationSettings =
+  public static SettingsStore ApplicationSettings =>
     new(Unbind(s_settingsService).m_machineSettingsStorage);
 
   /// <summary>
@@ -56,14 +57,17 @@ public static class SettingsService
   /// </remarks>
   private static dynamic GetSettingKey(Setting key)
   {
-    foreach (var settings in new[] { UserSettings, ApplicationSettings })
+    try
     {
-      if (settings.TryGetRemoteKey(key, out dynamic remoteKey))
-        return remoteKey;
+      return RemoteClient.CreateEnum(
+        "WotC.MtGO.Client.Model.Settings.SettingName",
+        Enum.GetName(typeof(Setting), key));
     }
-
-    throw new KeyNotFoundException(
-        $"The key '{key}' was not found in the client settings.");
+    catch
+    {
+      throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the client settings.");
+    }
   }
 
   /// <summary>
@@ -78,7 +82,7 @@ public static class SettingsService
   public static T GetSetting<T>(Setting key)
   {
     dynamic remoteKey = GetSettingKey(key);
-    var obj = Unbind(s_settingsService).GetSetting(remoteKey)
+    var obj = Try(() => Unbind(s_settingsService).GetSetting(remoteKey))
       ?? throw new KeyNotFoundException(
           $"The key '{key}' was not found in the client settings.");
 
