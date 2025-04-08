@@ -215,7 +215,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       if (Version > EULAVersion)
       {
         Log.Debug("Accepting EULA prompt for MTGO v{Version}.", Version);
-        s_loginManager.HighestVersionEulaAgreedTo = Version.ToString();
+        SettingsService.SetSetting(
+          Setting.LastEULAVersionNumberAgreedTo,
+          Version.ToString()
+        );
+        SettingsService.Save();
 
         // Restart the MTGO process with the updated EULA version.
         Log.Debug("Restarting the MTGO process with the updated EULA version.");
