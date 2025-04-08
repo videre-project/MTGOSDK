@@ -103,7 +103,11 @@ public abstract class BaseCommunicator
     }
     catch (Exception ex)
     {
-      Log.Error($"Unexpected error during request: {ex.Message}");
+      if (!_cancellationTokenSource.IsCancellationRequested)
+      {
+        Log.Error($"Unexpected error during request: {ex.Message}");
+      }
+
       return null;
     }
     finally
