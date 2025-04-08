@@ -47,7 +47,7 @@ public class SnapshotRuntime : IDisposable
   /// <summary>
   /// The collection of frozen (pinned) objects.
   /// </summary>
-  private readonly ObjectFreezer _freezer = new();
+  private readonly ObjectPinner _pinner = new();
 
   public SnapshotRuntime(bool useDomainSearch = false)
   {
@@ -130,28 +130,27 @@ public class SnapshotRuntime : IDisposable
   //
 
   public bool TryGetPinnedObject(ulong objAddress, out object instance) =>
-    _freezer.TryGetPinnedObject(objAddress, out instance);
+    _pinner.TryGetPinnedObject((IntPtr)objAddress, out instance);
 
   public ulong PinObject(object instance)
   {
     // Check if the object was pinned, otherwise ignore.
-    if (!_freezer.TryGetPinningAddress(instance, out ulong objAddress))
+    if (!_pinner.TryGetPinningAddress(instance, out IntPtr objAddress))
     {
       // Pin and mark for unpinning later
-      IntPtr ptr = _freezer.Pin(instance);
-      objAddress = (ulong)ptr.ToInt64();
+      objAddress = _pinner.Pin(instance);
     }
 
-    return objAddress;
+    return (ulong)objAddress;
   }
 
   public bool UnpinObject(ulong objAddress)
   {
     // Ignore if the object is not found in the pinned object pool.
-    if (!_freezer.TryGetPinnedObject(objAddress, out _))
+    if (!_pinner.TryGetPinnedObject((IntPtr)objAddress, out object obj))
       return false;
 
-    _freezer.Unpin(objAddress);
+    _pinner.Unpin(obj);
     return true;
   }
 
@@ -318,7 +317,7 @@ public class SnapshotRuntime : IDisposable
   public void Dispose()
   {
     DisposeRuntime();
-    _freezer.Dispose();
+    _pinner.Dispose();
 
     if (_lock != null)
     {
@@ -548,7 +547,8 @@ public class SnapshotRuntime : IDisposable
       try
       {
         // Suspend GC while enumerating objects
-        noGcSuccess = GC.TryStartNoGCRegion(16 * 1024 * 1024);
+        try { noGcSuccess = GC.TryStartNoGCRegion(16 * 1024 * 1024); }
+        catch { /* Ignore if GC was already suspended */ }
 
         // Now downgrade to read lock for enumeration
         _lock.ExitWriteLock();
