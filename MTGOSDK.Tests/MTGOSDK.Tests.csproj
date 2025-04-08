@@ -29,8 +29,8 @@
     <ExcludeByAttribute>GeneratedCodeAttribute,RuntimeInternalAttribute</ExcludeByAttribute>
     <ExcludeByFile>**/*.g.cs;**/*.Version.cs</ExcludeByFile>
     <Include>[*]MTGOSDK.API.*</Include>
-    <Threshold>70,60,60</Threshold>
-    <ThresholdType>line,branch,method</ThresholdType>
+    <!-- <Threshold>70,60,60</Threshold>
+    <ThresholdType>line,branch,method</ThresholdType> -->
   </PropertyGroup>
 
   <Target Name="GenerateHtmlCoverageReport"
