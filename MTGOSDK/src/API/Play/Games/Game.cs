@@ -237,8 +237,8 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// Event triggered when the current game prompt changes.
   /// </summary>
-  public EventProxy<GameEventArgs> PromptChanged =
-    new(/* IGame */ game, nameof(PromptChanged));
+  public EventHookWrapper<GamePrompt> OnPromptChanged =
+    new(GamePromptChanged, new Filter<GamePrompt>((s,_) => s.Id == game.Id));
 
   /// <summary>
   /// Event triggered when the current game state changes.
@@ -266,8 +266,8 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// Event triggered when the game phase for the current turn.
   /// </summary>
-  public EventProxy<GameEventArgs> CurrentPhaseChanged =
-    new(/* IGame */ game, nameof(CurrentPhaseChanged));
+  public EventHookWrapper<CurrentPlayerPhase> OnGamePhaseChange =
+    new(GamePhaseChanged, new Filter<CurrentPlayerPhase>((s,_) => s.Id == game.Id));
 
   /// <summary>
   /// Event triggered when the current turn number changes.
@@ -309,6 +309,59 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   // IGame static events
   //
 
+  /// <summary>
+  /// Event triggered when the current game prompt changes in any active game.
+  /// </summary>
+  public static EventHookProxy<Game, GamePrompt> GamePromptChanged =
+    new(
+      "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
+      "ProcessTurnStepElement",
+      new((instance, args) =>
+      {
+        Game game = new(instance);
+        DateTime __timestamp = instance.__timestamp;
+
+        dynamic turnStep = args[0];
+        GamePrompt gamePrompt = new(new
+        {
+          // DynamicRemoteObject properties
+          __timestamp,
+          // IGamePrompt properties
+          Text = turnStep.PromptText,
+          Timestamp = turnStep.TimeStamp,
+          Options = new List<GameAction>()
+        });
+
+        return (game, gamePrompt);
+      })
+    );
+
+  /// <summary>
+  /// Event triggered when the current phase changes in any active game.
+  /// </summary>
+  public static EventHookProxy<Game, CurrentPlayerPhase> GamePhaseChanged =
+    new(
+      "Shiny.Play.Duel.ViewModel.PhaseControllerViewModel",
+      "set_CurrentPhase",
+      new((instance, args) =>
+      {
+        GamePhase currentPhase = Cast<GamePhase>(args[0].GamePhase);
+        if (currentPhase == GamePhase.Invalid) return null;
+
+        GamePlayer activePlayer = new(instance.ActivePlayer);
+        Game game = activePlayer.GameInterface;
+        if (game == null) return null; // Ignore invalid game objects.
+
+        // Set timestamp on activePlayer
+        Unbind(activePlayer).__timestamp = instance.__timestamp;
+
+        return (game, new CurrentPlayerPhase(activePlayer, currentPhase));
+      })
+    );
+
+  /// <summary>
+  /// Event triggered when a new instance of a game card is created.
+  /// /// </summary>
   public static EventHookProxy<Game, GameCard> GameCardCreated =
     new(
       "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
