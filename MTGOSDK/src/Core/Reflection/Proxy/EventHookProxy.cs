@@ -23,8 +23,6 @@ public delegate (dynamic, dynamic)? EventHook(dynamic instance, dynamic[] args);
 /// subscription and unsubscription.
 /// </remarks>
 public class EventHookProxy<I, T> : EventProxyBase<I, T>
-    where I : class
-    where T : class
 {
   // private event HookProxy<I,T> _eventHook;
   private event Action<I,T> _eventHook;

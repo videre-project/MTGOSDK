@@ -9,7 +9,6 @@ namespace MTGOSDK.Core.Reflection;
 public delegate bool Filter<I>(dynamic t, I i);
 
 public class EventHookWrapper<I>(EventHookProxy<dynamic, I> handler, Filter<I> hook)
-    where I : class
 {
   private EventHookProxy<dynamic, I> _handler = handler;
   private event Action<I> _instanceHandler = null;
