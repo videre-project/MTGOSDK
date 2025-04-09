@@ -322,7 +322,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         try
         {
           result = Retry(() => ((FieldInfo)firstMember).GetValue(__ro),
-                         delay: 0, raise: true);
+                         delay: 10, raise: true);
         }
         catch (Exception ex)
         {
@@ -333,7 +333,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         try
         {
           result = Retry(() => ((PropertyInfo)firstMember).GetValue(__ro),
-                         delay: 0, raise: true);
+                         delay: 10, raise: true);
         }
         catch (Exception ex)
         {
