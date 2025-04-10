@@ -4,12 +4,11 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections;
-
 
 namespace MTGOSDK.Core.Remoting.Types;
 
-public class DynamicRemoteEnumerator(dynamic remoteEnumerator) : IEnumerator
+public class DynamicRemoteEnumerator(dynamic remoteEnumerator)
+  : IEnumerator<object>, IDisposable
 {
   public object Current => remoteEnumerator.Current;
 
@@ -25,8 +24,13 @@ public class DynamicRemoteEnumerator(dynamic remoteEnumerator) : IEnumerator
     }
     catch
     {
-      // TODO: Handle IDisposable's Dispose method explicitly when expected
-      // by a using statement or a call to Dispose().
+      remoteEnumerator.Reset();
+      remoteEnumerator.MoveNext();
     }
+  }
+
+  ~DynamicRemoteEnumerator()
+  {
+    Dispose();
   }
 }
