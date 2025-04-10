@@ -6,6 +6,7 @@
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
+using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Play;
 
 
@@ -25,13 +26,18 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
 
   internal Game GameInterface => new(@base.Game);
 
+  internal IUser m_user => Bind<IUser>(Unbind(gamePlayer).m_user);
+
   //
   // IGamePlayer wrapper properties
   //
 
+  public string Name => m_user.Name;
+
   /// <summary>
   /// The User object for the player.
   /// </summary>
+  [NonSerializable]
   public User User => new(Unbind(@base).User.Id);
 
   /// <summary>
@@ -82,7 +88,7 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   // IGamePlayer wrapper methods
   //
 
-  public override string ToString() => this.User.Name;
+  public override string ToString() => this.Name;
 
   //
   // IGamePlayer wrapper events

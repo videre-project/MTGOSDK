@@ -425,7 +425,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       new((instance, _) =>
       {
         GamePlayer player = new(instance);
-        if (player.User.Id == -1) return null; // Ignore invalid user objects.
+        if (string.IsNullOrEmpty(player.Name)) return null;
         Game game = player.GameInterface;
 
         // Return a tuple of (Game, GamePlayer)
