@@ -420,6 +420,26 @@ public abstract class DLRWrapper : IJsonSerializable
   }
 
   /// <summary>
+  /// Safely executes an async lambda function with a given number of retries.
+  /// /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="delay">The delay in ms between retries (optional).</param>
+  /// <param name="retries">The number of times to retry (optional).</param>
+  /// <returns>True if the function executed successfully.</returns>
+  public static async Task<bool> WaitUntilAsync(
+    Func<Task<bool>> lambda,
+    int delay = 250,
+    int retries = 20)
+  {
+    for (; retries > 0; retries--)
+    {
+      try { if (await lambda()) return true; } catch { }
+      await Task.Delay(delay);
+    }
+    return false;
+  }
+
+  /// <summary>
   /// Safely executes a lambda function with a given number of retries.
   /// </summary>
   /// <param name="lambda">The function to execute.</param>
