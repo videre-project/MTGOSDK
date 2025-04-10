@@ -281,6 +281,34 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   }
 
   /// <summary>
+  /// Checks if the MTGO login server is available.
+  /// </summary>
+  /// <returns>True if the login server is available, false otherwise.</returns>
+  /// <exception cref="HttpRequestException">
+  /// Thrown when the request to fetch server status fails.
+  /// </exception>
+  public static async Task<bool> IsLoginAvailable()
+  {
+    using (HttpClient client = new())
+    {
+      string url = "https://auth.daybreakgames.com/api/mtgostatus";
+      using var response = await client.GetAsync(url);
+
+      if (!response.IsSuccessStatusCode)
+        throw new HttpRequestException("Failed to fetch server status");
+
+      using var content = response.Content;
+      var json = JObject.Parse(await content.ReadAsStringAsync());
+
+      if (!json["response"].ToObject<string>().Equals("success"))
+        throw new HttpRequestException("Failed to fetch server status");
+
+      // Check if the login server is up.
+      return json["message"].ToObject<string>() == "UP";
+    }
+  }
+
+  /// <summary>
   /// Verifies the client's compatibility with the SDK version.
   /// </summary>
   /// <param name="assert">Whether to throw an exception on failure.</param>
@@ -364,6 +392,9 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <exception cref="InvalidOperationException">
   /// Thrown when the client is already logged in.
   /// </exception>
+  /// <exception cref="ServerOfflineException">
+  /// Thrown when the login server is currently offline.
+  /// </exception>
   /// <exception cref="ArgumentException">
   /// Thrown when the user's credentials are missing or malformed.
   /// </exception>
@@ -374,6 +405,9 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   {
     if (IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
+
+    if (!await IsLoginAvailable())
+      throw new ServerOfflineException("The login server is currently offline.");
 
     // Passes the user's credentials to the MTGO client for authentication.
     s_loginManager.ScreenName = username;
