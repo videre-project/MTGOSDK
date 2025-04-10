@@ -103,7 +103,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// The pre-game phase is the period before the game starts, where players
   /// can mulligan, choose starting hands, etc.
   /// </remarks>
-  public bool IsPreGame => CurrentPhase >= GamePhase.PreGame1;
+  public bool IsPreGame => Try<bool>(() => CurrentPhase >= GamePhase.PreGame1);
 
   /// <summary>
   /// The player whose turn it is.

@@ -53,6 +53,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
       catch (Exception e)
       {
         Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
+        Log.Debug(e.StackTrace);
       }
     });
   }

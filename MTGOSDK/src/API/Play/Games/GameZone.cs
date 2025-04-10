@@ -31,7 +31,11 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// <summary>
   /// The name of the zone.
   /// </summary>
-  public string Name => m_cardZone.ToString();
+  /// <remarks>
+  /// This is a string representation of the zone's enum value.
+  /// If the zone is not a standard zone (or is unset), this will be null.
+  /// </remarks>
+  public string? Name => Try(() => m_cardZone.ToString());
 
   /// <summary>
   /// The number of cards in the zone.
