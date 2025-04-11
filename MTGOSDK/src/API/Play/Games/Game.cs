@@ -276,12 +276,6 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     new(/* IGame */ game, nameof(CurrentTurnChanged));
 
   /// <summary>
-  /// Event triggered when a new instance of a game card is created.
-  /// </summary>
-  public EventHookWrapper<GameCard> OnCardCreated =
-    new(GameCardCreated, new Filter<GameCard>((s,_) => s.Id == game.Id));
-
-  /// <summary>
   /// Event triggered when any cards are added or removed from a zone.
   /// </summary>
   public EventHookWrapper<GameCard> OnZoneChange =
@@ -356,23 +350,6 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         Unbind(activePlayer).__timestamp = instance.__timestamp;
 
         return (game, new CurrentPlayerPhase(activePlayer, currentPhase));
-      })
-    );
-
-  /// <summary>
-  /// Event triggered when a new instance of a game card is created.
-  /// /// </summary>
-  public static EventHookProxy<Game, GameCard> GameCardCreated =
-    new(
-      "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
-      "CreateDigitalObject",
-      new((instance, args) =>
-      {
-        Game game = new(instance);
-        GameCard gamecard = game.GetGameCard(args[0]);
-        if (gamecard.SourceId == -1) return null; // Ignore invalid events.
-
-        return (game, gamecard); // Return a tuple of (Game, GameCard)
       })
     );
 
