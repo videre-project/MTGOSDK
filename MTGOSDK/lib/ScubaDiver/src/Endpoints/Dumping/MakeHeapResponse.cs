@@ -26,16 +26,10 @@ public partial class Diver : IDisposable
     // Default filter - Find all exact matches based on the filter type.
     Predicate<string> matchesFilter = (string typeName) => typeName == filter;
 
-    (bool anyErrors, List<HeapDump.HeapObject> objects) = _runtime.GetHeapObjects(
+    List<HeapDump.HeapObject> objects = _runtime.GetHeapObjects(
       matchesFilter,
       dumpHashcodes
     );
-    if (anyErrors)
-    {
-      return "{\"error\":\"All dumping trials failed because at least 1 " +
-           "object moved between the snapshot and the heap enumeration\"}";
-    }
-
     HeapDump hd = new() { Objects = objects };
 
     var resJson = JsonConvert.SerializeObject(hd);

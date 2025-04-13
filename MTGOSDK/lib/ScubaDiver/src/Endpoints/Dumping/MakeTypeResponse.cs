@@ -47,11 +47,6 @@ public partial class Diver : IDisposable
     }
 
     string assembly = dumpRequest.Assembly;
-    //Log.Debug($"[Diver] Trying to dump Type: {type}");
-    if (assembly != null)
-    {
-      //Log.Debug($"[Diver] Trying to dump Type: {type}, WITH Assembly: {assembly}");
-    }
     Type resolvedType = _runtime.ResolveType(type, assembly);
 
     if (resolvedType != null)

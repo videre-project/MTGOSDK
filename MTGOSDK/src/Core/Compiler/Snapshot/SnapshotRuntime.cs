@@ -11,7 +11,7 @@ using System.Diagnostics;
 using System.Reflection;
 
 using Microsoft.Diagnostics.Runtime;
-
+using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -415,7 +415,7 @@ public class SnapshotRuntime : IDisposable
     ClrObject lastKnownClrObj = GetClrObject(objAddr);
     if (lastKnownClrObj == default)
     {
-      throw new Exception("No object in this address. Try finding it's address again and dumping again.");
+      throw new Exception("No object in this address.");
     }
 
     // Make sure it's still in place by refreshing the runtime
@@ -425,82 +425,64 @@ public class SnapshotRuntime : IDisposable
     //
     // Figuring out the Method Table value and the actual Object's address
     //
-    ulong methodTable;
-    ulong finalObjAddress;
+    object instance = null;
     if (clrObj.Type != null && clrObj.Type.Name == typeName)
     {
-      methodTable = clrObj.Type.MethodTable;
-      finalObjAddress = clrObj.Address;
+      instance = Compile(clrObj.Address, clrObj.Type.MethodTable);
     }
     else
     {
       // Object moved; fallback to hashcode filtering (if enabled)
       if (!hashCodeFallback)
       {
-        throw new Exception(
-          "{\"error\":\"Object moved since last refresh. 'address' now points at an invalid address. " +
-          "Hash Code fallback was NOT activated\"}");
+        throw new RemoteObjectMovedException(objAddr,
+          $"Object moved since last refresh. Object 0x{objAddr:X} " +
+          "could not be found in the heap.");
       }
 
-      Predicate<string> typeFilter = (string type) => type.Contains(lastKnownClrObj.Type.Name);
-      (bool anyErrors, List<HeapDump.HeapObject> objects) = GetHeapObjects(typeFilter, true);
-      if (anyErrors)
+      // Directly search the heap for the moved object by type and hashcode
+      bool found = false;
+      string expectedTypeName = lastKnownClrObj.Type.Name;
+      _lock.EnterReadLock(); // Need read lock for heap enumeration
+      try
       {
-        throw new Exception(
-          "{\"error\":\"Object moved since last refresh. 'address' now points at an invalid address. " +
-          "Hash Code fallback was activated but dumping function failed so non hash codes were checked\"}");
+        foreach (ClrObject currentObj in _runtime.Heap.EnumerateObjects())
+        {
+          if (currentObj.IsFree || currentObj.Type == null ||
+              !currentObj.Type.Name.Contains(expectedTypeName))
+            continue;
+
+          try
+          {
+            // Compile and check hashcode
+            instance = Compile(currentObj.Address, currentObj.Type.MethodTable);
+            if (instance != null && instance.GetHashCode() == hashcode.Value)
+            {
+              found = true;
+              break; // Found the object, stop searching
+            }
+          }
+          catch
+          {
+            // Ignore errors during compilation or GetHashCode for this specific
+            // object, continue searching
+          }
+        }
       }
-      var matches = objects.Where(heapObj => heapObj.HashCode == hashcode.Value).ToList();
-      if (matches.Count != 1)
+      finally
       {
-        throw new Exception(
-          "{\"error\":\"Object moved since last refresh. 'address' now points at an invalid address. " +
-          $"Hash Code fallback was activated but {((matches.Count > 1) ? "too many (>1)" : "no")} objects with the same hash code were found\"}}");
+        if (_lock.IsReadLockHeld)
+          _lock.ExitReadLock();
       }
 
-      // Single match! We are as lucky as it gets :)
-      HeapDump.HeapObject heapObj = matches.Single();
-      ulong newObjAddress = heapObj.Address;
-      finalObjAddress = newObjAddress;
-      methodTable = heapObj.MethodTable;
+      if (!found)
+      {
+        throw new RemoteObjectMovedException(objAddr,
+          $"Object moved since last refresh. Object 0x{objAddr:X} " +
+          "could not be found in the heap, and no object matching the type " +
+          $"'{expectedTypeName}' was found with the hash code {hashcode.Value}.");
+      }
     }
-
-    //
-    // Actually convert the address back into an Object reference.
-    //
-    object instance;
-    try
-    {
-      instance = Compile(finalObjAddress, methodTable);
-    }
-    catch (ArgumentException)
-    {
-      throw new Exception("Method Table value mismatched");
-    }
-
-    //
-    // A GC collect might still happen between checking the CLR MD object and
-    // the retrieval of the object. So we check the final object's type name one
-    // last time (it's better to crash here then return bad objects).
-    //
-    string finalTypeName;
-    try
-    {
-      finalTypeName = instance.GetType().FullName;
-    }
-    catch (Exception ex)
-    {
-      throw new AggregateException(
-        "The final object we got from the addres (after checking CLR MD twice) was" +
-        "broken and we couldn't read it's Type's full name.", ex);
-    }
-
-    if (finalTypeName != typeName)
-      throw new Exception(
-        "A GC occurened between checking the CLR MD (twice) and the object retrieval." +
-        "A different object was retrieved and its type is not the one we expected." +
-        $"Expected Type: {typeName}, Actual Type: {finalTypeName}");
-
 
     // Pin the result object if requested
     ulong pinnedAddress = 0;
@@ -529,7 +511,7 @@ public class SnapshotRuntime : IDisposable
   /// method will return an empty list of objects and set 'anyErrors' to true.
   /// </para>
   /// </remarks>
-  public (bool anyErrors, List<HeapDump.HeapObject> objects) GetHeapObjects(
+  public List<HeapDump.HeapObject> GetHeapObjects(
     Predicate<string> filter,
     bool dumpHashcodes)
   {
@@ -620,8 +602,9 @@ public class SnapshotRuntime : IDisposable
     }
 
     if (anyErrors && objects.Count == 0)
-      return (true, []);
+      throw new HeapDumpException(
+        "Failed to dump heap objects. No objects were found and errors occurred.");
 
-    return (anyErrors, objects);
+    return objects;
   }
 }

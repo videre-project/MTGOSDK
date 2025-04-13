@@ -25,14 +25,9 @@ public class UnifiedAppDomain
       // Use snapshot's heap searching to locate all 'System.AppDomain' objects.
       try
       {
-        (bool anyErrors, var candidates) = snapshot
+        var candidates = snapshot
           .GetHeapObjects(heapObjType =>
               heapObjType == typeof(AppDomain).FullName, true);
-
-        if(anyErrors)
-        {
-          throw new Exception("GetHeapObjects returned anyErrors: True");
-        }
 
         _domains = candidates
           .Select(cand =>
@@ -40,7 +35,6 @@ public class UnifiedAppDomain
                 .GetHeapObject(cand.Address, false, cand.Type, cand.HashCode)
                 .instance)
           .Cast<AppDomain>().ToArray();
-        // Logger.Debug("[Diver][UnifiedAppDomain] All assemblies were retrieved from all AppDomains.");
       }
       catch// (Exception ex)
       {
