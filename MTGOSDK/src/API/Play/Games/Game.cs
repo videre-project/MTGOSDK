@@ -11,7 +11,10 @@ using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
+using WotC.MtGO.Client.Model.Chat;
 using WotC.MtGO.Client.Model.Play;
+
+using ChannelManager = MTGOSDK.API.Chat.ChannelManager;
 
 
 namespace MTGOSDK.API.Play.Games;
@@ -241,12 +244,6 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     new(GamePromptChanged, new Filter<GamePrompt>((s,_) => s.Id == game.Id));
 
   /// <summary>
-  /// Event triggered when the current game state changes.
-  /// </summary>
-  public EventProxy<GameEventArgs> GameChanged =
-    new(/* IGame */ game, nameof(GameChanged));
-
-  /// <summary>
   /// Event triggered when the game completion status changes.
   public EventProxy<GameStatusEventArgs> GameStatusChanged =
     new(/* IGame */ game, "GameStateChanged");
@@ -297,7 +294,25 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// Event triggered when a log message is received.
   /// </summary>
   public EventHookWrapper<Message> OnLogMessage =
-    new(LogMessageReceived, new Filter<Message>((s,_) => s.LocalFileName == game.LogChannel.HistoricalChatChannel.LocalFileName));
+    new(LogMessageReceived, new Filter<Message>((s,_) =>
+    {
+      //
+      // Cache the historical game log channel for this game.
+      //
+      // This is a performance optimization to avoid creating a new channel
+      // object for each log message received.
+      //
+      if (!ChannelManager.s_gameLogChannels.TryGetValue(game.Id,
+          out IHistoricalChatChannel channel))
+      {
+        channel = Bind<IHistoricalChatChannel>(game.LogChannel.HistoricalChatChannel);
+        ChannelManager.s_gameLogChannels.TryAdd(game.Id, channel);
+      }
+
+      // Check if the originating channel is parented to the game log channel.
+      // If so, it's a valid log message for the current game.
+      return s.LocalFileName == channel.LocalFileName;
+    }));
 
   //
   // IGame static events

@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
+
 using MTGOSDK.API.Interface.ViewModels;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
@@ -18,6 +20,9 @@ public static class ChannelManager
   //
   // IChannelManager wrapper methods
   //
+
+  internal static readonly ConcurrentDictionary<int, IHistoricalChatChannel>
+    s_gameLogChannels = new();
 
   /// <summary>
   /// Manages the client's set information and card definitions.
