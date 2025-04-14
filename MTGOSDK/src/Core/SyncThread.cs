@@ -72,6 +72,7 @@ public static class SyncThread
     catch (Exception ex)
     {
       Log.Error(ex, "An error occurred while executing a callback.");
+      Log.Debug(ex.StackTrace);
 
       // Loop through all inner exceptions
       while (ex.InnerException != null)

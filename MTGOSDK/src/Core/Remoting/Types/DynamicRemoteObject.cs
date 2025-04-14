@@ -281,6 +281,8 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   #region Dynamic Object API
   public override bool TryGetMember(GetMemberBinder binder, out object result)
   {
+    try
+    {
     Type lastType = __type;
     Type nextType = __type;
     do
@@ -295,6 +297,11 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
     result = null;
     return false;
+    }
+    catch (Exception ex)
+    {
+      throw new Exception($"DynamicObject threw an exception while trying to get member \"{binder.Name}\" from {__type.Name}", innerException: ex);
+    }
   }
 
   private bool TryGetMember(Type t, string name, out object result)

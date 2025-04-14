@@ -21,7 +21,7 @@ public abstract class BaseCommunicator
     MaxConnectionsPerServer = 20
   })
   {
-    Timeout = TimeSpan.FromSeconds(10),
+    Timeout = TimeSpan.FromSeconds(30),
     DefaultRequestHeaders = { ConnectionClose = false }
   };
 
@@ -99,6 +99,7 @@ public abstract class BaseCommunicator
     catch (HttpRequestException ex)
     {
       Log.Error($"HTTP request failed: {ex.Message}");
+      Log.Debug(ex.StackTrace);
       return null;
     }
     catch (Exception ex)
@@ -106,6 +107,7 @@ public abstract class BaseCommunicator
       if (!_cancellationTokenSource.IsCancellationRequested)
       {
         Log.Error($"Unexpected error during request: {ex.Message}");
+        Log.Debug(ex.StackTrace);
       }
 
       return null;
