@@ -245,6 +245,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
 
   /// <summary>
   /// Event triggered when the game completion status changes.
+  /// </summary>
   public EventProxy<GameStatusEventArgs> GameStatusChanged =
     new(/* IGame */ game, "GameStateChanged");
 
@@ -259,6 +260,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public EventProxy<GameEventArgs> PriorityPlayerChanged =
     new(/* IGame */ game, nameof(PriorityPlayerChanged));
+
+  /// <summary>
+  /// Event triggered when the game results for the current game change.
+  /// </summary>
+  public EventHookWrapper<IList<PlayerResult>> OnGameResultsChanged =
+    new(GameResultsChanged, new Filter<IList<PlayerResult>>((s,_) => s.Id == game.Id));
 
   /// <summary>
   /// Event triggered when the game phase for the current turn.
@@ -447,6 +454,41 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         });
 
         return (instance, message);
+      })
+    );
+
+  /// <summary>
+  /// Event triggered when a player's life total changes in any active game.
+  /// </summary>
+  public static EventHookProxy<Game, IList<PlayerResult>> GameResultsChanged =
+    new(
+      "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
+      "CompileWinningPlayers",
+      new((instance, args) =>
+      {
+        Game game = new(instance);
+        if (game == null) return null; // Ignore invalid game objects.
+        if (game.IsReplay) return null; // Ignore replay games.
+
+        dynamic message = args[1];
+        if (message == null) return null; // Ignore invalid messages.
+
+        List<PlayerResult> results = new();
+        foreach(var entry in message.GameResults)
+        {
+          int i = results.Count;
+          GamePlayer player = new(instance.GetPlayerByServerIndex(i));
+          PlayDrawResult playDrawResult = i == message.MovedFirst
+            ? PlayDrawResult.Play
+            : PlayDrawResult.Draw;
+
+          GameResult result = Cast<GameResult>(entry.Results);
+          TimeSpan clockRemaining = TimeSpan.FromSeconds(entry.PlayingTime);
+
+          results.Add(new(player, playDrawResult, result, clockRemaining));
+        }
+
+        return (game, results);
       })
     );
 }
