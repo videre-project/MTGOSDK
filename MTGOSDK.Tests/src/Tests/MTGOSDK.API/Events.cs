@@ -68,6 +68,8 @@ public class Events : EventValidationFixture
         return Try<bool>(() => (e as Match)!.State >= MatchState.GameStarted);
       if (typeof(T) == typeof(Tournament))
         return Try<bool>(() => (e as Tournament)!.State >= TournamentState.RoundInProgress);
+      if (typeof(T) == typeof(Queue))
+        return Try<bool>(() => (e as Queue)!.CurrentState >= QueueState.NotJoined);
 
       return true;
     });
@@ -106,22 +108,18 @@ public class Events : EventValidationFixture
 
 public class EventValidationFixture : BaseFixture
 {
-  public T GetEvent<T>(Func<dynamic, bool> predicate = null!) where T : class
+  public T GetEvent<T>(Predicate predicate = null!) where T : class
   {
     dynamic eventObj = null!;
     switch (typeof(T).Name)
     {
       case "League":
-        eventObj = LeagueManager.Leagues
-          .Where(e => predicate?.Invoke(e) ?? true)
-          .First();
+        eventObj = Filter<T>(LeagueManager.Leagues, predicate);
         break;
       default:
         using (Log.Suppress()) // Exclude Log.Trace messages from test output
         {
-          eventObj = EventManager.Events
-            .Where(e => e is T && (predicate?.Invoke(e) ?? true))
-            .First();
+          eventObj = Filter<T>(EventManager.Events, predicate);
         }
         break;
     }
@@ -305,8 +303,8 @@ public class EventValidationFixture : BaseFixture
     ValidateEvent(match);
 
     // IMatch properties
-    Assert.That(match.MatchId, Is.GreaterThan(0));
-    Assert.That(match.MatchToken, Is.Not.EqualTo(Guid.Empty));
+    Assert.That(match.Id, Is.GreaterThan(0));
+    Assert.That(match.Token, Is.Not.EqualTo(Guid.Empty));
     Assert.That(match.State, Is.Not.EqualTo(MatchState.Invalid));
     Assert.That(match.IsComplete,
         Is.EqualTo(true).Or.EqualTo(
@@ -350,7 +348,7 @@ public class EventValidationFixture : BaseFixture
     Assert.That(format.MaxDeckSize, Is.GreaterThanOrEqualTo(format.MinDeckSize));
     Assert.That(format.MaxCopiesPerCard, Is.GreaterThanOrEqualTo(0));
     Assert.That(format.MaxSideboardSize, Is.GreaterThanOrEqualTo(0));
-    Assert.That(format.Type, Is.Not.Empty);
+    Assert.That(format.Type, Is.Not.EqualTo(PlayFormatType.Null));
     Assert.That(format.LegalSets.Take(1),
       format.MinDeckSize == 40 ? Is.Empty : Is.Not.Empty);
     Assert.That(format.BasicLands.Take(1), Is.Not.Empty);

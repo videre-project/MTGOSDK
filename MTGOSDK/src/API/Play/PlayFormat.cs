@@ -56,13 +56,21 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <summary>
   /// The format type (i.e. Constructed, Sealed, Draft).
   /// </summary>
-  public string Type => Unbind(@base).Type.ToString();
+  public PlayFormatType Type => Cast<PlayFormatType>(Unbind(@base).Type);
 
   /// <summary>
   /// The sets that are legal in this format.
   /// </summary>
   public IEnumerable<Set> LegalSets =>
-    Map<Set>(Unbind(@base).LegalSetsByCode.Values);
+    //
+    // Enumerate the dictionary directly to avoid pinning a separate
+    // IEnumerable<KeyValuePair<string, ICardSet>> object in the client's heap.
+    //
+    // We do this to allow this method to be accessed frequently without
+    // causing high memory pressure or GC activity in the MTGO client, as this
+    // may be called frequently during deckbuilding and return many set objects.
+    //
+    Map<Set>(Unbind(@base).LegalSetsByCode, Lambda(kvp => new Set(kvp.Value)));
 
   /// <summary>
   /// Basic land cards that can be used for deckbuilding.
