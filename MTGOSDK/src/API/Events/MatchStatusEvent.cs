@@ -28,7 +28,7 @@ public sealed partial class Events
   /// <summary>
   /// Delegate type for subscribing to Match events updating the match status.
   /// </summary>
-  public delegate void MatchStatusEventCallback(MatchStatusEventArgs args);
+  public delegate void MatchStatesEventCallback(MatchStateEventArgs args);
 
   //
   // EventHandler argument types
@@ -37,7 +37,7 @@ public sealed partial class Events
   /// <summary>
   /// Event args triggered on Match events updating the match status.
   /// </summary>
-  public class MatchStatusEventArgs(dynamic args)
+  public class MatchStateEventArgs(dynamic args)
       : DLRWrapper<WotC.MtGO.Client.Model.Play.Events.MatchStatusEventArgs>
   {
     internal override dynamic obj => args;
@@ -50,11 +50,11 @@ public sealed partial class Events
     /// <summary>
     /// The previous match status.
     /// </summary>
-    public MatchStatuses OldStatus => Cast<MatchStatuses>(@base.OldStatus);
+    public MatchState OldStatus => Cast<MatchState>(@base.OldStatus);
 
     /// <summary>
     /// The new match status.
     /// </summary>
-    public MatchStatuses NewStatus => Cast<MatchStatuses>(@base.NewStatus);
+    public MatchState NewStatus => Cast<MatchState>(@base.NewStatus);
   }
 }

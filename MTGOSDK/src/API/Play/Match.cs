@@ -5,8 +5,10 @@
 
 using System.Collections;
 
+using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Users;
+using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -27,6 +29,10 @@ public sealed class Match(dynamic match) : Event
   /// </summary>
   internal override dynamic obj => Bind<IMatch>(match);
 
+  public new int Id => @base.MatchId;
+
+  public new Guid Token => Cast<Guid>(Unbind(@base).MatchToken);
+
   //
   // IMatch wrapper properties
   //
@@ -34,12 +40,14 @@ public sealed class Match(dynamic match) : Event
   /// <summary>
   /// The unique ID for this match.
   /// </summary>
-  public int MatchId => @base.MatchId;
+  [Obsolete("Use Id instead.")]
+  public int MatchId => this.Id;
 
   /// <summary>
   /// The match's session token.
   /// </summary>
-  public Guid MatchToken => Cast<Guid>(Unbind(@base).MatchToken);
+  [Obsolete("Use Token instead.")]
+  public Guid MatchToken => this.Token;
 
   /// <summary>
   /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
@@ -124,27 +132,83 @@ public sealed class Match(dynamic match) : Event
   // IMatch wrapper events
   //
 
-  public EventProxy<GameEventArgs> GameEnded =
-    new(/* IMatch */ match, nameof(GameEnded));
+  public EventHookWrapper<Game> OnGameStarted =
+    new(GameStarted, new((s,_) => s.Id == match.MatchId));
 
-  public EventProxy<GameEventArgs> CurrentGameChanged =
-    new(/* IMatch */ match, nameof(CurrentGameChanged));
+  public EventHookWrapper<Game> OnGameEnded =
+    new(GameEnded, new((s,_) => s.Id == match.MatchId));
 
-  public EventProxy ChallengeDeclined =
-    new(/* IMatch */ match, nameof(ChallengeDeclined));
+  public EventHookWrapper<MatchState> OnMatchStateChanged =
+    new(MatchStateChanged, new((s,_) => s.Id == match.MatchId));
 
-  public EventProxy<CountdownEventArgs> Countdown =
-    new(/* IMatch */ match, nameof(Countdown));
+  public EventHookWrapper<Deck> OnSideboardingDeckChanged =
+    new(DeckForSideboardingChanged, new((s,_) => s.Id == match.MatchId));
 
-  public EventProxy CountdownCancelled =
-    new(/* IMatch */ match, nameof(CountdownCancelled));
+  //
+  // IMatch static events
+  //
 
-  public EventProxy DeckForSideboardingChanged =
-    new(/* IMatch */ match, nameof(DeckForSideboardingChanged));
+  public static EventHookProxy<Match, MatchState> MatchStateChanged =
+    new(
+      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase",
+      "OnMatchStatusChanged",
+      new((instance, args) =>
+      {
+        Match match = new(instance);
+        if (!match.IsParticipant) return null; // Ignore non-local matches
 
-  public EventProxy<MatchStatusEventArgs> MatchStatusChanged =
-    new(/* IMatch */ match, nameof(MatchStatusChanged));
+        MatchState state = Cast<MatchState>(args[0].NewStatus);
+        if (state == MatchState.Invalid) return null; // Ignore invalid states
 
-  public EventProxy<MatchErrorEventArgs> MatchError =
-    new(/* IMatch */ match, nameof(MatchError));
+        return (match, state); // Return a tuple of (Match, MatchState)
+      })
+    );
+
+  public static EventHookProxy<Match, Game> GameStarted =
+    new(
+      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase",
+      "OnCurrentGameChanged",
+      new((instance, args) =>
+      {
+        if (args[0] == null) return null; // Ignore invalid game objects
+
+        Match match = new(instance);
+        if (!match.IsParticipant) return null; // Ignore non-local matches
+
+        Game game = new(args[0]);
+
+        return (match, game); // Return a tuple of (Match, Game)
+      })
+    );
+
+  public static EventHookProxy<Match, Game> GameEnded =
+    new(
+      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase",
+      "OnGameEnded",
+      new((instance, args) =>
+      {
+        if (args[0] == null) return null; // Ignore invalid game objects
+
+        Match match = new(instance);
+        if (!match.IsParticipant) return null; // Ignore non-local matches
+
+        Game game = new(args[0]);
+
+        return (match, game); // Return a tuple of (Match, Game)
+      })
+    );
+
+  public static EventHookProxy<Match, Deck> DeckForSideboardingChanged =
+    new(
+      "Shiny.Play.ViewModels.SideboardingViewModel",
+      "SubmitDeck",
+      new((instance, _) =>
+      {
+        Match match = new(instance.m_match);
+        Deck deck = new(instance.Deck);
+        if (deck == null) return null; // Ignore invalid deck objects
+
+        return (match, deck); // Return a tuple of (Match, Deck)
+      })
+    );
 }

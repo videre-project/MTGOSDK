@@ -129,7 +129,7 @@ public static class EventManager
   /// <returns>The parent event of the game, or null if not found.</returns>
   public static Event? FindParentEvent(IEnumerable<dynamic> events, Match match)
   {
-    int matchId = match.MatchId;
+    int matchId = match.Id;
     foreach(var playerEvent in events)
     {
       switch (playerEvent)
@@ -141,12 +141,12 @@ public static class EventManager
         case Tournament tournament:
           foreach (var round in tournament.Rounds)
           {
-            if (round.Matches.Any(m => m.MatchId == matchId))
+            if (round.Matches.Any(m => m.Id == matchId))
               return tournament;
           }
           break;
         case Match matchEvent:
-          if (matchEvent.MatchId == matchId)
+          if (matchEvent.Id == matchId)
             return matchEvent;
           break;
         case Queue queue:
@@ -196,13 +196,15 @@ public static class EventManager
       case "FilterableLeague" or "League":
         eventObject = new League(eventObject);
         break;
-      case "FilterableMatch" or "Match":
+      case "FilterableMatch" or "Match" or
+           "LeagueMatch" or "TournamentMatch":
         eventObject = new Match(eventObject);
         break;
       case "FilterableTournament" or "Tournament":
         eventObject = new Tournament(eventObject);
         break;
-      case "FilterableQueue" or "Queue":
+      case "FilterableQueue" or "Queue" or
+           "TournamentQueue":
         eventObject = new Queue(eventObject);
         break;
       default:

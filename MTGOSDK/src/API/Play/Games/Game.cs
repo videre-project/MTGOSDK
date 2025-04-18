@@ -264,8 +264,8 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// Event triggered when the game results for the current game change.
   /// </summary>
-  public EventHookWrapper<IList<PlayerResult>> OnGameResultsChanged =
-    new(GameResultsChanged, new Filter<IList<PlayerResult>>((s,_) => s.Id == game.Id));
+  public EventHookWrapper<IList<GamePlayerResult>> OnGameResultsChanged =
+    new(GameResultsChanged, new Filter<IList<GamePlayerResult>>((s,_) => s.Id == game.Id));
 
   /// <summary>
   /// Event triggered when the game phase for the current turn.
@@ -458,9 +458,9 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     );
 
   /// <summary>
-  /// Event triggered when a player's life total changes in any active game.
+  ///
   /// </summary>
-  public static EventHookProxy<Game, IList<PlayerResult>> GameResultsChanged =
+  public static EventHookProxy<Game, IList<GamePlayerResult>> GameResultsChanged =
     new(
       "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
       "CompileWinningPlayers",
@@ -473,7 +473,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         dynamic message = args[1];
         if (message == null) return null; // Ignore invalid messages.
 
-        List<PlayerResult> results = new();
+        List<GamePlayerResult> results = new();
         foreach(var entry in message.GameResults)
         {
           int i = results.Count;
@@ -488,7 +488,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
           results.Add(new(player, playDrawResult, result, clockRemaining));
         }
 
-        return (game, results);
+        return (game, results); // Return a tuple of (Game, IList<GamePlayerResult>)
       })
     );
 }
