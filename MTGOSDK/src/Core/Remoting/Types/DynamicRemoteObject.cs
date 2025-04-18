@@ -196,6 +196,21 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   public DynamicRemoteObject() { } // For avoiding overriding reference type
 
+  ~DynamicRemoteObject()
+  {
+    // Destructor - we need to make sure we don't leave dangling references to
+    // remote objects. This is important because the remote object might be
+    // disposed of and we don't want to keep a reference to it.
+    if (__ro != null && __ro.IsValid)
+    {
+      __ro.ReleaseReference();
+    }
+
+    __ro = null;
+    __ra = null;
+    __type = null;
+  }
+
   /// <summary>
   /// Gets the type of the proxied remote object, in the remote app.
   /// </summary>

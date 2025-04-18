@@ -10,14 +10,27 @@ namespace MTGOSDK.Core.Remoting.Types;
 public class DynamicRemoteEnumerator(dynamic remoteEnumerator)
   : IEnumerator<object>, IDisposable
 {
+  //
+  // IEnumerator<object> implementation
+  //
+
   public object Current => remoteEnumerator.Current;
 
   public bool MoveNext() => remoteEnumerator.MoveNext();
 
   public void Reset() => remoteEnumerator.Reset();
 
+  private bool _isDisposed = false;
+
+  //
+  // IDisposable implementation
+  //
+
   public void Dispose()
   {
+    if (_isDisposed) return;
+    _isDisposed = true;
+
     try
     {
       remoteEnumerator.Dispose();

@@ -14,7 +14,7 @@ namespace MTGOSDK.Core.Remoting.Types;
 
 public class RemoteObject
 {
-  private static readonly ConcurrentQueue<WeakReference<RemoteObject>> s_cleanupQueue = new();
+  private static readonly ConcurrentQueue<Tuple<WeakReference<RemoteObject>, RemoteObjectRef>> s_cleanupQueue = new();
   private static readonly Timer s_cleanupTimer;
 
   static RemoteObject()
@@ -25,25 +25,44 @@ public class RemoteObject
 
   private static void CleanupCallback(object? state)
   {
-    while (s_cleanupQueue.TryDequeue(out var weakRef))
+    while (s_cleanupQueue.TryDequeue(out var item))
     {
-      if (weakRef.TryGetTarget(out var obj))
+      var weakRef = item.Item1;
+      var remoteRef = item.Item2; // Get the ref associated with the weakRef
+
+      if (weakRef.TryGetTarget(out _)) // Check if RemoteObject is still alive
       {
-        // Object still alive, requeue for later
-        s_cleanupQueue.Enqueue(weakRef);
+        // Object still alive, requeue for later check
+        s_cleanupQueue.Enqueue(item);
       }
       else
       {
-        // Object ready for cleanup
-        obj?._ref?.RemoteRelease();
+        // Object has been GC'd, release its reference count using the stored ref
+        remoteRef?.ReleaseReference();
       }
     }
   }
 
+  private bool _isDisposed = false;
+
+  internal void AddReference() => _ref?.AddReference();
+
+  internal void ReleaseReference(bool useJitter = false)
+  {
+    if (_isDisposed) return;
+    _isDisposed = true;
+
+    _ref?.ReleaseReference(useJitter);
+  }
+
+  internal bool IsValid => _ref != null && _ref.IsValid && !_isDisposed;
+
   ~RemoteObject()
   {
-    // Add to cleanup queue instead of immediate release
-    s_cleanupQueue.Enqueue(new WeakReference<RemoteObject>(this));
+    if (_ref != null)
+    {
+      s_cleanupQueue.Enqueue(Tuple.Create(new WeakReference<RemoteObject>(this), _ref));
+    }
   }
 
   private readonly RemoteHandle _app;
@@ -56,8 +75,12 @@ public class RemoteObject
 
   internal RemoteObject(RemoteObjectRef reference, RemoteHandle remoteApp)
   {
-    _app = remoteApp;
+    // Increment the reference count of the remote object
+    reference.AddReference();
+
+    // Create a strong reference to the remote object
     _ref = reference;
+    _app = remoteApp;
   }
 
   /// <summary>

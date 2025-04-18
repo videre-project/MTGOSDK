@@ -17,12 +17,8 @@ internal class RemoteObjectRef(
   DiverCommunicator creatingCommunicator)
 {
   private bool _isReleased = false;
-
-  // TODO: I think addresses as token should be reworked
-  public ulong Token => remoteObjectInfo.PinnedAddress;
-  public DiverCommunicator Communicator => creatingCommunicator;
-
-  public TypeDump GetTypeDump() => typeInfo;
+  private int _refCount = 0;
+  private readonly object _lock = new();
 
   private void ThrowIfReleased()
   {
@@ -32,6 +28,116 @@ internal class RemoteObjectRef(
           "Cannot use RemoteObjectRef object after `Release` have been called");
     }
   }
+
+  internal void AddReference()
+  {
+    lock (_lock)
+    {
+      ThrowIfReleased();
+      Interlocked.Increment(ref _refCount);
+    }
+  }
+
+  /// <summary>
+  /// Decrements the reference count and potentially releases the remote object.
+  /// </summary>
+  /// <param name="useJitter">Whether to apply jitter to the release delay.</param>
+  internal void ReleaseReference(bool useJitter = false)
+  {
+    lock (_lock)
+    {
+      if (_isReleased) return; // Already released
+
+      int newCount = Interlocked.Decrement(ref _refCount);
+      Log.Trace("ReleaseReference: Token={Token}, NewCount={Count}", Token, newCount);
+
+      if (newCount == 0)
+      {
+        // Last reference released, proceed with unpinning
+        RemoteRelease(useJitter);
+      }
+    }
+  }
+
+  public void ForceRelease()
+  {
+    lock (_lock)
+    {
+      if (_isReleased) return; // Already released
+
+      _isReleased = true;
+      _refCount = 0;
+      RemoteRelease(false);
+    }
+  }
+
+  private static readonly Random _random = new Random();
+  private static readonly TimeSpan _minDelay = TimeSpan.FromSeconds(1);
+  private static readonly TimeSpan _maxDelay = TimeSpan.FromSeconds(5);
+
+  public bool IsValid => !_isReleased && creatingCommunicator.IsConnected;
+
+  /// <summary>
+  /// Releases hold of the remote object in the remote process and the local proxy.
+  /// </summary>
+  public void RemoteRelease(bool useJitter = false)
+  {
+    // Check if already released to avoid redundant calls
+    if (_isReleased) return;
+
+    // Guard against disconnected communicator
+    if (creatingCommunicator is null || !creatingCommunicator.IsConnected)
+    {
+      _isReleased = true;
+      return;
+    }
+
+    try
+    {
+      if (useJitter)
+      {
+        // Calculate exponential backoff with jitter
+        var baseDelay = Math.Min(
+          _maxDelay.TotalMilliseconds,
+          _minDelay.TotalMilliseconds * (1 + _random.NextDouble())
+        );
+
+        // Add jitter between 80-120% of base delay
+        var jitteredDelay = (int)(baseDelay * (0.8 + (_random.NextDouble() * 0.4)));
+
+        // Use Task.Delay instead of Thread.Sleep to avoid blocking
+        Task.Delay(jitteredDelay).ContinueWith(_ =>
+        {
+          // Unpin the object after the delay
+          creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
+        });
+      }
+      else
+      {
+        // No delay, unpin immediately
+        creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
+      }
+    }
+    catch (NullReferenceException)
+    {
+      // Ignore null reference exceptions
+    }
+    catch (Exception ex)
+    {
+      Log.Error(ex, "Failed to release remote object");
+    }
+    finally
+    {
+      _isReleased = true;
+    }
+  }
+
+  // TODO: I think addresses as token should be reworked
+  public ulong Token => remoteObjectInfo.PinnedAddress;
+  public DiverCommunicator Communicator => creatingCommunicator;
+
+  public TypeDump GetTypeDump() => typeInfo;
+
 
   /// <summary>
   /// Gets the value of a remote field.
@@ -142,54 +248,5 @@ internal class RemoteObjectRef(
   internal ObjectOrRemoteAddress GetItem(ObjectOrRemoteAddress key)
   {
     return creatingCommunicator.GetItem(Token, key);
-  }
-
-  private static readonly Random _random = new Random();
-  private static readonly TimeSpan _minDelay = TimeSpan.FromSeconds(1);
-  private static readonly TimeSpan _maxDelay = TimeSpan.FromSeconds(30);
-
-  /// <summary>
-  /// Releases hold of the remote object in the remote process and the local proxy.
-  /// </summary>
-  public void RemoteRelease()
-  {
-    // Check if already released to avoid redundant calls
-    if (_isReleased) return;
-
-    // Guard against disconnected communicator
-    if (creatingCommunicator is null || !creatingCommunicator.IsConnected)
-    {
-      _isReleased = true;
-      return;
-    }
-
-    try
-    {
-      // Calculate exponential backoff with jitter
-      var baseDelay = Math.Min(
-        _maxDelay.TotalMilliseconds,
-        _minDelay.TotalMilliseconds * (1 + _random.NextDouble())
-      );
-
-      // Add jitter between 80-120% of base delay
-      var jitteredDelay = (int)(baseDelay * (0.8 + (_random.NextDouble() * 0.4)));
-
-      // Use Task.Delay instead of Thread.Sleep to avoid blocking
-      Task.Delay(jitteredDelay).Wait();
-
-      creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
-    }
-    catch (NullReferenceException)
-    {
-      // Ignore null reference exceptions
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "Failed to release remote object");
-    }
-    finally
-    {
-      _isReleased = true;
-    }
   }
 }

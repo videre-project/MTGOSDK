@@ -6,6 +6,7 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
@@ -25,7 +26,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
   {
     // The WeakReferences are to RemoteObject
     private readonly Dictionary<ulong, WeakReference<RemoteObject>> _pinnedAddressesToRemoteObjects;
-    private readonly object _lock = new object();
+    private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
 
     private readonly RemoteHandle _app;
 
@@ -55,8 +56,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
         }
       }, raise: true);
 
-      var remoteObject = new RemoteObject(
-          new RemoteObjectRef(od, td, _app.Communicator), _app);
+      var objRef = new RemoteObjectRef(od, td, _app.Communicator);
+      var remoteObject = new RemoteObject(objRef, _app);
 
       return remoteObject;
     }
@@ -68,45 +69,111 @@ public class RemoteHandle : DLRWrapper, IDisposable
     {
       RemoteObject ro;
       WeakReference<RemoteObject> weakRef;
-      // Easiest way - Non-collected and previously obtained object ("Cached")
-      if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out weakRef) &&
-        weakRef.TryGetTarget(out ro))
-      {
-        // Not GC'd!
-        return ro;
-      }
 
-      // Harder case - At time of checking, item wasn't cached.
-      // We need exclusive access to the cache now to make sure we are the only one adding it.
-      lock (_lock)
+      _rwLock.EnterUpgradeableReadLock();
+      try
       {
-        // Last chance - when we waited on the lock some other thread might've added it to the cache.
+        // Check cache under upgradeable read lock
         if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out weakRef))
         {
-          bool gotTarget = weakRef.TryGetTarget(out ro);
-          if (gotTarget)
+          if (weakRef.TryGetTarget(out ro) && ro.IsValid)
           {
-            // Not GC'd!
-            return ro;
+            // Tentatively valid, try to secure reference
+            ro.AddReference();
+            if (ro.IsValid)
+            {
+              // Still valid after adding reference, return it
+              return ro;
+            }
+            else
+            {
+              // Became invalid between IsValid check and AddReference/second IsValid check.
+              // Need to remove the stale entry.
+              _rwLock.EnterWriteLock();
+              try
+              {
+                // Re-check if the entry is still the same weakRef before removing
+                if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var currentWeakRef) && currentWeakRef == weakRef)
+                {
+                  _pinnedAddressesToRemoteObjects.Remove(address);
+                }
+                // If it changed, another thread already handled it, so we do nothing here.
+              }
+              finally
+              {
+                _rwLock.ExitWriteLock();
+              }
+              // Fall through to fetch uncached version
+            }
           }
           else
           {
-            // Object was GC'd...
-            _pinnedAddressesToRemoteObjects.Remove(address);
-            // Now let's make sure the GC'd object finalizer was also called (otherwise some "object moved" errors might happen).
-            GC.WaitForPendingFinalizers();
-            // Now we need to-read the remote object since stuff might have moved
+            // Object was GC'd or initially invalid. Need write lock to remove.
+            _rwLock.EnterWriteLock();
+            try
+            {
+              // Re-check if the entry is still the same weakRef before removing
+              if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var currentWeakRef) && currentWeakRef == weakRef)
+              {
+                _pinnedAddressesToRemoteObjects.Remove(address);
+              }
+              // If it changed, another thread already handled it, so we do nothing here.
+            }
+            finally
+            {
+              _rwLock.ExitWriteLock();
+            }
+            // Fall through to fetch uncached version
           }
         }
 
-        // Get remote
-        ro = GetRemoteObjectUncached(address, typeName, hashcode);
-        // Add to cache
-        weakRef = new WeakReference<RemoteObject>(ro);
-        _pinnedAddressesToRemoteObjects[ro.RemoteToken] = weakRef;
-      }
+        // Object not in cache or was removed. Need write lock to add.
+        _rwLock.EnterWriteLock();
+        try
+        {
+          // Double-check: Another thread might have added it while waiting for the write lock.
+          if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out weakRef))
+          {
+            if (weakRef.TryGetTarget(out ro) && ro.IsValid)
+            {
+              ro.AddReference();
+              if (ro.IsValid)
+              {
+                // Added by another thread and still valid.
+                return ro;
+              }
+              else
+              {
+                // Added by another thread but became invalid quickly. Remove it again.
+                _pinnedAddressesToRemoteObjects.Remove(address);
+                // Fall through to fetch uncached version outside the write lock (but still in upgradeable read)
+              }
+            }
+            else
+            {
+              // Added by another thread but already GC'd or invalid. Remove it.
+              _pinnedAddressesToRemoteObjects.Remove(address);
+              // Fall through to fetch uncached version outside the write lock (but still in upgradeable read)
+            }
+          }
 
-      return ro;
+          // Get remote (object not in cache or was invalid/removed)
+          ro = GetRemoteObjectUncached(address, typeName, hashcode);
+
+          // Add to cache
+          weakRef = new WeakReference<RemoteObject>(ro);
+          _pinnedAddressesToRemoteObjects.Add(ro.RemoteToken, weakRef); // Add under write lock
+          return ro; // Return the newly created object
+        }
+        finally
+        {
+          _rwLock.ExitWriteLock();
+        }
+      }
+      finally
+      {
+        _rwLock.ExitUpgradeableReadLock();
+      }
     }
   }
 
