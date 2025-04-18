@@ -27,6 +27,11 @@ public abstract class BaseCommunicator
 
   protected readonly CancellationTokenSource _cancellationTokenSource;
 
+  /// <summary>
+  /// Cancels all requests in progress (keeping the cancellation token source)
+  /// </summary>
+  public void Cancel() => _cancellationTokenSource.Cancel();
+
   protected BaseCommunicator(
     string hostname,
     int port,

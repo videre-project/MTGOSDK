@@ -51,6 +51,8 @@ public partial class Diver : IDisposable
     {
       removed = _registeredPids.Remove(pid);
       remaining = _registeredPids.Count;
+      // Clean up all pinned objects if not used by any client
+      if (remaining == 0) _runtime?.UnpinAllObjects();
 
       // Clean up all callbacks associated with this client
       if (_clientCallbacks.TryRemove(pid, out var tokens))

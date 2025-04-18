@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
+
 namespace MTGOSDK.Core.Remoting.Interop;
 
 /// <summary>

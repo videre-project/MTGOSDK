@@ -77,6 +77,7 @@ public partial class Diver : IDisposable
     if (!_callbackTokens.TryGetValue(token, out var cts))
       return;
 
+    ulong? addr = null;
     var remoteParams = new ObjectOrRemoteAddress[parameters.Length];
     for (int i = 0; i < parameters.Length; i++)
     {
@@ -91,8 +92,10 @@ public partial class Diver : IDisposable
       }
       else
       {
-        ulong addr = _runtime.PinObject(parameter);
-        remoteParams[i] = ObjectOrRemoteAddress.FromToken(addr, parameter.GetType().FullName);
+        addr = _runtime.PinObject(parameter);
+        remoteParams[i] = ObjectOrRemoteAddress.FromToken(
+          addr.Value,
+          parameter.GetType().FullName);
       }
     }
 
@@ -110,10 +113,16 @@ public partial class Diver : IDisposable
       if (!IsPortOpen(callbacksEndpoint.Port) ||
           !await reverseCommunicator.CheckIfAlive())
       {
+        // Cancel any pending requests
+        reverseCommunicator.Cancel();
+
+        // Remove the callback token from the dictionary
         _remoteEventHandler.TryRemove(token, out _);
         _remoteHooks.TryRemove(token, out _);
         _reverseCommunicators.TryRemove(callbacksEndpoint, out _);
-        return;
+
+        // Unpin the object if it was pinned
+        if (addr != null) _runtime.UnpinObject(addr.Value);
       }
     }
   }

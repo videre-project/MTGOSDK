@@ -70,7 +70,7 @@ public class ObjectPinner : IDisposable
         catch (Exception ex)
         {
           Log.Error("Exception in ObjectPinner task", ex);
-          Log.Debug(ex.StackTrace);
+          Log.Debug(ex.Message + "\n" + ex.StackTrace);
         }
       },
       CancellationToken.None,
@@ -171,6 +171,8 @@ public class ObjectPinner : IDisposable
        throw new InvalidOperationException(
           "Failed to pin object. No free slots available or internal error.");
     }
+    Log.Trace($"Pinned object {obj} at address {objAddr}.");
+    Log.Trace($"Now {_addrMap.Count} objects pinned.");
     return objAddr;
   }
 
@@ -195,6 +197,46 @@ public class ObjectPinner : IDisposable
 
       // Return index to free list
       _freeIndices.Push(pinningInfo.Index);
+      Log.Trace($"Unpinned object {obj} at address {pinningInfo.Address}.");
+      Log.Trace($"Now {_addrMap.Count} objects pinned.");
+    }
+    finally
+    {
+      _lock.ExitWriteLock();
+    }
+  }
+
+  /// <summary>
+  /// Unpins all objects and clears all dictionaries and mappings
+  /// from the ObjectPinner.
+  /// </summary>
+  public void UnpinAllObjects()
+  {
+    _lock.EnterWriteLock();
+    try
+    {
+      // Clear all weak references and free indices
+      _freeIndices.Clear();
+      _nextIndex = 0;
+
+      // Clear all mappings and reset state
+      foreach (var kvp in _addrMap)
+      {
+        var weakRef = kvp.Value;
+        if (weakRef.TryGetTarget(out object? obj) && obj != null)
+        {
+          // Remove the entry from the weak table
+          if (_weakTable.TryGetValue(obj, out PinningInfo? pinningInfo))
+          {
+            // Enqueue unpin request (null object signifies unpin for that index)
+            _requestQueue.Enqueue(new PinRequest(null, pinningInfo.Index));
+            _weakTable.Remove(obj);
+          }
+        }
+      }
+      _addrMap.Clear();
+      _signal.Set(); // Signal background task
+      Log.Trace("Unpinned all objects.");
     }
     finally
     {

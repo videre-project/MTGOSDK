@@ -154,6 +154,8 @@ public class SnapshotRuntime : IDisposable
     return true;
   }
 
+  public void UnpinAllObjects() => _pinner.UnpinAllObjects();
+
   //
   // IL.Emit runtime converter methods
   //
