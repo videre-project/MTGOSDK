@@ -53,7 +53,7 @@ public static class CollectionManager
     bool excludeNonMtgoCards = false
   ) =>
     Map<IList, int>(
-      Unbind(s_cardDataManager).GetCatalogIdsForNameInPreferentialOrder(
+      s_cardDataManager.GetCatalogIdsForNameInPreferentialOrder(
         cardName,
         excludeGoldBorders,
         excludeNonMtgoCards
