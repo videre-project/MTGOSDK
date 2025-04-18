@@ -449,7 +449,24 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     }
 
     object obj = null;
-    bool success = Retry(() => drm.TryInvoke(args, out obj), raise: true);
+    bool success;
+    try
+    {
+      success = Retry(() => drm.TryInvoke(args, out obj), raise: true);
+    }
+    catch (NullReferenceException ex)
+    {
+      throw new InvalidOperationException(
+        $"Unable to invoke member \"{binder.Name}\" on type {this.__type.Name}. " +
+        "The remote object may have been disposed of or is in an invalid state.",
+        ex);
+    }
+    catch (Exception ex)
+    {
+      throw new Exception(
+        $"DynamicObject threw an exception while trying to invoke member \"{binder.Name}\"",
+        ex);
+    }
     result = obj;
     return success;
   }
@@ -591,7 +608,17 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     if (!__members.Any(member => member.Name == nameof(GetEnumerator)))
       throw new Exception($"No method called {nameof(GetEnumerator)} found. The remote object probably doesn't implement IEnumerable");
 
-    dynamic enumeratorDro = InvokeMethod<object>(nameof(GetEnumerator));
-    return new DynamicRemoteEnumerator(enumeratorDro);
+    try
+    {
+      dynamic enumeratorDro = InvokeMethod<object>(nameof(GetEnumerator));
+      return new DynamicRemoteEnumerator(enumeratorDro);
+    }
+    catch (NullReferenceException ex)
+    {
+      throw new InvalidOperationException(
+        "Unable to enumerate the remote object. " +
+        "The enumerator may have been disposed of or is in an invalid state.",
+        ex);
+    }
   }
 }

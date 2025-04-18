@@ -240,19 +240,27 @@ public abstract class DLRWrapper : IJsonSerializable
     where T1 : notnull
     where T2 : notnull
   {
-    // Guard against null objects and return an empty enumerable.
-    if (obj == null) yield break;
+    // Guard against null or empty objects and return an empty enumerable.
+    if (obj == null || Try<bool>(() => obj.Count == 0)) yield break;
 
     dynamic mapper = func as dynamic ?? UseTypeMapper<T1, T2>();
 
-    // Check if the object can support indexing
-    if (Try<bool>(() => obj[0] != null))
+    // Check if the object implements the ICollection interface by attempting
+    // to access the Count and Items properties.
+    dynamic items = Try(() => obj.Count >= 0 && obj.Items);
+    if (items != null)
+    {
+      foreach (var item in Cast<IList<T1>>(items))
+        yield return mapper(item);
+    }
+    // Check if the object can support indexing (e.g. IList)
+    else if (Try<bool>(() => obj[0] != null))
     {
       int count = Try(() => obj.Count, () => obj.Length);
       for (var i = 0; i < count; i++)
         yield return mapper(obj[i]);
     }
-    // Otherwise, iterate using the object's enumerator
+    // Otherwise, iterate using the object's enumerator (i.e. IEnumerable)
     else
     {
       foreach (var item in Cast<E>(obj))
@@ -336,16 +344,30 @@ public abstract class DLRWrapper : IJsonSerializable
   /// <param name="obj">The collection of dynamic objects to filter.</param>
   /// <param name="predicate">The predicate used to filter the objects.</param>
   /// <returns>An enumerable collection of dynamic objects that satisfy the predicate.</returns>
-  public static IEnumerable<dynamic> Filter(dynamic obj, Predicate predicate)
-  {
-    foreach (var item in obj)
-      if (predicate(item)) yield return item;
-  }
+  public static IEnumerable<dynamic> Filter(dynamic obj, Predicate predicate) =>
+    // Return an object containing an IEnumerable
+    // (i.e. containing a .GetEnumerator() method).
+    ((IEnumerable<dynamic>)Map<dynamic>(obj)).Where(i => predicate(i));
 
+  /// <summary>
+  /// Filters a collection of dynamic objects based on a given predicate and
+  /// returns the first match.
+  /// </summary>
+  /// <typeparam name="T">The type of the object to return.</typeparam>
+  /// <param name="obj">The collection of dynamic objects to filter.</param>
+  /// <param name="predicate">The predicate used to filter the objects.</param>
+  /// <returns>
+  /// The first dynamic object that satisfies the predicate,
+  /// or default(T) if none match.
+  /// </returns>
+  /// <remarks>
+  /// This method is a wrapper for the <see cref="Filter(dynamic, Predicate)"/> method.
+  /// </remarks>
   public static T Filter<T>(dynamic obj, Predicate predicate)
   {
-    foreach (var item in obj)
+    foreach (var item in Map<dynamic>(obj))
       if (predicate(item)) return item;
+
     return default(T);
   }
 
@@ -367,7 +389,6 @@ public abstract class DLRWrapper : IJsonSerializable
     }
     return null;
   }
-
 
   /// <summary>
   /// Safely executes a lambda function.

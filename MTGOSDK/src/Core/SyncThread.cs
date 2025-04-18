@@ -138,6 +138,7 @@ public static class SyncThread
     catch (Exception ex)
     {
       Log.Error(ex, "An error occurred while executing a callback.");
+      Log.Debug(ex.StackTrace);
 
       while (ex.InnerException != null)
       {

@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
@@ -426,7 +427,15 @@ public sealed class RemoteClient : DLRWrapper
   /// <returns>A dynamic wrapper around the remote object.</returns>
   public static dynamic GetInstance(string queryPath)
   {
-    return GetInstances(queryPath).Single();
+    var queryRefs = GetInstances(queryPath).ToList();
+    if (queryRefs.Count == 0)
+      throw new InvalidOperationException($"Object '{queryPath}' not found.");
+
+    if (queryRefs.Count > 1)
+      throw new AmbiguousMatchException(
+          $"Multiple objects named '{queryPath}' found.");
+
+    return queryRefs.First();
   }
 
   /// <summary>
@@ -442,6 +451,10 @@ public sealed class RemoteClient : DLRWrapper
       var queryObject = @client.GetRemoteObject(candidate);
       yield return queryObject.Dynamify();
     }
+
+    // If no objects were found, throw an exception
+    if (!queryRefs.Any())
+      throw new InvalidOperationException($"Object '{queryPath}' not found.");
   }
 
   /// <summary>
@@ -451,7 +464,15 @@ public sealed class RemoteClient : DLRWrapper
   /// <returns>A dynamic wrapper around the remote type.</returns>
   public static Type GetInstanceType(string queryPath)
   {
-    return GetInstanceTypes(queryPath).Single();
+    var queryRefs = GetInstanceTypes(queryPath).ToList();
+    if (queryRefs.Count == 0)
+      throw new  InvalidOperationException($"Type '{queryPath}' not found.");
+
+    if (queryRefs.Count > 1)
+      throw new AmbiguousMatchException(
+          $"Multiple types named '{queryPath}' found.");
+
+    return queryRefs.First();
   }
 
   /// <summary>
@@ -467,6 +488,10 @@ public sealed class RemoteClient : DLRWrapper
       var queryObject = @client.GetRemoteType(candidate);
       yield return queryObject;
     }
+
+    // If no types were found, throw an exception
+    if (!queryRefs.Any())
+      throw new InvalidOperationException($"Type '{queryPath}' not found.");
   }
 
   /// <summary>
@@ -479,7 +504,16 @@ public sealed class RemoteClient : DLRWrapper
     string queryPath,
     string methodName)
   {
-    return GetInstanceMethods(queryPath, methodName).Single();
+    var methods = GetInstanceMethods(queryPath, methodName).ToList();
+    if (methods.Count == 0)
+      throw new MissingMethodException(
+          $"Method '{methodName}' not found on remote type '{queryPath}'.");
+
+    if (methods.Count > 1)
+      throw new AmbiguousMatchException(
+          $"Multiple methods named '{methodName}' found on remote type '{queryPath}'.");
+
+    return methods[0];
   }
 
   /// <summary>
@@ -496,6 +530,10 @@ public sealed class RemoteClient : DLRWrapper
     var methods = type.GetMethods((BindingFlags)0xffff)
       .Where(mInfo => mInfo.Name == methodName);
 
+    if (!methods.Any())
+      throw new MissingMethodException(
+          $"Method '{methodName}' not found on remote type '{queryPath}'.");
+
     return methods;
   }
 
@@ -511,6 +549,9 @@ public sealed class RemoteClient : DLRWrapper
   {
     RemoteActivator activator = @client.Activator;
     RemoteObject queryObject = activator.CreateInstance(queryPath, parameters);
+    if (!queryObject.IsValid)
+      throw new InvalidOperationException($"Object '{queryPath}' could not be created.");
+
     return queryObject.Dynamify();
   }
 
