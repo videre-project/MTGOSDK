@@ -4,6 +4,8 @@
 **/
 
 using System;
+using System.Reflection;
+
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Commands;
@@ -14,9 +16,28 @@ namespace MTGOSDK.NUnit.Attributes;
 /// <summary>
 /// The test command for the <see cref="RetryAttribute"/>
 /// </summary>
-public class RetryOnErrorCommand(TestCommand innerCommand, int tryCount)
+public class RetryOnErrorCommand(
+  TestCommand innerCommand,
+  int tryCount,
+  RetryBehavior retryBehavior)
     : DelegatingTestCommand(innerCommand)
 {
+  private static StackFilter? GetStackFilter(Test test)
+  {
+    IMethodInfo? testMethod = test.Method;
+    if (testMethod == null) return null;
+
+    Type? declaringType = testMethod.MethodInfo.DeclaringType;
+    if (declaringType == null) return null;
+
+    // Check if the assembly has the ExceptionFilterAttribute
+    var assembly = declaringType.Assembly;
+    var filterAttribute = assembly.GetCustomAttribute<ExceptionFilterAttribute>();
+    if (filterAttribute == null) return null;
+
+    return new(filterAttribute.FilterPatterns);
+  }
+
   /// <summary>
   /// Runs the test, saving a TestResult in the supplied TestExecutionContext.
   /// </summary>
@@ -45,8 +66,9 @@ public class RetryOnErrorCommand(TestCommand innerCommand, int tryCount)
       if (context.CurrentResult.ResultState != ResultState.Failure &&
           context.CurrentResult.ResultState != ResultState.Error)
       {
-        break;
+        if (retryBehavior == RetryBehavior.UntilPasses) break;
       }
+      else if (retryBehavior == RetryBehavior.UntilFails) break;
 
       // Clear result for retry
       if (count > 0)
@@ -54,6 +76,18 @@ public class RetryOnErrorCommand(TestCommand innerCommand, int tryCount)
         context.CurrentResult = context.CurrentTest.MakeTestResult();
         context.CurrentRepeatCount++;
       }
+    }
+
+    // Modify the stack trace to filter out internal stack frames
+    if ((context.CurrentResult.ResultState == ResultState.Failure ||
+         context.CurrentResult.ResultState == ResultState.Error) &&
+        GetStackFilter(context.CurrentTest) is StackFilter exceptionFilter)
+    {
+      context.CurrentResult.SetResult(
+        context.CurrentResult.ResultState,
+        exceptionFilter.Filter(context.CurrentResult.Message)!,
+        exceptionFilter.Filter(context.CurrentResult.StackTrace)
+      );
     }
 
     return context.CurrentResult;

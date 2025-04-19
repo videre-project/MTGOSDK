@@ -25,15 +25,20 @@ namespace MTGOSDK.NUnit.Attributes;
 [AttributeUsage(AttributeTargets.Assembly |
                 AttributeTargets.Class |
                 AttributeTargets.Method, AllowMultiple=false, Inherited=true)]
-public class RetryOnErrorAttribute(int tryCount) : NUnitAttribute, IRepeatTest, IApplyToTest
+public class RetryOnErrorAttribute(
+  int retryCount,
+  RetryBehavior retryBehavior = RetryBehavior.UntilPasses)
+    : NUnitAttribute, IRepeatTest, IApplyToTest
 {
+  private readonly int _tryCount = retryCount + 1;
+
   /// <summary>
   /// Wrap a command and return the result.
   /// </summary>
   /// <param name="command">The command to be wrapped</param>
   /// <returns>The wrapped command</returns>
   public TestCommand Wrap(TestCommand command) =>
-    new RetryOnErrorCommand(command, tryCount);
+    new RetryOnErrorCommand(command, _tryCount, retryBehavior);
 
   /// <summary>
   /// Apply retry attribute on existing test methods
@@ -46,10 +51,10 @@ public class RetryOnErrorAttribute(int tryCount) : NUnitAttribute, IRepeatTest, 
       ? testMethod.GetRetryableTestCasesRecursively()
       : test.GetRetryableTestMethodsRecursively();
 
-    // add retry attribute and replace the test method with the wrapped one
+    // Add retry attribute and replace the test method with the wrapped one
     foreach (var method in testMethodEnumerable)
     {
-      method.WrapWithAttributes(new RetryOnErrorAttribute(tryCount));
+      method.WrapWithAttributes(new RetryOnErrorAttribute(retryCount, retryBehavior));
     }
   }
 }
