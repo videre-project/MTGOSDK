@@ -253,12 +253,18 @@ public abstract class DLRWrapper : IJsonSerializable
       foreach (var item in Cast<IList<T1>>(items))
         yield return mapper(item);
     }
+
     // Check if the object can support indexing (e.g. IList)
-    else if (Try<bool>(() => obj[0] != null))
+    int? count = Try(() => obj.Count, () => obj.Length);
+    if (count != null && Try<bool>(() => obj[0] != null))
     {
-      int count = Try(() => obj.Count, () => obj.Length);
       for (var i = 0; i < count; i++)
         yield return mapper(obj[i]);
+    }
+    else if (count == 0)
+    {
+      // If the object is empty, return an empty enumerable.
+      yield break;
     }
     // Otherwise, iterate using the object's enumerator (i.e. IEnumerable)
     else
