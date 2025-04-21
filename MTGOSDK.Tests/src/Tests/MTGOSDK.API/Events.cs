@@ -23,17 +23,33 @@ public class Events : EventValidationFixture
   [Test]
   public void Test_EventManager()
   {
-    // Grab a random event type to test
-    dynamic eventObj = null!;
+    // Grab a random event type to test the `Events` property
+    dynamic eventObj1 = null!;
     using (Log.Suppress())
     {
-      eventObj = EventManager.Events
+      eventObj1 = EventManager.Events
         .Where(e => e.Description != string.Empty)
         .Skip(new Random().Next(0, 50))
         .First();
     }
-    Assert.That(eventObj, Is.Not.Null);
-    ValidateEvent(eventObj);
+    Assert.That(eventObj1, Is.Not.Null);
+    ValidateEvent(eventObj1);
+
+    // Grab a random tournament to test the `FeaturedEvents` property
+    Tournament? eventObj2 = null!;
+    using (Log.Suppress())
+    {
+      eventObj2 = EventManager.FeaturedEvents
+        .Where(e => e.Description != string.Empty && e.HasPlayoffs)
+        .Skip(new Random().Next(0, 50))
+        .FirstOrDefault();
+    }
+    Assert.That(eventObj2, Is.Not.Null);
+    ValidateTournament(eventObj2);
+
+    // Ensure that the event manager has a valid list of joined events
+    Assert.That(EventManager.JoinedEvents, Is.Not.Null);
+    Assert.That(EventManager.JoinedEvents, Is.InstanceOf<IEnumerable<dynamic>>());
 
     // Ensure that invalid event ids or tokens throw an exception
     Assert.That(() => EventManager.GetEvent(-1),
@@ -67,12 +83,15 @@ public class Events : EventValidationFixture
       if (typeof(T) == typeof(Match))
         return Try<bool>(() => (e as Match)!.State >= MatchState.GameStarted);
       if (typeof(T) == typeof(Tournament))
-        return Try<bool>(() => (e as Tournament)!.State >= TournamentState.RoundInProgress);
+        return Try<bool>(() => (e as Tournament)!.State >= TournamentState.RoundInProgress &&
+                               (e as Tournament)!.CurrentRound > 0 &&
+                              !(e as Tournament)!.HasPlayoffs);
       if (typeof(T) == typeof(Queue))
         return Try<bool>(() => (e as Queue)!.CurrentState >= QueueState.NotJoined);
 
       return true;
     });
+
     switch (typeof(T).Name)
     {
       case "League":
@@ -218,10 +237,32 @@ public class EventValidationFixture : BaseFixture
     // IEvent properties
     ValidateEvent(tournament);
 
+
+    Assert.That(tournament.EntryFee, Is.Not.Empty);
+    Assert.That(tournament.EntryFee.Count, Is.GreaterThan(0));
+    EntryFeeSuite.EntryFee entryFee = tournament.EntryFee[0];
+    Assert.That(entryFee.Id, Is.GreaterThan(-1));
+    Assert.That(entryFee.Count, Is.GreaterThan(0));
+    Assert.That(entryFee.Item.Id, Is.EqualTo(entryFee.Id));
+
+    Assert.That(tournament.Prizes, Is.Not.Empty);
+    Assert.That(tournament.Prizes.Count, Is.GreaterThan(0));
+    IList<EventPrize> firstPrizes = tournament.Prizes.First().Value;
+    Assert.That(firstPrizes, Is.Not.Empty);
+    Assert.That(firstPrizes.Count, Is.GreaterThan(0));
+    EventPrize firstPrize = firstPrizes.First();
+    Assert.That(firstPrize.Id, Is.GreaterThan(-1));
+    Assert.That(firstPrize.Count, Is.GreaterThan(0));
+    Assert.That(firstPrize.Item.Id, Is.EqualTo(firstPrize.Id));
+
     // IQueueBasedEvent properties
     Assert.That(tournament.StartTime, Is.GreaterThan(DateTime.MinValue));
     Assert.That(tournament.EndTime, Is.GreaterThan(tournament.StartTime));
     Assert.That(tournament.TotalRounds, Is.GreaterThan(0));
+    Assert.That(tournament.TotalRounds,
+      Is.LessThanOrEqualTo(Math.Max(
+        Tournament.GetNumberOfRounds(tournament.TotalPlayers),
+        Tournament.GetNumberOfRounds(tournament.MinimumPlayers))));
 
     // ITournament properties
     Assert.That(tournament.State, Is.Not.EqualTo(TournamentState.NotSet));
@@ -252,6 +293,20 @@ public class EventValidationFixture : BaseFixture
           tournament.CurrentRound <= 1 ? Is.GreaterThanOrEqualTo(0) : Is.GreaterThan(0));
       Assert.That(standing.Player, Is.Not.Null);
       Assert.That(standing.Points, Is.GreaterThanOrEqualTo(0));
+
+      string record = standing.Record;
+      Assert.That(record, Is.Not.Null.Or.Empty);
+      string[] recordParts = record.Split('-');
+      Assert.That(recordParts.Length, Is.EqualTo(3));
+      Assert.That(int.TryParse(recordParts[0], out int wins), Is.True);
+      Assert.That(int.TryParse(recordParts[1], out int losses), Is.True);
+      Assert.That(int.TryParse(recordParts[2], out int ties), Is.True);
+      Assert.That(wins + losses + ties,
+        Is.EqualTo(
+          standing.PreviousMatches
+            .Count(m => !m.HasBye &&
+                   m.State.HasFlag(MatchState.MatchCompleted))));
+
       Assert.That(standing.OpponentMatchWinPercentage, Is.Not.Empty);
       Assert.That(standing.GameWinPercentage, Is.Not.Empty);
       Assert.That(standing.OpponentGameWinPercentage, Is.Not.Empty);
@@ -272,7 +327,8 @@ public class EventValidationFixture : BaseFixture
         Assert.That(match.Players.Count, Is.GreaterThanOrEqualTo(1));
         Assert.That(match.WinningPlayerIds.Count, Is.LessThanOrEqualTo(3));
         Assert.That(match.LosingPlayerIds.Count, Is.LessThanOrEqualTo(2));
-        Assert.That(match.GameStandingRecords, match.HasBye ? Is.Empty : Is.Not.Empty);
+        Assert.That(match.GameStandingRecords,
+          match.HasBye ? Is.Empty : Is.Not.Empty);
 
         foreach(GameStandingRecord game in match.GameStandingRecords)
         {

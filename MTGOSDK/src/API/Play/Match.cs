@@ -38,18 +38,6 @@ public sealed class Match(dynamic match) : Event
   //
 
   /// <summary>
-  /// The unique ID for this match.
-  /// </summary>
-  [Obsolete("Use Id instead.")]
-  public int MatchId => this.Id;
-
-  /// <summary>
-  /// The match's session token.
-  /// </summary>
-  [Obsolete("Use Token instead.")]
-  public Guid MatchToken => this.Token;
-
-  /// <summary>
   /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
   /// <remarks>

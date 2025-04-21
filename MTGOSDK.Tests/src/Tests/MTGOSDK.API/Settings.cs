@@ -20,13 +20,13 @@ public class Settings : SettingsValidationFixture
     // Assuming that the last user is the same as the current user,
     // verify that user settings are being read correctly.
     var lastUserName = SettingsService.GetSetting(Setting.LastLoginName);
-    Assert.That(lastUserName, Is.Not.EqualTo(string.Empty));
+    Assert.That(lastUserName, Is.Not.Null.Or.Empty);
     Assert.That(lastUserName, Is.EqualTo(Client.CurrentUser.Name));
 
     // Verify that the last EULA version agreed to is the current
     // version after the client has started.
     var lastEulaVersion = SettingsService.GetSetting<Version>(Setting.LastEULAVersionNumberAgreedTo);
-    Assert.That(lastEulaVersion, Is.Not.Null);
+    Assert.That(lastEulaVersion, Is.Not.Null.Or.Empty);
     Assert.That(lastEulaVersion, Is.EqualTo(Client.Version));
 
     // Check that Setting.Invalid throws an exception to guard

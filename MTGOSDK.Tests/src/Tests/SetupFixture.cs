@@ -53,7 +53,6 @@ public class SetupFixture : Shared
         {
           CreateProcess = true,
           StartMinimized = true,
-          // CloseOnExit = true,
           AcceptEULAPrompt = true
         },
         loggerProvider: new NUnitLoggerProvider(LogLevel.Trace)
@@ -70,6 +69,7 @@ public class SetupFixture : Shared
           username: DotEnv.Get("USERNAME"), // String value
           password: DotEnv.Get("PASSWORD")  // SecureString value
         );
+        Assert.That(await Client.IsOnline(), Is.True);
         Assert.That(Client.IsLoggedIn, Is.True);
 
         // Revalidate the client's reported interactive state.
@@ -137,5 +137,12 @@ public class SetupFixture : Shared
     // Verify that all remote handles have been reset.
     Assert.That(RemoteClient.IsInitialized, Is.False);
     Assert.That(RemoteClient.Port, Is.Null);
+
+    // Finally, kill the process to ensure that all resources are released.
+    if (!Client.IsLoggedIn)
+    {
+      RemoteClient.KillProcess();
+      Assert.That(RemoteClient.HasStarted, Is.False);
+    }
   }
 }

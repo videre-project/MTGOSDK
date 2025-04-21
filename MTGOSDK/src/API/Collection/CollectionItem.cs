@@ -22,6 +22,7 @@ public class CollectionItem<T>(dynamic collectionItem)
   /// <summary>
   /// Stores an internal reference to the CollectionItem object.
   /// </summary>
+  [RuntimeInternal]
   internal override dynamic obj => collectionItem;
 
   //

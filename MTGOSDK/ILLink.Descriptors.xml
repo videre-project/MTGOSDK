@@ -73,6 +73,13 @@
         <method name="SetDeckLegality" />
       </type>
     </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Core">
+      <type fullname="ICardDataManager">
+        <property name="AllCardSetsByCode" />
+        <method name="GetCardDefinitionForCatId" />
+        <method name="GetCatalogIdsForNameInPreferentialOrder" />
+      </type>
+    </namespace>
     <namespace fullname="WotC.MtGO.Client.Model.Play">
       <type fullname="IPlayerEvent">
         <property name="EventId" />

@@ -24,7 +24,7 @@ public abstract class HistoricalItem<T> : DLRWrapper<IHistoricalItem>
   [RuntimeInternal]
   internal override Type type => typeof(T);
 
-  [ExcludeFromCodeCoverage]
+  [RuntimeInternal]
   public sealed class Default(dynamic historicalItem) : HistoricalItem<dynamic>
   {
     /// <summary>

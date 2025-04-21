@@ -39,21 +39,19 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
-  public MatchState State =>
-    Retry(() => Cast<MatchState>(Unbind(@base).Status), MatchState.Invalid);
+  public MatchState State => Cast<MatchState>(Unbind(@base).Status);
 
   /// <summary>
   /// Whether the player has been assigned a bye.
   /// </summary>
-  public bool HasBye => @base.HasBye;
+  public bool HasBye => Try(() => @base.HasBye, this.Players.Count == 1);
 
   /// <summary>
   /// The user objects of both players.
   /// </summary>
   [NonSerializable]
   public IList<User> Players =>
-    Map<IList, User>(Unbind(@base).Users,
-        new Func<dynamic, User>(player => new User(player.Name)));
+    Map<IList, User>(Unbind(@base).Users, Lambda(p => new User(p.Name)));
 
   /// <summary>
   /// The IDs of the winning player(s).

@@ -131,7 +131,8 @@ public sealed class Tournament(dynamic tournament) : Event
   /// <summary>
   /// Whether the tournament has playoffs (i.e. Top-8) or concludes after swiss.
   /// </summary>
-  public bool HasPlayoffs => Unbind(@base).m_playoffs.Count > 0;
+  public bool HasPlayoffs =>
+    Retry<int>(() => Unbind(@base).m_playoffs.Count) > 0;
 
   /// <summary>
   /// The tournament's detailed round information.

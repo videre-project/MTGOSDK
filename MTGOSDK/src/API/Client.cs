@@ -406,7 +406,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     if (IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
 
-    if (!await RetryAsync(IsLoginAvailable, retries: 3))
+    if (!await RetryAsync(IsLoginAvailable, retries: 3) && !await IsOnline())
       throw new ServerOfflineException("The login server is currently offline.");
 
     // Passes the user's credentials to the MTGO client for authentication.
