@@ -26,14 +26,14 @@ public class RemoteHandle : DLRWrapper, IDisposable
   {
     // The WeakReferences are to RemoteObject
     private readonly Dictionary<ulong, WeakReference<RemoteObject>> _pinnedAddressesToRemoteObjects;
-    private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
+    private readonly ReaderWriterLockSlim _rwLock = new();
 
     private readonly RemoteHandle _app;
 
     public RemoteObjectsCollection(RemoteHandle app)
     {
       _app = app;
-      _pinnedAddressesToRemoteObjects = new Dictionary<ulong, WeakReference<RemoteObject>>();
+      _pinnedAddressesToRemoteObjects = new();
     }
 
     private RemoteObject GetRemoteObjectUncached(
@@ -52,7 +52,10 @@ public class RemoteHandle : DLRWrapper, IDisposable
         }
         catch (Exception e)
         {
-          throw new Exception("Could not dump remote object/type.", e);
+          throw new InvalidOperationException(
+            $"Could not dump remote object {typeName} at address {remoteAddress:X}.\n" +
+            $"This is likely due to the object being invalid or not being a managed object.",
+            e);
         }
       }, raise: true);
 
