@@ -32,6 +32,8 @@ public class STACommand(TestCommand command) : TestCommand(command.Test)
       catch (Exception e)
       {
         tcs.SetException(e);
+        // Filter stack trace to exclude internal frames
+        StackFilter.FilterException(context);
       }
     });
     thread.SetApartmentState(ApartmentState.STA);

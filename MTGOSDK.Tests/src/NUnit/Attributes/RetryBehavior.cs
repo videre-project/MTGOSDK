@@ -3,13 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
-using NUnit.Framework.Interfaces;
-using NUnit.Framework.Internal;
-using NUnit.Framework.Internal.Commands;
-
-using MTGOSDK.NUnit.Extensions;
-
 
 namespace MTGOSDK.NUnit.Attributes;
 

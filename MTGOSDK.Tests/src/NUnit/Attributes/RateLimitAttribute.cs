@@ -31,7 +31,12 @@ public class RateLimitAttribute(int ms = 100) : STATestAttribute
       lock (s_lock)
       {
         Thread.Sleep(ms);
-        return base.RunCommand(context);
+        TestResult result = base.RunCommand(context);
+
+        // Filter stack trace to exclude internal frames
+        StackFilter.FilterException(context);
+
+        return result;
       }
     }
   }
