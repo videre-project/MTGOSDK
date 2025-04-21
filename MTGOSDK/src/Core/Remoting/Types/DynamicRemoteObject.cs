@@ -298,20 +298,24 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   {
     try
     {
-    Type lastType = __type;
-    Type nextType = __type;
-    do
-    {
-      bool found = TryGetMember(nextType, binder.Name, out result);
-      if (found)
-        return true;
-      lastType = nextType;
-      nextType = nextType.BaseType;
-    }
-    while (nextType != null || lastType == typeof(object));
+      object obj = null;
+      bool ret = Retry(() =>
+      {
+        Type lastType = __type;
+        Type nextType = __type;
+        do
+        {
+          bool found = TryGetMember(nextType, binder.Name, out obj);
+          if (found) return true;
+          lastType = nextType;
+          nextType = nextType.BaseType;
+        }
+        while (nextType != null || lastType == typeof(object));
+        return false;
+      }, raise: true);
 
-    result = null;
-    return false;
+      result = obj;
+      return ret;
     }
     catch (Exception ex)
     {
