@@ -17,9 +17,9 @@ NOTICES
 ========================================================================
 
 Certain files in this code base have been modified and/or copied,
-either partially or wholely, from source code from the RemoteNET
-library, which is licensed under the open-source MIT License with
-the following copyright information.
+either partially or wholely, from source code from the RemoteNET and
+ImpromptuInterface libraries, which are licensed under the open-source MIT
+License and Apache License with the following copyright information.
 
 The below filepaths are derived from these original components of RemoteNET:
 RemoteNET:      MTGOSDK\src\Core\Compiler
@@ -29,6 +29,12 @@ ScubaDiver:     MTGOSDK\lib\ScubaDiver
 
 The original RemoteNET library can be found at the following URL:
 https://github.com/theXappy/RemoteNET/tree/57dc377d8fc665c4da6b9b07a541e4d4c8440f58
+
+The below filepath is derived from components of ImpromptuInterface:
+ImpromptuInterface.Build: MTGOSDK\src\Core\Reflection\Proxy\Builder
+
+The original ImpromptuInterface library can be found at the following URL:
+https://github.com/ekonbenefits/impromptu-interface/tree/5e70e34f20ad443923a8caf2281a1b3df48b9b87
 
 MIT License
 ========================================================================

@@ -50,6 +50,8 @@
     <NoWarn>$(NoWarn);IL2097;IL2098;IL2099</NoWarn>
     <!-- Unused 'UnconditionalSuppressMessageAttribute' for warning 'IL2070' -->
     <NoWarn>$(NoWarn);IL2121</NoWarn>
+    <!-- Compiler-generated member's requirements can't be guaranteed by trimmer -->
+    <NoWarn>$(NoWarn);IL2111;IL2118</NoWarn>
   </PropertyGroup>
 
   <!--

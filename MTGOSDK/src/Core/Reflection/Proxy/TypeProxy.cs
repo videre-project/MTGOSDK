@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using ImpromptuInterface;
+using MTGOSDK.Core.Reflection.Proxy.Builder;
 
 
 namespace MTGOSDK.Core.Reflection.Proxy;
@@ -22,9 +22,23 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// </summary>
   /// <typeparam name="T">The interface type to bind to.</typeparam>
   /// <param name="obj">The remote object to bind to.</param>
+  /// <param name="otherInterfaces">The other interface types to bind to.</param>
   /// <returns>The proxied object.</returns>
-  public static T As(dynamic? obj=null) =>
-    Impromptu.ActLike<T>(obj);
+  public static T As(
+    object? obj = null)
+  {
+    obj = TypeProxyBuilder.FixTargetContext(obj, out var tContext);
+    var tProxy = DynamicTypeBuilder.BuildType(tContext, typeof(T));
+
+    var proxy =  TypeProxyBuilder.InitializeProxy<T>(tProxy, obj);
+    if (!TypeProxyBuilder.IsValidRuntimeType(proxy))
+    {
+      throw new InvalidOperationException(
+        $"The proxy type {proxy.GetType()} is not a valid runtime type.");
+    }
+
+    return proxy;
+  }
 
   /// <summary>
   /// Binds the proxied object to the specified interface types.
@@ -35,16 +49,42 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <param name="obj">The remote object to bind to.</param>
   /// <param name="interfaces">The interface types to bind to.</param>
   /// <returns>The proxied object.</returns>
-  public static dynamic As(dynamic? obj=null, params Type[] interfaces) =>
-    Impromptu.DynamicActLike(obj, interfaces);
+  public static dynamic As(object? obj=null, params Type[] interfaces)
+  {
+    obj = TypeProxyBuilder.FixTargetContext(obj, out var tContext);
+    var tProxy = DynamicTypeBuilder.BuildType(
+      tContext,
+      interfaces.First(),
+      interfaces.Skip(1).ToArray());
+
+    var proxy = TypeProxyBuilder.InitializeProxy<T>(tProxy, obj, interfaces);
+    if (!TypeProxyBuilder.IsValidRuntimeType(proxy))
+    {
+      throw new InvalidOperationException(
+        $"The proxy type {proxy.GetType()} is not a valid runtime type.");
+    }
+
+    return proxy;
+  }
 
   /// <summary>
   /// Unbinds the proxied object from any bound interface types.
   /// </summary>
   /// <param name="obj">The remote object to unbind.</param>
   /// <returns>The unbound proxied object.</returns>
-  public static dynamic From(dynamic? obj=null) =>
-    Impromptu.UndoActLike(obj);
+  public static dynamic From(dynamic? obj=null)
+  {
+    if (obj is IProxy proxy)
+    {
+      if (!TypeProxyBuilder.IsValidRuntimeType(proxy))
+      {
+        throw new InvalidOperationException(
+          $"The proxy type {proxy.GetType()} is not a valid runtime type.");
+      }
+      return proxy.Original;
+    }
+    return obj;
+  }
 
   /// <summary>
   /// Check whether an instance implements a proxy interface.
@@ -53,7 +93,8 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <returns>True if the object is a proxy</returns>
   public static bool IsProxy(dynamic? obj=null) =>
     obj != null &&
-    typeof(IActLikeProxy).IsAssignableFrom(obj.GetType());
+    typeof(IProxy).IsAssignableFrom(obj.GetType()) &&
+    TypeProxyBuilder.IsValidRuntimeType(obj);
 
   //
   // Derived class properties
