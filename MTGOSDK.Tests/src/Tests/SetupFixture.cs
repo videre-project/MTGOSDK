@@ -22,6 +22,7 @@ namespace MTGOSDK.Tests;
 /// A shared setup fixture that can be used to interact with the global state
 /// of the test runner.
 /// </summary>
+[RetryOnError(1, RetryBehavior.UntilPasses)]
 public class Shared : DLRWrapper<Client>
 {
   /// <summary>

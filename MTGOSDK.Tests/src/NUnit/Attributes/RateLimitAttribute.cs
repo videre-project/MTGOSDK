@@ -4,7 +4,7 @@
 **/
 
 using System;
-using System.Threading;
+using System.Threading.Tasks;
 
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Commands;
@@ -30,11 +30,8 @@ public class RateLimitAttribute(int ms = 100) : STATestAttribute
     {
       lock (s_lock)
       {
-        Thread.Sleep(ms);
+        Task.Delay(ms).Wait();
         TestResult result = base.RunCommand(context);
-
-        // Filter stack trace to exclude internal frames
-        StackFilter.FilterException(context);
 
         return result;
       }

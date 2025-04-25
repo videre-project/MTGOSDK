@@ -11,13 +11,10 @@ global using NUnit.Framework;
 global using MTGOSDK.NUnit.Attributes;
 
 //
-// Apply a global retry policy to all tests defined in the assembly.
+// Filter internal namespaces and members from error stacktraces thrown during
+// unit tests. This is useful for filtering out runtime internals that MTGOSDK
+// proxies and does not control.
 //
-// By default, we opt to retry tests, leveraging the StackTrace filtering
-// offered by this attribute's test runner to ensure consistent test reporting
-// should this be used in a CI/CD pipeline under stricter failure conditions.
-//
-[assembly: RetryOnError(3, RetryBehavior.UntilPasses)]
 [assembly: ExceptionFilter(
   @"^--",
   @"CallSite\.Target",
@@ -25,5 +22,6 @@ global using MTGOSDK.NUnit.Attributes;
   @"System\.(Reflection|Dynamic|RuntimeMethodHandle|Threading\.ExecutionContext)",
   @"NUnit\.Framework",
   @"MTGOSDK\.NUnit",
-  @"MTGOSDK\.Core\.(Remoting\.(Reflection|Types|Interop))"
+  @"MTGOSDK\.Core\.(Remoting\.(Reflection|Types|Interop))",
+  @"DLRWrapper\.Retry[T]"
 )]

@@ -61,9 +61,6 @@ public class RetryOnErrorCommand(
       }
     }
 
-    // Filter stack trace to exclude internal frames
-    StackFilter.FilterException(context);
-
     return context.CurrentResult;
   }
 }

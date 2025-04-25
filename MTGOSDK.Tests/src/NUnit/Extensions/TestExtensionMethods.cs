@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 
@@ -43,7 +44,7 @@ public static class TestExtensionMethods
     test.GetAllTestMethods()
       .Where(method => !method.HasAnAttributeOf<NoRetryAttribute>());
 
-  private static IEnumerable<TestFixture> GetAllTestFixtures(this ITest test)
+  public static IEnumerable<TestFixture> GetAllTestFixtures(this ITest test)
   {
     List<TestFixture> testMethods = [];
 
@@ -60,7 +61,7 @@ public static class TestExtensionMethods
     return testMethods;
   }
 
-  private static IEnumerable<TestMethod> GetAllTestMethods(this ITest test)
+  public static IEnumerable<TestMethod> GetAllTestMethods(this ITest test)
   {
     List<TestMethod> testMethods = [];
 

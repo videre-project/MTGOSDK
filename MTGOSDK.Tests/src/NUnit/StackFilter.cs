@@ -21,16 +21,25 @@ public class StackFilter(IEnumerable<string> filterPatterns)
   private readonly IEnumerable<Regex> _regexPatterns =
     filterPatterns.Select(p => new Regex(p, RegexOptions.IgnoreCase));
 
-  public static StackFilter? GetStackFilter(Test test)
+  private static StackFilter? GetStackFilter(Test? test = null)
   {
-    IMethodInfo? testMethod = test.Method;
-    if (testMethod == null) return null;
+    Assembly assembly;
+    if (test != null)
+    {
+      IMethodInfo? testMethod = test.Method;
+      if (testMethod == null) return null;
 
-    Type? declaringType = testMethod.MethodInfo.DeclaringType;
-    if (declaringType == null) return null;
+      Type? declaringType = testMethod.MethodInfo.DeclaringType;
+      if (declaringType == null) return null;
+
+      assembly = declaringType.Assembly;
+    }
+    else
+    {
+      assembly = Assembly.GetCallingAssembly();
+    }
 
     // Check if the assembly has the ExceptionFilterAttribute
-    var assembly = declaringType.Assembly;
     var filterAttribute = assembly.GetCustomAttribute<ExceptionFilterAttribute>();
     if (filterAttribute == null) return null;
 
@@ -46,8 +55,24 @@ public class StackFilter(IEnumerable<string> filterPatterns)
     {
       context.CurrentResult.SetResult(
         context.CurrentResult.ResultState,
-        exceptionFilter.Filter(context.CurrentResult.Message)!,
+        context.CurrentResult.Message,
+        // exceptionFilter.Filter(context.CurrentResult.Message)!,
         exceptionFilter.Filter(context.CurrentResult.StackTrace)
+      );
+    }
+  }
+
+  public void Filter(TestExecutionContext context)
+  {
+    // Modify the stack trace to filter out internal stack frames
+    if (context.CurrentResult.ResultState == ResultState.Failure ||
+        context.CurrentResult.ResultState == ResultState.Error)
+    {
+      context.CurrentResult.SetResult(
+        context.CurrentResult.ResultState,
+        context.CurrentResult.Message,
+        // exceptionFilter.Filter(context.CurrentResult.Message)!,
+        Filter(context.CurrentResult.StackTrace)
       );
     }
   }

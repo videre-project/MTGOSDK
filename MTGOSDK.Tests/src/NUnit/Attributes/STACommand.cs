@@ -27,13 +27,20 @@ public class STACommand(TestCommand command) : TestCommand(command.Test)
     {
       try
       {
-        tcs.SetResult(RunCommand(context));
+        context.CurrentResult = RunCommand(context);
       }
-      catch (Exception e)
+      catch (Exception ex)
       {
-        tcs.SetException(e);
-        // Filter stack trace to exclude internal frames
-        StackFilter.FilterException(context);
+        if (context.CurrentResult == null)
+        {
+          context.CurrentResult = context.CurrentTest.MakeTestResult();
+        }
+        context.CurrentResult.RecordException(ex);
+      }
+      finally
+      {
+        // Set the result in the TaskCompletionSource
+        tcs.SetResult(context.CurrentResult);
       }
     });
     thread.SetApartmentState(ApartmentState.STA);
