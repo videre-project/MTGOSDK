@@ -24,6 +24,8 @@ public sealed class Tournament(dynamic tournament) : Event
   /// </summary>
   internal override dynamic obj => Bind<ITournament>(tournament);
 
+  private Queue m_queue => new(tournament);
+
   //
   // IQueueBasedEvent wrapper properties
   //
@@ -39,6 +41,9 @@ public sealed class Tournament(dynamic tournament) : Event
   /// </summary>
   public IDictionary<string, IList<EventPrize>> Prizes =>
     EventPrize.FromPrizeStructure(@base.Prizes, HasPlayoffs);
+
+  public EventStructure EventStructure =>
+    new(m_queue, Unbind(@base).TournamentStructure);
 
   /// <summary>
   /// The time the event is scheduled to start.
@@ -132,7 +137,8 @@ public sealed class Tournament(dynamic tournament) : Event
   /// Whether the tournament has playoffs (i.e. Top-8) or concludes after swiss.
   /// </summary>
   public bool HasPlayoffs =>
-    Retry<int>(() => Unbind(@base).m_playoffs.Count) > 0;
+    Try(() => Unbind(@base).m_playoffs.Count > 0,
+        () => this.EventStructure.HasPlayoffs) ?? false;
 
   /// <summary>
   /// The tournament's detailed round information.

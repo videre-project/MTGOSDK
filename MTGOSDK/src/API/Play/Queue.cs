@@ -31,6 +31,12 @@ public sealed class Queue(dynamic queue) : Event
   /// </summary>
   public QueueState CurrentState => Cast<QueueState>(Unbind(@base).CurrentState);
 
+  /// <summary>
+  /// The event structure of the queue.
+  /// </summary>
+  public EventStructure EventStructure =>
+    new(this, Unbind(@base).TournamentStructure);
+
   //
   // IQueue wrapper events
   //

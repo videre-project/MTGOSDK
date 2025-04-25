@@ -351,6 +351,33 @@ public class EventValidationFixture : BaseFixture
 
     // IQueue properties
     Assert.That(queue.CurrentState, Is.Not.EqualTo(QueueState.NotSet));
+
+    EventStructure eventStructure = queue.EventStructure;
+    Assert.That(eventStructure, Is.Not.Null);
+    Assert.That(eventStructure.Name, Is.Not.Empty);
+
+    Assert.That(eventStructure.IsConstructed,
+        Is.EqualTo(!eventStructure.IsLimited &&
+                   !eventStructure.IsDraft && !eventStructure.IsSealed));
+    Assert.That(eventStructure.IsDraft,
+        Is.EqualTo(eventStructure.IsLimited &&
+                   !eventStructure.IsConstructed && !eventStructure.IsSealed));
+    Assert.That(eventStructure.IsSealed,
+        Is.EqualTo(eventStructure.IsLimited &&
+                   !eventStructure.IsConstructed && !eventStructure.IsDraft));
+
+    Assert.That(eventStructure.IsSingleElimination,
+        Is.EqualTo(!eventStructure.IsSwiss && !eventStructure.HasPlayoffs));
+    Assert.That(eventStructure.IsSwiss,
+        Is.EqualTo(!eventStructure.IsSingleElimination));
+
+    if (eventStructure.HasPlayoffs)
+    {
+      Assert.That(eventStructure.IsSwiss, Is.True,
+          "HasPlayoffs is true, but IsSwiss is false.");
+      Assert.That(eventStructure.IsSingleElimination, Is.False,
+          "HasPlayoffs is true, but IsSingleElimination is true.");
+    }
   }
 
   public void ValidateMatch(Match match)
