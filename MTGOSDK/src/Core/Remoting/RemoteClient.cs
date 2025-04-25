@@ -372,6 +372,7 @@ public sealed class RemoteClient : DLRWrapper
     // Call all event subscribers first before disposing
     Log.Debug("Disposing RemoteClient.");
     Try(() => Disposed?.Invoke(null, EventArgs.Empty));
+    GC.WaitForPendingFinalizers();
     Disposed = null;
 
     // Cleanup all resources and dispose of the client handle

@@ -156,10 +156,12 @@ public class SetupFixture : Shared
       if (!RemoteClient.IsInitialized && client == null) return;
 
       // Log off the client to ensure that the user session terminates.
+      bool isLoggedIn = true;
       if (!Client.IsInteractive)
       {
         await client.LogOff();
         Assert.That(Client.IsLoggedIn, Is.False);
+        isLoggedIn = false;
       }
 
       // Set a callback to indicate when the client has been disposed.
@@ -179,7 +181,7 @@ public class SetupFixture : Shared
       Assert.That(RemoteClient.Port, Is.Null);
 
       // Finally, kill the process to ensure that all resources are released.
-      if (!Client.IsLoggedIn)
+      if (!isLoggedIn)
       {
         RemoteClient.KillProcess();
         Assert.That(RemoteClient.HasStarted, Is.False);
