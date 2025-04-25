@@ -16,7 +16,8 @@ public class Log : LoggerBase
   /// <summary>
   /// Suppresses all logging in the current context.
   /// </summary>
-  public static IDisposable Suppress() => new SuppressionContext(LogLevel.None);
+  public static IDisposable Suppress(LogLevel level = LogLevel.None) =>
+    new SuppressionContext(level);
 
   //
   // ILogger Extensions
