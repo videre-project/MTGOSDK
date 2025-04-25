@@ -18,6 +18,15 @@ public class NUnitLogger(
   LogLevel minLogLevel,
   DateTimeOffset? logStart) : ILogger
 {
+  public static bool UseImmediateFlush { get; set; } = true;
+
+  public static void Write(string message)
+  {
+    // TestContext.Progress.WriteLine(message); // Requires '--logger "Console;Verbosity=normal"'
+    // TestContext.Error.WriteLine(message);
+    Console.Error.WriteLine(message);
+  }
+
   private static readonly string[] NewLineChars = new[] { Environment.NewLine };
 
   public void Log<TState>(
@@ -66,8 +75,14 @@ public class NUnitLogger(
 
     try
     {
-      // TestContext.Progress.WriteLine(message); // Requires '--logger "Console;Verbosity=normal"'
-      TestContext.WriteLine(message);
+      if (UseImmediateFlush)
+      {
+        Write(message);
+      }
+      else
+      {
+        TestContext.WriteLine(message);
+      }
     }
     catch (Exception)
     {

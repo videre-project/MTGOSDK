@@ -5,6 +5,8 @@
 
 using System;
 
+using NUnit.Framework.Internal;
+
 
 namespace MTGOSDK.Tests;
 
@@ -17,12 +19,6 @@ public abstract class BaseFixture : Shared
 
   private static void Mark(string? message) =>
     Write("----------------------- " + message ?? "");
-
-  public DateTime StartTime;
-
-  public DateTime EndTime;
-
-  public TimeSpan Duration => EndTime - StartTime;
 
   [SetUp]
   public void Setup()

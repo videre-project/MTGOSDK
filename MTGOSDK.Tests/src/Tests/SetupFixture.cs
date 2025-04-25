@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
 
+using NUnit.Framework.Internal;
+
 using MTGOSDK.API;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
@@ -25,6 +27,12 @@ namespace MTGOSDK.Tests;
 [RetryOnError(1, RetryBehavior.UntilPasses)]
 public class Shared : DLRWrapper<Client>
 {
+  public DateTime StartTime;
+
+  public DateTime EndTime;
+
+  public TimeSpan Duration => EndTime - StartTime;
+
   /// <summary>
   /// The default client instance to interact with the MTGO API.
   /// </summary>
@@ -41,9 +49,21 @@ public class Shared : DLRWrapper<Client>
 [SetUpFixture]
 public class SetupFixture : Shared
 {
+  private static void Write(string message) =>
+    NUnitLogger.Write($"----------------------- {message}");
+
   [OneTimeSetUp, CancelAfter(/* 5 min */ 300_000)]
   public virtual async Task RunBeforeAnyTests()
   {
+    Write($"{nameof(SetupFixture)}.{nameof(RunBeforeAnyTests)}");
+    {
+      // Disable NUnit's console redirection during setup.
+      NUnitLogger.UseImmediateFlush = true;
+
+      // Set the start time for the test fixture.
+      StartTime = DateTime.Now;
+    }
+
     try
     {
       // Skip if the client has already been initialized.
@@ -108,42 +128,70 @@ public class SetupFixture : Shared
       await Task.Delay(1000);
       Environment.Exit(-100);
     }
+    finally
+    {
+      EndTime = DateTime.Now;
+      Write($"Took {Duration.TotalSeconds:F2} seconds\n\n");
+
+      // Use NUnit's console redirection after setup has completed.
+      NUnitLogger.UseImmediateFlush = false;
+    }
   }
 
   [OneTimeTearDown, CancelAfter(/* 10 seconds */ 10_000)]
   public virtual async Task RunAfterAnyTests()
   {
-    // Skip if the client has already been disposed.
-    if (!RemoteClient.IsInitialized && client == null) return;
-
-    // Log off the client to ensure that the user session terminates.
-    if (!Client.IsInteractive)
+    Write($"{nameof(SetupFixture)}.{nameof(RunAfterAnyTests)}");
     {
-      await client.LogOff();
-      Assert.That(Client.IsLoggedIn, Is.False);
+      // Disable NUnit's console redirection during teardown.
+      NUnitLogger.UseImmediateFlush = true;
+
+      // Set the start time for the test fixture.
+      StartTime = DateTime.Now;
     }
 
-    // Set a callback to indicate when the client has been disposed.
-    bool isDisposed = false;
-    RemoteClient.Disposed += (s, e) => isDisposed = true;
-
-    // Safely dispose of the client instance.
-    client.Dispose();
-    client = null!;
-    if (!await WaitUntil(() => isDisposed)) // Waits at most 5 seconds.
+    try
     {
-      Assert.Fail("The client was not disposed within the timeout period.");
+      // Skip if the client has already been disposed.
+      if (!RemoteClient.IsInitialized && client == null) return;
+
+      // Log off the client to ensure that the user session terminates.
+      if (!Client.IsInteractive)
+      {
+        await client.LogOff();
+        Assert.That(Client.IsLoggedIn, Is.False);
+      }
+
+      // Set a callback to indicate when the client has been disposed.
+      bool isDisposed = false;
+      RemoteClient.Disposed += (s, e) => isDisposed = true;
+
+      // Safely dispose of the client instance.
+      client.Dispose();
+      client = null!;
+      if (!await WaitUntil(() => isDisposed)) // Waits at most 5 seconds.
+      {
+        Assert.Fail("The client was not disposed within the timeout period.");
+      }
+
+      // Verify that all remote handles have been reset.
+      Assert.That(RemoteClient.IsInitialized, Is.False);
+      Assert.That(RemoteClient.Port, Is.Null);
+
+      // Finally, kill the process to ensure that all resources are released.
+      if (!Client.IsLoggedIn)
+      {
+        RemoteClient.KillProcess();
+        Assert.That(RemoteClient.HasStarted, Is.False);
+      }
     }
-
-    // Verify that all remote handles have been reset.
-    Assert.That(RemoteClient.IsInitialized, Is.False);
-    Assert.That(RemoteClient.Port, Is.Null);
-
-    // Finally, kill the process to ensure that all resources are released.
-    if (!Client.IsLoggedIn)
+    finally
     {
-      RemoteClient.KillProcess();
-      Assert.That(RemoteClient.HasStarted, Is.False);
+      EndTime = DateTime.Now;
+      Write($"Took {Duration.TotalSeconds:F2} seconds");
+
+      // Use NUnit's console redirection after setup has completed.
+      NUnitLogger.UseImmediateFlush = false;
     }
   }
 }
