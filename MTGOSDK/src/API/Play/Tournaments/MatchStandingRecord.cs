@@ -19,7 +19,8 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// Stores an internal reference to the IMatchStandingRecord object.
   /// </summary>
-  internal override dynamic obj => matchStandingRecord;
+  internal override dynamic obj =>
+    Bind<IMatchStandingRecord>(matchStandingRecord);
 
   //
   // IMatchStandingRecord wrapper properties
@@ -51,7 +52,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// </summary>
   [NonSerializable]
   public IList<User> Players =>
-    Map<IList, User>(Unbind(@base).Users, Lambda(p => new User(p.Name)));
+    Map<IList, User>(@base.Users, Lambda(p => new User(p.Name)));
 
   /// <summary>
   /// The IDs of the winning player(s).

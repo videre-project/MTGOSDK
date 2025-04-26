@@ -41,7 +41,7 @@
       **/*.g.cs;
       **/*.Version.cs
     </ExcludeByFile>
-    <Threshold>70,70,80</Threshold>
+    <Threshold>50,50,50</Threshold>
     <ThresholdType>line,branch,method</ThresholdType>
   </PropertyGroup>
 

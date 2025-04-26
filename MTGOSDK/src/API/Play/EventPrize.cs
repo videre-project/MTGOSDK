@@ -62,10 +62,14 @@ public class EventPrize(int count, int catalogId) : IJsonSerializable
         bracket = string.Format("{0}-{1}", wins, losses);
       }
 
+      // Pin references to the keys and values of the sorted list
+      dynamic m_digitalObjects = tier.DigitalObjects;
+      var values = m_digitalObjects.Values;
+      var keys = m_digitalObjects.Keys;
+
       List<EventPrize> digitalObjects = new();
-      var values = tier.DigitalObjects.Values;
-      var keys = tier.DigitalObjects.Keys;
-      for(int i = 0; i < tier.DigitalObjects.Count; i++)
+      int numItems = m_digitalObjects.Count;
+      for(int i = 0; i < numItems; i++)
       {
         digitalObjects.Add(new EventPrize(values[i], keys[i]));
       }

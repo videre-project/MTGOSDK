@@ -27,14 +27,6 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   private readonly ICardDefinition CardDefinition =
     Bind<ICardDefinition>(avatar.CardDefinition);
 
-  /// <summary>
-  /// The associated visual resource for the Avatar.
-  /// </summary>
-  private Uri? AvatarSource =>
-    Optional<Uri>(
-      Try(() => avatar.AvatarImage.UriSource),
-      Lambda<bool>(url => url?.ToString() != ""));
-
   //
   // IAvatar wrapper properties
   //
@@ -58,13 +50,4 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// </summary>
   [NonSerializable]
   public Card Card => new(CardDefinition);
-
-  /// <summary>
-  /// Whether the Avatar resource has been loaded.
-  /// </summary>
-  /// <remarks>
-  /// This corresponds to the loading state of the card definition's visual
-  /// resources, which may be fetched separately after an Avatar is obtained.
-  /// </remarks>
-  public bool IsLoaded => AvatarSource != null;
 }

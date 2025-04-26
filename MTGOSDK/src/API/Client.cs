@@ -421,7 +421,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Executes the login command and creates a new task to connect the client.
     Log.Debug("Logging in as {Username}.", username);
     s_loginManager.LogOnExecute();
-    if (!await WaitForClientReady())
+    if (!await WaitForClientReady() && !s_loginManager.IsLoggedIn)
       throw new TimeoutException("Failed to connect and initialize the client.");
 
     // Explicitly update state for a non-interactive session.

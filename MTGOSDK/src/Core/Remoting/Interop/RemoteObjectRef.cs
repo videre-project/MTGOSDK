@@ -49,8 +49,6 @@ internal class RemoteObjectRef(
       if (_isReleased) return; // Already released
 
       int newCount = Interlocked.Decrement(ref _refCount);
-      Log.Trace("ReleaseReference: Token={Token}, NewCount={Count}", Token, newCount);
-
       if (newCount == 0)
       {
         // Last reference released, proceed with unpinning

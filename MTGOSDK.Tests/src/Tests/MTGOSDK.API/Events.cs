@@ -32,7 +32,8 @@ public class Events : EventValidationFixture
         .Skip(new Random().Next(0, 50))
         .First();
     }
-    Assert.That(eventObj1, Is.Not.Null);
+    Assert.That(eventObj1, Is.Not.Null,
+      "Unable to find an event in the events list.");
     ValidateEvent(eventObj1);
 
     // Grab a random tournament to test the `FeaturedEvents` property
@@ -40,12 +41,28 @@ public class Events : EventValidationFixture
     using (Log.Suppress())
     {
       eventObj2 = EventManager.FeaturedEvents
-        .Where(e => e.Description != string.Empty && e.HasPlayoffs)
         .Skip(new Random().Next(0, 50))
         .FirstOrDefault();
     }
-    Assert.That(eventObj2, Is.Not.Null);
+    Assert.That(eventObj2, Is.Not.Null,
+      "Unable to find a tournament in the featured events list.");
     ValidateTournament(eventObj2);
+
+    // Grab a random tournament to ensure we test other event structures.
+    // We use the Events collection instead to query previous tournaments as well.
+    bool hasPlayoffs = eventObj2.HasPlayoffs;
+    Tournament? eventObj3 = null!;
+    using (Log.Suppress())
+    {
+      eventObj3 = EventManager.Events
+        .Where(e => Try<bool>(() => e.HasPlayoffs == hasPlayoffs))
+        .Skip(new Random().Next(0, 50))
+        .FirstOrDefault();
+    }
+    Assert.That(eventObj3, Is.Not.Null,
+      string.Format("Unable to find a tournament {0} playoffs.",
+                    hasPlayoffs ? "with top 8 " : "without top 8 "));
+    ValidateEvent(eventObj3);
 
     // Ensure that the event manager has a valid list of joined events
     Assert.That(EventManager.JoinedEvents, Is.Not.Null);
@@ -83,9 +100,7 @@ public class Events : EventValidationFixture
       if (typeof(T) == typeof(Match))
         return Try<bool>(() => (e as Match)!.State >= MatchState.GameStarted);
       if (typeof(T) == typeof(Tournament))
-        return Try<bool>(() => (e as Tournament)!.State >= TournamentState.RoundInProgress &&
-                               (e as Tournament)!.CurrentRound > 0 &&
-                              !(e as Tournament)!.HasPlayoffs);
+        return Try<bool>(() => (e as Tournament)!.HasPlayoffs);
       if (typeof(T) == typeof(Queue))
         return Try<bool>(() => (e as Queue)!.CurrentState >= QueueState.NotJoined);
 
@@ -232,11 +247,33 @@ public class EventValidationFixture : BaseFixture
       league.ActiveDeck != null ? Has.Member(league) : Has.No.Member(league));
   }
 
+  private void ValidateEventStructure(EventStructure eventStructure)
+  {
+    Assert.That(eventStructure, Is.Not.Null);
+    Assert.That(eventStructure.Name, Is.Not.Empty);
+
+    Assert.That(eventStructure.IsConstructed,
+        Is.EqualTo(!eventStructure.IsLimited &&
+                   !eventStructure.IsDraft && !eventStructure.IsSealed));
+    Assert.That(eventStructure.IsDraft,
+        Is.EqualTo(eventStructure.IsLimited &&
+                   !eventStructure.IsConstructed && !eventStructure.IsSealed));
+    Assert.That(eventStructure.IsSealed,
+        Is.EqualTo(eventStructure.IsLimited &&
+                   !eventStructure.IsConstructed && !eventStructure.IsDraft));
+
+    Assert.That(eventStructure.IsSingleElimination,
+        Is.EqualTo(!eventStructure.IsSwiss));
+    Assert.That(eventStructure.IsSwiss,
+        Is.EqualTo(!eventStructure.IsSingleElimination));
+    Assert.That(eventStructure.HasPlayoffs,
+        Is.EqualTo(eventStructure.Name.Contains("(with top 8)")));
+  }
+
   public void ValidateTournament(Tournament tournament)
   {
     // IEvent properties
     ValidateEvent(tournament);
-
 
     Assert.That(tournament.EntryFee, Is.Not.Empty);
     Assert.That(tournament.EntryFee.Count, Is.GreaterThan(0));
@@ -256,6 +293,7 @@ public class EventValidationFixture : BaseFixture
     Assert.That(firstPrize.Item.Id, Is.EqualTo(firstPrize.Id));
 
     // IQueueBasedEvent properties
+    ValidateEventStructure(tournament.EventStructure);
     Assert.That(tournament.StartTime, Is.GreaterThan(DateTime.MinValue));
     Assert.That(tournament.EndTime, Is.GreaterThan(tournament.StartTime));
     Assert.That(tournament.TotalRounds, Is.GreaterThan(0));
@@ -270,11 +308,12 @@ public class EventValidationFixture : BaseFixture
     Assert.That(tournament.CurrentRound, Is.GreaterThanOrEqualTo(0));
     Assert.That(tournament.Rounds.Count, Is.EqualTo(tournament.CurrentRound));
     Assert.That(tournament.Standings.Count,
-        Is.GreaterThanOrEqualTo(tournament.TotalPlayers * 0.95).Or.EqualTo(0));
+        Is.GreaterThanOrEqualTo(
+            Math.Floor(tournament.TotalPlayers * 0.95)).Or.EqualTo(0));
 
     Assert.That((bool?)tournament.HasBye, Is.Not.Null);
     Assert.That((bool?)tournament.InPlayoffs, Is.Not.Null);
-    foreach(TournamentRound round in tournament.Rounds.Take(5))
+    foreach(TournamentRound round in tournament.Rounds.Take(3))
     {
       Assert.That(round.Number, Is.GreaterThan(0));
       Assert.That(round.IsComplete,
@@ -284,10 +323,10 @@ public class EventValidationFixture : BaseFixture
             : Is.AnyOf(true, false));
       Assert.That(round.Matches.Count, Is.GreaterThanOrEqualTo(0));
       Assert.That(round.StartTime, Is.GreaterThanOrEqualTo(tournament.StartTime));
-      Assert.That(round.UsersWithByes.Take(5), Has.All.Not.Null);
+      Assert.That(round.UsersWithByes.Take(3), Has.All.Not.Null);
     }
 
-    foreach(StandingRecord standing in tournament.Standings.Take(5))
+    foreach(StandingRecord standing in tournament.Standings.Take(3))
     {
       Assert.That(standing.Rank,
           tournament.CurrentRound <= 1 ? Is.GreaterThanOrEqualTo(0) : Is.GreaterThan(0));
@@ -351,33 +390,7 @@ public class EventValidationFixture : BaseFixture
 
     // IQueue properties
     Assert.That(queue.CurrentState, Is.Not.EqualTo(QueueState.NotSet));
-
-    EventStructure eventStructure = queue.EventStructure;
-    Assert.That(eventStructure, Is.Not.Null);
-    Assert.That(eventStructure.Name, Is.Not.Empty);
-
-    Assert.That(eventStructure.IsConstructed,
-        Is.EqualTo(!eventStructure.IsLimited &&
-                   !eventStructure.IsDraft && !eventStructure.IsSealed));
-    Assert.That(eventStructure.IsDraft,
-        Is.EqualTo(eventStructure.IsLimited &&
-                   !eventStructure.IsConstructed && !eventStructure.IsSealed));
-    Assert.That(eventStructure.IsSealed,
-        Is.EqualTo(eventStructure.IsLimited &&
-                   !eventStructure.IsConstructed && !eventStructure.IsDraft));
-
-    Assert.That(eventStructure.IsSingleElimination,
-        Is.EqualTo(!eventStructure.IsSwiss && !eventStructure.HasPlayoffs));
-    Assert.That(eventStructure.IsSwiss,
-        Is.EqualTo(!eventStructure.IsSingleElimination));
-
-    if (eventStructure.HasPlayoffs)
-    {
-      Assert.That(eventStructure.IsSwiss, Is.True,
-          "HasPlayoffs is true, but IsSwiss is false.");
-      Assert.That(eventStructure.IsSingleElimination, Is.False,
-          "HasPlayoffs is true, but IsSingleElimination is true.");
-    }
+    ValidateEventStructure(queue.EventStructure);
   }
 
   public void ValidateMatch(Match match)

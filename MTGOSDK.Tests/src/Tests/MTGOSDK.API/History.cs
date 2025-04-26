@@ -5,6 +5,9 @@
 
 using System;
 using System.Linq;
+
+using Microsoft.Extensions.Logging;
+
 using MTGOSDK.API.Play.History;
 using MTGOSDK.Core.Logging;
 
@@ -24,7 +27,13 @@ public class History : HistoryValidationFixture
     int itemCount = HistoryManager.Items.Count;
     Log.Debug("History items: {0}", itemCount);
 
+    //
     // Clear the existing store in client memory.
+    //
+    // This does not immediately overwrite the existing game history on disk,
+    // but if the user finishes any matches or tournaments while this happens,
+    // it will overwrite the game history file.
+    //
     Log.Trace("Clearing game history items from memory...");
     HistoryManager.Items.Clear();
 
@@ -39,9 +48,13 @@ public class History : HistoryValidationFixture
     // Merge the latest game history file into the current game history,
     // without overwriting the existing game history file (memory-persisted).
     string gameHistoryFile = gameHistoryFiles.First();
-    var gameHistory2 = HistoryManager.MergeGameHistory(gameHistoryFile, false);
-    Assert.That(gameHistory2, Is.Not.Empty);
-    Assert.That(gameHistory2.Count, Is.GreaterThanOrEqualTo(itemCount));
+
+    using (Log.Suppress(LogLevel.Trace))
+    {
+      var gameHistory2 = HistoryManager.MergeGameHistory(gameHistoryFile, false);
+      Assert.That(gameHistory2, Is.Not.Empty);
+      Assert.That(gameHistory2.Count, Is.GreaterThanOrEqualTo(itemCount));
+    }
     Log.Debug("History items: {0}", itemCount);
   }
 

@@ -55,6 +55,8 @@ public class Settings : SettingsValidationFixture
   {
     ValidateSetting(key, defaultValue);
     object setting = SettingsService.GetSetting(key);
+    Assert.That(setting, Is.Not.Null);
+    Assert.That(setting.GetType(), Is.EqualTo(defaultValue.GetType()));
 
     PrimitiveSetting<TValue> entry = SettingsService.UserSettings[key];
     ValidatePrimitiveSetting(key, entry);
@@ -62,7 +64,8 @@ public class Settings : SettingsValidationFixture
     object currentValue = entry.Value;
     Assert.That(currentValue, Is.Not.Null);
     Assert.That(currentValue.GetType(), Is.EqualTo(defaultValue.GetType()));
-    Assert.That(currentValue, Is.EqualTo(setting));
+
+    Assert.That(setting, Is.EqualTo(currentValue));
   }
 
   [TestCase<string>(Setting.LastLoginName, "")]
