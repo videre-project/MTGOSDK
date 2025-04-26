@@ -53,6 +53,10 @@ public abstract class DLRWrapper : IJsonSerializable
   /// </remarks>
   public static T Bind<T>(dynamic obj) where T : class
   {
+    if (obj == null)
+      throw new ArgumentNullException(nameof(obj),
+          $"{typeof(T).Name} object cannot be null.");
+
     // Unbind any nested interface types before re-binding the object.
     if (TypeProxy<dynamic>.IsProxy(obj))
       obj = Unbind(obj);
