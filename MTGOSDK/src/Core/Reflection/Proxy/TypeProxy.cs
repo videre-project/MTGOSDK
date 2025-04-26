@@ -24,8 +24,7 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <param name="obj">The remote object to bind to.</param>
   /// <param name="otherInterfaces">The other interface types to bind to.</param>
   /// <returns>The proxied object.</returns>
-  public static T As(
-    object? obj = null)
+  public static T As(object obj)
   {
     obj = TypeProxyBuilder.FixTargetContext(obj, out var tContext);
     var tProxy = DynamicTypeBuilder.BuildType(tContext, typeof(T));
@@ -49,7 +48,7 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <param name="obj">The remote object to bind to.</param>
   /// <param name="interfaces">The interface types to bind to.</param>
   /// <returns>The proxied object.</returns>
-  public static dynamic As(object? obj=null, params Type[] interfaces)
+  public static dynamic As(object obj, params Type[] interfaces)
   {
     obj = TypeProxyBuilder.FixTargetContext(obj, out var tContext);
     var tProxy = DynamicTypeBuilder.BuildType(

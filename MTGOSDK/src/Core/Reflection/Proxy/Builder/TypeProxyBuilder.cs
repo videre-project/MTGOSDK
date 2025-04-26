@@ -11,6 +11,23 @@ namespace MTGOSDK.Core.Reflection.Proxy.Builder;
 public static class TypeProxyBuilder
 {
   /// <summary>
+  /// Fixes the target context of the specified object.
+  /// </summary>
+  /// <param name="obj">The object to fix.</param>
+  /// <param name="tContext">The context type.</param>
+  /// <returns>The fixed object.</returns>
+  public static dynamic FixTargetContext(object obj, out Type? tContext)
+  {
+    if (obj == null)
+      throw new ArgumentNullException(nameof(obj), "Object cannot be null.");
+
+    obj = obj.GetTargetContext(out tContext, out var _);
+    tContext = tContext.FixContext();
+
+    return obj;
+  }
+
+  /// <summary>
   /// Validates the naming convention of the runtime type.
   /// </summary>
   /// <param name="obj">The object to validate.</param>
@@ -60,18 +77,4 @@ public static class TypeProxyBuilder
     IDictionary<string, Type> propertySpec = null) =>
       InitializeProxy<TInterface>(proxytype, original,
           new[] { typeof (TInterface) }, propertySpec);
-
-  /// <summary>
-  /// Fixes the target context of the specified object.
-  /// </summary>
-  /// <param name="obj">The object to fix.</param>
-  /// <param name="tContext">The context type.</param>
-  /// <returns>The fixed object.</returns>
-  public static dynamic FixTargetContext(object? obj, out Type? tContext)
-  {
-    obj = obj.GetTargetContext(out tContext, out var _);
-    tContext = tContext.FixContext();
-
-    return obj;
-  }
 }
