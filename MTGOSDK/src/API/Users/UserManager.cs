@@ -3,14 +3,13 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Concurrent;
+using System.Collections;
 
-using MTGOSDK.Core.Logging;
-using MTGOSDK.Core.Remoting;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using WotC.MtGO.Client.Model.Chat;
 using WotC.MtGO.Client.Model.Core;
+using WotC.MtGO.Client.Model;
 
 
 namespace MTGOSDK.API.Users;
@@ -18,25 +17,6 @@ using static MTGOSDK.API.Events;
 
 public static class UserManager
 {
-  /// <summary>
-  /// A dictionary of cached user objects by their Login ID.
-  /// </summary>
-  public static ConcurrentDictionary<int, User> Users { get; } = new();
-
-  /// <summary>
-  /// A map of user objects from their display name to their Login ID.
-  /// </summary>
-  public static ConcurrentDictionary<string, int> UserIds { get; } = new();
-
-  /// <summary>
-  /// Resets the local user cache.
-  /// </summary>
-  public static void ClearCache()
-  {
-    Users.Clear();
-    UserIds.Clear();
-  }
-
   //
   // UserManager wrapper methods
   //
@@ -46,34 +26,6 @@ public static class UserManager
   /// </summary>
   private static readonly IUserManager s_userManager =
     ObjectProvider.Get<IUserManager>();
-
-  private static readonly dynamic UsersById =
-    Unbind(s_userManager).m_usersById;
-
-  /// <summary>
-  /// Retrieves a user object by id from the client's UserManager.
-  /// </summary>
-  /// <param name="id">The Login ID of the user.</param>
-  /// <returns>A new User object.</returns>
-  private static User? GetUserById(int id)
-  {
-    if (!UsersById.ContainsKey(id)) return null;
-
-    Log.Trace("Retrieving user #{Id} from UserManager...", id);
-    return new User(UsersById[id]);
-  }
-
-  /// <summary>
-  /// Creates a new user object in the client's UserManager.
-  /// </summary>
-  /// <param name="name">The display name of the user.</param>
-  /// <param name="id">The Login ID of the user.</param>
-  /// <returns>A new User object.</returns>
-  private static User CreateNewUser(string name, int id)
-  {
-    Log.Trace("Creating new User object for {Name} (#{Id})", name, id);
-    return new User(Unbind(s_userManager).CreateNewUser(id, name));
-  }
 
   /// <summary>
   /// Retrieves a user object from the client's UserManager.
@@ -97,40 +49,18 @@ public static class UserManager
       throw new ArgumentException("Username cannot be null or empty.");
     }
 
-    if (!Users.TryGetValue(id, out var user))
+    // Check if the user exists by the provided ID and matches the given name.
+    if (GetUserName(id) != name)
     {
-      // Ensure that the user exists and is named correctly.
-      // FIXME: We cannot differentiate between offline and invalid users.
-      var matchedName = GetUserName(id);
-      if (!string.IsNullOrEmpty(matchedName) && matchedName != name)
-      {
-        throw new ArgumentException($"User #{id} does not match User '{name}'.");
-      }
-
-      // Retrieve an existing object or create a new one in the client's cache.
-      user = GetUserById(id) ?? CreateNewUser(name, id);
-
-      // Cache the user object locally for future calls.
-      //
-      // Created user objects either add to the client's internal user cache or
-      // return an existing user object. If an existing user object is returned,
-      // it may not reflect the same user data for the given user name.
-      //
-      // In any case, only one instance of a user object is created per user id,
-      // so any client-side updates to the user cache will be reflected in our
-      // local user cache.
-      Users[id] = user;
-      UserIds[name] = id;
-
-      // Set callback to remove user from cache when the client is disposed.
-      RemoteClient.Disposed += (s, e) =>
-      {
-        Users.TryRemove(id, out _);
-        UserIds.TryRemove(name, out _);
-      };
+      throw new ArgumentException(
+          $"User ID {id} does not match username '{name}'.");
     }
 
-    return user;
+    IUser? user = s_userManager.GetUser(id, name, null);
+    if (string.IsNullOrEmpty(user?.Name))
+      throw new ArgumentException($"User '{name}' (#{id}) cannot be found.");
+
+    return new(user);
   }
 
   /// <summary>
@@ -143,27 +73,16 @@ public static class UserManager
   /// <exception cref="KeyNotFoundException">
   /// Thrown if the user does not exist.
   /// </exception>
-  public static User GetUser(string name)
+  public static User GetUser(string name, bool ignoreCase = false)
   {
     if (string.IsNullOrEmpty(name))
       throw new ArgumentException("Username cannot be null or empty.");
 
-    // Attempt to retrieve the user object from the local cache.
-    if (UserIds.TryGetValue(name, out var id))
-    {
-      // If a user ID is cached, retrieve the user object from the local cache.
-      if (Users.TryGetValue(id, out var user))
-        return user;
-    }
-    else
-    {
-      // If the user ID is not cached, retrieve it from the client's UserManager.
-      id = GetUserId(name)
-        ?? throw new KeyNotFoundException($"User '{name}' cannot be found.");
-    }
+    IUser? user = s_userManager.GetUser(name, ignoreCase);
+    if (string.IsNullOrEmpty(user?.Name))
+      throw new KeyNotFoundException($"User '{name}' cannot be found.");
 
-    // Otherwise, retrieve the user object from the client's UserManager.
-    return GetUser(id, name);
+    return new(user);
   }
 
   /// <summary>
@@ -180,17 +99,14 @@ public static class UserManager
   public static User GetUser(int id)
   {
     if (id <= 0)
-      throw new ArgumentException("User ID must be greater than 0.");
+      throw new ArgumentException(
+          $"User ID must be greater than zero. Got {id}.");
 
-    // Attempt to retrieve the user object from the local cache.
-    if (Users.TryGetValue(id, out var user))
-      return user;
+    IUser? user = s_userManager.GetUser(id, null, null);
+    if (string.IsNullOrEmpty(user?.Name))
+      throw new KeyNotFoundException($"User #{id} cannot be found.");
 
-    string name = GetUserName(id)
-      ?? throw new KeyNotFoundException($"User #{id} cannot be found.");
-
-    // Otherwise, retrieve the user object from the client's UserManager.
-    return GetUser(id, name);
+    return new(user);
   }
 
   /// <summary>
@@ -199,9 +115,7 @@ public static class UserManager
   /// <param name="id">The Login ID of the user.</param>
   /// <returns>The display name of the user.</returns>
   public static string GetUserName(int id) =>
-    // Use a fallback to the user cache if the method fails.
-    Try(() => s_userManager.GetUserName(id),
-        () => UsersById[id]?.Name);
+    s_userManager.GetUserName(id);
 
   /// <summary>
   /// Retrieves the Login ID of a user by their username.
@@ -209,9 +123,7 @@ public static class UserManager
   /// <param name="name">The display name of the user.</param>
   /// <returns>The Login ID of the user.</returns>
   public static int? GetUserId(string name) =>
-    // Use a fallback to the user cache if the method fails.
-    Try(() => s_userManager.GetUserId(name),
-        () => s_userManager.GetUser(name, false)?.Id);
+    s_userManager.GetUserId(name);
 
   //
   // IBuddyUsersList wrapper methods
@@ -226,9 +138,8 @@ public static class UserManager
   /// <summary>
   /// Retrieves a list of the current user's buddy users.
   /// </summary>
-  public static IEnumerable<User> GetBuddyUsers() =>
-    Map<User>(/* IEnumerable<IUser> */ s_buddyUsersList,
-      new Func<dynamic, User>(user => GetUser(user.Name)));
+  public static IList<User> GetBuddyUsers() =>
+    Map<IList, User>(s_buddyUsersList);
 
   //
   // IBuddyUsersList wrapper events

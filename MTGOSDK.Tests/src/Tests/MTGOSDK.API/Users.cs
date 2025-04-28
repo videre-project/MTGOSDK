@@ -25,16 +25,11 @@ public class Users : UserValidationFixture
     Assert.Throws<ArgumentException>(() => new User(null!));
     Assert.Throws<KeyNotFoundException>(() => new User(1));
     Assert.Throws<KeyNotFoundException>(() => new User("$_Invalid"));
-
-    // This method cannot differentiate between invalid and offline users,
-    // so we will avoid creating an invalid user object with both fields to
-    // prevent subsequent test runs from retrieving a cached user object.
-    // Assert.Throws<ArgumentException>(() => new User(1, "$_Invalid"));
+    Assert.Throws<ArgumentException>(() => new User(1, "$_Invalid"));
 
     // Retrieve the current user for testing (as they are logged-in).
     int userId = Client.CurrentUser.Id;
     string username = Client.CurrentUser.Name;
-    UserManager.ClearCache();
 
     // If an invalid id is given, assert that the user object is invalid.
     Assert.Throws<ArgumentException>(() => new User(userId, "$_Invalid"));
@@ -49,7 +44,6 @@ public class Users : UserValidationFixture
   public void Test_CurrentUser()
   {
     Log.Trace("Retrieving current user...");
-    UserManager.ClearCache();
     User user = Client.CurrentUser;
 
     Assert.That(user.Id, Is.GreaterThan(0));
@@ -67,7 +61,6 @@ public class Users : UserValidationFixture
     // a user object. Partial queries (by id or name) will query against the
     // list of online users and may throw an exception if the user is not found.
     //
-    UserManager.ClearCache();
     Log.Trace("Calling GetUser({id}, '{name}')...", id, name);
     User user = new(id, name);
 
@@ -75,7 +68,6 @@ public class Users : UserValidationFixture
     // Test that the user can be found only by their id or name. If successful,
     // the MTGO client will fill in missing user data from its internal cache.
     //
-    UserManager.ClearCache();
     Log.Trace("Calling GetUser({id}) and GetUser('{name}')...", id, name);
     Assert.That(id, Is.EqualTo((new User(name)).Id));
     Assert.That(name, Is.EqualTo((new User(id)).Name));
