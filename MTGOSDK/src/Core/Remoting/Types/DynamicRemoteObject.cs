@@ -18,6 +18,7 @@ using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
+using MTGOSDK.Core.Logging;
 
 
 namespace MTGOSDK.Core.Remoting.Types;
@@ -62,13 +63,17 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
     public bool TryInvoke(object[] args, out object result)
     {
-      List<RemoteMethodInfo> overloads = _methods;
+      List<RemoteMethodInfo> overloads = this._methods;
 
       // Narrow down (hopefully to one) overload with the same amount of types
       // TODO: We COULD possibly check the args types (local ones,
       // RemoteObjects, DynamicObjects, ...) if we still have multiple results
       overloads = overloads
         .Where(overload => overload.GetParameters().Length == args.Length)
+        // Concatenate any other matches in case overloads were incorrectly
+        // routed due to missing argument types (i.e. null arguments).
+        .Concat(this._parent.__type.Methods.Where(m => m.Name == _name))
+        .DistinctBy(overload => overload.ToString())
         .ToList();
 
       if (overloads.Count == 1)
@@ -79,12 +84,12 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         {
           if (!overload.IsGenericMethod)
           {
-            throw new ArgumentException("A non-generic method was intialized with some generic arguments.");
+            throw new ArgumentException("A non-generic method was initialized with some generic arguments.");
           }
           else if (overload.IsGenericMethod &&
                    overload.GetGenericArguments().Length != _genericArguments.Length)
           {
-            throw new ArgumentException("Wrong number of generic arguments was provided to a generic method");
+            throw new ArgumentException("Generic method was initialized with the wrong number of generic arguments.");
           }
 
           // OK, invoking with generic arguments
@@ -96,7 +101,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         {
           if (overload.IsGenericMethod)
           {
-            throw new ArgumentException("A generic method was intialized with no generic arguments.");
+            throw new ArgumentException("A generic method was initialized with no generic arguments.");
           }
           // OK, invoking without generic arguments
           result = overloads.Single()
@@ -105,15 +110,60 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       }
       else if (overloads.Count > 1)
       {
-        // Multiple overloads. This sucks because we need to... return some "Router" func...
+        List<RemoteMethodInfo> matchingOverloads = new();
+        foreach (var overload in overloads)
+        {
+          var parameters = overload.GetParameters();
+          if (parameters.Length != args.Length)
+            continue;
 
-        throw new NotImplementedException($"Multiple overloads aren't supported at the moment. " +
-                          $"Method `{_methods[0]}` had {overloads.Count} overloads registered.");
+          bool isMatch = true;
+          for (int i = 0; i < parameters.Length; i++)
+          {
+            // If the argument provided is null, we cannot deduce a type match.
+            if (args[i] == null) continue;
+
+            Type? argType   = args[i]?.GetType();
+            Type? paramType = parameters[i]?.ParameterType;
+
+            // Check assignment if local types, otherwise compare by FullName.
+            bool bothLocal = argType.GetType().FullName   == "System.RuntimeType"
+                          && paramType.GetType().FullName == "System.RuntimeType";
+
+            bool valid = bothLocal
+              ? paramType.IsAssignableFrom(argType)
+              : argType.FullName == paramType.FullName;
+
+            if (!valid)
+            {
+              isMatch = false;
+              break;
+            }
+          }
+
+          if (isMatch)
+            matchingOverloads.Add(overload);
+        }
+
+        if (matchingOverloads.Count == 1)
+        {
+          // We found a single matching overload, so we can invoke it.
+          result = matchingOverloads.Single().Invoke(_parent.__ro, args);
+        }
+        else
+        {
+          // We have multiple matching overloads, so we need to throw an exception.
+          throw new ArgumentException(
+            $"Multiple overloads found for method '{_name}' with {args.Length} parameters. " +
+            $"Please specify the generic arguments to disambiguate.");
+        }
       }
       else // This case is for "overloads.Count == 0"
       {
-        throw new ArgumentException($"Incorrent number of parameters provided to function.\n" +
-          $"After filtering all overloads with given amount of parameters ({args.Length}) we were left with 0 overloads.");
+        throw new ArgumentException(
+          $"No overloads were found for method '{_name}' with {args.Length} " +
+           "matching parameters. This likely means that one or more of the " +
+           "arguments were passed with the wrong type (or in the wrong order).");
       }
       return true;
     }
@@ -436,7 +486,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       //
       // We can now see if the invoked for the function specified generic types
       // In that case, we can hijack and do the call here
-      // Otherwise - Just let TryGetMembre return a proxy
+      // Otherwise - Just let TryGetMember return a proxy
       if (TypeArgumentsPropInfo.GetValue(binder) is IList<Type> genArgs)
       {
         foreach (Type t in genArgs)

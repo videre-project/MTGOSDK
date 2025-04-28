@@ -4,7 +4,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Globalization;
 using System.Reflection;
 
 using MTGOSDK.Core.Reflection.Types;
@@ -24,6 +23,7 @@ public class RemoteType : TypeStub
   private readonly bool _isGenericParameter;
 
   public RemoteHandle App;
+  public List<RemoteMethodInfo> Methods => _methods;
 
   public override bool IsGenericParameter => _isGenericParameter;
 
