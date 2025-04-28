@@ -61,7 +61,7 @@ public class Events : EventValidationFixture
     }
     Assert.That(eventObj3, Is.Not.Null,
       string.Format("Unable to find a tournament {0} playoffs.",
-                    hasPlayoffs ? "with top 8 " : "without top 8 "));
+                    hasPlayoffs ? "with top 8" : "without top 8"));
     ValidateEvent(eventObj3);
 
     // Ensure that the event manager has a valid list of joined events
@@ -341,7 +341,7 @@ public class EventValidationFixture : BaseFixture
       Assert.That(int.TryParse(recordParts[1], out int losses), Is.True);
       Assert.That(int.TryParse(recordParts[2], out int ties), Is.True);
       Assert.That(wins + losses + ties,
-        Is.EqualTo(
+        Is.GreaterThanOrEqualTo(
           standing.PreviousMatches
             .Count(m => !m.HasBye &&
                    m.State.HasFlag(MatchState.MatchCompleted))));

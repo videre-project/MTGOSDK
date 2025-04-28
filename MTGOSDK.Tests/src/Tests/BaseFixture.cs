@@ -11,7 +11,7 @@ using NUnit.Framework.Internal;
 namespace MTGOSDK.Tests;
 
 [TestFixture]
-[Parallelizable]
+// [Parallelizable]
 public abstract class BaseFixture : Shared
 {
   public static void Write(string message) =>

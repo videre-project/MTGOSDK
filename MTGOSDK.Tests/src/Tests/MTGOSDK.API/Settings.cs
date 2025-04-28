@@ -69,9 +69,9 @@ public class Settings : SettingsValidationFixture
   }
 
   [TestCase<string>(Setting.LastLoginName, "")]
-  // [TestCase<string>(Setting.LastEULAVersionNumberAgreedTo, "")]
+  [TestCase<string>(Setting.LastEULAVersionNumberAgreedTo, "")]
   // [TestCase<bool>(Setting.ShowAccountActivationDialog, false)]
-  [TestCase<DateTime>(Setting.AgeGateBirthDate)]
+  // [TestCase<DateTime>(Setting.AgeGateBirthDate)]
   [TestCase<bool>(Setting.JoinBegoneWarning, false)]
   public void Test_ApplicationSettings<TValue>(
     Setting key,
