@@ -3,8 +3,12 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Reflection.Serialization;
+
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace MTGOSDK.API.Play;
@@ -62,16 +66,12 @@ public class EventPrize(int count, int catalogId) : IJsonSerializable
         bracket = string.Format("{0}-{1}", wins, losses);
       }
 
-      // Pin references to the keys and values of the sorted list
-      dynamic m_digitalObjects = tier.DigitalObjects;
-      var values = m_digitalObjects.Values;
-      var keys = m_digitalObjects.Keys;
-
-      List<EventPrize> digitalObjects = new();
-      int numItems = m_digitalObjects.Count;
-      for(int i = 0; i < numItems; i++)
+      List<EventPrize> digitalObjects = [];
+      foreach(var kvp in Map<IDictionary, int, int>(tier.DigitalObjects))
       {
-        digitalObjects.Add(new EventPrize(values[i], keys[i]));
+        int catalogId = kvp.Key;
+        int count = kvp.Value;
+        digitalObjects.Add(new EventPrize(count, catalogId));
       }
 
       prizes[bracket] = digitalObjects;

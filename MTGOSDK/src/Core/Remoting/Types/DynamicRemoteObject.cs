@@ -664,7 +664,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
     try
     {
-      dynamic enumeratorDro = InvokeMethod<object>(nameof(GetEnumerator));
+      dynamic enumeratorDro = Retry(() => InvokeMethod<object>(nameof(GetEnumerator)), raise: true);
       return new DynamicRemoteEnumerator(enumeratorDro);
     }
     catch (NullReferenceException ex)

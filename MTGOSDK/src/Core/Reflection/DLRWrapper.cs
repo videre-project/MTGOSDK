@@ -341,6 +341,35 @@ public abstract class DLRWrapper : IJsonSerializable
   }
 
   /// <summary>
+  /// Iterates over a dictionary and maps each key/value pair type to a new type.
+  /// </summary>
+  /// <typeparam name="L">The dictionary type of the object.</typeparam>
+  /// <typeparam name="TKey">The key type to cast to.</typeparam>
+  /// <typeparam name="TValue">The value type to cast to.</typeparam>
+  /// <param name="obj">The object or enumerable to iterate over.</param>
+  /// <param name="keyFunc">The function to run for each key (optional).</param>
+  /// <param name="valueFunc">The function to run for each value (optional).</param>
+  /// <returns>An enumerable of each key/value pair in the dictionary.</returns>
+  public static IEnumerable<KeyValuePair<TKey, TValue>> Map<L, TKey, TValue>(
+    dynamic obj,
+    Func<dynamic, TKey>? keyFunc = null,
+    Func<dynamic, TValue>? valueFunc = null)
+      where L : IDictionary
+      where TKey : notnull
+      where TValue : notnull
+  {
+    dynamic keys = obj.Keys;
+    dynamic values = obj.Values;
+    int count = obj.Count;
+    for(int i = 0; i < count; i++)
+    {
+      yield return new KeyValuePair<TKey, TValue>(
+        keyFunc != null ? keyFunc(keys[i]) : Cast<TKey>(keys[i]),
+        valueFunc != null ? valueFunc(values[i]) : Cast<TValue>(values[i]));
+    }
+  }
+
+  /// <summary>
   /// Represents a method that defines a set of criteria and determines whether
   /// the specified object in an iterable meets those criteria.
   /// </summary>
