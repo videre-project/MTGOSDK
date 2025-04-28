@@ -52,7 +52,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// </summary>
   [NonSerializable]
   public IList<User> Players =>
-    Map<IList, User>(@base.Users, Lambda(p => new User(p.Name)));
+    Map<IList, User>(Unbind(@base).Users, Lambda(p => new User(p.Name)));
 
   /// <summary>
   /// The IDs of the winning player(s).
