@@ -30,7 +30,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// The ID of the match.
   /// </summary>
   [Default(-1)]
-  public int Id => @base.HasBye ? -1 : @base.Id;
+  public int Id => this.HasBye ? -1 : @base.Id;
 
   /// <summary>
   /// The round number of the match.
@@ -45,7 +45,15 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// Whether the player has been assigned a bye.
   /// </summary>
-  public bool HasBye => Try(() => @base.HasBye, this.Players.Count == 1);
+  public bool HasBye =>
+    //
+    // Try accessing several properties as not all of them may be set.
+    //
+    Try(() => @base.HasBye,
+        // Byes always have exactly one player assigned to a match standing.
+        () => Unbind(@base).Players.Count == 1,
+        // Otherwise, we can check that the match ID is not set.
+        () => Try<int>(() => Unbind(@base).Id) <= 0);
 
   /// <summary>
   /// The user objects of both players.

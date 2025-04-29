@@ -29,7 +29,6 @@ public class Events : EventValidationFixture
     {
       eventObj1 = EventManager.Events
         .Where(e => e.Description != string.Empty)
-        .Skip(new Random().Next(0, 50))
         .First();
     }
     Assert.That(eventObj1, Is.Not.Null,
@@ -41,12 +40,12 @@ public class Events : EventValidationFixture
     using (Log.Suppress())
     {
       eventObj2 = EventManager.FeaturedEvents
-        .Skip(new Random().Next(0, 50))
+        .Where(e => e.Description != string.Empty)
         .FirstOrDefault();
     }
     Assert.That(eventObj2, Is.Not.Null,
       "Unable to find a tournament in the featured events list.");
-    ValidateTournament(eventObj2);
+    ValidateEvent(eventObj2);
 
     // Grab a random tournament to ensure we test other event structures.
     // We use the Events collection instead to query previous tournaments as well.
@@ -56,7 +55,6 @@ public class Events : EventValidationFixture
     {
       eventObj3 = EventManager.Events
         .Where(e => Try<bool>(() => e.HasPlayoffs == hasPlayoffs))
-        .Skip(new Random().Next(0, 50))
         .FirstOrDefault();
     }
     Assert.That(eventObj3, Is.Not.Null,
