@@ -5,7 +5,7 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
+    <RestoreLockedMode>true</RestoreLockedMode>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
@@ -17,6 +17,13 @@
     <RestoreUseStaticGraphEvaluation>false</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
+  <PropertyGroup Label="SDKVersions">
+    <!-- .NET SDK Versions -->
+    <DotNetSdkVersion>9.0.4</DotNetSdkVersion>
+    <!-- MSBuild SDK Versions -->
+    <ReproducibleBuildsSdkVersion>1.2.25</ReproducibleBuildsSdkVersion>
+  </PropertyGroup>
+
   <ItemGroup Label="PackageVersions">
     <!-- MTGOSDK -->
 		<PackageVersion Include="Microsoft.CSharp"
@@ -24,11 +31,11 @@
     <PackageVersion Include="Microsoft.Diagnostics.Runtime"
                     Version="3.1.512801" />
     <PackageVersion Include="Microsoft.Extensions.Logging"
-                    Version="8.0.0" />
+                    Version="$(DotNetSdkVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console"
-                    Version="8.0.0" />
+                    Version="$(DotNetSdkVersion)" />
     <PackageVersion Include="ImpromptuInterface"
-                    Version="8.0.4" />
+                    Version="8.0.6" />
     <PackageVersion Include="Newtonsoft.Json"
                     Version="13.0.3" />
     <!-- MTGOSDK.Core -->
@@ -37,27 +44,27 @@
     <PackageVersion Include="System.Reflection.Emit.Lightweight"
                     Version="4.7.0" />
     <PackageVersion Include="Meziantou.Polyfill"
-                    Version="1.0.39" />
+                    Version="1.0.48" />
     <!-- MTGOSDK/lib/ILLink -->
     <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
-                    Version="8.0.0"
+                    Version="8.0.15"
                     Condition="'$(UseILLinkTrim)' == 'true'" />
     <!-- MTGOSDK/lib/ILRepack -->
     <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
-                    Version="2.0.34.1" />
+                    Version="2.0.40" />
     <!-- MTGOSDK/lib/Launcher -->
     <PackageVersion Include="FrameworkExtract.System.Deployment"
                     Version="4.0.30319" />
     <!-- MTGOSDK/lib/ScubaDiver -->
     <PackageVersion Include="Lib.Harmony"
-                    Version="2.3.3" />
+                    Version="2.3.6" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
-                    Version="17.10.4" />
+                    Version="17.13.9" />
     <PackageVersion Include="JetBrains.Refasmer"
-                    Version="1.0.33" />
+                    Version="2.0.1" />
     <PackageVersion Include="Microsoft.ILVerification"
-                    Version="8.0.0" />
+                    Version="$(DotNetSdkVersion)" />
     <!-- MTGOSDK.Win32 -->
     <PackageVersion Include="Microsoft.Win32.Registry"
                     Version="5.0.0" />
@@ -65,17 +72,17 @@
                     Version="1.21.0" />
     <!-- MTGOSDK.Tests -->
     <PackageVersion Include="coverlet.msbuild"
-                    Version="6.0.2" />
+                    Version="6.0.4" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk"
-                    Version="17.10.0" />
+                    Version="17.13.0" />
     <PackageVersion Include="NUnit"
-                    Version="4.1.0" />
+                    Version="4.3.2" />
     <PackageVersion Include="NUnit.Analyzers"
-                    Version="4.2.0" />
+                    Version="4.7.0" />
     <PackageVersion Include="NUnit3TestAdapter"
-                    Version="4.5.0" />
+                    Version="5.0.0" />
     <PackageVersion Include="ReportGenerator"
-                    Version="5.3.8" />
+                    Version="5.4.5" />
   </ItemGroup>
 
   <!-- .NET Standard 2.0 -->
@@ -115,11 +122,11 @@
     - https://github.com/dotnet/reproducible-builds
   -->
   <Sdk Name="DotNet.ReproducibleBuilds.Isolated"
-       Version="1.2.4"
+       Version="$(ReproducibleBuildsSdkVersion)"
        Condition="'$(EnableSourceLink)' != 'false'" />
   <ItemGroup Condition="'$(EnableSourceLink)' != 'false'">
     <GlobalPackageReference Include="DotNet.ReproducibleBuilds"
-                            Version="1.2.4"
+                            Version="$(ReproducibleBuildsSdkVersion)"
                             PrivateAssets="All" />
     <!--
       Required for deterministic source paths.
@@ -127,9 +134,6 @@
     -->
     <SourceRoot Include="$([MSBuild]::EnsureTrailingSlash($(RepoRoot)))"
                 Condition="'$(RepoRoot)' != ''" />
-    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub"
-                            Version="8.0.0"
-                            PrivateAssets="All" />
   </ItemGroup>
 
   <!-- Use Nerdbank.GitVersioning for package SemVer -->

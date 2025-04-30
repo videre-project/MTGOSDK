@@ -36,6 +36,7 @@
       InputAssemblies="@(InputAssemblies)"
       NoRepackRes="true"
       DebugInfo="false"
+      AllowDuplicateResources="true"
       Parallel="true" />
 
     <!-- Delete all copied reference assemblies in the output directory -->

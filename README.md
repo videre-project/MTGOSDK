@@ -122,7 +122,7 @@ reference local builds for `1.2.3` without using a floating version specifier.
 ## Building this Project
 
 > [!NOTE]
-> This project requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) to be installed with Visual Studio 2017 or newer. This can also be installed in Visual Studio using the [Visual Studio Installer](https://learn.microsoft.com/en-us/visualstudio/install/install-visual-studio?view=vs-2022).
+> This project requires the [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) to be installed with Visual Studio 2022 (v17.13) or newer. This can also be installed in Visual Studio using the [Visual Studio Installer](https://learn.microsoft.com/en-us/visualstudio/install/install-visual-studio?view=vs-2022).
 
 To build this project, run either of the below commands from the root of the repository:
 

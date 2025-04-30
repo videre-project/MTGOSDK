@@ -131,7 +131,7 @@ public class SetupFixture : Shared
     finally
     {
       EndTime = DateTime.Now;
-      Write($"Took {Duration.TotalSeconds:F2} seconds\n\n");
+      Write($"Took {Duration.TotalSeconds:F2} seconds\n");
 
       // Use NUnit's console redirection after setup has completed.
       NUnitLogger.UseImmediateFlush = false;

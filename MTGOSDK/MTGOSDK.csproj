@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0-windows;$(_MTGOSDKCoreTFM)</TargetFrameworks>
+    <TargetFrameworks>net9.0-windows;$(_MTGOSDKCoreTFM)</TargetFrameworks>
     <LangVersion>Latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

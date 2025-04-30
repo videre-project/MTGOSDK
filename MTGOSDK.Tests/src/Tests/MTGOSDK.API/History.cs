@@ -59,9 +59,9 @@ public class History : HistoryValidationFixture
   }
 
   // [RateLimit(ms: 300)]
-  // [TestCase<HistoricalItem>()]
-  // [TestCase<HistoricalMatch>()]
-  // [TestCase<HistoricalTournament>()]
+  // [TestCaseGeneric<HistoricalItem>()]
+  // [TestCaseGeneric<HistoricalMatch>()]
+  // [TestCaseGeneric<HistoricalTournament>()]
   public void Test_HistoricalItems<T>()
     where T : class
   {

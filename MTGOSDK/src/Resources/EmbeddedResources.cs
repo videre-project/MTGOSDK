@@ -44,7 +44,11 @@ public static class EmbeddedResources
       }
 
       var buffer = new byte[stream.Length];
+#if NET9_0_OR_GREATER
+      stream.ReadExactly(buffer);
+#else
       stream.Read(buffer, 0, buffer.Length);
+#endif
 
       return buffer;
     }

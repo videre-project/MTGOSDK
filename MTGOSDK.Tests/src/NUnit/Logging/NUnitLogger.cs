@@ -20,12 +20,8 @@ public class NUnitLogger(
 {
   public static bool UseImmediateFlush { get; set; } = true;
 
-  public static void Write(string message)
-  {
-    // TestContext.Progress.WriteLine(message); // Requires '--logger "Console;Verbosity=normal"'
-    // TestContext.Error.WriteLine(message);
-    Console.Error.WriteLine(message);
-  }
+  public static void Write(string message) =>
+    TestContext.Progress.WriteLine(message);
 
   private static readonly string[] NewLineChars = new[] { Environment.NewLine };
 
