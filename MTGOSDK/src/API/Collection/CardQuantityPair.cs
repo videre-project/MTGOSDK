@@ -18,12 +18,21 @@ public class CardQuantityPair(dynamic cardQuantityPair)
   /// </summary>
   internal override dynamic obj => cardQuantityPair;
 
-  // TODO: Enable construction of new CardQuantityPair objects by calling the
-  // remote constructor.
-  //
-  // public CardQuantityPair(Card card, int quantity)
-  //   : base(RemoteClient.CreateInstance(...))
-  // { }
+  /// <summary>
+  /// Stores the values of the ICardQuantityPair object while deferring the
+  /// creation of the Card object until it is needed.
+  /// </summary>
+  private readonly record struct CardQuantityPairValues(
+    int CatalogId,
+    int Quantity,
+    string Name)
+  {
+    public Card CardDefinition => CollectionManager.GetCard(CatalogId);
+  }
+
+  public CardQuantityPair(int CatalogId, int Quantity, string Name)
+    : this(new CardQuantityPairValues(CatalogId, Quantity, Name))
+  { }
 
   //
   // ICardQuantityPair derived properties
@@ -31,7 +40,7 @@ public class CardQuantityPair(dynamic cardQuantityPair)
 
   public int Id => @base.CatalogId;
 
-  // public int Hash => Unbind(@base).Key.GetHashCode();
+  public string Name => Try(() => @base.Name, () => this.Card.Name);
 
   public Card Card => new(@base.CardDefinition);
 
