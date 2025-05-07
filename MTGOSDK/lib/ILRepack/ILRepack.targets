@@ -47,6 +47,9 @@
              Importance="high" />
   </Target>
 
+  <!-- Override the original ILRepack target to avoid running it twice -->
+  <Target Name="ILRepack" />
+
   <!-- If ILRepack is not run, delete all duplicate references from rebuilds -->
   <Target Name="CleanReferenceAssemblies"
           AfterTargets="MergeReferenceAssemblies"

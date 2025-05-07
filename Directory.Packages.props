@@ -111,7 +111,7 @@
                       PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Build-time dependencies for MTGOSDK.MSBuild -->
+  <!-- Build-time dependencies for MTGOSDK/lib/IILLink -->
   <ItemGroup Condition="'$(ILRepackTargetsFile)' != ''">
     <PackageReference Include="ILRepack.Lib.MSBuild.Task"
                       PrivateAssets="all" />
