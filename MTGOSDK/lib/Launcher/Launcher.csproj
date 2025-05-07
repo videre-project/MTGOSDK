@@ -12,29 +12,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FrameworkExtract.System.Deployment" />
+    <PackageReference Include="FrameworkExtract.System.Deployment"
+                      PrivateAssets="all" />
   </ItemGroup>
-
-  <!-- Merge the Launcher executable with System.Deployment.dll -->
-  <PropertyGroup>
-    <ILRepackTargetsFile>
-      $(MSBuildThisFileDirectory)..\ILRepack\ILRepack.targets
-    </ILRepackTargetsFile>
-    <ILRepackTarget>Launcher</ILRepackTarget>
-    <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).exe</ILRepackOutput>
-  </PropertyGroup>
 
   <Target Name="BuildArtifactDirectory"
           AfterTargets="AfterBuild;MergeReferenceAssemblies">
     <Copy SourceFiles="$(OutputPath)Launcher.exe"
-          DestinationFolder="$(MSBuildThisFileDirectory)\dist" />
-    <!-- Write a build timestamp to the dist/ directory -->
-    <PropertyGroup>
-      <BuildTimestamp>$([System.DateTime]::UtcNow.ToString("o"))</BuildTimestamp>
-    </PropertyGroup>
-    <WriteLinesToFile File="$(MSBuildThisFileDirectory)\dist\build.timestamp"
-                      Lines="$(BuildTimestamp)"
-                      Overwrite="true" />
+          DestinationFolder="$(SolutionDir)dist\$(Configuration)" />
   </Target>
 
 </Project>

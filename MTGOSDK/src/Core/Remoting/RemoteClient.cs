@@ -116,6 +116,7 @@ public sealed class RemoteClient : DLRWrapper
         Arguments = args,
         UseShellExecute = true,
         CreateNoWindow = false,
+        WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty,
       },
     };
     process.Start();

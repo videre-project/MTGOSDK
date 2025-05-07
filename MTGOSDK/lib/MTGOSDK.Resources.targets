@@ -26,14 +26,14 @@
     <!-- Bundle resource projects' build artifacts into the main library -->
     <ItemGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
       <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
-      <ResourceFiles Include="$(SolutionDir)\MTGOSDK\lib\Launcher\dist\*.*" />
     </ItemGroup>
     <!-- Embed all resource files into the MTGOSDK assembly -->
     <ItemGroup Condition="'@(ResourceFiles)' != ''">
       <EmbeddedResource Include="@(ResourceFiles)"
                         LogicalName="Resources\%(Filename)%(Extension)"
                         WithCulture="false"
-                        Condition="'%(Extension)' == '.dll' OR '%(Extension)' == '.exe'" />
+                        Condition="'%(Extension)' == '.dll' OR
+                                   '%(Extension)' == '.exe'" />
     </ItemGroup>
 	</Target>
 

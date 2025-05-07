@@ -3,6 +3,7 @@
 
   <!-- Build resource projects to bundle inside the main library -->
   <ItemGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
+    <ResourceProjects Include="lib\Launcher\Launcher.csproj" />
     <ResourceProjects Include="lib\ScubaDiver\ScubaDiver.csproj" />
   </ItemGroup>
 
