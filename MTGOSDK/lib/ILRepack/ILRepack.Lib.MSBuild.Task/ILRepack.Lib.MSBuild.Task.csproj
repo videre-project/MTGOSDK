@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>Latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <Configuration>Release</Configuration>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ILRepack"
+                      GeneratePathProperty="true"
+                      PrivateAssets="all" />
+    <PackageReference Include="ILRepack.Lib" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="ILRepack.Lib.MSBuild.Task.targets"
+          CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
+
+  <Target Name="Repack" AfterTargets="Build">
+    <Exec Command="&quot;$(ILRepack)&quot; /out:ILRepack.Lib.MSBuild.Task.dll ILRepack.Lib.MSBuild.Task.dll ILRepack.dll"
+          WorkingDirectory="$(OutDir)"
+          ConsoleToMSBuild="True"/>
+    <!-- Copy to the solution-level dist/ directory -->
+    <Copy SourceFiles="$(OutDir)\ILRepack.Lib.MSBuild.Task.dll"
+          DestinationFolder="$(SolutionDir)dist\tools\ILRepack"
+          SkipUnchangedFiles="true"
+          OverwriteReadOnlyFiles="true"/>
+  </Target>
+
+</Project>

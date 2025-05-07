@@ -15,6 +15,7 @@
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
     <UseILLinkTrim>true</UseILLinkTrim>
+    <UseILRepack>true</UseILRepack>
     <SelfContained>false</SelfContained>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <MergeNugetDependencies>false</MergeNugetDependencies>

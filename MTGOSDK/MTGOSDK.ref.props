@@ -13,14 +13,6 @@
 
   <ItemGroup>
     <!--
-      Add a `ProjectReference` to ensure that the task is built before being
-      called in a consuming project. This is necessary because the task assembly
-      is not referenced to be built by default, which will fail the build.
-    -->
-    <ProjectReference Include="$(SolutionDir)\MTGOSDK.MSBuild\MTGOSDK.MSBuild.csproj"
-                      ReferenceOutputAssembly="false"
-                      PrivateAssets="all" />
-    <!--
       Include reference assemblies to compile against the current MTGO version.
 
       We optionally disable copying reference assemblies to the output directory
@@ -52,6 +44,9 @@
           Condition="'$(PublishTrimmed)' == 'true' And
                      '$(UseILLinkTrim)' == 'true'" />
 
+  <!-- Configure ILRepack as a post-build step to merge reference assemblies -->
+  <Import Project="lib\ILRepack\ILRepack.targets"
+          Condition="'$(UseILRepack)' == 'true'" />
   <PropertyGroup Condition="'$(UseILRepack)' == 'true'">
     <!-- Always evaluate all MTGOSDK.MSBuild targets when building the SDK. -->
     <AccelerateBuildsInVisualStudio>false</AccelerateBuildsInVisualStudio>

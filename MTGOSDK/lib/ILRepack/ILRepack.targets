@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- Import the ILRepack targets and set it as a development dependency -->
   <Import Project="ILRepack.Config.props" />
+  <Import Project="$(ILRepackTargetsFile)"
+          Condition="Exists('$(ILRepackTargetsFile)')"/>
+  <ItemGroup>
+    <ProjectReference Include="$(_ILRepackProjectPath)"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
 
   <!-- Merge the main assembly with any copied reference assemblies -->
   <Target Name="ComputeInputAssemblies"
@@ -24,6 +33,7 @@
   </Target>
 
   <!-- Merge the main assembly with any copied reference assemblies -->
+  <UsingTask TaskName="ILRepack" AssemblyFile="$(_ILRepackTaskPath)" />
   <Target Name="MergeReferenceAssemblies"
           AfterTargets="ComputeInputAssemblies"
           Condition="@(InputAssemblies) != '' And
@@ -37,7 +47,9 @@
       NoRepackRes="true"
       DebugInfo="false"
       AllowDuplicateResources="true"
-      Parallel="true" />
+      Parallel="true"
+      LogFile="$(LogDir)\ILRepack-$(AssemblyName).log"
+    />
 
     <!-- Delete all copied reference assemblies in the output directory -->
     <Delete Files="@(InputAssemblies)"

@@ -50,7 +50,9 @@
                     Version="8.0.15"
                     Condition="'$(UseILLinkTrim)' == 'true'" />
     <!-- MTGOSDK/lib/ILRepack -->
-    <PackageVersion Include="ILRepack.Lib.MSBuild.Task"
+    <PackageVersion Include="ILRepack"
+                    Version="2.0.40" />
+    <PackageVersion Include="ILRepack.Lib"
                     Version="2.0.40" />
     <!-- MTGOSDK/lib/Launcher -->
     <PackageVersion Include="FrameworkExtract.System.Deployment"
@@ -108,12 +110,6 @@
   <!-- For the .NET SDK and Standard TFM, provide the ILLink.Tasks package -->
   <ItemGroup Condition="'$(UseILLinkTrim)' == 'true'">
     <PackageReference Include="Microsoft.NET.ILLink.Tasks"
-                      PrivateAssets="all" />
-  </ItemGroup>
-
-  <!-- Build-time dependencies for MTGOSDK/lib/IILLink -->
-  <ItemGroup Condition="'$(ILRepackTargetsFile)' != ''">
-    <PackageReference Include="ILRepack.Lib.MSBuild.Task"
                       PrivateAssets="all" />
   </ItemGroup>
 
