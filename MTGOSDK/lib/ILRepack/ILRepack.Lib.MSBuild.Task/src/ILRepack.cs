@@ -254,7 +254,7 @@ public class ILRepack : Microsoft.Build.Utilities.Task, IDisposable
       KeyFile = _keyFile,
       KeyContainer = _keyContainer,
       LogFile = _logFile,
-      LogVerbose = logger.ShouldLogVerbose,
+      LogVerbose = true,
       NoRepackRes = NoRepackRes,
       UnionMerge = Union,
       DebugInfo = DebugInfo,
