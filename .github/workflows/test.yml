@@ -21,6 +21,14 @@ jobs:
     runs-on: windows-latest
     name: "Run SDK Tests"
     steps:
+      # Configure Event Tracing on Widows
+      - name: Download WPT
+        run: Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2026036" -OutFile "C:\adksetup.exe"
+      - name: Install WPT
+        run: C:\adksetup.exe /q /norestart /features OptionId.WindowsPerformanceToolkit
+      - name: Start ETW Session
+        run: xperf -on DiagEasy
+
       # Creates a dev drive using ReFS.
       #
       # This step creates a 10GB VHDX file, mounts it, initializes the disk,
@@ -61,14 +69,15 @@ jobs:
 
           $WORKSPACE_PATH = $Drive + "\workspace"
           Write-Output "WORKSPACE=$WORKSPACE_PATH" >> $env:GITHUB_ENV
+        shell: powershell
 
       # Checks out the repository to the dev drive.
       #
       # This is a patch of the actions/checkout action to allow for `path` to
       # point to another drive. By default, this is restricted to paths relative
       # to the $GITHUB_WORKSPACE directory, which is slower than a ReFS VHDX.
-      - run: |
-          git config --global core.fscache false
+      - run: git config --global core.fscache false
+        shell: powershell
       - name: Checkout latest repository commit
         uses: Qonfused/checkout@4.2.2
         with:
@@ -100,11 +109,13 @@ jobs:
             -Verbosity quiet `
             -NonInteractive -UseLockFile `
             -OutputDirectory "${{ env.WORKSPACE }}/packages"
+        shell: powershell
         working-directory: ${{ env.WORKSPACE }}
 
       # Build the SDK
       - name: Build SDK Solution
         run: dotnet build
+        shell: powershell
         working-directory: ${{ env.WORKSPACE }}
 
       # Create .env file for integration tests
@@ -112,14 +123,26 @@ jobs:
         run: |
           echo "USERNAME=${{ secrets.USERNAME }}" > .env
           echo "PASSWORD=${{ secrets.PASSWORD }}" >> .env
+        shell: powershell
         working-directory: ${{ env.WORKSPACE }}
 
       # Run the test suite
       - name: Run tests
         run: dotnet test --no-build -clp:NoSummary
+        shell: powershell
         working-directory: ${{ env.WORKSPACE }}
+
+      # Stop the ETW session and save the trace file (on failure)
+      - if: ${{ always() }}
+        name: Stop ETW Session
+        run: xperf -d C:\perf.etl
+      - if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-etl
+          path: C:\perf.etl
 
       # Show the Diver logs for debugging test failures or crashes
       - if: ${{ failure() }}
-        shell: pwsh
         run: Get-Content $env:LOCALAPPDATA\MTGOSDK\Logs\* -Tail 1000
+        shell: powershell
