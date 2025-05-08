@@ -38,7 +38,7 @@ The original ImpromptuInterface library can be found at the following URL:
 https://github.com/ekonbenefits/impromptu-interface/tree/5e70e34f20ad443923a8caf2281a1b3df48b9b87
 
 The below filepath is derived from components of ILLink.Lib.MSBuild.Task:
-ILLink.Lib.MSBuild.Task: MTGOSDK\lib\ILRepack\ILRepack.Lib.MSBuild.Task
+ILLink.Lib.MSBuild.Task: tools\ILRepack.MSBuild
 
 The original ILLink.Lib.MSBuild.Task library can be found at the following URL:
 https://github.com/ravibpatel/ILRepack.Lib.MSBuild.Task/tree/070b893caa6eefa013379babc1148173d68b7793

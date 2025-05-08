@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="ILRepack.MSBuild.props" />
 
   <!-- Import the ILRepack targets and set it as a development dependency -->
-  <Import Project="ILRepack.Config.props" />
   <Import Project="$(ILRepackTargetsFile)"
           Condition="Exists('$(ILRepackTargetsFile)')"/>
   <ItemGroup>

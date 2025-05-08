@@ -13,11 +13,11 @@
   <!-- <PropertyGroup>
     <UseILLinkTrim>true</UseILLinkTrim>
   </PropertyGroup>
-  <Import Project="..\ILLink\ILLink.targets"
+  <Import Project="$(ToolsDir)\ILLink\ILLink.targets"
           Condition="'$(UseILLinkTrim)' == 'true'" /> -->
 
   <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
-  <Import Project="$(MSBuildThisFileDirectory)..\ILRepack\ILRepack.targets" />
+  <Import Project="$(_ILRepackTargetsPath)" />
   <PropertyGroup>
     <ILRepackTargetsFile>$(MSBuildThisFileDirectory)..\ILRepack\ILRepack.targets</ILRepackTargetsFile>
     <ILRepackTarget>Microsoft.Diagnostics.Runtime</ILRepackTarget>

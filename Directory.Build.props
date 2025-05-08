@@ -11,6 +11,7 @@
     <DistDir>$(SolutionDir)dist</DistDir>
     <LogDir>$(SolutionDir)logs</LogDir>
     <ExampleDir>$(SolutionDir)examples</ExampleDir>
+    <ToolsDir>$(SolutionDir)tools</ToolsDir>
     <TestDir>$(SolutionDir)MTGOSDK.Tests</TestDir>
     <PublishDir>$(SolutionDir)publish</PublishDir>
     <PackageOutputPath>$(PublishDir)</PackageOutputPath>
@@ -26,10 +27,11 @@
     <NuGetExePath>$(SolutionDir)\NuGet.exe</NuGetExePath>
   </PropertyGroup>
 
-  <!-- ILRepack paths -->
+  <!-- Tool paths -->
   <PropertyGroup>
-    <_ILRepackTaskPath>$(DistDir)\tools\ILRepack\ILRepack.Lib.MSBuild.Task.dll</_ILRepackTaskPath>
-    <_ILRepackProjectPath>$(SolutionDir)MTGOSDK\lib\ILRepack\ILRepack.Lib.MSBuild.Task\ILRepack.Lib.MSBuild.Task.csproj</_ILRepackProjectPath>
+    <_ILRepackTaskPath>$(DistDir)\tools\ILRepack\ILRepack.MSBuild.dll</_ILRepackTaskPath>
+    <_ILRepackProjectPath>$(ToolsDir)\ILRepack.MSBuild\ILRepack.MSBuild.csproj</_ILRepackProjectPath>
+    <_ILRepackTargetsPath>$(ToolsDir)\ILRepack.MSBuild\ILRepack.MSBuild.targets</_ILRepackTargetsPath>
   </PropertyGroup>
 
   <!-- Debugging Options -->

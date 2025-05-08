@@ -16,17 +16,12 @@
     <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="ILRepack.Lib.MSBuild.Task.targets"
-          CopyToOutputDirectory="PreserveNewest"/>
-  </ItemGroup>
-
   <Target Name="Repack" AfterTargets="Build">
-    <Exec Command="&quot;$(ILRepack)&quot; /out:ILRepack.Lib.MSBuild.Task.dll ILRepack.Lib.MSBuild.Task.dll ILRepack.dll"
+    <Exec Command="&quot;$(ILRepack)&quot; /out:ILRepack.MSBuild.dll ILRepack.MSBuild.dll ILRepack.dll"
           WorkingDirectory="$(OutDir)"
           ConsoleToMSBuild="True"/>
     <!-- Copy to the solution-level dist/ directory -->
-    <Copy SourceFiles="$(OutDir)\ILRepack.Lib.MSBuild.Task.dll"
+    <Copy SourceFiles="$(OutDir)\ILRepack.MSBuild.dll"
           DestinationFolder="$(SolutionDir)dist\tools\ILRepack"
           SkipUnchangedFiles="true"
           OverwriteReadOnlyFiles="true"/>

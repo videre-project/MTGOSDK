@@ -40,12 +40,12 @@
     internalized in the final package, and can again be trimmed by ILLink
     when the package is used by a self-contained application.
   -->
-  <Import Project="lib\ILLink\ILLink.targets"
+  <Import Project="$(ToolsDir)\ILLink\ILLink.targets"
           Condition="'$(PublishTrimmed)' == 'true' And
                      '$(UseILLinkTrim)' == 'true'" />
 
   <!-- Configure ILRepack as a post-build step to merge reference assemblies -->
-  <Import Project="lib\ILRepack\ILRepack.targets"
+  <Import Project="$(_ILRepackTargetsPath)"
           Condition="'$(UseILRepack)' == 'true'" />
   <PropertyGroup Condition="'$(UseILRepack)' == 'true'">
     <!-- Always evaluate all MTGOSDK.MSBuild targets when building the SDK. -->

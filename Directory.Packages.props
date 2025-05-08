@@ -45,15 +45,6 @@
                     Version="4.7.0" />
     <PackageVersion Include="Meziantou.Polyfill"
                     Version="1.0.48" />
-    <!-- MTGOSDK/lib/ILLink -->
-    <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
-                    Version="8.0.15"
-                    Condition="'$(UseILLinkTrim)' == 'true'" />
-    <!-- MTGOSDK/lib/ILRepack -->
-    <PackageVersion Include="ILRepack"
-                    Version="2.0.40" />
-    <PackageVersion Include="ILRepack.Lib"
-                    Version="2.0.40" />
     <!-- MTGOSDK/lib/Launcher -->
     <PackageVersion Include="FrameworkExtract.System.Deployment"
                     Version="4.0.30319" />
@@ -85,6 +76,15 @@
                     Version="5.0.0" />
     <PackageVersion Include="ReportGenerator"
                     Version="5.4.5" />
+    <!-- tools/ILLink -->
+    <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
+                    Version="8.0.15"
+                    Condition="'$(UseILLinkTrim)' == 'true'" />
+    <!-- tools/ILRepack -->
+    <PackageVersion Include="ILRepack"
+                    Version="2.0.40" />
+    <PackageVersion Include="ILRepack.Lib"
+                    Version="2.0.40" />
   </ItemGroup>
 
   <!-- .NET Standard 2.0 -->
