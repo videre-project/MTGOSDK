@@ -1,0 +1,73 @@
+name: Release
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Test"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+  packages: write
+  actions: read
+
+jobs:
+  release:
+    name: "Release SDK Packages"
+    runs-on: windows-latest
+    environment: release
+    # Only run if the Test workflow was successful and for the main branch
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+
+    steps:
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+
+      - name: Download Build Artifacts
+        uses: videre-project/MTGOSDK/.github/actions/download-artifact@main
+        with:
+          name: mtgosdk-packages
+          path: ${{ github.workspace }}/publish
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Create .env file for integration tests
+      - name: Create .env file
+        run: |
+          echo "NUGET_API_KEY=${{ secrets.NUGET_API_KEY }}" > .env
+          echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> .env
+        shell: powershell
+
+      - name: Download publish.ps1 script
+        shell: powershell
+        run: |
+          $PublishScriptUrl = "https://raw.githubusercontent.com/videre-project/MTGOSDK/${{ github.ref }}/publish.ps1"
+          $OutputPath = Join-Path -Path "${{ github.workspace }}" -ChildPath "publish.ps1"
+          Write-Output "Downloading publish.ps1 from $PublishScriptUrl to $OutputPath"
+          Invoke-WebRequest -Uri $PublishScriptUrl -OutFile $OutputPath
+          if (Test-Path $OutputPath) {
+            Write-Output "Successfully downloaded publish.ps1 to $OutputPath"
+          } else {
+            Write-Error "Failed to download publish.ps1"
+            exit 1
+          }
+
+      - name: Publish Packages
+        env:
+          NUGET_KEY: ${{ secrets.NUGET_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: powershell
+        run: |
+          $PublishScriptPath = Join-Path -Path "${{ github.workspace }}" -ChildPath "publish.ps1"
+          if (-not (Test-Path $PublishScriptPath)) {
+            Write-Error "Publish script not found at $PublishScriptPath"
+            exit 1
+          }
+
+          & $PublishScriptPath
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Publish script failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          } else {
+            Write-Output "Publish script completed successfully"
+          }

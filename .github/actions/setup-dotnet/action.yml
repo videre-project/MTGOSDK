@@ -1,0 +1,48 @@
+name: 'Setup .NET and Restore NuGet Packages'
+description: 'Sets up .NET and restores NuGet packages with caching.'
+
+inputs:
+  WORKSPACE_PATH:
+    description: 'The path to the workspace'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: ${{ inputs.WORKSPACE_PATH }}/global.json
+
+    - name: List package.lock.json files
+      id: list-lock-files
+      shell: powershell
+      run: |
+        $lockFiles = Get-ChildItem -Path "${{ inputs.WORKSPACE_PATH }}" -Recurse -Filter "packages.lock.json" | Select-Object -ExpandProperty FullName
+        if ($lockFiles.Count -eq 0) {
+          Write-Error "No packages.lock.json files found."
+          exit 1
+        }
+
+        Write-Output "Found packages.lock.json files:"
+        foreach ($file in $lockFiles) {
+          Write-Output $file
+        }
+
+    - name: Restore NuGet Cache
+      id: nuget-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.WORKSPACE_PATH }}/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles(format('{0}/**/packages.lock.json', inputs.WORKSPACE_PATH)) }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore NuGet packages
+      if: steps.nuget-cache.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        dotnet restore `
+          --verbosity quiet `
+          --packages "${{ inputs.WORKSPACE_PATH }}/packages"
+      working-directory: ${{ inputs.WORKSPACE_PATH }}

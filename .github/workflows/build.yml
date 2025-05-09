@@ -1,0 +1,83 @@
+name: Build
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - '.github/workflows/build.yml'
+      - '.github/workflows/test.yml' # Trigger build if test workflow changes
+      - '**/*.cs'
+      - '**/*.sln'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '**/packages.lock.json'
+  workflow_dispatch:
+
+env:
+  WORKSPACE_PATH: D:\workspace
+
+permissions:
+  contents: read
+  packages: write
+  actions: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    name: "Build SDK Project"
+    runs-on: windows-latest
+    steps:
+      - name: Setup Dev Drive and Checkout
+        id: setup_dev_drive_checkout
+        uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
+
+      - name: Setup .NET and Restore NuGet Packages
+        uses: videre-project/MTGOSDK/.github/actions/setup-dotnet@main
+        with:
+          WORKSPACE_PATH: ${{ env.WORKSPACE_PATH }}
+
+      # Build the SDK
+      - name: Build SDK Solution
+        run: dotnet build
+        shell: powershell
+        working-directory: ${{ env.WORKSPACE_PATH }}
+      - name: Stage SDK Build Artifacts
+        shell: powershell
+        run: |
+          $sourceDir = "${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests"
+          $destDir = "${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/dist"
+          New-Item -ItemType Directory -Path $destDir -Force
+          Move-Item -Path "$sourceDir/bin" -Destination "$destDir/bin" -Force
+          Move-Item -Path "$sourceDir/obj" -Destination "$destDir/obj" -Force
+
+      # Upload MTGOSDK.Tests build artifacts
+      - name: Upload MTGOSDK.Tests Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtgosdk-tests-artifacts
+          path: "${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/dist/"
+          retention-days: 1
+
+      # Generate SLSA attestations for the NuGet packages (.nupkg and .snupkg)
+      - name: Generate SLSA Attestations
+        id: attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            "${{ env.WORKSPACE_PATH }}/publish/*.nupkg"
+            "${{ env.WORKSPACE_PATH }}/publish/*.snupkg"
+
+      # Upload NuGet package files
+      - name: Upload NuGet Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtgosdk-packages
+          path: ${{ env.WORKSPACE_PATH }}/publish/
+          retention-days: 1

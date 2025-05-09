@@ -1,0 +1,59 @@
+name: 'Setup Dev Drive and Checkout'
+description: 'Configures a D: drive, sets up workspace path, and checks out the repository.'
+outputs:
+  WORKSPACE_PATH:
+    description: 'The path to the workspace on the D: drive.'
+    value: ${{ steps.dev_drive.outputs.WORKSPACE_PATH }}
+runs:
+  using: "composite"
+  steps:
+    - name: Configure workspace to use ReFS drive
+      id: dev_drive
+      shell: powershell
+      run: |
+        if (Test-Path "D:\") {
+          Write-Output "Using existing drive at D:"
+          $Drive = "D:"
+        } else {
+            $Volume = New-VHD -Path C:/dev.vhdx -SizeBytes 10GB |
+                Mount-VHD -Passthru |
+                Initialize-Disk -Passthru |
+                New-Partition -DriveLetter D -UseMaximumSize |
+                Format-Volume -DevDrive -Confirm:$false -Force
+
+            $Drive = "D:"
+
+            # Set the drive as trusted
+            # See https://learn.microsoft.com/en-us/windows/dev-drive/#how-do-i-designate-a-dev-drive-as-trusted
+            fsutil devdrv trust $Drive
+
+            # Disable antivirus filtering on dev drives
+            # See https://learn.microsoft.com/en-us/windows/dev-drive/#how-do-i-configure-additional-filters-on-dev-drive
+            fsutil devdrv enable /disallowAv
+
+            # Remount so the changes take effect
+            Dismount-VHD -Path C:/dev.vhdx
+            Mount-VHD -Path C:/dev.vhdx
+
+            # Show some debug information
+            Get-Partition -DriveLetter D | Write-Output
+            fsutil devdrv query $Drive
+
+            Write-Output "Using Dev Drive at $Drive"
+        }
+
+        # Set the workspace path to the D: drive
+        $WORKSPACE_PATH = $Drive + "\workspace"
+        Write-Output "WORKSPACE_PATH=$WORKSPACE_PATH" |
+          Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+    - name: Disable git fscache
+      shell: powershell
+      run: git config --global core.fscache false
+
+    - name: Checkout latest repository commit
+      uses: Qonfused/checkout@4.2.2
+      with:
+        path: ${{ steps.dev_drive.outputs.WORKSPACE_PATH }}
+        show-progress: false
+        fetch-depth: 0 # Disable shallow clone for MinVer

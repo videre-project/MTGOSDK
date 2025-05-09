@@ -48,11 +48,10 @@
     <IsNonDeterministic>true</IsNonDeterministic>
   </PropertyGroup>
 
-  <!-- Continuous Integration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release' And
-                            '$(IsNonDeterministic)' != 'true'">
+  <!-- Enable deterministic builds and package verification -->
+  <PropertyGroup Condition="'$(IsNonDeterministic)' != 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-    <!-- <EnablePackageValidation>true</EnablePackageValidation> -->
+    <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(VSTestArtifactsProcessingMode)' == 'collect' Or

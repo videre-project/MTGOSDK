@@ -1,122 +1,40 @@
 name: Test
 on:
-  push:
-    branches: [main]
-  pull_request:
-    types: [opened, synchronize]
-    paths:
-      - '.github/workflows/test.yml'
-      - '**/*.cs'
-      - '**/*.sln'
-      - '**/*.csproj'
-      - '**/*.props'
-      - '**/*.targets'
-      - '**/packages.lock.json'
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
+
+env:
+  WORKSPACE_PATH: D:\workspace
+
 concurrency:
-  group: ci-${{ github.workflow }}
+  group: test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   test:
-    runs-on: windows-latest
     name: "Run SDK Tests"
+    runs-on: windows-latest
+    if: github.event.workflow_run.conclusion == 'success'
     steps:
-      # Configure Event Tracing on Widows
-      - name: Download WPT
-        run: Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2026036" -OutFile "C:\adksetup.exe"
-      - name: Install WPT
-        run: C:\adksetup.exe /q /norestart /features OptionId.WindowsPerformanceToolkit
-      - name: Start ETW Session
-        run: xperf -on DiagEasy
+      - name: Setup Dev Drive and Checkout
+        id: setup_dev_drive_checkout
+        uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
 
-      # Creates a dev drive using ReFS.
-      #
-      # This step creates a 10GB VHDX file, mounts it, initializes the disk,
-      # creates a partition, and formats the volume using ReFS. The drive letter
-      # is stored in the DEV_DRIVE environment variable for later use.
-      - name: Create dev drive using ReFS
-        run: |
-          if (Test-Path "D:\") {
-            Write-Output "Using existing drive at D:"
-            $Drive = "D:"
-          } else {
-            $Volume = New-VHD -Path C:/dev.vhdx -SizeBytes 10GB |
-                      Mount-VHD -Passthru |
-                      Initialize-Disk -Passthru |
-                      New-Partition -AssignDriveLetter -UseMaximumSize |
-                      Format-Volume -DevDrive -Confirm:$false -Force
-
-            $Drive = "$($Volume.DriveLetter):"
-
-            # Set the drive as trusted
-            # See https://learn.microsoft.com/en-us/windows/dev-drive/#how-do-i-designate-a-dev-drive-as-trusted
-            fsutil devdrv trust $Drive
-
-            # Disable antivirus filtering on dev drives
-            # See https://learn.microsoft.com/en-us/windows/dev-drive/#how-do-i-configure-additional-filters-on-dev-drive
-            fsutil devdrv enable /disallowAv
-
-            # Remount so the changes take effect
-            Dismount-VHD -Path C:/dev.vhdx
-            Mount-VHD -Path C:/dev.vhdx
-
-            # Show some debug information
-            Write-Output $Volume
-            fsutil devdrv query $Drive
-
-            Write-Output "Using Dev Drive at $Volume"
-          }
-
-          $WORKSPACE_PATH = $Drive + "\workspace"
-          Write-Output "WORKSPACE=$WORKSPACE_PATH" >> $env:GITHUB_ENV
-        shell: powershell
-
-      # Checks out the repository to the dev drive.
-      #
-      # This is a patch of the actions/checkout action to allow for `path` to
-      # point to another drive. By default, this is restricted to paths relative
-      # to the $GITHUB_WORKSPACE directory, which is slower than a ReFS VHDX.
-      - run: git config --global core.fscache false
-        shell: powershell
-      - name: Checkout latest repository commit
-        uses: Qonfused/checkout@4.2.2
+      - name: Setup .NET and Restore NuGet Packages
+        uses: videre-project/MTGOSDK/.github/actions/setup-dotnet@main
         with:
-          path: ${{ env.WORKSPACE }}
-          show-progress: false
-          fetch-depth: 0 # Disable shallow clone for Nerdbank.GitVersioning
+          WORKSPACE_PATH: ${{ env.WORKSPACE_PATH }}
 
-      # Setup the .NET environment
-      - name: Install .NET Core
-        uses: actions/setup-dotnet@v4
-
-      # Setup NuGet environment
-      - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
-
-      - name: Restore NuGet Cache
-        id: nuget-cache
-        uses: actions/cache@v4
+      # Download MTGOSDK.Tests build artifacts
+      - name: Download MTGOSDK.Tests Artifacts
+        uses: videre-project/MTGOSDK/.github/actions/download-artifact@main
         with:
-          path: ${{ env.WORKSPACE }}/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      - name: Restore NuGet packages
-        if: steps.nuget-cache.outputs.cache-hit != 'true'
-        run: |
-          nuget restore `
-            -Verbosity quiet `
-            -NonInteractive -UseLockFile `
-            -OutputDirectory "${{ env.WORKSPACE }}/packages"
-        shell: powershell
-        working-directory: ${{ env.WORKSPACE }}
-
-      # Build the SDK
-      - name: Build SDK Solution
-        run: dotnet build
-        shell: powershell
-        working-directory: ${{ env.WORKSPACE }}
+          name: mtgosdk-tests-artifacts
+          path: ${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # Create .env file for integration tests
       - name: Create .env file
@@ -124,23 +42,13 @@ jobs:
           echo "USERNAME=${{ secrets.USERNAME }}" > .env
           echo "PASSWORD=${{ secrets.PASSWORD }}" >> .env
         shell: powershell
-        working-directory: ${{ env.WORKSPACE }}
+        working-directory: ${{ env.WORKSPACE_PATH }}
 
       # Run the test suite
       - name: Run tests
-        run: dotnet test --no-build -clp:NoSummary
+        run: dotnet test --no-build --verbosity diag
         shell: powershell
-        working-directory: ${{ env.WORKSPACE }}
-
-      # Stop the ETW session and save the trace file (on failure)
-      - if: ${{ always() }}
-        name: Stop ETW Session
-        run: xperf -d C:\perf.etl
-      - if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: perf-etl
-          path: C:\perf.etl
+        working-directory: ${{ env.WORKSPACE_PATH }}
 
       # Show the Diver logs for debugging test failures or crashes
       - if: ${{ failure() }}

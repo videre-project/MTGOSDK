@@ -85,13 +85,13 @@ To reference the local package feed created by the SDK, you can add the followin
 <configuration>
   <packageSources>
     <clear />
-    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+    <add key="nuget" value="https://api.nuget.org/v3/index.json" />
     <!-- Configure the local feed as a package source -->
-    <add key="SDK Feed" value="MTGOSDK/packages" />
+    <add key="mtgosdk" value="MTGOSDK/packages" />
   </packageSources>
   <packageSourceMapping>
     <!-- Prioritize the local feed over NuGet for SDK packages -->
-    <packageSource key="SDK Feed">
+    <packageSource key="mtgosdk">
       <package pattern="MTGOSDK" />
       <package pattern="MTGOSDK.MSBuild" />
       <package pattern="MTGOSDK.Win32" />
