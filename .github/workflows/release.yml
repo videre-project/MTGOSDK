@@ -17,13 +17,13 @@ jobs:
     runs-on: windows-latest
     environment: release
     # Only run if the Test workflow was successful and for the main branch
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && vars.SKIP_RELEASE != 'true'
 
     steps:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
 
-      - name: Download Build Artifacts
+      - name: Download MTGOSDK Packages
         uses: videre-project/MTGOSDK/.github/actions/download-artifact@main
         with:
           name: mtgosdk-packages

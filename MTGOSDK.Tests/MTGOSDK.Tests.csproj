@@ -5,16 +5,31 @@
     <LangVersion>Latest</LangVersion>
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);NUnit1033</NoWarn>
+    <UseLocalFeed>false</UseLocalFeed>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <RestoreLockedMode>false</RestoreLockedMode>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <RestoreUseStaticGraphEvaluation>false</RestoreUseStaticGraphEvaluation>
+  </PropertyGroup>
+
+  <!-- NUnit Dependencies -->
   <ItemGroup>
-    <ProjectReference Include="$(SolutionDir)MTGOSDK\MTGOSDK.csproj" />
-    <!-- NUnit Dependencies -->
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="NUnit" />
     <PackageReference Include="NUnit.Analyzers" />
     <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+
+  <!-- Use the MTGOSDK package from the local feed if it exists -->
+  <ItemGroup Condition="'$(UseLocalFeed)' == 'true'">
+    <PackageReference Include="MTGOSDK" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalFeed)' != 'true'">
+    <ProjectReference Include="$(SolutionDir)MTGOSDK\MTGOSDK.csproj" />
     <!-- Code Coverage -->
     <PackageReference Include="coverlet.msbuild" />
     <PackageReference Include="ReportGenerator" />
@@ -46,7 +61,8 @@
   </PropertyGroup>
 
   <Target Name="GenerateHtmlCoverageReport"
-          AfterTargets="GenerateCoverageResultAfterTest">
+          AfterTargets="GenerateCoverageResultAfterTest"
+          Condition="'$(CoverletReport)' != ''">
     <ReportGenerator
       ReportFiles="@(CoverletReport)"
       TargetDirectory="$(MSBuildThisFileDirectory)html-coverage-report" />

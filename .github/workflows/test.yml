@@ -23,18 +23,17 @@ jobs:
         id: setup_dev_drive_checkout
         uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
 
+      - name: Download MTGOSDK Feed
+        uses: videre-project/MTGOSDK/.github/actions/download-artifact@main
+        with:
+          name: mtgosdk-feed
+          path: ${{ env.WORKSPACE_PATH }}/packages
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup .NET and Restore NuGet Packages
         uses: videre-project/MTGOSDK/.github/actions/setup-dotnet@main
         with:
           WORKSPACE_PATH: ${{ env.WORKSPACE_PATH }}
-
-      # Download MTGOSDK.Tests build artifacts
-      - name: Download MTGOSDK.Tests Artifacts
-        uses: videre-project/MTGOSDK/.github/actions/download-artifact@main
-        with:
-          name: mtgosdk-tests-artifacts
-          path: ${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # Create .env file for integration tests
       - name: Create .env file
@@ -46,7 +45,7 @@ jobs:
 
       # Run the test suite
       - name: Run tests
-        run: dotnet test --no-build --verbosity diag
+        run: dotnet test MTGOSDK.Tests -p:UseLocalFeed=true
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
 

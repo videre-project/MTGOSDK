@@ -10,13 +10,6 @@
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(UseLocalFeed)' == 'true'">
-    <IsPackable>false</IsPackable>
-    <RestoreLockedMode>false</RestoreLockedMode>
-    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
-    <RestoreUseStaticGraphEvaluation>false</RestoreUseStaticGraphEvaluation>
-  </PropertyGroup>
-
   <PropertyGroup Label="SDKVersions">
     <!-- .NET SDK Versions -->
     <DotNetSdkVersion>9.0.4</DotNetSdkVersion>

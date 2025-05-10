@@ -48,21 +48,13 @@ jobs:
         run: dotnet build
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
-      - name: Stage SDK Build Artifacts
-        shell: powershell
-        run: |
-          $sourceDir = "${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests"
-          $destDir = "${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/dist"
-          New-Item -ItemType Directory -Path $destDir -Force
-          Move-Item -Path "$sourceDir/bin" -Destination "$destDir/bin" -Force
-          Move-Item -Path "$sourceDir/obj" -Destination "$destDir/obj" -Force
 
-      # Upload MTGOSDK.Tests build artifacts
-      - name: Upload MTGOSDK.Tests Artifacts
+      # Upload MTGOSDK package feed
+      - name: Upload NuGet Feed
         uses: actions/upload-artifact@v4
         with:
-          name: mtgosdk-tests-artifacts
-          path: "${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/dist/"
+          name: mtgosdk-feed
+          path: ${{ env.WORKSPACE_PATH }}/packages/
           retention-days: 1
 
       # Generate SLSA attestations for the NuGet packages (.nupkg and .snupkg)

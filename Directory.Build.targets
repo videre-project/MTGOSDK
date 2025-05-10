@@ -131,13 +131,16 @@
   <Target Name="UseLocalFeedPackageVersions"
           BeforeTargets="CollectPackageReferences"
           Condition="'$(UseLocalFeed)' == 'true'">
+    <PropertyGroup>
+      <PrereleaseSpecifier>*-preview.*</PrereleaseSpecifier>
+    </PropertyGroup>
     <ItemGroup>
       <PackageReference Update="MTGOSDK"
-                        VersionOverride="*-dev*" />
+                        VersionOverride="$(PrereleaseSpecifier)" />
       <PackageReference Update="MTGOSDK.MSBuild"
-                        VersionOverride="*-dev*" />
+                        VersionOverride="$(PrereleaseSpecifier)" />
       <PackageReference Update="MTGOSDK.Win32"
-                        VersionOverride="*-dev*" />
+                        VersionOverride="$(PrereleaseSpecifier)" />
     </ItemGroup>
   </Target>
 
