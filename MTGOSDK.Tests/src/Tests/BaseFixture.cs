@@ -4,8 +4,10 @@
 **/
 
 using System;
+using System.IO;
 
 using NUnit.Framework.Internal;
+using NUnit.Framework.Interfaces;
 
 
 namespace MTGOSDK.Tests;
@@ -14,6 +16,13 @@ namespace MTGOSDK.Tests;
 [Parallelizable]
 public abstract class BaseFixture : Shared
 {
+  private string _testResultsPath =>
+    Path.Combine(Directory.GetCurrentDirectory(), ".testresults");
+
+  public string TestName;
+
+  public bool TestResult;
+
   public static void Write(string message) =>
     TestContext.WriteLine(message);
 
@@ -24,16 +33,22 @@ public abstract class BaseFixture : Shared
   public void Setup()
   {
     string className = this.GetType().Name;
-    string testName = TestContext.CurrentContext.Test.Name;
+    TestName = className + "." + TestContext.CurrentContext.Test.Name;
 
-    Mark(className + "." + testName + ":");
+    Mark(TestName + ":");
     StartTime = DateTime.Now;
   }
 
   [TearDown]
   public void Cleanup()
   {
+    TestResult = TestContext.CurrentContext.Result.Outcome.Status == TestStatus.Passed;
     EndTime = DateTime.Now;
-    Mark($"Took {Duration.TotalSeconds:F2} seconds");
+
+    // Append a new line to the test results file containing the test name and result
+    string result = (TestResult ? "Success" : "Failure") + $" - Took {Duration.TotalSeconds:F2} seconds";
+    File.AppendAllText(_testResultsPath, $"{TestName}: {result}{Environment.NewLine}");
+
+    Mark(result);
   }
 }

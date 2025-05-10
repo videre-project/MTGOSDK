@@ -68,6 +68,44 @@ jobs:
         run: Get-Content $env:LOCALAPPDATA\MTGOSDK\Logs\* -Tail 1000
         shell: powershell
 
+      - if: always()
+        run: |
+          $TEST_RESULTS_PATH = Get-ChildItem -Path $env:WORKSPACE_PATH\MTGOSDK.Tests\bin\* -Recurse -Include *.testresults | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $TEST_RESULTS_PATH) {
+            Write-Output "TEST_RESULTS_LABEL=Critical error" |
+              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Output "TEST_RESULTS_DESCRIPTION=Test workflow failed" |
+              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } else {
+            $testCount = (Get-Content $TEST_RESULTS_PATH | Where-Object {$_.Trim() -ne ""} | Measure-Object -Line).Lines
+            $successCount = (Select-String -Path $TEST_RESULTS_PATH -Pattern 'Success' | Measure-Object).Count
+
+            # Calculate the total duration of all tests in the test results file
+            $duration = (Select-String -Path $TEST_RESULTS_PATH -Pattern 'Took' | ForEach-Object {
+              $_.ToString().Split(' ')[-2].TrimEnd('s')
+            } | Measure-Object -Sum).Sum
+            $formattedDuration = if ($duration -ge 60) {
+              "{0}m {1}s" -f [math]::Floor($duration / 60), ($duration % 60)
+            } else {
+              "{0}s" -f $duration
+            }
+
+            if ($env:TEST_RESULT -eq 'success') {
+              Write-Output "TEST_RESULTS_LABEL=Successful in $formattedDuration" |
+                Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            } else {
+              Write-Output "TEST_RESULTS_LABEL=Failing after $formattedDuration" |
+                Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            }
+
+            Write-Output "TEST_RESULTS_DESCRIPTION=$successCount/$testCount tests passed" |
+              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+        shell: powershell
+        env:
+          # Report success or failure based on the workflow run status
+          TEST_RESULT: ${{ job.status == 'success' && 'success' || 'failure' }}
+
       - name: Update Commit Status - Result
         if: always()
         uses: videre-project/MTGOSDK/.github/actions/update-commit-status@main
@@ -75,5 +113,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ github.event.workflow_run.head_sha }}
           state: ${{ job.status }}
-          description: "SDK tests ${{ job.status == 'success' && 'passed' || 'failed' }}"
+          description: '${{ env.TEST_RESULTS_LABEL }} - ${{ env.TEST_RESULTS_DESCRIPTION }}'
           status_context: 'Test / Run SDK Tests'
