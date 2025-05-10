@@ -9,6 +9,9 @@ on:
 env:
   WORKSPACE_PATH: D:\workspace
 
+permissions:
+  statuses: write
+
 concurrency:
   group: test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -19,9 +22,20 @@ jobs:
     runs-on: windows-latest
     if: github.event.workflow_run.conclusion == 'success'
     steps:
+      - name: Update Commit Status - Pending
+        uses: videre-project/MTGOSDK/.github/actions/update-commit-status@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ github.event.workflow_run.head_sha }}
+          state: 'pending'
+          description: 'SDK tests are running...'
+          status_context: 'Run SDK Tests'
+
       - name: Setup Dev Drive and Checkout
         id: setup_dev_drive_checkout
         uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
+        with:
+          ref: ${{ github.event.workflow_run.head_commit.id }}
 
       - name: Download MTGOSDK Feed
         uses: videre-project/MTGOSDK/.github/actions/download-artifact@main
@@ -53,3 +67,13 @@ jobs:
       - if: ${{ failure() }}
         run: Get-Content $env:LOCALAPPDATA\MTGOSDK\Logs\* -Tail 1000
         shell: powershell
+
+      - name: Update Commit Status - Result
+        if: always()
+        uses: videre-project/MTGOSDK/.github/actions/update-commit-status@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ github.event.workflow_run.head_sha }}
+          state: ${{ job.status }}
+          description: "SDK tests ${{ job.status == 'success' && 'passed' || 'failed' }}"
+          status_context: 'Run SDK Tests'

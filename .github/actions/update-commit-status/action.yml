@@ -1,0 +1,36 @@
+name: 'Update Commit Status'
+description: 'Updates the commit status using GitHub API'
+inputs:
+  github_token:
+    description: 'GitHub token'
+    required: true
+  sha:
+    description: 'The SHA of the commit to update'
+    required: true
+  state:
+    description: 'The state of the status (e.g., pending, success, failure, error)'
+    required: true
+  description:
+    description: 'A short description of the status'
+    required: true
+  status_context:
+    description: 'A string label to differentiate this status from the status of other systems (this will be the "context" in the API call)'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Update Commit Status
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          await github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: '${{ inputs.sha }}',
+            state: '${{ inputs.state }}',
+            description: '${{ inputs.description }}',
+            context: '${{ inputs.status_context }}',
+            target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+          });

@@ -1,5 +1,10 @@
 name: 'Setup Dev Drive and Checkout'
 description: 'Configures a D: drive, sets up workspace path, and checks out the repository.'
+inputs:
+  ref:
+    description: 'The branch or tag to check out.'
+    required: false
+    default: 'refs/heads/main'
 outputs:
   WORKSPACE_PATH:
     description: 'The path to the workspace on the D: drive.'
@@ -55,5 +60,6 @@ runs:
       uses: Qonfused/checkout@4.2.2
       with:
         path: ${{ steps.dev_drive.outputs.WORKSPACE_PATH }}
+        ref: ${{ inputs.ref }}
         show-progress: false
         fetch-depth: 0 # Disable shallow clone for MinVer
