@@ -29,7 +29,7 @@ jobs:
           sha: ${{ github.event.workflow_run.head_sha }}
           state: 'pending'
           description: 'SDK tests are running...'
-          status_context: 'Run SDK Tests'
+          status_context: 'Test / Run SDK Tests'
 
       - name: Setup Dev Drive and Checkout
         id: setup_dev_drive_checkout
@@ -76,4 +76,4 @@ jobs:
           sha: ${{ github.event.workflow_run.head_sha }}
           state: ${{ job.status }}
           description: "SDK tests ${{ job.status == 'success' && 'passed' || 'failed' }}"
-          status_context: 'Run SDK Tests'
+          status_context: 'Test / Run SDK Tests'

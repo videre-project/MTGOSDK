@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   release:
-    name: "Release SDK Packages"
+    name: "Publish SDK Packages"
     runs-on: windows-latest
     environment: release
     # Only run if the Test workflow was successful and for the main branch
@@ -27,7 +27,7 @@ jobs:
           sha: ${{ github.event.workflow_run.head_sha }}
           state: 'pending'
           description: 'SDK packages are being published...'
-          status_context: 'Release SDK Packages'
+          status_context: 'Release / Publish SDK Packages'
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -89,4 +89,4 @@ jobs:
           sha: ${{ github.event.workflow_run.head_sha }}
           state: ${{ job.status }}
           description: "SDK packages ${{ job.status == 'success' && 'successfully published' || 'failed to publish' }}"
-          status_context: 'Release SDK Packages'
+          status_context: 'Release / Publish SDK Packages'
