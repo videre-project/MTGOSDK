@@ -4,7 +4,7 @@
 **/
 
 using System;
-
+using MTGOSDK.Tests;
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Commands;
@@ -21,6 +21,15 @@ public class RetryOnErrorCommand(
   RetryBehavior retryBehavior)
     : DelegatingTestCommand(innerCommand)
 {
+  private void SetbaseFixtureResult(TestExecutionContext context, int count)
+  {
+    object? fixture = context.CurrentTest.Fixture;
+    if (fixture is BaseFixture baseFixture)
+    {
+      baseFixture.SetResult(context, count);
+    }
+  }
+
   /// <summary>
   /// Runs the test, saving a TestResult in the supplied TestExecutionContext.
   /// </summary>
@@ -45,6 +54,10 @@ public class RetryOnErrorCommand(
         }
         context.CurrentResult.RecordException(ex);
       }
+      finally
+      {
+        SetbaseFixtureResult(context, count);
+      }
 
       if (context.CurrentResult.ResultState != ResultState.Failure &&
           context.CurrentResult.ResultState != ResultState.Error)
@@ -60,6 +73,7 @@ public class RetryOnErrorCommand(
         context.CurrentRepeatCount++;
       }
     }
+    SetbaseFixtureResult(context, 0);
 
     return context.CurrentResult;
   }
