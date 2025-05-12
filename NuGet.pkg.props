@@ -9,6 +9,7 @@
     <Copyright>Copyright (c) $([System.DateTime]::UtcNow.ToString(yyyy)) $(Authors)</Copyright>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <CreateSymbolPackage>false</CreateSymbolPackage>
   </PropertyGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)\assets\icon.png" Pack="true" PackagePath="" />
