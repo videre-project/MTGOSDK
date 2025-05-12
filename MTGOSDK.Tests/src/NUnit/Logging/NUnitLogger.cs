@@ -4,11 +4,14 @@
 **/
 
 using System;
+using System.IO;
 using System.Globalization;
 using System.Linq;
 using System.Text;
 
 using Microsoft.Extensions.Logging;
+
+using MTGOSDK.Core.Logging;
 
 
 namespace MTGOSDK.NUnit.Logging;
@@ -16,7 +19,8 @@ namespace MTGOSDK.NUnit.Logging;
 public class NUnitLogger(
   string category,
   LogLevel minLogLevel,
-  DateTimeOffset? logStart) : ILogger
+  DateTimeOffset? logStart,
+  StreamWriter? fileLoggerStreamWriter) : ILogger
 {
   public static bool UseImmediateFlush { get; set; } = true;
 
@@ -24,6 +28,32 @@ public class NUnitLogger(
     TestContext.Progress.WriteLine(message);
 
   private static readonly string[] NewLineChars = new[] { Environment.NewLine };
+
+  private readonly FileLogger _fileLogger = new(
+    category,
+    fileLoggerStreamWriter!,
+    new FileLoggerOptions
+    {
+      LogLevel = LogLevel.Debug,
+      Formatter = FileLogger.DefaultLineFormatter
+    });
+
+  public void Log(string message)
+  {
+    if (UseImmediateFlush)
+    {
+      Write(message);
+    }
+    else
+    {
+      TestContext.WriteLine(message);
+    }
+
+    if (fileLoggerStreamWriter != null)
+    {
+      _fileLogger.Log(message);
+    }
+  }
 
   public void Log<TState>(
     LogLevel logLevel,
@@ -71,14 +101,7 @@ public class NUnitLogger(
 
     try
     {
-      if (UseImmediateFlush)
-      {
-        Write(message);
-      }
-      else
-      {
-        TestContext.WriteLine(message);
-      }
+      Log(message);
     }
     catch (Exception)
     {

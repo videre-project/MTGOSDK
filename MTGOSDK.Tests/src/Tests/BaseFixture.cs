@@ -70,7 +70,7 @@ public abstract class BaseFixture : Shared
 
     // Append a new line to the test results file containing the test name and result
     string result = (TestResult!.Value ? "Success" : "Failure") + $" - Took {Duration.TotalSeconds:F2} seconds";
-    File.AppendAllText(s_testResultsPath, $"{TestName}: {Retries}{result}{Environment.NewLine}");
+    File.AppendAllText(s_testResultsPath, $"{TestName}: {result}{Environment.NewLine}");
 
     Mark(result);
   }

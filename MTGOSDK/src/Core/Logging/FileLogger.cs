@@ -25,7 +25,15 @@ public class FileLogger(
 
   public bool IsEnabled(LogLevel logLevel) =>
     logLevel >= (options.LogLevel ?? LogLevel.Debug);
-    // logLevel >= (options.LogLevel ?? LogLevel.Information);
+
+  public void Log(string message)
+  {
+    lock (logFile)
+    {
+      logFile.WriteLine(message);
+      logFile.Flush();
+    }
+  }
 
   public void Log<TState>(
     LogLevel logLevel,
@@ -41,10 +49,6 @@ public class FileLogger(
     var lineFormatter = options.Formatter ?? DefaultLineFormatter;
 
     // Write log messages to text file
-    lock (logFile)
-    {
-      logFile.WriteLine(lineFormatter(logLevel, category, message));
-      logFile.Flush();
-    }
+    Log(lineFormatter(logLevel, category, message));
   }
 }

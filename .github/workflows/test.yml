@@ -63,9 +63,31 @@ jobs:
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
 
-      # Show the Diver logs for debugging test failures or crashes
+      # Upload the Diver logs for debugging test failures or crashes
       - if: ${{ failure() }}
-        run: Get-Content $env:LOCALAPPDATA\MTGOSDK\Logs\* -Tail 1000
+        name: Upload Diver Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: diver-logs
+          path: ${{ env.LOCALAPPDATA }}/MTGOSDK/Logs/*
+          retention-days: 7
+
+      # Upload the MSBuild binary log
+      - if: ${{ always() }}
+        name: Upload Binary Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: msbuild-binlog
+          path: ${{ env.WORKSPACE_PATH }}/logs/msbuild.binlog
+          retention-days: 7
+
+      # Show the test log
+      - if: ${{ always() }}
+        run: |
+          $TEST_LOG_PATH = Get-ChildItem -Path $env:WORKSPACE_PATH\MTGOSDK.Tests\bin\* -Recurse -Include *.testresults-*.log | Select-Object -First 1 -ExpandProperty FullName
+          foreach ($line in Get-Content -Path $TEST_LOG_PATH) {
+            Write-Host $line
+          }
         shell: powershell
 
       - if: always()

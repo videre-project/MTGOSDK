@@ -4,6 +4,7 @@
 **/
 
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
@@ -49,8 +50,25 @@ public class Shared : DLRWrapper<Client>
 [SetUpFixture]
 public class SetupFixture : Shared
 {
-  private static void Write(string message) =>
-    NUnitLogger.Write($"----------------------- {message}");
+  private static readonly NUnitLoggerProvider s_loggerProvider =
+    new(LogLevel.Trace)
+    {
+      FileLoggerStreamWriter = new StreamWriter(
+        Path.Combine(
+          Environment.CurrentDirectory,
+          $".testresults-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.log"),
+        append: true)
+    };
+
+  private static readonly NUnitLogger s_logger =
+    (NUnitLogger)s_loggerProvider.CreateLogger(nameof(SetupFixture));
+
+  private static void Write(string message)
+  {
+    string formattedMessage = $"----------------------- {message}";
+    NUnitLogger.Write(formattedMessage);
+    s_logger.Log(formattedMessage);
+  }
 
   [OneTimeSetUp, CancelAfter(/* 5 min */ 300_000)]
   public virtual async Task RunBeforeAnyTests()
@@ -76,7 +94,7 @@ public class SetupFixture : Shared
           StartMinimized = true,
           AcceptEULAPrompt = true
         },
-        loggerProvider: new NUnitLoggerProvider(LogLevel.Trace)
+        loggerProvider: s_loggerProvider
       );
 
       // Ensure the MTGO client is not interactive (with an existing user session).
