@@ -46,6 +46,16 @@ public class DiverCommunicator : BaseCommunicator
       : base(hostname, diverPort, cts)
   {
     _listener = new CallbacksListener(this);
+    RemoteClient.Disposed += (s, e) =>
+    {
+      SyncThread.Enqueue(() =>
+      {
+        base.Cancel();
+        _process_id = null;
+        if (_listener.IsOpen)
+          _listener.Close();
+      });
+    };
   }
   public DiverCommunicator(IPAddress ipa, int diverPort)
     : this(ipa.ToString(), diverPort, null) { }

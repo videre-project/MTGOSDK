@@ -103,8 +103,12 @@ public abstract class BaseCommunicator
     }
     catch (HttpRequestException ex)
     {
-      Log.Error($"HTTP request failed: {ex.Message}");
-      Log.Debug(ex.StackTrace);
+      if (!_cancellationTokenSource.IsCancellationRequested)
+      {
+        Log.Error($"HTTP request failed: {ex.Message}");
+        Log.Debug(ex.StackTrace);
+      }
+
       return null;
     }
     catch (Exception ex)
