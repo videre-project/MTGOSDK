@@ -70,7 +70,8 @@ public static class ObjectCache
       if (!s_instances.TryRemove(key, out _) ||
           !s_resetters.TryGetValue(key, out var s_reset)) return;
 
-      Log.Trace("Resetting instance type {Type}", key);
+      if (!ObjectProvider.SuppressLogging)
+        Log.Trace("Resetting instance type {Type}", key);
       s_reset(callback);
       ClearCallback(key, callback);
     }

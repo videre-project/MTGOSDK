@@ -11,12 +11,12 @@ using System.Security;
 using System.Windows;
 
 using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json.Linq;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Users;
 using MTGOSDK.API.Settings;
-using MTGOSDK.API.Interface;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
@@ -361,6 +361,35 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   //
   // ISession wrapper methods
   //
+
+  public static async Task<bool> WaitForMTGOProcess(TimeSpan timeout = default)
+  {
+    return await WaitUntilAsync(async () =>
+    {
+      // Check if there exists a valid MTGO process running.
+      using var process = RemoteClient.MTGOProcess();
+      if (process == null || process.Id <= 0 || process.HasExited) return false;
+
+      // Wait for the MTGO process UI to start and open kicker window.
+      return await WaitUntil(() =>
+        process.WaitForInputIdle() &&
+        !string.IsNullOrEmpty(process.MainWindowTitle)
+      );
+    }, retries: (int)timeout.TotalMilliseconds / 250);
+  }
+
+  public static async Task<bool> WaitForUserLogin(TimeSpan timeout = default)
+  {
+    ObjectProvider.SuppressLogging = true;
+    bool res = await WaitUntilAsync(() =>
+    {
+      ObjectProvider.ResetCache();
+      return Task.FromResult(IsLoggedIn);
+    }, retries: (int) timeout.TotalMilliseconds / 250);
+    ObjectProvider.SuppressLogging = false;
+
+    return res;
+  }
 
   /// <summary>
   /// Waits until the client has connected and is ready to be interacted with.

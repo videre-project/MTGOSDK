@@ -24,6 +24,8 @@ public static class ObjectProvider
   /// </summary>
   private static readonly TypeProxy s_proxy = new(typeof(t_ObjectProvider));
 
+  public static bool SuppressLogging { get; set; } = false;
+
   /// <summary>
   /// Creates a lazy instance of the given type to later invoke ObjectProvider.
   /// </summary>
@@ -44,7 +46,8 @@ public static class ObjectProvider
     bool useCache = true,
     bool useHeap = false)
   {
-    Log.Trace("Creating lazy instance of type {Type}", queryPath);
+    if (!SuppressLogging)
+      Log.Trace("Creating lazy instance of type {Type}", queryPath);
     dynamic instance = new LazyRemoteObject();
     var resetter = instance.Set(new Func<dynamic>(() =>
     {
@@ -94,7 +97,8 @@ public static class ObjectProvider
       // Check if the instance is already cached
       if (useCache && s_instances.TryGetValue(queryPath, out dynamic instance))
       {
-        Log.Trace("Retrieved cached instance type {Type}", queryPath);
+        if (!SuppressLogging)
+          Log.Trace("Retrieved cached instance type {Type}", queryPath);
         return instance;
       }
       // Otherwise create a lazy instance and store its resetter for future use.
@@ -104,7 +108,8 @@ public static class ObjectProvider
       if (!useHeap)
       {
         // Get the RemoteType from the type's query path
-        Log.Trace("Retrieving instance type {Type}", queryPath);
+        if (!SuppressLogging)
+          Log.Trace("Retrieving instance type {Type}", queryPath);
         Type genericType = RemoteClient.GetInstanceType(queryPath);
 
         // Invoke the Get<T>() method on the client's ObjectProvider class
@@ -113,7 +118,8 @@ public static class ObjectProvider
       // Query the for the instance type from the client's object heap
       else
       {
-        Log.Trace("Retrieving heap instance of type {Type}", queryPath);
+        if (!SuppressLogging)
+          Log.Trace("Retrieving heap instance of type {Type}", queryPath);
         instance = RemoteClient.GetInstance(queryPath);
       }
 
@@ -179,7 +185,8 @@ public static class ObjectProvider
   /// </remarks>
   public static void ResetCache()
   {
-    Log.Debug("Resetting ObjectProvider cache.");
+    if (!SuppressLogging)
+      Log.Debug("Resetting ObjectProvider cache.");
     ObjectCache.Clear();
   }
 }
