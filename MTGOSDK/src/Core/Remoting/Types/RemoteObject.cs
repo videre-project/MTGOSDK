@@ -14,7 +14,7 @@ namespace MTGOSDK.Core.Remoting.Types;
 
 public class RemoteObject
 {
-  private static readonly ConcurrentQueue<Tuple<WeakReference<RemoteObject>, RemoteObjectRef>> s_cleanupQueue = new();
+  private static readonly ConcurrentQueue<RemoteObjectRef> s_cleanupQueue = new();
   private static readonly Timer s_cleanupTimer;
 
   static RemoteObject()
@@ -25,21 +25,10 @@ public class RemoteObject
 
   private static void CleanupCallback(object? state)
   {
-    while (s_cleanupQueue.TryDequeue(out var item))
+    while (s_cleanupQueue.TryDequeue(out var remoteRef))
     {
-      var weakRef = item.Item1;
-      var remoteRef = item.Item2; // Get the ref associated with the weakRef
-
-      if (weakRef.TryGetTarget(out _)) // Check if RemoteObject is still alive
-      {
-        // Object still alive, requeue for later check
-        s_cleanupQueue.Enqueue(item);
-      }
-      else
-      {
-        // Object has been GC'd, release its reference count using the stored ref
-        remoteRef?.ReleaseReference();
-      }
+      // Object has been GC'd, release its reference count using the stored ref.
+      remoteRef?.ReleaseReference();
     }
   }
 
@@ -61,7 +50,7 @@ public class RemoteObject
   {
     if (_ref != null)
     {
-      s_cleanupQueue.Enqueue(Tuple.Create(new WeakReference<RemoteObject>(this), _ref));
+      s_cleanupQueue.Enqueue(_ref);
     }
   }
 
