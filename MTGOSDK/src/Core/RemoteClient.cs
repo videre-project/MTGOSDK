@@ -170,7 +170,8 @@ public sealed class RemoteClient : DLRWrapper<dynamic>
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
-    return await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero);
+    return await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero,
+      delay: 500, retries: 20 /* ~ 10 sec */);
   }
 
   private const int SW_MAXIMIZE = 3;

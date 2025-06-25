@@ -69,7 +69,16 @@ public static class DotEnv
         // Skip and reset cursor on newlines.
         if (c == '\n' || c == '\r')
         {
-          Variables.Add(key.ToString(), new SecureVariable(value));
+          try
+          {
+            Variables.Add(key.ToString(), new SecureVariable(value));
+          }
+          catch (ArgumentException)
+          {
+            // Overwrite the existing dictionary entry.
+            Variables[key.ToString()] = new SecureVariable(value);
+          }
+
           key.Clear();
           value = new();
 
