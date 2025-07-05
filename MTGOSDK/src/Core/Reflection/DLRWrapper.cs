@@ -480,12 +480,34 @@ public abstract class DLRWrapper : IJsonSerializable
   }
 
   /// <summary>
+  /// Safely executes a lambda function with a given number of retries.
+  /// </summary>
+  /// <param name="lambda">The function to execute.</param>
+  /// <param name="delay">The delay in ms between retries (optional).</param>
+  /// <param name="retries">The number of times to retry (optional).</param>
+  /// <returns>True if the function executed successfully.</returns>
+  [DebuggerHidden]
+  public static bool WaitUntilSync(
+    Func<bool> lambda,
+    int delay = 250,
+    int retries = 20)
+  {
+    for (; retries > 0; retries--)
+    {
+      try { if (lambda()) return true; } catch { }
+      Thread.Sleep(delay);
+    }
+    return false;
+  }
+
+  /// <summary>
   /// Safely executes an async lambda function with a given number of retries.
   /// /// </summary>
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
   /// <returns>True if the function executed successfully.</returns>
+  [DebuggerHidden]
   public static async Task<bool> WaitUntilAsync(
     Func<Task<bool>> lambda,
     int delay = 250,
@@ -507,6 +529,7 @@ public abstract class DLRWrapper : IJsonSerializable
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
+  [DebuggerHidden]
   public static T Retry<T>(
     Func<T> lambda,
     T @default = default,
@@ -539,6 +562,7 @@ public abstract class DLRWrapper : IJsonSerializable
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
+  [DebuggerHidden]
   public static void Retry(
     Action lambda,
     int delay = 100,
@@ -558,6 +582,7 @@ public abstract class DLRWrapper : IJsonSerializable
   /// <remarks>
   /// This method is a wrapper for the <see cref="Retry{T}"/> method.
   /// </remarks>
+  [DebuggerHidden]
   public static async Task<T> RetryAsync<T>(
     Func<Task<T>> lambda,
     int delay = 100,
@@ -590,6 +615,7 @@ public abstract class DLRWrapper : IJsonSerializable
   /// <remarks>
   /// This method is a wrapper for the <see cref="Retry{T}"/> method.
   /// </remarks>
+  [DebuggerHidden]
   public static async Task RetryAsync(
     Action lambda,
     int delay = 100,
