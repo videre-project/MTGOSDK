@@ -172,7 +172,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       Log.Debug("Running the MTGO client API factory.");
 
       // Sets the client's disposal policy.
-      if(options.CloseOnExit)
+      if (options.CloseOnExit)
         RemoteClient.CloseOnExit = true;
 
       // Starts a new MTGO client process.
@@ -239,7 +239,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     }
 
     // Verify that MTGO is not under maintenance or is otherwise offline.
-    if (IsUnderMaintenance)
+    if (Retry(() => IsUnderMaintenance, delay: 1000))
       throw new ServerOfflineException("MTGO is currently under maintenance.");
 
     // Verify that any existing user sessions are valid.
