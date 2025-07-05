@@ -245,7 +245,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       throw new ServerOfflineException("MTGO is currently under maintenance.");
 
     // Verify that any existing user sessions are valid.
-    if ((SessionId == Guid.Empty) && IsConnected)
+    if (!WaitUntilSync(() => SessionId != Guid.Empty) && IsConnected)
       throw new VerificationException("Current user session is invalid.");
   }
 
