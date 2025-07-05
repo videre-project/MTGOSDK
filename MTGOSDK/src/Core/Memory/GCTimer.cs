@@ -43,6 +43,7 @@ public static class GCTimer
   private static bool s_noGCRegionActive = false;
   private static readonly ReaderWriterLockSlim s_gcRegionLock = new();
 
+  /// Starts the GC timer and enables GC notifications by default.
   static GCTimer()
   {
     try
@@ -58,8 +59,8 @@ public static class GCTimer
     }
     catch
     {
-      // Fallback: If notification registration fails, use timer as before
-      s_timer = new Timer(GCCallback, null, Timeout.Infinite, Timeout.Infinite);
+      // Fallback: If notification registration fails, use a timer instead.
+      UnsubscribeFromGCNotifications();
     }
   }
 
@@ -86,6 +87,13 @@ public static class GCTimer
     }
   }
 
+  /// <summary>
+  /// Enqueues an object reference for cleanup when the garbage collector runs.
+  /// </summary>
+  /// <remarks>
+  /// This is useful for synchronizing cleanup of any unmanaged resources to
+  /// ensure cleanup occurs when there are no more managed references to it.
+  /// </remarks>
   public static void Enqueue(IObjectReference objRef)
   {
     if (objRef == null || !objRef.IsValid)
@@ -94,6 +102,9 @@ public static class GCTimer
     s_objQueue.Enqueue(objRef);
   }
 
+  /// <summary>
+  /// Starts the garbage collection timer and enables GC notifications if available.
+  /// </summary>
   public static void Start()
   {
     // Only end NoGCRegion if it is active
@@ -129,6 +140,9 @@ public static class GCTimer
     }
   }
 
+  /// <summary>
+  /// Stops the garbage collection timer and cancels any GC notifications.
+  /// /// </summary>
   public static void Stop()
   {
     // Only start NoGCRegion if it is not active
@@ -158,5 +172,35 @@ public static class GCTimer
     s_timer?.Change(Timeout.Infinite, Timeout.Infinite);
   }
 
+  /// <summary>
+  /// Suppresses garbage collection for the duration of the IDisposable scope.
+  /// </summary>
+  /// <remarks>
+  /// This creates a no-GC region that requests the garbage collector to suspend
+  /// activity until the scope is disposed. This also pauses any GC handling of
+  /// remote objects until the scope is disposed.
+  /// </remarks>
   public static IDisposable SuppressGC() => new GCTimerPause();
+
+  /// <summary>
+  /// Unsubscribes from GC notifications and uses the timer to manage cleanup.
+  /// </summary>
+  /// <remarks>
+  /// This method is useful when you want to stop receiving GC notifications
+  /// and have a more controlled cleanup process using the timer.
+  /// <para/>
+  /// This is useful in environments using server GC, where GC notifications are
+  /// not frequently available or reliable, which may cause memory fragmentation
+  /// in the MTGO client from holding onto too many pinned objects for too long.
+  /// </remarks>
+  public static void UnsubscribeFromGCNotifications()
+  {
+    if (s_gcNotificationsAvailable)
+    {
+      GC.CancelFullGCNotification();
+      s_gcNotificationsAvailable = false;
+      s_gcListenerCts.Cancel();
+      s_timer = new Timer(GCCallback, null, Timeout.Infinite, Timeout.Infinite);
+    }
+  }
 }
