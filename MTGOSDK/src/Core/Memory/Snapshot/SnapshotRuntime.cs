@@ -11,14 +11,16 @@ using System.Diagnostics;
 using System.Reflection;
 
 using Microsoft.Diagnostics.Runtime;
+
 using MTGOSDK.Core.Exceptions;
+using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 using MTGOSDK.Win32.API;
 
 
-namespace MTGOSDK.Core.Compiler.Snapshot;
+namespace MTGOSDK.Core.Memory.Snapshot;
 
 /// <summary>
 /// The snapshot runtime used to interact with the ClrMD runtime and snapshot
@@ -527,13 +529,10 @@ public class SnapshotRuntime : IDisposable
       // Refresh runtime while holding write lock
       RefreshRuntime();
 
-      bool noGcSuccess = false;
+      // Suspend GC while enumerating objects
+      using var gcContext = GCTimer.SuppressGC();
       try
       {
-        // Suspend GC while enumerating objects
-        try { noGcSuccess = GC.TryStartNoGCRegion(16 * 1024 * 1024); }
-        catch { /* Ignore if GC was already suspended */ }
-
         // Now downgrade to read lock for enumeration
         _lock.ExitWriteLock();
         _lock.EnterReadLock();
@@ -580,13 +579,6 @@ public class SnapshotRuntime : IDisposable
       }
       finally
       {
-        // Ensure we end NoGC region before releasing locks
-        if (noGcSuccess)
-        {
-          try { GC.EndNoGCRegion(); }
-          catch { /* Ignore if GC was triggered anyway */ }
-        }
-
         // Release the read lock we acquired after downgrading
         if (_lock.IsReadLockHeld)
           _lock.ExitReadLock();

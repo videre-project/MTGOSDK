@@ -4,39 +4,18 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Concurrent;
-
+using MTGOSDK.Core.Memory;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 
 
 namespace MTGOSDK.Core.Remoting.Types;
 
-public class RemoteObject
+public class RemoteObject : IObjectReference
 {
-  private static readonly ConcurrentQueue<RemoteObjectRef> s_cleanupQueue = new();
-  private static readonly Timer s_cleanupTimer;
+  public void AddReference() => _ref?.AddReference();
 
-  static RemoteObject()
-  {
-    // Run cleanup every 30 seconds
-    s_cleanupTimer = new(CleanupCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
-  }
-
-  private static void CleanupCallback(object? state)
-  {
-    while (s_cleanupQueue.TryDequeue(out var remoteRef))
-    {
-      // Object has been GC'd, release its reference count using the stored ref.
-      remoteRef?.ReleaseReference();
-    }
-  }
-
-  private bool _isDisposed = false;
-
-  internal void AddReference() => _ref?.AddReference();
-
-  internal void ReleaseReference(bool useJitter = false)
+  public void ReleaseReference(bool useJitter = false)
   {
     if (_isDisposed) return;
     _isDisposed = true;
@@ -44,13 +23,16 @@ public class RemoteObject
     _ref?.ReleaseReference(useJitter);
   }
 
-  internal bool IsValid => _ref != null && _ref.IsValid && !_isDisposed;
+  public bool IsValid => _ref != null && _ref.IsValid && !_isDisposed;
+
+  private bool _isDisposed = false;
 
   ~RemoteObject()
   {
-    if (_ref != null)
+    if (IsValid)
     {
-      s_cleanupQueue.Enqueue(_ref);
+      GCTimer.Enqueue(this);
+      GC.SuppressFinalize(this);
     }
   }
 

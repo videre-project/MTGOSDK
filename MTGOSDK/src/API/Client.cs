@@ -19,6 +19,7 @@ using MTGOSDK.API.Users;
 using MTGOSDK.API.Settings;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Memory;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
@@ -193,6 +194,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
 
     // Initializes the client connection and starts the MTGO client API.
     RemoteClient.EnsureInitialize();
+    using var gcContext = GCTimer.SuppressGC();
     Log.Information("Initialized the MTGO client API.");
 
     // Minimize the MTGO window after startup.

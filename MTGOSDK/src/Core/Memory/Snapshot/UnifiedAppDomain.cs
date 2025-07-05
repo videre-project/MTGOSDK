@@ -9,7 +9,7 @@ using System.Reflection;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
-namespace MTGOSDK.Core.Compiler.Snapshot;
+namespace MTGOSDK.Core.Memory.Snapshot;
 
 /// <summary>
 /// Encapsulates access to all AppDomains in the process

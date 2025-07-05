@@ -14,7 +14,7 @@ using MTGOSDK.Core.Compiler.Structs;
 using MTGOSDK.Core.Logging;
 
 
-namespace MTGOSDK.Core.Compiler;
+namespace MTGOSDK.Core.Memory;
 
 /// <summary>
 /// Pins objects in memory using a background task and IL generation,
