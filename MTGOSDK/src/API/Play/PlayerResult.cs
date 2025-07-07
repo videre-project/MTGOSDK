@@ -10,7 +10,7 @@ using MTGOSDK.Core.Reflection.Serialization;
 
 namespace MTGOSDK.API.Play;
 
-public class PlayerResult : IJsonSerializable
+public class PlayerResult : SerializableBase
 {
   /// <summary>
   /// The player who won or lost the match.

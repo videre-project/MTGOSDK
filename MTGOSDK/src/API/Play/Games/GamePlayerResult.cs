@@ -15,7 +15,7 @@ public class GamePlayerResult(
   string player,
   PlayDrawResult playDraw,
   GameResult result,
-  TimeSpan clock) : IJsonSerializable
+  TimeSpan clock) : SerializableBase
 {
   /// <summary>
   /// The player who won or lost the game.

@@ -13,7 +13,7 @@ using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 namespace MTGOSDK.API.Play;
 
-public class EventPrize(int count, int catalogId) : IJsonSerializable
+public class EventPrize(int count, int catalogId) : SerializableBase
 {
   public int Id => catalogId;
 

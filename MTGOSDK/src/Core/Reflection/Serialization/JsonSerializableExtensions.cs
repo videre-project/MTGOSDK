@@ -118,17 +118,15 @@ public static class JsonSerializableExtensions
     JsonSerializerOptions options,
     bool isRecursive = false)
   {
-    // Get all properties of the object, public and non-public.
-    var properties = obj.GetType().GetProperties(
-        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-    // Only include public properties or those with a JsonInclude attribute;
-    // exclude all properties with a JsonIgnore attribute.
-    var filteredProperties = properties
-      .Where(p => p.GetCustomAttribute<NonSerializableAttribute>() == null &&
-                  p.GetGetMethod()?.IsPublic == true)
-      .OrderBy(p => p.MetadataToken)
-      .ToList();
+    IList<PropertyInfo> filteredProperties;
+    if (obj is SerializableBase serializableBase)
+    {
+      filteredProperties = serializableBase.SerializableProperties;
+    }
+    else
+    {
+      filteredProperties = new PropertyFilter(obj.GetType()).Properties;
+    }
 
     // Create an ExpandoObject to store the serialized object.
     var expando = new ExpandoObject();

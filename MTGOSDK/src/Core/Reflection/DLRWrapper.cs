@@ -24,7 +24,7 @@ namespace MTGOSDK.Core.Reflection;
 /// to defer dynamic dispatching when comparing or casting their underlying
 /// captured dynamic objects.
 /// </remarks>
-public abstract class DLRWrapper : IJsonSerializable
+public abstract class DLRWrapper : SerializableBase
 {
   /// <summary>
   /// Internal unwrapped reference to any captured dynamic objects.
