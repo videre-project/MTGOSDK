@@ -12,6 +12,7 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
@@ -39,7 +40,7 @@ public partial class Diver : IDisposable
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
   private readonly ConcurrentDictionary<int, RegisteredMethodHookInfo> _remoteHooks;
 
-  private readonly ManualResetEvent _stayAlive = new(true);
+  private readonly CancellationTokenSource _cts = new();
 
   private readonly ConcurrentDictionary<int, HashSet<int>> _clientCallbacks = new();
   private readonly ConcurrentDictionary<int, CancellationTokenSource> _callbackTokens = new();
@@ -91,7 +92,7 @@ public partial class Diver : IDisposable
     manager.IdleConnection = TimeSpan.FromSeconds(5);
     listener.Start();
     Log.Debug($"[Diver] Listening on {listeningUrl}...");
-    Dispatcher(listener);
+    DispatcherAsync(listener, _cts.Token).GetAwaiter().GetResult();
 
     Log.Debug("[Diver] Closing listener");
     listener.Stop();
@@ -114,13 +115,72 @@ public partial class Diver : IDisposable
   }
 
   #region HTTP Dispatching
-  private async void HandleDispatchedRequestAsync(HttpListenerContext requestContext)
+  public async Task DispatcherAsync(
+    HttpListener listener,
+    CancellationToken cancellationToken)
+  {
+    while (!cancellationToken.IsCancellationRequested)
+    {
+      HttpListenerContext context = null;
+      try
+      {
+        context = await listener.GetContextAsync();
+      }
+      catch (ObjectDisposedException)
+      {
+        Log.Debug("[Diver][Dispatcher] Listener was disposed. Exiting.");
+        break;
+      }
+      catch (HttpListenerException e)
+      {
+        if (e.Message.StartsWith("The I/O operation has been aborted"))
+        {
+          Log.Debug($"[Diver][Dispatcher] Listener was aborted. Exiting.");
+          break;
+        }
+        Log.Error("[Diver][Dispatcher] HttpListenerException", e);
+        continue;
+      }
+      catch (Exception ex)
+      {
+        Log.Error("[Diver][Dispatcher] Error in dispatcher loop", ex);
+        await Task.Delay(100, cancellationToken);
+        continue;
+      }
+
+      // Use SyncThread to control concurrency and backpressure, with a 30s timeout
+      _ = SyncThread.EnqueueAsync(() =>
+        HandleDispatchedRequestAsync(context, cancellationToken),
+            timeout: TimeSpan.FromSeconds(30));
+    }
+
+    Log.Debug("[Diver] HTTP Loop ended. Cleaning up");
+
+    Log.Debug("[Diver] Removing all event subscriptions and hooks");
+    foreach (RegisteredEventHandlerInfo rehi in _remoteEventHandler.Values)
+    {
+      rehi.EventInfo.RemoveEventHandler(rehi.Target, rehi.RegisteredProxy);
+    }
+    foreach (RegisteredMethodHookInfo rmhi in _remoteHooks.Values)
+    {
+      HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
+    }
+    _remoteEventHandler.Clear();
+    _remoteHooks.Clear();
+    Log.Debug("[Diver] Removed all event subscriptions and hooks");
+  }
+
+  private async Task HandleDispatchedRequestAsync(
+    HttpListenerContext requestContext,
+    CancellationToken cancellationToken)
   {
     HttpListenerRequest request = requestContext.Request;
     var response = requestContext.Response;
 
     string body;
-    if (_responseBodyCreators.TryGetValue(request.Url.AbsolutePath, out var respBodyGenerator))
+    if (_responseBodyCreators.TryGetValue(
+      request.Url.AbsolutePath,
+      out var respBodyGenerator))
     {
       try
       {
@@ -139,15 +199,12 @@ public partial class Diver : IDisposable
     }
 
     byte[] buffer = Encoding.UTF8.GetBytes(body);
-
-    // Set response properties
     response.ContentLength64 = buffer.Length;
     response.ContentType = "application/json";
 
     try
     {
-      // Write asynchronously to avoid blocking
-      await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+      await response.OutputStream.WriteAsync(buffer, 0, buffer.Length, cancellationToken);
     }
     catch (Exception ex)
     {
@@ -155,109 +212,17 @@ public partial class Diver : IDisposable
     }
     finally
     {
-      // Always close the output stream
       response.OutputStream.Close();
     }
-  }
-
-  private void Dispatcher(HttpListener listener)
-  {
-    // Using a timeout we can make sure not to block if the
-    // 'stayAlive' state changes to "reset" (which means we should die)
-    int pendingRequests = 0;
-
-    while (_stayAlive.WaitOne(TimeSpan.FromMilliseconds(100)))
-    {
-      try
-      {
-        // Begin accepting a new request - this is non-blocking
-        IAsyncResult asyncOperation = listener.BeginGetContext(result =>
-        {
-          Interlocked.Decrement(ref pendingRequests);
-
-          HttpListener listenerObj = (HttpListener)result.AsyncState;
-          HttpListenerContext context;
-          try
-          {
-            context = listenerObj.EndGetContext(result);
-          }
-          catch (ObjectDisposedException)
-          {
-            Log.Debug("[Diver][ListenerCallback] Listener was disposed. Exiting.");
-            return;
-          }
-          catch (HttpListenerException e)
-          {
-            if (e.Message.StartsWith("The I/O operation has been aborted"))
-            {
-              Log.Debug($"[Diver][ListenerCallback] Listener was aborted. Exiting.");
-              return;
-            }
-            throw;
-          }
-
-          try
-          {
-            HandleDispatchedRequestAsync(context);
-          }
-          catch (Exception e)
-          {
-            Log.Debug("[Diver] Request handling failed! Exception: " + e.ToString());
-          }
-        }, listener);
-
-        Interlocked.Increment(ref pendingRequests);
-
-        // Only sleep if we're accepting requests too quickly
-        // This prevents tight CPU looping while still being responsive
-        if (pendingRequests > Environment.ProcessorCount * 2)
-        {
-          Thread.Sleep(10);
-        }
-
-        // Check if we should terminate
-        if (!_stayAlive.WaitOne(0))
-          break;
-      }
-      catch (Exception ex)
-      {
-        Log.Error("[Diver] Error in dispatcher loop", ex);
-        // Short pause before retry
-        Thread.Sleep(100);
-      }
-    }
-
-    // Wait for pending requests to complete with a timeout
-    int timeout = 5000; // 5 seconds max wait
-    int waited = 0;
-    while (pendingRequests > 0 && waited < timeout)
-    {
-      Thread.Sleep(100);
-      waited += 100;
-    }
-    Log.Debug("[Diver] HTTP Loop ended. Cleaning up");
-
-    Log.Debug("[Diver] Removing all event subscriptions and hooks");
-    foreach (RegisteredEventHandlerInfo rehi in _remoteEventHandler.Values)
-    {
-      rehi.EventInfo.RemoveEventHandler(rehi.Target, rehi.RegisteredProxy);
-    }
-    foreach (RegisteredMethodHookInfo rmhi in _remoteHooks.Values)
-    {
-      HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
-    }
-    _remoteEventHandler.Clear();
-    _remoteHooks.Clear();
-    Log.Debug("[Diver] Removed all event subscriptions and hooks");
   }
   #endregion
 
   // IDisposable
   public void Dispose()
   {
+    _cts.Cancel();
+    _cts.Dispose();
     _runtime?.Dispose();
-    _stayAlive.Reset();
-    _stayAlive.Dispose();
     _clientCallbacks.Clear();
     ReverseCommunicator.Dispose(); // Cleanup the shared HttpClient instance.
   }

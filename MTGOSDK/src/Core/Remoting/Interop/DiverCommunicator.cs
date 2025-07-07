@@ -48,13 +48,13 @@ public class DiverCommunicator : BaseCommunicator
     _listener = new CallbacksListener(this);
     RemoteClient.Disposed += (s, e) =>
     {
-      SyncThread.Enqueue(() =>
-      {
+      // SyncThread.Enqueue(() =>
+      // {
         base.Cancel();
         _process_id = null;
         if (_listener.IsOpen)
           _listener.Close();
-      });
+      // });
     };
   }
   public DiverCommunicator(IPAddress ipa, int diverPort)
