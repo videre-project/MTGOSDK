@@ -14,6 +14,11 @@ namespace MTGOSDK.API.Play;
 
 public abstract class Event : DLRWrapper<IPlayerEvent>
 {
+  /// <summary>
+  /// Pinned reference to the list of users currently registered for the event.
+  /// </summary>
+  private dynamic m_joinedUsers;
+
   //
   // IPlayerEvent wrapper properties
   //
@@ -41,12 +46,14 @@ public abstract class Event : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The total number of players registered for the event.
   /// </summary>
-  public int TotalPlayers => Unbind(@base.JoinedUsers).Count;
+  public int TotalPlayers =>
+    (m_joinedUsers ??= Unbind(@base.JoinedUsers)).Count;
 
   /// <summary>
   /// The current players registered for the event.
   /// </summary>
-  public IEnumerable<User> Players => Map<User>(Unbind(@base).JoinedUsers);
+  public IEnumerable<User> Players =>
+    Map<User>(m_joinedUsers ??= Unbind(@base.JoinedUsers));
 
   /// <summary>
   /// The user's registered deck for the event.
