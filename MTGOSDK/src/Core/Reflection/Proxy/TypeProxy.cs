@@ -113,7 +113,8 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// Returns the first interface implemented by the proxied class.
   /// </summary>
   public Type? Interface {
-    get {
+    get
+    {
       // Subtract the base class interfaces from the derived class interfaces
       var interfaces = Class.GetInterfaces().ToHashSet();
       if (Base != null && Base != typeof(object))
