@@ -6,9 +6,8 @@
 
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Net;
-using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,39 +32,22 @@ public partial class Diver : IDisposable
 
   private readonly ConcurrentDictionary<IPEndPoint, ReverseCommunicator> _reverseCommunicators = new();
 
-  private readonly ConcurrentDictionary<int, bool> _portStatusCache = new();
-  private readonly Timer _portStatusRefreshTimer;
-  private const int PORT_CACHE_DURATION_MS = 1000; // Refresh every second
-
-  private void RefreshPortStatus(object state)
-  {
-    var ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
-    var activePorts = ipGlobalProperties.GetActiveTcpListeners()
-        .Select(x => x.Port)
-        .ToHashSet();
-
-    // Update cache
-    foreach (var port in _portStatusCache.Keys.ToList())
-    {
-      _portStatusCache[port] = activePorts.Contains(port);
-    }
-  }
-
   private bool IsPortOpen(int port)
   {
-    return _portStatusCache.GetOrAdd(port, p =>
+    try
     {
-      try
+      using (var tcpClient = new TcpClient())
       {
-        var ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
-        var tcpListeners = ipGlobalProperties.GetActiveTcpListeners();
-        return tcpListeners.Any(endpoint => endpoint.Port == p);
+        // Try to connect to the port
+        tcpClient.Connect(IPAddress.Loopback, port);
+        return true; // Port is open
       }
-      catch
-      {
-        return false;
-      }
-    });
+    }
+    catch (SocketException)
+    {
+      // If we can't connect, the port is likely closed
+      return false;
+    }
   }
 
   public async Task InvokeControllerCallback(
