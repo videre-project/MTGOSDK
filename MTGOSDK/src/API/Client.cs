@@ -240,10 +240,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       }
     }
 
-    // Verify that MTGO is not under maintenance or is otherwise offline.
-    if (Retry(() => IsUnderMaintenance, delay: 1000))
-      throw new ServerOfflineException("MTGO is currently under maintenance.");
-
     // Verify that any existing user sessions are valid.
     if (!WaitUntilSync(() => SessionId != Guid.Empty) && IsConnected)
       throw new VerificationException("Current user session is invalid.");
@@ -435,6 +431,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   {
     if (IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
+
+    // // Verify that MTGO is not under maintenance or is otherwise offline.
+    // if (Retry(() => IsUnderMaintenance, delay: 1000))
+    //   throw new ServerOfflineException("MTGO is currently under maintenance.");
 
     if (!await RetryAsync(IsLoginAvailable, retries: 3) && !await IsOnline())
       throw new ServerOfflineException("The login server is currently offline.");
