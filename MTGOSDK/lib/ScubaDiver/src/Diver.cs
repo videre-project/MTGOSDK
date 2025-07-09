@@ -144,7 +144,7 @@ public partial class Diver : IDisposable
       catch (Exception ex)
       {
         Log.Error("[Diver][Dispatcher] Error in dispatcher loop", ex);
-        await Task.Delay(100, cancellationToken);
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
         continue;
       }
 

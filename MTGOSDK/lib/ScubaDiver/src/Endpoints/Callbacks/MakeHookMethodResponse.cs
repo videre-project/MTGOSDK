@@ -14,6 +14,7 @@ using System.Threading;
 
 using Newtonsoft.Json;
 
+using MTGOSDK.Core;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
@@ -152,10 +153,14 @@ public partial class Diver : IDisposable
     }
 
     // Preparing a proxy method that Harmony will invoke
-    HarmonyWrapper.HookCallback patchCallback = async (obj, args) =>
+    HarmonyWrapper.HookCallback patchCallback = (obj, args) =>
     {
       DateTime timestamp = DateTime.Now;
-      await InvokeControllerCallback(endpoint, token, timestamp, obj, args);
+
+      _ = SyncThread.EnqueueAsync(
+          async () => await InvokeControllerCallback(endpoint, token, timestamp, obj, args),
+          uniqueId,
+          TimeSpan.FromSeconds(5));
     };
 
     Log.Debug($"[Diver] Hooking function {methodName}...");

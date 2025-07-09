@@ -75,7 +75,7 @@ public class HarmonyWrapper
   public static bool HasCallback(string uniqueId) =>
     _actualHooks.ContainsKey(uniqueId);
 
-  public delegate Task HookCallback(object instance, object[] args);
+  public delegate void HookCallback(object instance, object[] args);
 
   public void AddHook(MethodBase target, HarmonyPatchPosition pos, HookCallback patch)
   {
@@ -176,16 +176,16 @@ public class HarmonyWrapper
     _actualHooks.TryRemove(uniqueId, out _);
   }
 
-  private static async Task SinglePrefixHook(MethodBase __originalMethod, object __instance, params object[] args)
+  private static void SinglePrefixHook(
+    MethodBase __originalMethod,
+    object __instance,
+    params object[] args)
   {
     string uniqueId = __originalMethod.DeclaringType.FullName + ":"
                     + __originalMethod.Name;
     if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
     {
-      await SyncThread.EnqueueAsync(
-        async () => await funcHook(__instance, args),
-        uniqueId,
-        TimeSpan.FromSeconds(5));
+      funcHook(__instance, args);
     }
   }
 

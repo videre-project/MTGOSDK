@@ -176,12 +176,7 @@ public partial class Diver : IDisposable
       _ = SyncThread.EnqueueAsync(
           async () => await InvokeControllerCallback(endpoint, token, timestamp, [obj, args]),
           groupId,
-          TimeSpan.FromSeconds(5))
-        .ContinueWith(t =>
-        {
-          if (t.IsFaulted)
-              Log.Error($"Failed to process event {eventName}: {t.Exception}");
-        }, TaskContinuationOptions.OnlyOnFaulted);
+          TimeSpan.FromSeconds(5));
     };
 
     try

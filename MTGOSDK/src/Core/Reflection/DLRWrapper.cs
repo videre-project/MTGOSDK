@@ -474,7 +474,7 @@ public abstract class DLRWrapper : SerializableBase
     for (; retries > 0; retries--)
     {
       try { if (lambda()) return true; } catch { }
-      await Task.Delay(delay);
+      await Task.Delay(delay).ConfigureAwait(false);
     }
     return false;
   }
@@ -516,7 +516,7 @@ public abstract class DLRWrapper : SerializableBase
     for (; retries > 0; retries--)
     {
       try { if (await lambda()) return true; } catch { }
-      await Task.Delay(delay);
+      await Task.Delay(delay).ConfigureAwait(false);
     }
     return false;
   }
@@ -549,7 +549,7 @@ public abstract class DLRWrapper : SerializableBase
           return @default;
         }
         // This will block the caller's thread for the duration of the delay.
-        Task.Delay(delay).Wait();
+        Task.Delay(delay).ConfigureAwait(false).GetAwaiter().GetResult();
       }
     }
   }
@@ -600,7 +600,7 @@ public abstract class DLRWrapper : SerializableBase
           if (raise) throw;
           return default;
         }
-        await Task.Delay(delay);
+        await Task.Delay(delay).ConfigureAwait(false);
       }
     }
   }
@@ -633,7 +633,7 @@ public abstract class DLRWrapper : SerializableBase
           if (raise) throw;
           return;
         }
-        await Task.Delay(delay);
+        await Task.Delay(delay).ConfigureAwait(false);
       }
     }
   }
