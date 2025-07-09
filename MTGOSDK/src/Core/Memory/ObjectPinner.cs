@@ -50,7 +50,7 @@ public class ObjectPinner : IDisposable
   private readonly ConditionalWeakTable<object, PinningInfo> _weakTable = new();
   private readonly ConcurrentDictionary<IntPtr, WeakReference> _addrMap = new();
 
-  public ObjectPinner(uint size = 1024)
+  public ObjectPinner(uint size = 1_048_576)
   {
     if (size == 0) throw new ArgumentOutOfRangeException(nameof(size), "Size must be greater than zero.");
     _size = size;
@@ -76,6 +76,19 @@ public class ObjectPinner : IDisposable
       CancellationToken.None,
       TaskCreationOptions.LongRunning,
       TaskScheduler.Default);
+  }
+
+  public bool IsFull()
+  {
+    _lock.EnterReadLock();
+    try
+    {
+      return _nextIndex >= _size || _freeIndices.Count == 0;
+    }
+    finally
+    {
+      _lock.ExitReadLock();
+    }
   }
 
   public void Dispose()
@@ -168,8 +181,11 @@ public class ObjectPinner : IDisposable
 
     if (!TryPinObject(obj, out IntPtr objAddr))
     {
-       throw new InvalidOperationException(
-          "Failed to pin object. No free slots available or internal error.");
+      if (IsFull())
+        throw new InvalidOperationException("Failed to pin object. No free slots available.");
+      else
+        throw new InvalidOperationException(
+          "Failed to pin object. Address collision or internal error occurred.");
     }
     Log.Trace($"Pinned object {obj} at address {objAddr}.");
     Log.Trace($"Now {_addrMap.Count} objects pinned.");
