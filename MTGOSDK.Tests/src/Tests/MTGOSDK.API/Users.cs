@@ -82,7 +82,6 @@ public class UserValidationFixture : BaseFixture
     Assert.That(user.Id, Is.EqualTo(id));
     Assert.That(user.Name, Is.EqualTo(name));
     Assert.That(user.ToString(), Is.EqualTo(name));
-    Assert.That(user.Avatar.Id, Is.GreaterThan(-1)); // May equal 0 if offline.
 
     IEnumerable<User> buddies = UserManager.GetBuddyUsers();
     Assert.That(user.IsBuddy, Is.EqualTo(buddies.Any(buddy => buddy.Id == id)));

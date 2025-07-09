@@ -4,9 +4,9 @@
   <PropertyGroup>
     <NoWarn>$(NoWarn);NU1702</NoWarn>
     <!-- Disable Microsoft.Testing.Platform in VSTest mode -->
-    <EnableMSTestRunner>false</EnableMSTestRunner>
+    <!-- <EnableMSTestRunner>false</EnableMSTestRunner>
     <TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>
-    <TestingPlatformCaptureOutput>true</TestingPlatformCaptureOutput>
+    <TestingPlatformCaptureOutput>true</TestingPlatformCaptureOutput> -->
   </PropertyGroup>
 
   <!-- Project Directories -->
