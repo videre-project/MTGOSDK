@@ -3,7 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using static MTGOSDK.Core.Reflection.DLRWrapper;
+using MTGOSDK.Core.Reflection;
+
+using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.Games;
@@ -11,16 +13,24 @@ namespace MTGOSDK.API.Play.Games;
 /// <summary>
 /// Represents a card association (e.g. Target, Attacker, Effect source, etc.)
 /// </summary>
-public struct GameCardAssociation(dynamic gameCardAssociation)
+public class GameCardAssociation(dynamic gameCardAssociation)
+    : DLRWrapper<IGameCardAssociation>
 {
+  internal override dynamic obj =>
+    Bind<IGameCardAssociation>(gameCardAssociation);
+
+  //
+  // IGameCardAssociation wrapper properties
+  //
+
   /// <summary>
   /// Represents a card association (e.g. ChosenPlayer, TriggeringSource, etc.).
   /// </summary>
-  public CardAssociation Association =
-    Cast<CardAssociation>(Unbind(gameCardAssociation).Value);
+  public CardAssociation Association =>
+    Cast<CardAssociation>(Unbind(@base).Value);
 
   /// <summary>
   /// The ID of the associated target.
   /// </summary>
-  public int TargetId = gameCardAssociation.AssociatedTarget.Id;
+  public int TargetId => @base.AssociatedTarget.Id;
 }
