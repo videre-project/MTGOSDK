@@ -17,7 +17,8 @@ public class FileLogger(
   FileLoggerOptions options) : ILogger
 {
   public static readonly LineFormatter DefaultLineFormatter =
-    new((level, category, message) => $"[{level}] [{category}] {message}");
+    new((timestamp, level, category, message) =>
+      $"{timestamp:O} [{level}] [{category}] {message}");
 
 #pragma warning disable CS8633
   public IDisposable BeginScope<TState>(TState state) => null;
@@ -45,10 +46,11 @@ public class FileLogger(
     if (!IsEnabled(logLevel) || logFile == null) return;
 
     // Get the formatted log message
+    var timestamp = DateTime.Now;
     string message = formatter(state, exception);
     var lineFormatter = options.Formatter ?? DefaultLineFormatter;
 
     // Write log messages to text file
-    Log(lineFormatter(logLevel, category, message));
+    Log(lineFormatter(timestamp, logLevel, category, message));
   }
 }

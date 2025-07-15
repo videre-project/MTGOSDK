@@ -23,6 +23,9 @@ public readonly struct FileLoggerOptions
   /// </summary>
   public string FileName { get; init; }
 
+  /// <summary>
+  /// The maximum age of log files before they are deleted.
+  /// </summary>
   public TimeSpan? MaxAge { get; init; }
 
   /// <summary>
@@ -39,6 +42,7 @@ public readonly struct FileLoggerOptions
   /// A delegate that represents a method to format log entries.
   /// </summary>
   public delegate string LineFormatter(
+    DateTime timestamp,
     LogLevel level,
     string category,
     string message);
