@@ -245,11 +245,7 @@ public static class EventManager
       "AddJoinedEvent",
       new((_, args) =>
       {
-        dynamic joinedEvent = args[0];
-        if (joinedEvent == null || !joinedEvent.IsLocalUserJoined)
-          return null; // Ignore no-op or duplicate events.
-
-        var playerEvent = PlayerEventFactory(joinedEvent);
+        var playerEvent = PlayerEventFactory(args[0]);
         return (playerEvent, null); // Return a tuple of (Event, null).
       })
     );
@@ -266,10 +262,7 @@ public static class EventManager
       "OnGameStarted",
       new((_, args) =>
       {
-        GameEventArgs gameArgs = new(args[0]);
-        Game game = gameArgs.Game;
-        if (Unbind(game) == null)
-          return null; // Ignore no-op or invalid events.
+        Game game = new(args[0]);
 
         Match match = game.Match;
         Event? playerEvent = FindParentEvent(JoinedEvents, match);

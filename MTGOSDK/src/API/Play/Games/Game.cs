@@ -361,12 +361,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       "set_CurrentPhase",
       new((instance, args) =>
       {
-        GamePhase currentPhase = Cast<GamePhase>(args[0].GamePhase);
-        if (currentPhase == GamePhase.Invalid) return null;
-
-        GamePlayer activePlayer = new(instance.ActivePlayer);
+        GamePlayer activePlayer = new(args[0]);
         Game game = activePlayer.GameInterface;
         if (game == null) return null; // Ignore invalid game objects.
+
+        GamePhase currentPhase = Cast<GamePhase>(args[1]);
+        if (currentPhase == GamePhase.Invalid) return null;
 
         // Set timestamp on activePlayer
         Unbind(activePlayer).__timestamp = instance.__timestamp;
@@ -385,7 +385,6 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       new((instance, _) =>
       {
         GameCard card = new(instance);
-        if (card.SourceId == -1) return null; // Ignore invalid events.
         Game game = card.GameInterface;
 
         // Return a tuple of (Game, GameCard)
@@ -458,7 +457,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     );
 
   /// <summary>
-  ///
+  /// Event triggered when the game results for the current game update.
   /// </summary>
   public static EventHookProxy<Game, IList<GamePlayerResult>> GameResultsChanged =
     new(

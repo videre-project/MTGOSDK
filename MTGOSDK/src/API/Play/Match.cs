@@ -142,11 +142,10 @@ public sealed class Match(dynamic match) : Event
       "OnMatchStatusChanged",
       new((instance, args) =>
       {
-        Match match = new(instance);
-        if (!match.IsParticipant) return null; // Ignore non-local matches
-
         MatchState state = Cast<MatchState>(args[0].NewStatus);
         if (state == MatchState.Invalid) return null; // Ignore invalid states
+
+        Match match = new(instance);
 
         return (match, state); // Return a tuple of (Match, MatchState)
       })
@@ -161,8 +160,6 @@ public sealed class Match(dynamic match) : Event
         if (args[0] == null) return null; // Ignore invalid game objects
 
         Match match = new(instance);
-        if (!match.IsParticipant) return null; // Ignore non-local matches
-
         Game game = new(args[0]);
 
         return (match, game); // Return a tuple of (Match, Game)
@@ -178,8 +175,6 @@ public sealed class Match(dynamic match) : Event
         if (args[0] == null) return null; // Ignore invalid game objects
 
         Match match = new(instance);
-        if (!match.IsParticipant) return null; // Ignore non-local matches
-
         Game game = new(args[0]);
 
         return (match, game); // Return a tuple of (Match, Game)
