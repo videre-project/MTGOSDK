@@ -22,7 +22,7 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// </summary>
   internal override dynamic obj => Bind<ICardZone>(cardZone);
 
-  private readonly dynamic m_cardZone = Retry(() => Unbind(cardZone).CardZone);
+  private readonly dynamic? m_cardZone = Try(() => Unbind(cardZone).CardZone);
 
   //
   // ICardZone wrapper properties
@@ -65,6 +65,9 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   //
 
   public override string ToString() => this.Name;
+
+  public static implicit operator CardZone(GameZone zone) =>
+    Try(() => zone?.Name != null ? zone?.Zone : null) ?? CardZone.Invalid;
 
   //
   // ICardZone wrapper events
