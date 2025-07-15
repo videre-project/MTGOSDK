@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
+using MTGOSDK;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -168,15 +169,19 @@ public partial class Diver : IDisposable
       }
     }
 
-    string groupId = $"Event:{resolvedType.FullName}.{eventName}";
     EventHandler eventHandler = (obj, args) =>
     {
       // Get current timestamp
       DateTime timestamp = DateTime.Now;
+
+      var eventKey = (resolvedType.FullName, eventName);
+      if (!GlobalEvents.IsValidEvent(eventKey, obj, args, out var mappedArgs))
+        return;
+
       _ = SyncThread.EnqueueAsync(
-          async () => await InvokeControllerCallback(endpoint, token, timestamp, [obj, args]),
-          groupId,
-          TimeSpan.FromSeconds(5));
+        async () => await InvokeControllerCallback(endpoint, token, timestamp, [obj, mappedArgs]),
+        true,
+        TimeSpan.FromSeconds(5));
     };
 
     try

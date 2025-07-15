@@ -150,20 +150,24 @@ public static class SyncThread
 
   public static async Task EnqueueAsync(
     Func<Task> callback,
+    bool skipQueue = false,
     TimeSpan? timeout = null)
   {
     if (s_cancellationToken.IsCancellationRequested)
       return;
 
     // Wait for queue space with optional timeout
-    if (timeout.HasValue)
+    if (!skipQueue)
     {
-      if (!await s_queueSemaphore.WaitAsync(timeout.Value, s_cancellationToken))
-        throw new TimeoutException("Task queue is full");
-    }
-    else
-    {
-      await s_queueSemaphore.WaitAsync(s_cancellationToken);
+      if (timeout.HasValue)
+      {
+        if (!await s_queueSemaphore.WaitAsync(timeout.Value, s_cancellationToken))
+          throw new TimeoutException("Task queue is full");
+      }
+      else
+      {
+        await s_queueSemaphore.WaitAsync(s_cancellationToken);
+      }
     }
 
     try
@@ -176,18 +180,24 @@ public static class SyncThread
         }
         finally
         {
-          s_queueSemaphore.Release();
+          if (!skipQueue)
+            s_queueSemaphore.Release();
         }
       }), s_cancellationToken);
     }
     catch
     {
-      s_queueSemaphore.Release();
+      if (!skipQueue)
+        s_queueSemaphore.Release();
       throw;
     }
   }
 
-  public static async Task EnqueueAsync(Func<Task> callback, string groupId, TimeSpan? timeout = null)
+  public static async Task EnqueueAsync(
+    Func<Task> callback,
+    string groupId,
+    bool skipQueue = false,
+    TimeSpan? timeout = null)
   {
     if (string.IsNullOrEmpty(groupId))
     {
@@ -199,14 +209,17 @@ public static class SyncThread
       return;
 
     // Wait for queue space
-    if (timeout.HasValue)
+    if (!skipQueue)
     {
-      if (!await s_queueSemaphore.WaitAsync(timeout.Value, s_cancellationToken))
+      if (timeout.HasValue)
+      {
+        if (!await s_queueSemaphore.WaitAsync(timeout.Value, s_cancellationToken))
           throw new TimeoutException("Task queue is full");
-    }
-    else
-    {
-      await s_queueSemaphore.WaitAsync(s_cancellationToken);
+      }
+      else
+      {
+        await s_queueSemaphore.WaitAsync(s_cancellationToken);
+      }
     }
 
     try
@@ -224,7 +237,8 @@ public static class SyncThread
             }
             finally
             {
-              s_queueSemaphore.Release();
+              if (!skipQueue)
+                s_queueSemaphore.Release();
             }
           })(),
           s_cancellationToken,
@@ -241,7 +255,8 @@ public static class SyncThread
           }
           finally
           {
-            s_queueSemaphore.Release();
+            if (!skipQueue)
+              s_queueSemaphore.Release();
           }
         }), s_cancellationToken);
       }
@@ -250,7 +265,8 @@ public static class SyncThread
     }
     catch
     {
-      s_queueSemaphore.Release();
+      if (!skipQueue)
+        s_queueSemaphore.Release();
       throw;
     }
   }

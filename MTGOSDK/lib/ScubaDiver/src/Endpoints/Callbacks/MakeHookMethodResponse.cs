@@ -14,6 +14,7 @@ using System.Threading;
 
 using Newtonsoft.Json;
 
+using MTGOSDK;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -157,10 +158,13 @@ public partial class Diver : IDisposable
     {
       DateTime timestamp = DateTime.Now;
 
+      var eventKey = (resolvedType.FullName, methodName);
+      if (!GlobalEvents.IsValidEvent(eventKey, obj, args, out var mappedArgs)) return;
+
       _ = SyncThread.EnqueueAsync(
-          async () => await InvokeControllerCallback(endpoint, token, timestamp, obj, args),
-          uniqueId,
-          TimeSpan.FromSeconds(5));
+        async () => await InvokeControllerCallback(endpoint, token, timestamp, obj, mappedArgs),
+        true,
+        TimeSpan.FromSeconds(5));
     };
 
     Log.Debug($"[Diver] Hooking function {methodName}...");
