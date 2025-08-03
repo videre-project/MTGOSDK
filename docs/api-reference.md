@@ -1,14 +1,51 @@
-## API Structure & Usage
+# MTGOSDK API Reference
 
 MTGOSDK organizes its APIs by feature domain, providing direct access to MTGO session management, card collections, gameplay state, chat, user profiles, and client settings. These APIs support automation, structured data retrieval, and real-time event responses.
 
-### Session Management and Entry Points
+For installation and setup, see the [Getting Started Guide](./getting-started.md).
+
+## Table of Contents
+- [Client](#client)
+- [Collection](#collection)
+- [Play](#play)
+- [History](#history)
+- [Chat](#chat)
+- [Users](#users)
+- [Settings](#settings)
+- [Toasts and Dialogs](#toasts-and-dialogs)
+
+---
+
+## Client
+
+This section covers APIs for launching, authenticating, and managing the MTGO client session. Use these to automate login, attach to running sessions, and control the client lifecycle.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="2"><code>MTGOSDK.API</code></td>
+    <td><a href="/MTGOSDK/src/API/Client.cs"><code>Client</code></a></td>
+    <td>Manages MTGO process and session</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/ClientOptions.cs"><code>ClientOptions</code></a></td>
+    <td>Configuration for Client</td>
+  </tr>
+</table>
+
 
 To work with sessions, import the core client types:
 
 ```csharp
 using MTGOSDK.API; // Client, ClientOptions
 ```
+
+**Example: Automating Client Launch and Login**
 
 The `Client` class establishes communication with a running MTGO process. For automation, the client can launch MTGO, perform authentication, and manage cleanup:
 
@@ -25,6 +62,8 @@ await client.LogOn("username", password);
 
 await client.LogOff();
 ```
+
+**Example: Attaching to a Running Session**
 
 When integrating with an MTGO session started by the user, the same API attaches to the running process and allows inspection and event monitoring:
 
@@ -51,13 +90,86 @@ Once the client is disposed, the client releases all remote handles and cached d
 
 ---
 
-### Accessing Collections
+## Collection
+
+This section describes APIs for managing decks, cards, and binders. Use these to report, analyze, and export your collection data.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="4"><code>MTGOSDK.API.Collection</code></td>
+    <td><a href="/MTGOSDK/src/API/Collection/CollectionManager.cs"><code>CollectionManager</code></a></td>
+    <td>Manages decks, cards, binders</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Collection/Deck.cs"><code>Deck</code></a></td>
+    <td>Represents a deck</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Collection/Card.cs"><code>Card</code></a></td>
+    <td>Represents a card</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Collection/Binder.cs"><code>Binder</code></a></td>
+    <td>Represents a binder (collection grouping)</td>
+  </tr>
+</table>
 
 To access collection features, import the collection API:
 
 ```csharp
 using MTGOSDK.API.Collection; // CollectionManager, Card, Deck, Binder
 ```
+
+**Example: Exporting Your Collection**
+
+To snapshot the full collection for export or analytics, use `GetFrozenCollection`:
+
+```csharp
+// Retrieve the main collection grouping object
+var collection = CollectionManager.Collection
+  ?? throw new InvalidOperationException("Collection not loaded.");
+
+// Since the collection can contain thousands of unique card objects,
+// we use GetFrozenCollection to create a compact, immutable snapshot
+// that can be quickly serialized and read for the whole collection.
+var frozenCollection = collection.GetFrozenCollection.ToArray();
+Console.WriteLine($"Collection ({collection.ItemCount} items)");
+foreach (var card in frozenCollection.Take(25))
+{
+  Console.WriteLine($"{card.Quantity}x {card.Name} ({card.Id})");
+}
+```
+
+**Example: Accessing Binders**
+
+Binders are special groupings in your collection, such as wishlists or mega binders. You can access binders and inspect their properties:
+
+```csharp
+using MTGOSDK.API.Collection; // Binder
+
+// Get all binders
+foreach (var binder in CollectionManager.Binders)
+{
+    Console.WriteLine($"Binder: {binder.Name} (ID: {binder.Id})");
+    Console.WriteLine($"Is Last Used: {binder.IsLastUsedBinder}, Is Wishlist: {binder.IsWishList}, Is MegaBinder: {binder.IsMegaBinder}");
+    Console.WriteLine($"Item count: {binder.ItemCount}");
+}
+
+// Access items in a specific binder
+var myBinder = CollectionManager.GetBinder("My Binder Name");
+foreach (var card in myBinder.Items)
+{
+    Console.WriteLine($"{card.Name} - {card.Count}");
+}
+```
+
+**Example: Accessing Decks in Your Collection**
 
 The `CollectionManager` class abstracts collections, decks, and binders for both interactive and batch usage. Decks can be grouped by format for reporting and visualization:
 
@@ -81,23 +193,7 @@ foreach (var format in decks)
 }
 ```
 
-To snapshot the full collection for export or analytics, use `GetFrozenCollection`:
-
-```csharp
-// Retrieve the main collection grouping object
-var collection = CollectionManager.Collection
-  ?? throw new InvalidOperationException("Collection not loaded.");
-
-// Since the collection can contain thousands of unique card objects,
-// we use GetFrozenCollection to create a compact, immutable snapshot
-// that can be quickly serialized and read for the whole collection.
-var frozenCollection = collection.GetFrozenCollection.ToArray();
-Console.WriteLine($"Collection ({collection.ItemCount} items)");
-foreach (var card in frozenCollection.Take(25))
-{
-  Console.WriteLine($"{card.Quantity}x {card.Name} ({card.Id})");
-}
-```
+**Example: Card Lookup and Serialization**
 
 Direct card lookup is available by name or ID, and card objects can be serialized for downstream integration:
 
@@ -122,7 +218,46 @@ Console.WriteLine(card.ToJSON());
 
 ---
 
-### Monitoring Live Gameplay and Events
+## Play
+
+This section covers APIs for monitoring matches, games, tournaments, and leagues. Use these to track live events, standings, and gameplay.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="2"><code>MTGOSDK.API.Play</code></td>
+    <td><a href="/MTGOSDK/src/API/Play/EventManager.cs"><code>EventManager</code></a></td>
+    <td>Central hub for events</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Play/Match.cs"><code>Match</code></a></td>
+    <td>Represents a match</td>
+  </tr>
+  <tr>
+    <td rowspan="1"><code>MTGOSDK.API.Play.Games</code></td>
+    <td><a href="/MTGOSDK/src/API/Play/Games/Game.cs"><code>Game</code></a></td>
+    <td>Represents a game</td>
+  </tr>
+  <tr>
+    <td rowspan="1"><code>MTGOSDK.API.Play.Tournaments</code></td>
+    <td><a href="/MTGOSDK/src/API/Play/Tournaments/Tournament.cs"><code>Tournament</code></a></td>
+    <td>Tournament state and events</td>
+  </tr>
+  <tr>
+    <td rowspan="2"><code>MTGOSDK.API.Play.Leagues</code></td>
+    <td><a href="/MTGOSDK/src/API/Play/Leagues/League.cs"><code>League</code></a></td>
+    <td>League state and events</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Play/Leagues/LeagueManager.cs"><code>LeagueManager</code></a></td>
+    <td>Manages open leagues</td>
+  </tr>
+</table>
 
 To work with gameplay state, import the play/event APIs:
 
@@ -133,9 +268,9 @@ using MTGOSDK.API.Play.Tournaments; // Tournament
 using MTGOSDK.API.Play.Leagues;     // League, LeagueManager
 ```
 
-The Play APIs expose live state for matches, games, tournaments, and leagues. `EventManager` acts as the central hub for querying active events and subscribing to gameplay events.
+**Example: Accessing Events and Leagues**
 
-To inspect featured tournaments or enumerate current events:
+The Play APIs expose live state for matches, games, tournaments, and leagues. `EventManager` acts as the central hub for querying active events and subscribing to gameplay events.
 
 ```csharp
 foreach (var tournament in EventManager.FeaturedEvents)
@@ -159,6 +294,8 @@ foreach (var league in LeagueManager.OpenLeagues)
 }
 ```
 
+### Example: Accessing Tournament Standings
+
 `Tournament` objects provide detailed information about current standings and round progress, which can be used to track the progress of ongoing tournaments:
 
 ```csharp
@@ -172,7 +309,9 @@ foreach (var player in tournament.Standings)
 }
 ```
 
-You can also subscribe to gameplay events for real-time monitoring and automation:
+### Example: Subscribing to Events
+
+You can subscribe to events for real-time tracking of gameplay and tournament state changes.
 
 ```csharp
 // EventHookWrapper objects can be subscribed to like regular events
@@ -194,7 +333,7 @@ tournament.CurrentRoundChanged += (sender, args) =>
 };
 ```
 
-However, you can also clear all event subscriptions on an event or object level:
+You can also clear all event subscriptions on an event or object level:
 
 ```csharp
 // Clear all event subscriptions for a match or tournament
@@ -210,13 +349,39 @@ tournament.ClearEvents();
 
 ---
 
-### Accessing Game History
+## History
+
+This section describes APIs for accessing completed matches and tournaments. Use these for replay analysis and statistics.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="3"><code>MTGOSDK.API.Play.History</code></td>
+    <td><a href="/MTGOSDK/src/API/Play/History/HistoryManager.cs"><code>HistoryManager</code></a></td>
+    <td>Loads and manages history</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Play/History/HistoricalMatch.cs"><code>HistoricalMatch</code></a></td>
+    <td>Completed match data</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Play/History/HistoricalTournament.cs"><code>HistoricalTournament</code></a></td>
+    <td>Completed tournament data</td>
+  </tr>
+</table>
 
 To analyze game history, import the relevant history APIs:
 
 ```csharp
 using MTGOSDK.API.Play.History; // HistoryManager, HistoricalMatch, HistoricalTournament
 ```
+
+**Example: Querying and Iterating Game History**
 
 Game history APIs provide access to completed matches and tournaments for a given user. This supports replay analysis of past games, win/loss tracking, and statistics.
 
@@ -252,13 +417,43 @@ foreach (var item in HistoryManager.Items)
 
 ---
 
-### Chat
+## Chat
+
+This section covers APIs for interacting with MTGO chat channels, messages, and users.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="4"><code>MTGOSDK.API.Chat</code></td>
+    <td><a href="/MTGOSDK/src/API/Chat/ChannelManager.cs"><code>ChannelManager</code></a></td>
+    <td>Manages chat channels</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Chat/Channel.cs"><code>Channel</code></a></td>
+    <td>Represents a chat channel</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Chat/Message.cs"><code>Message</code></a></td>
+    <td>Represents a chat message</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Chat/ChannelType.cs"><code>ChannelType</code></a></td>
+    <td>Type of chat channel</td>
+  </tr>
+</table>
 
 To use chat APIs, import the chat namespace:
 
 ```csharp
 using MTGOSDK.API.Chat; // ChannelManager, Channel, Message, ChannelType
 ```
+
+**Example: Enumerating Channels and Sending Messages**
 
 Channels in MTGO represent different chat rooms, including system, private, and game-specific channels. These are also used in games to track chat logs as well as game logs. To enumerate channels and access their properties:
 
@@ -285,13 +480,35 @@ Console.WriteLine($"Channel: {mainLobby.Name}, Users: {mainLobby.UserCount}");
 
 ---
 
-### Users
+## Users
+
+This section describes APIs for managing user profiles, buddy lists, and social connections.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="2"><code>MTGOSDK.API.Users</code></td>
+    <td><a href="/MTGOSDK/src/API/Users/UserManager.cs"><code>UserManager</code></a></td>
+    <td>Manages users and buddies</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Users/User.cs"><code>User</code></a></td>
+    <td>Represents a user</td>
+  </tr>
+</table>
 
 To interact with user profiles and buddy lists, import the users namespace:
 
 ```csharp
 using MTGOSDK.API.Users; // UserManager, User
 ```
+
+**Example: User Lookup and Buddy List**
 
 User objects encapsulate identity, login state, avatar, and social connections. Retrieve a user by ID or name:
 
@@ -318,13 +535,35 @@ User objects also expose additional state such as login status, guest status, an
 
 ---
 
-### Settings
+## Settings
+
+This section covers APIs for reading and reporting MTGO client configuration and preferences.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="2"><code>MTGOSDK.API.Settings</code></td>
+    <td><a href="/MTGOSDK/src/API/Settings/SettingsService.cs"><code>SettingsService</code></a></td>
+    <td>Reads client settings</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Settings/Setting.cs"><code>Setting</code></a></td>
+    <td>Setting keys and options</td>
+  </tr>
+</table>
 
 For client settings, import the settings namespace:
 
 ```csharp
 using MTGOSDK.API.Settings; // SettingsService, Setting
 ```
+
+**Example: Reading Client Settings**
 
 Settings can be accessed to read MTGO client configuration, including UI preferences, last logged-in user, and other options. To retrieve a setting value:
 
@@ -343,13 +582,35 @@ Use these APIs to read user and application settings for diagnostics or configur
 
 ---
 
-### Toasts and Dialogs
+## Toasts and Dialogs
+
+This section describes APIs for displaying notifications and modal dialogs in the MTGO client.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="2"><code>MTGOSDK.API.Interface</code></td>
+    <td><a href="/MTGOSDK/src/API/Interface/ToastViewManager.cs"><code>ToastViewManager</code></a></td>
+    <td>Shows toast notifications</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Interface/DialogService.cs"><code>DialogService</code></a></td>
+    <td>Shows modal dialogs</td>
+  </tr>
+</table>
 
 To display toast notifications and modal dialogs in the MTGO client, import the interface APIs:
 
 ```csharp
 using MTGOSDK.API.Interface; // ToastViewManager, DialogService
 ```
+
+### Example: Showing a Toast Notification
 
 Toast notifications provide brief, non-blocking feedback to users:
 
@@ -358,6 +619,8 @@ Toast notifications provide brief, non-blocking feedback to users:
 ToastViewManager.ShowToast("Game Update", "You have joined a new match.");
 ```
 
+### Example: Toast with Navigation
+
 A toast can also be configured to navigate to a specific event when clicked:
 
 ```csharp
@@ -365,6 +628,8 @@ A toast can also be configured to navigate to a specific event when clicked:
 var tournamentEvent = EventManager.GetTournamentEvent(123456);
 ToastViewManager.ShowToast("Tournament Started", "Click to view tournament.", tournamentEvent);
 ```
+
+### Example: Showing a Modal Dialog
 
 To display a modal dialog that requires user confirmation or provides important information:
 
@@ -388,10 +653,10 @@ else
 }
 ```
 
-These APIs enable applications to provide feedback and prompt the user for choices in a way that integrates with MTGO's native UI.
+These APIs enable applications to provide feedback and prompt the user in a way that integrates with MTGO's native UI.
 
 ---
 
 MTGOSDK provides a consistent, type-safe interface to MTGO, suitable for automation, analytics, and user-facing tools. The APIs are designed to be intuitive and easy to use, allowing developers to focus on building new features for MTGO.
 
-For installation, build instructions, and architectural details, refer to the [README](README.md) and [architecture documentation](docs/architecture/core-classes.md).
+For installation, build instructions, and architectural details, refer to the [README](README.md) and [architecture documentation](docs/architecture/core-classes.md)
