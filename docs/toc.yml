@@ -1,0 +1,24 @@
+items:
+- name: Getting Started
+  href: getting-started.html
+- name: API
+  href: api/index.html
+  items:
+    - name: MTGOSDK
+      href: api/MTGOSDK/MTGOSDK.html
+    - name: MTGOSDK.MSBuild
+      href: api/MTGOSDK.MSBuild/MTGOSDK.MSBuild.html
+    - name: MTGOSDK.Win32
+      href: api/MTGOSDK.Win32/MTGOSDK.Win32.html
+  expanded: true
+- name: Architecture
+  href: architecture/README.html
+  items:
+    - name: Overview
+      href: architecture/overview.html
+    - name: Core Classes
+      href: architecture/core-classes.html
+- name: FAQ
+  href: FAQ.html
+- name: Changelog
+  href: CHANGELOG.html
