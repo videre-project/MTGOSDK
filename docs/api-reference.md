@@ -11,6 +11,7 @@ For installation and setup, see the [Getting Started Guide](./getting-started.md
 - [History](#history)
 - [Chat](#chat)
 - [Users](#users)
+- [Trade](#trade)
 - [Settings](#settings)
 - [Toasts and Dialogs](#toasts-and-dialogs)
 
@@ -309,7 +310,45 @@ foreach (var player in tournament.Standings)
 }
 ```
 
-### Example: Subscribing to Events
+You can also access previous matches and games for each player from the tournament standings or rounds collections:
+
+```csharp
+// Per-player match history
+foreach (var standing in tournament.Standings)
+{
+  Console.WriteLine($"Player: {standing.Player.Name}, Rank: {standing.Rank}, Record: {standing.Record}");
+  // Returns a collection of MatchStandingRecord objects, which contain only
+  // the match ID, round, state, result, and whether the player had a bye.
+  foreach (var match in standing.PreviousMatches)
+  {
+    Console.WriteLine($"  Match ID: {match.Id}, Round: {match.Round}, State: {match.State}, Has Bye: {match.HasBye}");
+    foreach (var game in match.GameStandingRecords)
+    {
+      Console.WriteLine($"    Game ID: {game.Id}, Status: {game.GameStatus}, Winner IDs: {string.Join(",", game.WinnerIds)}");
+    }
+  }
+}
+```
+
+```csharp
+// Per-round match results
+foreach (var round in tournament.Rounds)
+{
+  Console.WriteLine($"Round {round.Number} (Complete: {round.IsComplete})");
+  // Contains a collection of Match objects for this round, which relies on the
+  // client to listen to match state changes as each round progresses.
+  foreach (var match in round.Matches)
+  {
+    Console.WriteLine($"  Match ID: {match.Id}, State: {match.State}");
+    foreach (var player in match.Players)
+    {
+      Console.WriteLine($"    Player: {player.Name}");
+    }
+  }
+}
+```
+
+**Example: Subscribing to Events**
 
 You can subscribe to events for real-time tracking of gameplay and tournament state changes.
 
@@ -346,6 +385,57 @@ tournament.ClearEvents();
 ```
 
 `Match` instances also expose additional properties and event hooks for tracking game progress, player actions, and results. Additionally, `League` and `Tournament` objects provide event streams for leaderboard changes, round transitions, and more.
+
+### Example: Tracking Match and Game Progress
+
+You can use the Match and Game APIs to access key properties and subscribe to important events for tracking the progress of an ongoing game:
+
+```csharp
+var match = EventManager.GetMatch(123456);
+Console.WriteLine($"Match ID: {match.Id}");
+Console.WriteLine($"State: {match.State}, IsComplete: {match.IsComplete}");
+Console.WriteLine($"Start: {match.StartTime}, End: {match.EndTime}");
+Console.WriteLine($"Players: {string.Join(", ", match.Games.SelectMany(g => g.Players.Select(p => p.Name)).Distinct())}");
+Console.WriteLine($"Current Game: {match.CurrentGame?.Id}");
+
+// Subscribe to a few match-level events
+match.OnGameStarted += (game) =>
+{
+  Console.WriteLine($"Game started: {game.Id}");
+};
+match.OnGameEnded += (game) =>
+{
+  Console.WriteLine($"Game ended: {game.Id}");
+  Console.WriteLine($"Winning players: {string.Join(", ", game.WinningPlayers.Select(p => p.Name))}");
+};
+
+// For each game in the match, access useful properties and subscribe to key events
+foreach (var game in match.Games)
+{
+  Console.WriteLine($"Game ID: {game.Id}, Status: {game.Status}, Start: {game.StartTime}, End: {game.EndTime}");
+  Console.WriteLine($"Players: {string.Join(", ", game.Players.Select(p => p.Name))}");
+  Console.WriteLine($"Current Turn: {game.CurrentTurn}, Phase: {game.CurrentPhase}");
+  Console.WriteLine($"Is Replay: {game.IsReplay}");
+  Console.WriteLine($"Zones: {string.Join(", ", game.SharedZones.Select(z => z.Name))}");
+  Console.WriteLine($"Prompt: {game.Prompt?.Text}");
+
+  // Subscribe to a few game events
+  game.OnGamePhaseChange += (phase) =>
+  {
+    Console.WriteLine($"Phase changed: {phase.CurrentPhase}");
+  };
+  game.OnLifeChange += (player) =>
+  {
+    Console.WriteLine($"Life changed: {player.Name} now has {player.Life} life");
+  };
+  game.OnZoneChange += (card) =>
+  {
+    Console.WriteLine($"Card zone changed: {card.Name} now in {card.Zone?.Name}");
+  };
+}
+```
+
+This approach allows you to monitor both static and dynamic aspects of a match and its games, including state, timing, players, zones, and selected real-time events.
 
 ---
 
@@ -532,6 +622,84 @@ foreach (var buddy in UserManager.GetBuddyUsers())
 ```
 
 User objects also expose additional state such as login status, guest status, and avatar information.
+
+---
+
+## Trade
+
+This section covers APIs for accessing trade posts, trade partners, and managing trades in MTGO.
+
+**Key Classes:**
+<table>
+  <tr>
+    <th>Namespace</th>
+    <th>Class</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td rowspan="4"><code>MTGOSDK.API.Trade</code></td>
+    <td><a href="/MTGOSDK/src/API/Trade/TradeManager.cs"><code>TradeManager</code></a></td>
+    <td>Central manager for trade posts, partners, and current trades</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Trade/TradePost.cs"><code>TradePost</code></a></td>
+    <td>Represents a trade post in the marketplace</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Trade/TradePartner.cs"><code>TradePartner</code></a></td>
+    <td>Represents a previous trade partner</td>
+  </tr>
+  <tr>
+    <td><a href="/MTGOSDK/src/API/Trade/TradeEscrow.cs"><code>TradeEscrow</code></a></td>
+    <td>Represents an ongoing trade escrow</td>
+  </tr>
+</table>
+
+To use trade APIs, import the trade namespace:
+
+```csharp
+using MTGOSDK.API.Trade; // TradeManager, TradePost, TradePartner, TradeEscrow
+```
+
+**Example: Accessing Trade Posts and Partners**
+
+```csharp
+// List recent trade posts
+foreach (var post in TradeManager.AllPosts.Take(5))
+{
+    Console.WriteLine($"Post by {post.Poster.Name}: {post.Message}");
+    foreach (var wanted in post.Wanted)
+        Console.WriteLine($"  Wants: {wanted.Quantity}x {wanted.Card.Name}");
+    foreach (var offered in post.Offered)
+        Console.WriteLine($"  Offers: {offered.Quantity}x {offered.Card.Name}");
+}
+
+// Your own post
+var myPost = TradeManager.MyPost;
+if (myPost != null)
+    Console.WriteLine($"My post: {myPost.Message}");
+
+// List previous trade partners
+foreach (var partner in TradeManager.TradePartners)
+{
+    Console.WriteLine($"Traded with: {partner.Poster.Name} at {partner.LastTradeTime}");
+}
+```
+
+**Example: Accessing Current Trade Escrow**
+
+```csharp
+var currentTrade = TradeManager.CurrentTrade;
+if (currentTrade != null)
+{
+    Console.WriteLine($"Trade with: {currentTrade.TradePartner.Name}");
+    Console.WriteLine($"State: {currentTrade.State}, Accepted: {currentTrade.IsAccepted}");
+    foreach (var item in currentTrade.TradedItems)
+        Console.WriteLine($"You traded: {item.Quantity}x {item.Card.Name}");
+    foreach (var item in currentTrade.PartnerTradedItems)
+        Console.WriteLine($"Partner traded: {item.Quantity}x {item.Card.Name}");
+}
+```
 
 ---
 
