@@ -102,7 +102,51 @@ public abstract class SerializableBase : IJsonSerializable
     IList<string> properties = filter.Properties.Select(p => p.Name).ToList();
 
     this.SetSerializationProperties(properties, strict: true);
-    return TypeProxy.As(this.ToSerializable(), proxy.Class);
+    var serializable = this.ToSerializable();
+    return (TInterface)BindExpandoToInterface(serializable, proxy.Class);
+  }
+
+  private static object BindExpandoToInterface(object obj, Type interfaceType)
+  {
+    if (obj == null) return null;
+    if (interfaceType.IsInstanceOfType(obj)) return obj;
+
+    // If it's an ExpandoObject and the target is an interface, bind it
+    if (obj is System.Dynamic.ExpandoObject && interfaceType.IsInterface)
+    {
+      // Recursively bind all properties
+      var expandoDict = (IDictionary<string, object>)obj;
+      foreach (var prop in interfaceType.GetProperties())
+      {
+        if (expandoDict.TryGetValue(prop.Name, out var value) && value != null)
+        {
+          // Handle collections of interfaces
+          if (prop.PropertyType.IsGenericType &&
+              typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType) &&
+              prop.PropertyType.GetGenericArguments()[0].IsInterface)
+          {
+            var elemType = prop.PropertyType.GetGenericArguments()[0];
+            if (value is System.Collections.IEnumerable enumerable)
+            {
+              var listType = typeof(List<>).MakeGenericType(elemType);
+              var list = (System.Collections.IList)Activator.CreateInstance(listType);
+              foreach (var item in enumerable)
+              {
+                list.Add(BindExpandoToInterface(item, elemType));
+              }
+              expandoDict[prop.Name] = list;
+            }
+          }
+          // Handle nested interface
+          else if (prop.PropertyType.IsInterface && value is System.Dynamic.ExpandoObject)
+          {
+            expandoDict[prop.Name] = BindExpandoToInterface(value, prop.PropertyType);
+          }
+        }
+      }
+      return TypeProxy.As(obj, interfaceType);
+    }
+    return obj;
   }
 #endif
 }
