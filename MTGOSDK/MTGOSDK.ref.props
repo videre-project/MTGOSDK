@@ -22,7 +22,7 @@
       using transitive build targets provided by the `MTGOSDK.MSBuild` project.
     -->
     <Reference Include="Core"                             Private="$(UseRef)" />
-    <Reference Include="Duelscene"                        Private="$(UseRef)" />
+    <Reference Include="DuelScene"                        Private="$(UseRef)" />
     <Reference Include="FlsClient"                        Private="$(UseRef)" />
     <Reference Include="GameDetails"                      Private="$(UseRef)" />
     <Reference Include="MTGOEnumStruct"                   Private="$(UseRef)" />
