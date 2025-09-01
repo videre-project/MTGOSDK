@@ -330,7 +330,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public static EventHookProxy<Game, GamePrompt> GamePromptChanged =
     new(
-      "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game>(),
       "ProcessTurnStepElement",
       new((instance, args) =>
       {
@@ -357,7 +357,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public static EventHookProxy<Game, CurrentPlayerPhase> GamePhaseChanged =
     new(
-      "Shiny.Play.Duel.ViewModel.PhaseControllerViewModel",
+      new TypeProxy<Shiny.Play.Duel.ViewModel.PhaseControllerViewModel>(),
       "set_CurrentPhase",
       new((instance, args) =>
       {
@@ -380,7 +380,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public static EventHookProxy<Game, GameCard> CardZoneChanged =
     new(
-      "WotC.MtGO.Client.Model.Play.GameCard",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.GameCard>(),
       "OnZoneChanged",
       new((instance, _) =>
       {
@@ -397,7 +397,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public static EventHookProxy<Game, GameAction> GameActionPerformed =
     new(
-      "WotC.MtGO.Client.Model.Play.Actions.GameAction",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.Actions.GameAction>(),
       "Execute",
       new((instance, args) =>
       {
@@ -418,7 +418,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public static EventHookProxy<Game, GamePlayer> PlayerLifeChanged =
     new(
-      "WotC.MtGO.Client.Model.Play.GamePlayer",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.GamePlayer>(),
       "OnLifeChanged",
       new((instance, _) =>
       {
@@ -436,7 +436,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public static EventHookProxy<dynamic, Message> LogMessageReceived =
     new(
-      "WotC.MtGO.Client.Model.Chat.HistoricalChatChannel",
+      new TypeProxy<WotC.MtGO.Client.Model.Chat.HistoricalChatChannel>(),
       "AppendMessage",
       new((instance, args) =>
       {
@@ -461,7 +461,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public static EventHookProxy<Game, IList<GamePlayerResult>> GameResultsChanged =
     new(
-      "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game>(),
       "CompileWinningPlayers",
       new((instance, args) =>
       {

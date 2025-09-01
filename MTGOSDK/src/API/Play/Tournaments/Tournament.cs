@@ -5,6 +5,8 @@
 
 using System.Collections;
 
+using MTGOSDK.Core.Reflection;
+
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
@@ -198,15 +200,56 @@ public sealed class Tournament(dynamic tournament) : Event
   // ITournament wrapper events
   //
 
-  public EventProxy<TournamentRoundChangedEventArgs> CurrentRoundChanged =
-    new(/* ITournament */ tournament, nameof(CurrentRoundChanged));
+  public EventHookWrapper<TournamentRound> OnRoundChanged =
+    new(RoundChanged, new Filter<TournamentRound>((s, _) => s.Id == tournament.Id));
 
-  public EventProxy<TournamentStateChangedEventArgs> TournamentStateChanged =
-    new(/* ITournament */ tournament, nameof(TournamentStateChanged));
+  public EventHookWrapper<TournamentState> OnStateChanged =
+    new(StateChanged, new Filter<TournamentState>((s, _) => s.Id == tournament.Id));
 
-  public EventProxy<TournamentErrorEventArgs> TournamentError =
-    new(/* ITournament */ tournament, nameof(TournamentError));
+  public EventHookWrapper OnStandingsChanged =
+    new(StandingsChanged, new Filter<dynamic>((s, _) => s.Id == tournament.Id));
 
-  public EventProxy StandingsChanged =
-    new(/* ITournament */ tournament, nameof(StandingsChanged));
+  //
+  // ITournament static events
+  //
+
+  public static EventHookProxy<Tournament, TournamentRound> RoundChanged =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Play.TournamentEvent.Tournament>(),
+      "OnCurrentRoundChanged",
+      new((instance, args) =>
+      {
+        Tournament tournament = new(instance);
+        TournamentRound newRound = new(args[1]);
+
+        return (tournament, newRound);
+      })
+    );
+
+  public static EventHookProxy<Tournament, TournamentState> StateChanged =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Play.TournamentEvent.Tournament>(),
+      "OnTournamentStateChanged",
+      new((instance, args) =>
+      {
+        Tournament tournament = new(instance);
+
+        var eventArgs = new TournamentStateChangedEventArgs(args);
+        if (eventArgs.OldValue.Equals(TournamentState.Finished)) return null;
+        TournamentState state = eventArgs.NewValue;
+
+        return (tournament, state);
+      })
+    );
+
+  public static EventHookProxy<Tournament, dynamic> StandingsChanged =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Play.TournamentEvent.Tournament>(),
+      "OnTournamentStateChanged",
+      new((instance, _) =>
+      {
+        Tournament tournament = new(instance);
+        return (tournament, null);
+      })
+    );
 }

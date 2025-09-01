@@ -14,7 +14,6 @@ using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play;
-using static MTGOSDK.API.Events;
 
 public sealed class Match(dynamic match) : Event
 {
@@ -138,7 +137,7 @@ public sealed class Match(dynamic match) : Event
 
   public static EventHookProxy<Match, MatchState> MatchStateChanged =
     new(
-      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase>(),
       "OnMatchStatusChanged",
       new((instance, args) =>
       {
@@ -153,7 +152,7 @@ public sealed class Match(dynamic match) : Event
 
   public static EventHookProxy<Match, Game> GameStarted =
     new(
-      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase>(),
       "OnCurrentGameChanged",
       new((instance, args) =>
       {
@@ -168,7 +167,7 @@ public sealed class Match(dynamic match) : Event
 
   public static EventHookProxy<Match, Game> GameEnded =
     new(
-      "WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.MatchEvent.MatchBase>(),
       "OnGameEnded",
       new((instance, args) =>
       {
@@ -183,7 +182,7 @@ public sealed class Match(dynamic match) : Event
 
   public static EventHookProxy<Match, Deck> DeckForSideboardingChanged =
     new(
-      "Shiny.Play.ViewModels.SideboardingViewModel",
+      new TypeProxy<Shiny.Play.ViewModels.SideboardingViewModel>(),
       "SubmitDeck",
       new((instance, _) =>
       {

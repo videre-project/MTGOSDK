@@ -6,6 +6,7 @@
     <UseWPF>true</UseWPF>
     <!-- Whether to include reference assemblies as part of the package. -->
     <UseRef>true</UseRef>
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,11 +22,15 @@
       using transitive build targets provided by the `MTGOSDK.MSBuild` project.
     -->
     <Reference Include="Core"                             Private="$(UseRef)" />
+    <Reference Include="Duelscene"                        Private="$(UseRef)" />
     <Reference Include="FlsClient"                        Private="$(UseRef)" />
+    <Reference Include="GameDetails"                      Private="$(UseRef)" />
     <Reference Include="MTGOEnumStruct"                   Private="$(UseRef)" />
+    <Reference Include="WotC.Common.Client"               Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Common"          Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Chat"      Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Core"      Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Play"      Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Reference" Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Settings"  Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Trade"     Private="$(UseRef)" />

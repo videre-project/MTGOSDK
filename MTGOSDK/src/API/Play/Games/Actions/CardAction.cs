@@ -220,7 +220,7 @@ public class CardAction(dynamic cardAction) : GameAction, IDisposable
 
   public static EventHookProxy<CardAction, TargetSet> TargetSetChanged =
     new(
-      "WotC.MtGO.Client.Model.Play.Actions.TargetSet",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.Actions.TargetSet>(),
       "CurrentTargets_CollectionChanged",
       new((instance, args) =>
       {

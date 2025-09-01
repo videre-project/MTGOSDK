@@ -14,7 +14,7 @@ public abstract class EventProxyBase<I, T>
 
   public abstract void Clear();
 
-  public virtual void Dispose() => Clear();
+  public virtual void Dispose() => Try(Clear);
 
   public Delegate ProxyTypedDelegate(Delegate c) =>
     new Action<dynamic, dynamic>((dynamic obj, dynamic args) =>

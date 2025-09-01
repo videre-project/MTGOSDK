@@ -8,6 +8,17 @@ namespace MTGOSDK.Core.Reflection;
 
 public delegate bool Filter<I>(dynamic t, I i);
 
+public class EventHookWrapper(
+  EventHookProxy<dynamic, dynamic> handler,
+  Filter<dynamic> hook) : EventHookWrapper<dynamic>(handler, hook)
+{
+  public static EventHookWrapper operator +(EventHookWrapper e, Delegate c) =>
+    (EventHookWrapper) ((EventHookWrapper<dynamic>) e + c);
+
+  public static EventHookWrapper operator -(EventHookWrapper e, Delegate c) =>
+    (EventHookWrapper) ((EventHookWrapper<dynamic>) e - c);
+}
+
 public class EventHookWrapper<I>(
   EventHookProxy<dynamic, I> handler,
   Filter<I> hook)
@@ -25,7 +36,7 @@ public class EventHookWrapper<I>(
     _handler -= _instanceHook;
   }
 
-  ~EventHookWrapper() => Clear();
+  ~EventHookWrapper() => Dispose();
 
   public static EventHookWrapper<I> operator +(EventHookWrapper<I> e, Delegate c)
   {
@@ -39,13 +50,13 @@ public class EventHookWrapper<I>(
       e._handler += e._instanceHook;
     }
 
-    e._instanceHandler += (Action<I>)c;
+    e._instanceHandler += (Action<I>) c;
     return e;
   }
 
   public static EventHookWrapper<I> operator -(EventHookWrapper<I> e, Delegate c)
   {
-    e._instanceHandler -= (Action<I>)c;
+    e._instanceHandler -= (Action<I>) c;
 
     if (e._instanceHandler == null)
     {

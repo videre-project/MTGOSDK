@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using WotC.MtGO.Client.Model.Play.Tournaments;
+using MTGOSDK.API.Play.Tournaments;
 
 
 namespace MTGOSDK.API;

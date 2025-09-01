@@ -241,7 +241,7 @@ public static class EventManager
   /// </summary>
   public static EventHookProxy<Event, object> EventJoined =
     new(
-      "WotC.MtGO.Client.Model.Play.PlayService",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.PlayService>(),
       "AddJoinedEvent",
       new((_, args) =>
       {
@@ -258,7 +258,7 @@ public static class EventManager
   /// </remarks>
   public static EventHookProxy<Event, Game> GameJoined =
     new(
-      "WotC.MtGO.Client.Model.Play.PlayService",
+      new TypeProxy<WotC.MtGO.Client.Model.Play.PlayService>(),
       "OnGameStarted",
       new((_, args) =>
       {

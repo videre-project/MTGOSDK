@@ -1,4 +1,7 @@
 <linker>
+  <!--
+    MTGOSDK.API Static References (preserve members):
+  -->
   <assembly fullname="Core">
     <namespace fullname="Shiny.Chat">
       <type fullname="IChatSessionViewModel">
@@ -137,6 +140,44 @@
         <property name="GameLosses" />
         <property name="GameIds" />
       </type>
+    </namespace>
+  </assembly>
+  <!--
+    EventHookProxy Static References (no preservation of members):
+  -->
+  <assembly fullname="DuelScene">
+    <namespace fullname="Shiny.Play.Duel.ViewModel">
+      <type fullname="PhaseControllerViewModel" preserve="nothing" />
+    </namespace>
+  </assembly>
+  <assembly fullname="GameDetails">
+    <namespace fullname="Shiny.Play.ViewModels">
+      <type fullname="SideboardingViewModel" preserve="nothing" />
+    </namespace>
+  </assembly>
+  <assembly fullname="WotC.MtGO.Client.Model.Chat">
+    <namespace fullname="WotC.MtGO.Client.Model.Chat">
+      <type fullname="HistoricalChatChannel" preserve="nothing" />
+    </namespace>
+  </assembly>
+  <assembly fullname="WotC.MtGO.Client.Model.Play">
+    <namespace fullname="WotC.MtGO.Client.Model.Play">
+      <type fullname="GameCard" preserve="nothing" />
+      <type fullname="GamePlayer" preserve="nothing" />
+      <type fullname="PlayService" preserve="nothing" />
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play.Actions">
+      <type fullname="GameAction" preserve="nothing" />
+      <type fullname="TargetSet" preserve="nothing" />
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play.InProgressGameEvent">
+      <type fullname="Game" preserve="nothing" />
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play.MatchEvent">
+      <type fullname="MatchBase" preserve="nothing" />
+    </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Play.TournamentEvent">
+      <type fullname="Tournament" preserve="nothing" />
     </namespace>
   </assembly>
 </linker>

@@ -15,4 +15,4 @@
 /verbosity:minimal
 /clp:Summary;ForceNoAlign
 /nowarn:msb4011
-/bl:logs/msbuild.binlog
+#/bl:logs/msbuild.binlog
