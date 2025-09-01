@@ -119,6 +119,20 @@ public sealed class Tournament(dynamic tournament) : Event
       : Cast<TimeSpan>(Unbind(@base).TimeRemaining);
 
   /// <summary>
+  /// The time at which the current round or tournament phase ends.
+  /// </summary>
+  /// <remarks>
+  /// This returns the next round end time if between rounds, otherwise the
+  /// next round time is estimated based on the match time limit and current
+  /// server time.
+  /// <para>
+  /// If drafting, this will return the end of the draft phase.
+  /// </para>
+  /// </remarks>
+  public DateTime RoundEndTime =>
+    ServerTime.ServerTimeAsClientTime(@base.EndServerTime);
+
+  /// <summary>
   /// The current round of the tournament.
   /// </summary>
   public int CurrentRound => @base.CurrentRoundNumber;
