@@ -33,12 +33,12 @@ public sealed class Card(dynamic card)
   /// <summary>
   /// A string representing the card's unique colors (e.g. "WUBRG").
   /// </summary>
-  public string Colors => @base.ColorDisplayString;
+  public string Colors => field ??= @base.ColorDisplayString;
 
   /// <summary>
   /// The mana cost of the card.
   /// </summary>
-  public string ManaCost => @base.ManaCost;
+  public string ManaCost => field ??= @base.ManaCost;
 
   /// <summary>
   /// The card's converted mana cost (or mana value).
@@ -48,13 +48,13 @@ public sealed class Card(dynamic card)
   /// <summary>
   /// The card's oracle text.
   /// </summary>
-  public string RulesText => @base.RulesText;
+  public string RulesText => field ??= @base.RulesText;
 
   /// <summary>
   /// A list of the card's types.
   /// </summary>
   public IList<string> Types =>
-    Map<IList, string>(
+    field ??= Map<IList, string>(
       Unbind(@base).Types
         .ToString()
         .Split(new string[] { ", " }, StringSplitOptions.RemoveEmptyEntries));
@@ -62,12 +62,13 @@ public sealed class Card(dynamic card)
   /// <summary>
   /// A list of the card's subtypes.
   /// </summary>
-  public IList<string> Subtypes => Map<IList, string>(@base.Subtypes);
+  public IList<string> Subtypes =>
+    field ??= Map<IList, string>(@base.Subtypes);
 
   /// <summary>
   /// The name of the card's artist.
   /// </summary>
-  public string Artist => @base.ArtistName;
+  public string Artist => field ??= @base.ArtistName;
 
   /// <summary>
   /// The unique identifier for the card's art.
@@ -77,12 +78,12 @@ public sealed class Card(dynamic card)
   /// <summary>
   /// The card's printed set.
   /// </summary>
-  public Set Set => new(Unbind(@base.CardSet));
+  public Set Set => field ??= new(Unbind(@base.CardSet));
 
   /// <summary>
   /// A string representing the card's collector info (e.g. "1/254").
   /// </summary>
-  public string CollectorInfo => @base.CollectorInfo;
+  public string CollectorInfo => field ??= @base.CollectorInfo;
 
   /// <summary>
   /// The card's collector number.
@@ -92,27 +93,27 @@ public sealed class Card(dynamic card)
   /// <summary>
   /// The printed flavor text for the card.
   /// </summary>
-  public string FlavorText => @base.FlavorText;
+  public string FlavorText => field ??= @base.FlavorText;
 
   /// <summary>
   /// The card's power.
   /// </summary>
-  public string Power => @base.Power;
+  public string Power => field ??= @base.Power;
 
   /// <summary>
   /// The card's toughness.
   /// </summary>
-  public string Toughness => @base.Toughness;
+  public string Toughness => field ??= @base.Toughness;
 
   /// <summary>
   /// The card's initial loyalty.
   /// </summary>
-  public string Loyalty => @base.InitialLoyalty;
+  public string Loyalty => field ??= @base.InitialLoyalty;
 
   /// <summary>
   /// The card's initial battle defense.
   /// </summary>
-  public string Defense => @base.InitialBattleDefense;
+  public string Defense => field ??= @base.InitialBattleDefense;
 
   /// <summary>
   /// Whether the card represents a token.

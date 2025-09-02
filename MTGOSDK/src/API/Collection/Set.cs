@@ -28,12 +28,12 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <remarks>
   /// This code may be unique to MTGO and differ from it's regular set code.
   /// </remarks>
-  public string Code => @base.Code;
+  public string Code => field ??= @base.Code;
 
   /// <summary>
   /// The name of the set.
   /// </summary>
-  public string Name => @base.Name;
+  public string Name => field ??= @base.Name;
 
   // public Set CommonSet => new(@base.CommonSet);
 

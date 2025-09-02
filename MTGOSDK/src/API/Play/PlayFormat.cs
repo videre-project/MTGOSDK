@@ -26,12 +26,12 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <summary>
   /// The name of the format.
   /// </summary>
-  public string Name => @base.Name;
+  public string Name => field ??= @base.Name;
 
   /// <summary>
   /// The code of the format (i.e. "CSTANDARD", "CMODERN", ... "DMRDDST5DN").
   /// </summary>
-  public string Code => @base.Code;
+  public string Code => field ??= @base.Code;
 
   /// <summary>
   /// The minimum number of cards that can be in a deck.
@@ -70,13 +70,14 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
     // causing high memory pressure or GC activity in the MTGO client, as this
     // may be called frequently during deckbuilding and return many set objects.
     //
-    Map<Set>(Unbind(@base).LegalSetsByCode, Lambda(kvp => new Set(kvp.Value)));
+    field ??= Map<Set>(Unbind(@base).LegalSetsByCode,
+                       Lambda(kvp => new Set(kvp.Value)));
 
   /// <summary>
   /// Basic land cards that can be used for deckbuilding.
   /// </summary>
   public IEnumerable<Card> BasicLands =>
-    Map<Card>(Unbind(@base).BasicLandsForDeckbuilding);
+    field ??= Map<Card>(Unbind(@base).BasicLandsForDeckbuilding);
 
   //
   // IPlayFormat wrapper methods

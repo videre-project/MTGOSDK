@@ -22,7 +22,8 @@ public static class ServerTime
   private static readonly IFlsClientSession s_flsClientSession =
     ObjectProvider.Get<IFlsClientSession>();
 
-  private static IServerTime s_serverTime => s_flsClientSession.ServerTime;
+  private static IServerTime s_serverTime =>
+    field ??= s_flsClientSession.ServerTime;
 
   //
   // IServerTime wrapper methods
@@ -35,5 +36,5 @@ public static class ServerTime
     s_serverTime.ServerTimeAsClientTime(serverTime);
 
   public static bool IsServerTimeInFuture(DateTime serverTime) =>
-    ServerTimeAsRelativetime(serverTime) > TimeSpan.Zero;
+    s_serverTime.IsServerTimeInFuture(serverTime);
 }

@@ -61,7 +61,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// View model for the client's login and authentication process.
   /// </summary>
   private static dynamic s_loginManager =>
-    Unbind(s_shellViewModel).m_loginViewModel;
+    field ??= Unbind(s_shellViewModel).m_loginViewModel;
 
   //
   // Static fields and properties

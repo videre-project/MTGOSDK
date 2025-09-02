@@ -26,7 +26,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// </summary>
   internal override dynamic obj => Bind<ITournament>(tournament);
 
-  private Queue m_queue => new(tournament);
+  private Queue m_queue => field ??= new(tournament);
 
   //
   // IQueueBasedEvent wrapper properties
@@ -36,16 +36,16 @@ public sealed class Tournament(dynamic tournament) : Event
   /// The available entry fee options for the tournament.
   /// </summary>
   public IList<EntryFeeSuite.EntryFee> EntryFee =>
-    new EntryFeeSuite(Unbind(@base).EntrySuite).EntryFees;
+    field ??= new EntryFeeSuite(Unbind(@base).EntrySuite).EntryFees;
 
   /// <summary>
   /// The available prizes for the tournament, bracketed by final placement.
   /// </summary>
   public IDictionary<string, IList<EventPrize>> Prizes =>
-    EventPrize.FromPrizeStructure(@base.Prizes, HasPlayoffs);
+    field ??= EventPrize.FromPrizeStructure(@base.Prizes, HasPlayoffs);
 
   public EventStructure EventStructure =>
-    new(m_queue, Unbind(@base).TournamentStructure);
+    field ??= new(m_queue, Unbind(@base).TournamentStructure);
 
   /// <summary>
   /// The time the event is scheduled to start.

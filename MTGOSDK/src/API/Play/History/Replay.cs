@@ -29,7 +29,7 @@ public class Replay(dynamic replayEvent) : DLRWrapper<IReplayGameEvent>
   /// <summary>
   /// The game object that this event is associated with.
   /// </summary>
-  public Game Game => new(@base);
+  public Game Game => field ??= new(@base);
 
   /// <summary>
   /// The current state of the replay (e.g. "RequestSent", "Connecting", etc.).

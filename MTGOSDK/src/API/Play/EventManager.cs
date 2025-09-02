@@ -38,7 +38,7 @@ public static class EventManager
   /// A dictionary of all events by their event ID.
   /// </summary>
   private static dynamic eventsById =>
-    Unbind(s_playService).m_matchesAndTournamentsAndQueuesById;
+    field ??= Unbind(s_playService).m_matchesAndTournamentsAndQueuesById;
 
   /// <summary>
   /// All currently queryable events with GetEvent().

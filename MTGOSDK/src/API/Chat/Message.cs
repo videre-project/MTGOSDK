@@ -30,7 +30,7 @@ public sealed class Message(dynamic chatMessage) : DLRWrapper<IChatMessage>
   /// <summary>
   /// The user who sent the message.
   /// </summary>
-  public User? User => Optional<User>(@base.FromUser, IsUserMessage);
+  public User? User => field ??= Optional<User>(@base.FromUser, IsUserMessage);
 
   /// <summary>
   /// The timestamp of when the message was sent.

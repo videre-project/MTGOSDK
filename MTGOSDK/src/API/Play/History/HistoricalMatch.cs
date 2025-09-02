@@ -30,12 +30,14 @@ public sealed class HistoricalMatch(dynamic historicalMatch)
   /// <summary>
   /// The opponents' player objects.
   /// </summary>
-  public IList<User> Opponents => Map<IList, User>(Unbind(@base).Opponents);
+  public IList<User> Opponents =>
+    field ??= Map<IList, User>(Unbind(@base).Opponents);
 
   /// <summary>
   /// The game IDs for the match.
   /// </summary>
-  public IList<int> GameIds => Map<IList, int>(@base.GameIds);
+  public IList<int> GameIds =>
+    field ??= Map<IList, int>(@base.GameIds);
 
   /// <summary>
   /// The number of games won by the player.

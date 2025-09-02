@@ -33,13 +33,9 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <remarks>
   /// This is an instance of the game's view model, which is used by the client
   /// to control the client-side management of game state and UI elements.
-  /// <para/>
-  /// Note that the client's managed heap must be searched each time this
-  /// property is accessed. It is best to cache this property to avoid frequent
-  /// heap searches.
   /// </remarks>
   public DuelSceneViewModel? DuelScene =>
-    Optional<DuelSceneViewModel>(
+    field ??= Optional<DuelSceneViewModel>(
       // TODO: Use a more efficient method of retrieving view model objects
       //       without traversing the client's managed heap.
       RemoteClient.GetInstances(new TypeProxy<DuelSceneViewModel>())

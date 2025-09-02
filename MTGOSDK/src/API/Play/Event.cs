@@ -36,12 +36,12 @@ public abstract class Event : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// A class describing the event format (e.g. Standard, Modern, Legacy, etc.).
   /// </summary>
-  public PlayFormat Format => new(@base.PlayFormat);
+  public PlayFormat Format => field ??= new(@base.PlayFormat);
 
   /// <summary>
   /// The name of this event (e.g. "Standard Preliminary").
   /// </summary>
-  public string Description => @base.Description;
+  public string Description => field ??= @base.Description;
 
   /// <summary>
   /// The total number of players registered for the event.

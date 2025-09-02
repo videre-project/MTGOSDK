@@ -31,12 +31,15 @@ public abstract class DLRWrapper : SerializableBase
   /// </summary>
   internal virtual dynamic @base { get; }
 
+  protected dynamic @base_unbound { get; private set; } = null!;
+
   /// <summary>
   /// Internal reference to the remote object handle.
   /// </summary>
-  internal RemoteObject @ro => Try(() => Unbind(@base).__ro, () => @base.__ro)
-    ?? throw new InvalidOperationException(
-        $"{Unbind(@base)} type does not implement DynamicRemoteObject.");
+  internal RemoteObject @ro =>
+    field ??= Try(() => Unbind(@base).__ro, () => @base.__ro)
+      ?? throw new InvalidOperationException(
+          $"{Unbind(@base)} type does not implement DynamicRemoteObject.");
 
   //
   // Wrapper methods for type casting and dynamic dispatching.
@@ -76,7 +79,9 @@ public abstract class DLRWrapper : SerializableBase
   /// </remarks>
   public static dynamic Unbind(DLRWrapper dro)
   {
-    dynamic unbound_obj = Try(() => Unbind(dro.@base), () => dro.@base);
+    dynamic unbound_obj = dro.@base_unbound
+      ??= Try(() => Unbind(dro.@base), () => dro.@base);
+
     if (TypeProxy<dynamic>.IsProxy(unbound_obj))
       throw new InvalidOperationException(
           $"Unable to unbind types from {dro.GetType().Name}.");
@@ -732,7 +737,7 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
   /// This is used to allow derived classes to override the type of the
   /// wrapped object in a more flexible manner than using generics.
   /// </remarks>
-  internal virtual Type type => typeof(I);
+  internal virtual Type type => field ??= typeof(I);
 
   /// <summary>
   /// This is the internal reference for any dynamic or derived class objects.
@@ -751,25 +756,10 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
   /// This is used to extract dynamic objects passed from any derived
   /// classes, deferring any dynamic dispatching of class constructors.
   /// </remarks>
-  internal override dynamic @base
-  {
-    get
-    {
-      // Attempt to extract the base object from the derived class.
-      dynamic baseObj = Try(() => obj is DLRWrapper<I> ? obj.obj : obj)
+  internal override dynamic @base =>
+    (field ??= Try(() => obj is DLRWrapper<I> ? obj.obj : obj))
         ?? throw new ArgumentException(
             $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
-
-      // // Return a DynamicProxy wrapper with a default value, if present.
-      // if (DefaultAttribute.TryGetCallerAttribute(out var defaultAttribute))
-      // {
-      //   DynamicProxy proxy = new(baseObj, defaultAttribute.Value);
-      //   return Rebind(baseObj, proxy);
-      // }
-
-      return baseObj;
-    }
-  }
 
   //
   // Proxy methods for event and method binding.

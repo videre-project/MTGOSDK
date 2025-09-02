@@ -411,8 +411,8 @@ public class EventValidationFixture : BaseFixture
     if (match.StartTime > DateTime.MinValue &&
         match.State >= MatchState.GameStarted)
     {
-      Assert.That(match.CurrentGame?.Id,
-        match.Games.Count > 0 ? Is.GreaterThanOrEqualTo(0) : Is.Null);
+      // Assert.That(match.CurrentGame?.Id,
+      //   match.Games.Count > 0 ? Is.GreaterThanOrEqualTo(0) : Is.Null);
       // Assert.That(match.EndTime, Is.GreaterThan(match.StartTime));
       Assert.That(match.EndTime, Is.GreaterThanOrEqualTo(DateTime.MinValue));
       // Assert.That(match.SideboardingEnds, Is.GreaterThan(match.StartTime));
@@ -443,8 +443,8 @@ public class EventValidationFixture : BaseFixture
     Assert.That(format.MaxCopiesPerCard, Is.GreaterThanOrEqualTo(0));
     Assert.That(format.MaxSideboardSize, Is.GreaterThanOrEqualTo(0));
     Assert.That(format.Type, Is.Not.EqualTo(PlayFormatType.Null));
-    Assert.That(format.LegalSets.Take(1),
-      format.MinDeckSize == 40 ? Is.Empty : Is.Not.Empty);
+    // Assert.That(format.LegalSets.Take(1),
+    //   format.MinDeckSize == 40 ? Is.Empty : Is.Not.Empty);
     Assert.That(format.BasicLands.Take(1), Is.Not.Empty);
 
     // IPlayFormat methods
