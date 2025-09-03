@@ -30,13 +30,13 @@ public sealed class Queue(dynamic queue) : Event
   /// The current state of the queue (e.g. JoinRequested, Joined, Closed, etc.).
   /// </summary>
   public QueueState CurrentState =>
-    Cast<QueueState>(Unbind(@base).CurrentState);
+    Cast<QueueState>(Unbind(this).CurrentState);
 
   /// <summary>
   /// The event structure of the queue.
   /// </summary>
   public EventStructure EventStructure =>
-    field ??= new(this, Unbind(@base).TournamentStructure);
+    field ??= new(this, Unbind(this).TournamentStructure);
 
   //
   // IQueue wrapper events

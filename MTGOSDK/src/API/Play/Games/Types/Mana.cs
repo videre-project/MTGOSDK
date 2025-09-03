@@ -22,7 +22,7 @@ public sealed class Mana(dynamic manaItem) : DLRWrapper<IManaPoolItem>
   /// <summary>
   /// The type of color(s) the mana represents.
   /// </summary>
-  public MagicColors Color => Cast<MagicColors>(Unbind(@base).Color);
+  public MagicColors Color => Cast<MagicColors>(Unbind(this).Color);
 
   /// <summary>
   /// The amount of the given mana type in the player's mana pool.

@@ -36,7 +36,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// The available entry fee options for the tournament.
   /// </summary>
   public IList<EntryFeeSuite.EntryFee> EntryFee =>
-    field ??= new EntryFeeSuite(Unbind(@base).EntrySuite).EntryFees;
+    field ??= new EntryFeeSuite(Unbind(this).EntrySuite).EntryFees;
 
   /// <summary>
   /// The available prizes for the tournament, bracketed by final placement.
@@ -45,7 +45,7 @@ public sealed class Tournament(dynamic tournament) : Event
     field ??= EventPrize.FromPrizeStructure(@base.Prizes, HasPlayoffs);
 
   public EventStructure EventStructure =>
-    field ??= new(m_queue, Unbind(@base).TournamentStructure);
+    field ??= new(m_queue, Unbind(this).TournamentStructure);
 
   /// <summary>
   /// The time the event is scheduled to start.
@@ -67,10 +67,10 @@ public sealed class Tournament(dynamic tournament) : Event
       int realTotalRounds = TotalRounds + (HasPlayoffs ? 3 : 0);
       DateTime endTime = StartTime.AddMinutes(
         // Minutes per round + 2 minutes between rounds.
-        (2 * Unbind(@base).MatchTimeLimit * realTotalRounds) +
+        (2 * Unbind(this).MatchTimeLimit * realTotalRounds) +
         (2 * (realTotalRounds - 1)) +
         // Minutes for deckbuilding.
-        Try<int>(() => Unbind(@base).MinutesForDeckbuilding)
+        Try<int>(() => Unbind(this).MinutesForDeckbuilding)
       );
 
       // Round up to the nearest 10 minutes.
@@ -100,7 +100,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// (i.e. "WaitingToStart", "RoundInProgress", etc.)
   /// </summary>
   public TournamentState State =>
-    Try(() => Cast<TournamentState>(Unbind(@base).State),
+    Try(() => Cast<TournamentState>(Unbind(this).State),
         fallback: TournamentState.NotSet);
 
   /// <summary>
@@ -109,7 +109,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// </summary>
   public TournamentEliminationStyle EliminationStyle =>
     Try(() => Cast<TournamentEliminationStyle>(
-                  Unbind(@base).TournamentEliminationStyle),
+                  Unbind(this).TournamentEliminationStyle),
         fallback: TournamentEliminationStyle.Swiss);
 
   /// <summary>
@@ -118,7 +118,7 @@ public sealed class Tournament(dynamic tournament) : Event
   public TimeSpan TimeRemaining =>
     State == TournamentState.BetweenRounds
       ? TimeSpan.Zero
-      : Cast<TimeSpan>(Unbind(@base).TimeRemaining);
+      : Cast<TimeSpan>(Unbind(this).TimeRemaining);
 
   /// <summary>
   /// The time at which the current round or tournament phase ends.
@@ -153,7 +153,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// Whether the tournament has playoffs (i.e. Top-8) or concludes after swiss.
   /// </summary>
   public bool HasPlayoffs =>
-    Try(() => Unbind(@base).m_playoffs.Count > 0,
+    Try(() => Unbind(this).m_playoffs.Count > 0,
         () => this.EventStructure.HasPlayoffs) ?? false;
 
   /// <summary>

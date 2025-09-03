@@ -103,7 +103,7 @@ public sealed class Channel(dynamic chatChannel)
   /// The type of chat channel (e.g. "System", "GameChat", "GameLog", etc.)
   /// </summary>
   public ChannelType Type =>
-    Try(() => Cast<ChannelType>(Unbind(@base).ChannelType),
+    Try(() => Cast<ChannelType>(Unbind(this).ChannelType),
         fallback: ChannelType.System);
 
   /// <summary>
@@ -116,7 +116,7 @@ public sealed class Channel(dynamic chatChannel)
   //
 
   private IHistoricalChatChannel m_historicalChatChannel =>
-    field ??= Bind<IHistoricalChatChannel>(Unbind(@base).HistoricalChatChannel);
+    field ??= Bind<IHistoricalChatChannel>(Unbind(this).HistoricalChatChannel);
 
   /// <summary>
   /// The local file name of the chat log.

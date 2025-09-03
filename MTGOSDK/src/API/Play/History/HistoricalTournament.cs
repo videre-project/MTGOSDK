@@ -32,7 +32,7 @@ public sealed class HistoricalTournament(dynamic historicalTournament)
   /// The player's matches in the tournament.
   /// </summary>
   public IList<HistoricalMatch> Matches =>
-    field ??= Map<IList, HistoricalMatch>(Unbind(@base).Matches);
+    field ??= Map<IList, HistoricalMatch>(Unbind(this).Matches);
 
   /// <summary>
   /// The number of matches won by the player.

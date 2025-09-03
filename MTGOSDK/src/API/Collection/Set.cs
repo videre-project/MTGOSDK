@@ -48,7 +48,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// <summary>
   /// The set product type.
   /// </summary>
-  public SetType Type => Cast<SetType>(Unbind(@base).Type.EnumValue);
+  public SetType Type => Cast<SetType>(Unbind(this).Type.EnumValue);
 
   /// <summary>
   /// The set release number ordered by release date.

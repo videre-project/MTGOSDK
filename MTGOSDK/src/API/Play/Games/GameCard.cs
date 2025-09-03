@@ -46,12 +46,12 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// <remarks>
   /// Retrieved from the <c>MagicProperty.THINGNUMBER</c> property.
   /// </remarks>
-  public int Id => Unbind(@base).Id;
+  public int Id => Unbind(this).Id;
 
   /// <summary>
   /// The unique card texture number for the card object.
   /// </summary>
-  public int CTN => Unbind(@base).CTN;
+  public int CTN => Unbind(this).CTN;
 
   /// <summary>
   /// The source ID or 'thing' number of the card.
@@ -70,7 +70,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// The associated card definition.
   /// </summary>
   [NonSerializable]
-  public Card Definition => new(Unbind(@base).Definition);
+  public Card Definition => new(Unbind(this).Definition);
 
   /// <summary>
   /// The latest interaction timestamp associated with the card.
@@ -114,18 +114,18 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   public IEnumerable<GameCard> AttackingOrders =>
     ((IEnumerable<OrderedCombatParticipant>)
-     Map<OrderedCombatParticipant>(Unbind(@base).AttackingOrders))
+     Map<OrderedCombatParticipant>(Unbind(this).AttackingOrders))
       .OrderBy(item => item.Order)
       .Select(item => item.Target);
 
   public IEnumerable<GameCard> BlockingOrders =>
     ((IEnumerable<OrderedCombatParticipant>)
-     Map<OrderedCombatParticipant>(Unbind(@base).BlockingOrders))
+     Map<OrderedCombatParticipant>(Unbind(this).BlockingOrders))
       .OrderBy(item => item.Order)
       .Select(item => item.Target);
 
   public IEnumerable<CardCounter> Counters =>
-    Map<IList, CardCounter>(Unbind(@base).Counters);
+    Map<IList, CardCounter>(Unbind(this).Counters);
 
   public GamePlayer Owner => new(@base.Owner);
 

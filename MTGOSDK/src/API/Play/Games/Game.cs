@@ -54,12 +54,12 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The unique game server token.
   /// </summary>
-  public Guid ServerGuid => Cast<Guid>(Unbind(@base).ServerGuid);
+  public Guid ServerGuid => Cast<Guid>(Unbind(this).ServerGuid);
 
   /// <summary>
   /// The game's completion status (e.g. NotStarted, Started, Finished, etc.).
   /// </summary>
-  public GameStatus Status => Cast<GameStatus>(Unbind(@base).GameState);
+  public GameStatus Status => Cast<GameStatus>(Unbind(this).GameState);
 
   /// <summary>
   /// Whether the current game is a replay of a previous game.
@@ -93,7 +93,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// The game phase of the current turn (e.g. Untap, Upkeep, Draw, etc.).
   /// </summary>
   public GamePhase CurrentPhase =>
-    Cast<GamePhase>(Unbind(@base).CurrentPhase);
+    Cast<GamePhase>(Unbind(this).CurrentPhase);
 
   /// <summary>
   /// Whether the game is in the pre-game phase.
@@ -149,13 +149,13 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// The total duration of the game.
   /// </summary>
   [Default(null)]
-  public TimeSpan? CompletedDuration => Cast(Unbind(@base).CompletedDuration);
+  public TimeSpan? CompletedDuration => Cast(Unbind(this).CompletedDuration);
 
   public IList<GameZone> SharedZones =>
-    Map<IList, GameZone>(Unbind(@base).m_sharedZones.Values);
+    Map<IList, GameZone>(Unbind(this).m_sharedZones.Values);
 
   public DictionaryProxy<GamePlayer, IList<GameZone>> PlayerZones =>
-    new(Unbind(@base).m_playerZones,
+    new(Unbind(this).m_playerZones,
         keyMapper: Lambda<GamePlayer>(p => new(p)),
         valueMapper: Lambda<IList<GameZone>>(z =>
             Map<IList, GameZone>(z.Values)));
@@ -172,7 +172,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <param name="cardId">The card ID to retrieve.</param>
   /// <returns>A new GameCard instance.</returns>
   public GameCard? GetGameCard(int cardId) =>
-    Optional<GameCard>(Unbind(@base).FindGameCard(cardId));
+    Optional<GameCard>(Unbind(this).FindGameCard(cardId));
 
   // public GameCard GetGameCard(int thingNumber) =>
   //   new(@base.ResolveDigitalThingAsGameCard(thingNumber));
@@ -193,7 +193,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       Enum.GetName(typeof(CardZone), cardZone));
 
     var playerKey = Unbind(player);
-    var zoneEntry = Unbind(@base).m_playerZones[playerKey][key];
+    var zoneEntry = Unbind(this).m_playerZones[playerKey][key];
     if (zoneEntry != null)
       return new GameZone(zoneEntry);
 
@@ -214,7 +214,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       "WotC.MtGO.Client.Model.Play.CardZone",
       Enum.GetName(typeof(CardZone), cardZone));
 
-    var zoneEntry = Unbind(@base).m_sharedZones[key];
+    var zoneEntry = Unbind(this).m_sharedZones[key];
     if (zoneEntry != null)
       return new GameZone(zoneEntry);
 

@@ -35,7 +35,7 @@ public class Replay(dynamic replayEvent) : DLRWrapper<IReplayGameEvent>
   /// The current state of the replay (e.g. "RequestSent", "Connecting", etc.).
   /// </summary>
   [Default(ReplayState.Unset)]
-  public ReplayState State => Cast<ReplayState>(Unbind(@base).ReplayState);
+  public ReplayState State => Cast<ReplayState>(Unbind(this).ReplayState);
 
   /// <summary>
   /// The host game server ID replaying the game.
@@ -47,7 +47,7 @@ public class Replay(dynamic replayEvent) : DLRWrapper<IReplayGameEvent>
   //
 
   public void ExecuteAction(GameAction action) =>
-    Unbind(@base).ExecuteAction(action);
+    Unbind(this).ExecuteAction(action);
 
   //
   // IReplayGameEvent wrapper events

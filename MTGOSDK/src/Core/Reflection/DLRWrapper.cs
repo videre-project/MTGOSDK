@@ -79,12 +79,16 @@ public abstract class DLRWrapper : SerializableBase
   /// </remarks>
   public static dynamic Unbind(DLRWrapper dro)
   {
-    dynamic unbound_obj = dro.@base_unbound
-      ??= Try(() => Unbind(dro.@base), () => dro.@base);
+    dynamic unbound_obj = dro.@base_unbound;
 
-    if (TypeProxy<dynamic>.IsProxy(unbound_obj))
-      throw new InvalidOperationException(
-          $"Unable to unbind types from {dro.GetType().Name}.");
+    if (unbound_obj == null)
+    {
+      unbound_obj = Try(() => Unbind(dro.@base), () => dro.@base);
+
+      if (TypeProxy<dynamic>.IsProxy(unbound_obj))
+        throw new InvalidOperationException(
+            $"Unable to unbind types from {dro.GetType().Name}.");
+    }
 
     return unbound_obj;
   }

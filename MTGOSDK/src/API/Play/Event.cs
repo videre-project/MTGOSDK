@@ -26,12 +26,12 @@ public abstract class Event : DLRWrapper<IPlayerEvent>
   /// <summary>
   /// The event's tournament ID.
   /// </summary>
-  public int Id => Unbind(@base).EventId;
+  public int Id => Unbind(this).EventId;
 
   /// <summary>
   /// The event's session token.
   /// </summary>
-  public Guid Token => Cast<Guid>(Unbind(@base).EventToken);
+  public Guid Token => Cast<Guid>(Unbind(this).EventToken);
 
   /// <summary>
   /// A class describing the event format (e.g. Standard, Modern, Legacy, etc.).

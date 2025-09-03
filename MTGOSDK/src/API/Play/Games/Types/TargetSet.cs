@@ -42,5 +42,5 @@ public sealed class TargetSet(dynamic targetSet) : DLRWrapper<ITargetSet>
     Map<IList, Targetable>(targetSet.CurrentTargets);
 
   public ActionTargetRequirements TargetRequirements =>
-    Cast<ActionTargetRequirements>(Unbind(@base).TargetRequirements);
+    Cast<ActionTargetRequirements>(Unbind(this).TargetRequirements);
 }

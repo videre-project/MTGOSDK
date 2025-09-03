@@ -31,7 +31,7 @@ public sealed class HistoricalMatch(dynamic historicalMatch)
   /// The opponents' player objects.
   /// </summary>
   public IList<User> Opponents =>
-    field ??= Map<IList, User>(Unbind(@base).Opponents);
+    field ??= Map<IList, User>(Unbind(this).Opponents);
 
   /// <summary>
   /// The game IDs for the match.

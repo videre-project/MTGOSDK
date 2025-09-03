@@ -30,7 +30,7 @@ public sealed class Match(dynamic match) : Event
 
   public new int Id => @base.MatchId;
 
-  public new Guid Token => Cast<Guid>(Unbind(@base).MatchToken);
+  public new Guid Token => Cast<Guid>(Unbind(this).MatchToken);
 
   //
   // IMatch wrapper properties
@@ -49,12 +49,12 @@ public sealed class Match(dynamic match) : Event
   /// the field is set to <see cref="MatchState.Invalid"/>.
   /// </remarks>
   public MatchState State =>
-    Retry(() => Cast<MatchState>(Unbind(@base).Status), MatchState.Invalid);
+    Retry(() => Cast<MatchState>(Unbind(this).Status), MatchState.Invalid);
 
   /// <summary>
   /// Whether the match has been completed.
   /// </summary>
-  public bool IsComplete => Unbind(@base).IsCompleted ||
+  public bool IsComplete => Unbind(this).IsCompleted ||
     State == (MatchState.MatchCompleted | MatchState.GameClosed);
 
   /// <summary>

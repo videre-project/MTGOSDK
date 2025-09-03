@@ -40,7 +40,7 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
   /// <summary>
   /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
-  public MatchState State => Cast<MatchState>(Unbind(@base).Status);
+  public MatchState State => Cast<MatchState>(Unbind(this).Status);
 
   /// <summary>
   /// Whether the player has been assigned a bye.
@@ -51,16 +51,16 @@ public sealed class MatchStandingRecord(dynamic matchStandingRecord)
     //
     Try(() => @base.HasBye,
         // Byes always have exactly one player assigned to a match standing.
-        () => Unbind(@base).Players.Count == 1,
+        () => Unbind(this).Players.Count == 1,
         // Otherwise, we can check that the match ID is not set.
-        () => Try<int>(() => Unbind(@base).Id) <= 0);
+        () => Try<int>(() => Unbind(this).Id) <= 0);
 
   /// <summary>
   /// The user objects of both players.
   /// </summary>
   [NonSerializable]
   public IList<User> Players =>
-    Map<IList, User>(Unbind(@base).Users, Lambda(p => new User(p.Name)));
+    Map<IList, User>(Unbind(this).Users, Lambda(p => new User(p.Name)));
 
   /// <summary>
   /// The IDs of the winning player(s).

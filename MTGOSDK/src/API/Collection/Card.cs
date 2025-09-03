@@ -55,7 +55,7 @@ public sealed class Card(dynamic card)
   /// </summary>
   public IList<string> Types =>
     field ??= Map<IList, string>(
-      Unbind(@base).Types
+      Unbind(this).Types
         .ToString()
         .Split(new string[] { ", " }, StringSplitOptions.RemoveEmptyEntries));
 

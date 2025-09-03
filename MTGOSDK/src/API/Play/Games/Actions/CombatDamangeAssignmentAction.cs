@@ -26,7 +26,7 @@ public sealed class CombatDamageAssignmentAction(
   public GameCard Source => new(@base.Source);
 
   public IList<Distribution> Distributions =>
-    Map<IList, Distribution>(Unbind(@base).Distributions);
+    Map<IList, Distribution>(Unbind(this).Distributions);
 
   public int MinimumTotal => @base.MinimumTotal;
 
