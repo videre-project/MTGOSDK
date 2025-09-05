@@ -361,12 +361,19 @@ public sealed class RemoteClient : DLRWrapper
   {
     if (!Retry(@client.Communicator.CheckAliveness))
     {
-      Log.Debug("Could not establish a connection to the MTGO process.");
-      Dispose();
-      ProcessExited?.Invoke(null, EventArgs.Empty);
-      ProcessExited = null;
-
-      return false;
+      // Suppress expected transient timeouts / connection failures while the
+      // remote process is still spinning up under heavy CPU load.
+      using (Log.Suppress())
+      {
+        if (!Retry(@client.Communicator.CheckAliveness))
+        {
+          Log.Debug("Could not establish a connection to the MTGO process.");
+          Dispose();
+          ProcessExited?.Invoke(null, EventArgs.Empty);
+          ProcessExited = null;
+          return false;
+        }
+      }
     }
 
     return true;
