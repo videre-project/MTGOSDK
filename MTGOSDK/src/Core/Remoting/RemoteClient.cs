@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
@@ -309,7 +310,10 @@ public sealed class RemoteClient : DLRWrapper
   /// </summary>
   private readonly RemoteHandle _clientHandle;
 
-  private readonly CancellationTokenSource _cts = new();
+  // Cancellation source used for operations tied to this RemoteClient instance.
+  // Not readonly so we can swap it during disposal to avoid races with late
+  // callbacks (swap pattern).
+  private CancellationTokenSource _cts = new();
 
   /// <summary>
   /// The native process handle to the MTGO client.
@@ -387,7 +391,24 @@ public sealed class RemoteClient : DLRWrapper
     // Best-effort cleanup; swallow any individual errors.
     Try(@client.Dispose);
     Port = null;
-    Try(() => { @this._cts.Cancel(); @this._cts.Dispose(); });
+
+    //
+    // Replace the current CancellationTokenSource with a fresh one so any late
+    // callbacks that still hold a reference to the old CTS can safely cancel
+    // it without hitting an ObjectDisposedException. We then cancel and dispose
+    // the old CTS after the swap.
+    //
+    Try(() =>
+    {
+      var newCts = new CancellationTokenSource();
+      var oldCts = Interlocked.Exchange(ref @this._cts, newCts);
+      if (oldCts != null)
+      {
+        // Don't dispose old CTS to avoid races with DiverCommunicator.Cancel().
+        try { if (!oldCts.IsCancellationRequested) oldCts.Cancel(); }
+        catch (ObjectDisposedException) { }
+      }
+    });
 
     if (CloseOnExit)
     {
