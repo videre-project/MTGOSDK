@@ -36,6 +36,8 @@ public sealed class RemoteClient : DLRWrapper
 
   private static Lazy<RemoteClient> s_instance = new(() => new RemoteClient());
   private static bool _isDisposing = false;
+  private static bool _isDisposed = false;
+  private static readonly object _disposeLock = new();
 
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
@@ -64,6 +66,11 @@ public sealed class RemoteClient : DLRWrapper
 
   private RemoteClient()
   {
+    // A new instance implies the previous one (if any) is either not created
+    // or has been fully disposed. Reset disposal state here.
+    _isDisposed = false;
+    _isDisposing = false;
+
     Bootstrapper.ExtractDir = ExtractDir;
     _clientHandle = GetClientHandle();
   }
@@ -366,32 +373,41 @@ public sealed class RemoteClient : DLRWrapper
   /// </summary>
   public static void Dispose()
   {
-    // Prevent multiple calls to Dispose
-    if (!IsInitialized || _isDisposing) return;
-    _isDisposing = true;
+    if (_isDisposed) return;                     // Already disposed.
+    if (!IsInitialized && !_isDisposing) return; // Nothing to dispose.
 
-    // Call all event subscribers first before disposing
+    lock (_disposeLock)
+    {
+      if (_isDisposed || _isDisposing) return;
+      _isDisposing = true;
+    }
+
     Log.Debug("Disposing RemoteClient.");
-    Try(() => Disposed?.Invoke(null, EventArgs.Empty));
-    GC.WaitForPendingFinalizers();
-    Disposed = null;
 
-    // Cleanup all resources and dispose of the client handle
+    // Best-effort cleanup; swallow any individual errors.
     Try(@client.Dispose);
     Port = null;
+    Try(() => { @this._cts.Cancel(); @this._cts.Dispose(); });
 
-    // Cancel the heartbeat check and dispose of the cancellation token
-    @this._cts.Cancel();
-    @this._cts.Dispose();
-
-    // Kill the MTGO process if CloseOnExit is set
     if (CloseOnExit)
     {
       Try(@process.Kill);
       CloseOnExit = false;
     }
 
-    // Reset the singleton instance to allow lazy reinitialization
+    // Mark disposed before raising events so late subscribers can observe state.
+    _isDisposed = true;
+    _isDisposing = false;
+
+    EventHandler? handlers;
+    lock (_disposeLock)
+    {
+      handlers = _disposedHandlers;
+      _disposedHandlers = null; // release references
+    }
+    Try(() => handlers?.Invoke(null, EventArgs.Empty));
+
+    // Prepare a fresh lazy for future initialization attempts.
     s_instance = new Lazy<RemoteClient>(() => new RemoteClient());
     Log.Trace("RemoteClient disposed.");
   }
@@ -402,20 +418,58 @@ public sealed class RemoteClient : DLRWrapper
   public static event EventHandler? ProcessExited;
 
   /// <summary>
-  /// Event raised when the RemoteClient is disposed.
+  /// Indicates whether the RemoteClient instance has fully disposed.
   /// </summary>
-  public static event EventHandler? Disposed;
+  public static bool IsDisposed => _isDisposed;
+
+  /// <summary>
+  /// Event raised when the RemoteClient is disposed. Future-only: handlers
+  /// added after disposal will NOT be invoked. Use <see cref="IsDisposed"/>
+  /// or <see cref="WaitForDisposeAsync"/> / <see cref="OnDisposed"/> for
+  /// deterministic post-disposal logic.
+  /// </summary>
+  public static event EventHandler? Disposed
+  {
+    add
+    {
+      if (value is null) return;
+      lock (_disposeLock)
+      {
+        if (_isDisposed) return; // future-only: ignore late subscribers
+        _disposedHandlers += value;
+      }
+    }
+    remove
+    {
+      if (value is null) return;
+      lock (_disposeLock)
+      {
+        _disposedHandlers -= value;
+      }
+    }
+  }
+  private static EventHandler? _disposedHandlers;
 
   /// <summary>
   /// Waits for the RemoteClient to be disposed.
   /// </summary>
   public static async Task WaitForDisposeAsync()
   {
-    if (!IsInitialized) return;
+    if (_isDisposed) return; // Already disposed.
+    if (!IsInitialized && !_isDisposing) return; // Never initialized.
 
-    var tcs = new TaskCompletionSource<bool>();
-    Disposed += (s, e) => tcs.SetResult(true);
-    await tcs.Task;
+    var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    void Handler(object? s, EventArgs e) => tcs.TrySetResult(true);
+    Disposed += Handler;
+    try
+    {
+      if (_isDisposed) return; // Double-check after subscribing.
+      await tcs.Task.ConfigureAwait(false);
+    }
+    finally
+    {
+      Disposed -= Handler;
+    }
   }
 
   //

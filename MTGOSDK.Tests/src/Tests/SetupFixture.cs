@@ -182,17 +182,11 @@ public class SetupFixture : Shared
         isLoggedIn = false;
       }
 
-      // Set a callback to indicate when the client has been disposed.
-      bool isDisposed = false;
-      RemoteClient.Disposed += (s, e) => isDisposed = true;
-
-      // Safely dispose of the client instance.
+      // Safely teardown the client instance and wait for disposal.
       client.Dispose();
       client = null!;
-      if (!await WaitUntil(() => isDisposed, delay: 500)) // Wait at most 10s
-      {
-        Assert.Fail("The client was not disposed within the timeout period.");
-      }
+      await RemoteClient.WaitForDisposeAsync();
+      Assert.That(RemoteClient.IsDisposed, Is.True);
 
       // Verify that all remote handles have been reset.
       Assert.That(RemoteClient.IsInitialized, Is.False);
