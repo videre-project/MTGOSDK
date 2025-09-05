@@ -138,7 +138,7 @@ public class Events : EventValidationFixture
   }
 }
 
-public class EventValidationFixture : BaseFixture
+public abstract class EventValidationFixture : BaseFixture
 {
   public T GetEvent<T>(Predicate predicate = null!) where T : class
   {

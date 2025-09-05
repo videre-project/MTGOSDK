@@ -94,7 +94,7 @@ public class Settings : SettingsValidationFixture
   }
 }
 
-public class SettingsValidationFixture : BaseFixture
+public abstract class SettingsValidationFixture : BaseFixture
 {
   public void ValidateSetting(Setting key, object defaultValue)
   {

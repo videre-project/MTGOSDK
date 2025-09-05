@@ -92,7 +92,7 @@ public class Collection : CollectionValidationFixture
   }
 }
 
-public class CollectionValidationFixture : BaseFixture
+public abstract class CollectionValidationFixture : BaseFixture
 {
   private void ValidateCardGrouping<T>(CardGrouping<T> grouping) where T : class
   {

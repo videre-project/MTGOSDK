@@ -75,7 +75,7 @@ public class Users : UserValidationFixture
   }
 }
 
-public class UserValidationFixture : BaseFixture
+public abstract class UserValidationFixture : BaseFixture
 {
   public void ValidateUser(int id, string name, User user)
   {

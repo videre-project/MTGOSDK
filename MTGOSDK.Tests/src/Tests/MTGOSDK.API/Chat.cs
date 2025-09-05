@@ -26,7 +26,7 @@ public class Chat : ChatValidationFixture
   }
 }
 
-public class ChatValidationFixture : BaseFixture
+public abstract class ChatValidationFixture : BaseFixture
 {
   public void ValidateChannel(Channel channel)
   {

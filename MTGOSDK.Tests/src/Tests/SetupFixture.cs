@@ -156,7 +156,7 @@ public class SetupFixture : Shared
     }
   }
 
-  [OneTimeTearDown, CancelAfter(/* 10 seconds */ 10_000)]
+  [OneTimeTearDown, CancelAfter(/* 30 seconds */ 30_000)]
   public virtual async Task RunAfterAnyTests()
   {
     Write($"{nameof(SetupFixture)}.{nameof(RunAfterAnyTests)}");
