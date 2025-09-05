@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Dynamic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Linq.Expressions;
 
 using Microsoft.CSharp.RuntimeBinder;
 using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
@@ -18,7 +19,6 @@ using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
-using MTGOSDK.Core.Logging;
 
 
 namespace MTGOSDK.Core.Remoting.Types;
@@ -266,6 +266,32 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   /// </summary>
   public new Type GetType() => __type;
 
+  /// <summary>
+  /// Indicates whether this proxy should be treated as "nullish" for boolean checks.
+  /// Returns true when the RemoteClient is not initialized/disposed, or when the
+  /// underlying RemoteObject is null/invalid.
+  /// </summary>
+  public bool __isNullish =>
+    !RemoteClient.IsInitialized || __ro is null || !__ro.IsValid;
+
+  /// <summary>
+  /// Defines truthiness for DynamicRemoteObject. Evaluates to false when
+  /// RemoteClient is disposed (not initialized) or the underlying RemoteObject
+  /// is null/invalid; true otherwise.
+  /// </summary>
+  public static bool operator true(DynamicRemoteObject value)
+    => value is not null &&
+       RemoteClient.IsInitialized &&
+       value.__ro is not null && value.__ro.IsValid;
+
+  /// <summary>
+  /// Logical false operator paired with operator true.
+  /// </summary>
+  public static bool operator false(DynamicRemoteObject value)
+    => !(value is not null &&
+         RemoteClient.IsInitialized &&
+         value.__ro is not null && value.__ro.IsValid);
+
   private IEnumerable<MemberInfo> GetAllMembersRecursive()
   {
     Type lastType = __type;
@@ -344,6 +370,26 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   }
 
   #region Dynamic Object API
+  public override bool TryUnaryOperation(UnaryOperationBinder binder, out object result)
+  {
+    // Override truthiness checks when the RemoteClient is not intialized.
+    if (!RemoteClient.IsInitialized)
+    {
+      if (binder.Operation == ExpressionType.IsTrue)
+      {
+        result = false;
+        return true;
+      }
+      if (binder.Operation == ExpressionType.IsFalse)
+      {
+        result = true;
+        return true;
+      }
+    }
+
+    // Otherwise, defer to base for normal dynamic semantics
+    return base.TryUnaryOperation(binder, out result);
+  }
   public override bool TryGetMember(GetMemberBinder binder, out object result)
   {
     try
