@@ -12,7 +12,7 @@ using MTGOSDK.API.Trade.Enums;
 
 namespace MTGOSDK.Tests.MTGOSDK_API;
 
-public abstract class Trade : TradeValidationFixture
+public class Trade : TradeValidationFixture
 {
   [Test]
   public void Test_TradeManager()
@@ -36,7 +36,7 @@ public abstract class Trade : TradeValidationFixture
   }
 }
 
-public class TradeValidationFixture : BaseFixture
+public abstract class TradeValidationFixture : BaseFixture
 {
   public void ValidatePost(TradePost post)
   {

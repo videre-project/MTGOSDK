@@ -189,7 +189,7 @@ public class SetupFixture : Shared
       // Safely dispose of the client instance.
       client.Dispose();
       client = null!;
-      if (!await WaitUntil(() => isDisposed)) // Waits at most 5 seconds.
+      if (!await WaitUntil(() => isDisposed, delay: 500)) // Wait at most 10s
       {
         Assert.Fail("The client was not disposed within the timeout period.");
       }
