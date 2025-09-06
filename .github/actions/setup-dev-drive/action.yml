@@ -63,3 +63,18 @@ runs:
         ref: ${{ inputs.ref }}
         show-progress: false
         fetch-depth: 0 # Disable shallow clone for MinVer
+
+    # Copy [WORKSPACE_PATH]/.github to ./.github
+    - name: Create local copy of GitHub actions for local usage
+      shell: powershell
+      run: |
+        $sourcePath = Join-Path -Path ${{ steps.dev_drive.outputs.WORKSPACE_PATH }} -ChildPath ".github"
+        $destinationPath = Join-Path -Path $PWD -ChildPath ".github"
+
+        if (Test-Path -Path $destinationPath) {
+          Write-Output "Removing existing .github directory at $destinationPath"
+          Remove-Item -Path $destinationPath -Recurse -Force
+        }
+
+        Write-Output "Copying .github directory from $sourcePath to $destinationPath"
+        Copy-Item -Path $sourcePath -Destination $destinationPath -Recurse -Force
