@@ -49,7 +49,7 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   /// </summary>
   public void Activate()
   {
-    if (Client.IsInteractive)
+    if (Client.Current.IsInteractive)
       throw new InvalidOperationException("Cannot activate channels in interactive mode.");
 
     @base.Activate();
@@ -61,7 +61,7 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   /// <param name="leaveChannel">Whether to leave the channel.</param>
   public void Close(bool leaveChannel)
   {
-    if (Client.IsInteractive)
+  if (Client.Current.IsInteractive)
       throw new InvalidOperationException("Cannot close channels in interactive mode.");
 
     @base.Close(leaveChannel);
@@ -73,7 +73,7 @@ public sealed class ChatSessionViewModel(dynamic chatSessionViewModel)
   /// <param name="message">The message to send.</param>
   public void Send(string message)
   {
-    if (Client.IsInteractive)
+  if (Client.Current.IsInteractive)
       throw new InvalidOperationException("Cannot send messages in interactive mode.");
 
     @base.SendCommand.Execute(message);

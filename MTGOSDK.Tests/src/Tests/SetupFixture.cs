@@ -98,9 +98,9 @@ public class SetupFixture : Shared
       );
 
       // Ensure the MTGO client is not interactive (with an existing user session).
-      Assert.That(Client.IsInteractive, Is.False);
+      Assert.That(client.IsInteractive, Is.False);
 
-      if (!Client.IsConnected)
+      if (!client.IsConnected)
       {
         DotEnv.LoadFile();
         // Waits until the client has loaded and is ready.
@@ -109,10 +109,10 @@ public class SetupFixture : Shared
           password: DotEnv.Get("PASSWORD")  // SecureString value
         );
         Assert.That(await Client.IsOnline(), Is.True);
-        Assert.That(Client.IsLoggedIn, Is.True);
+        Assert.That(client.IsLoggedIn, Is.True);
 
         // Revalidate the client's reported interactive state.
-        Assert.That(Client.IsInteractive, Is.False);
+        Assert.That(client.IsInteractive, Is.False);
       }
 
       client.ClearCaches();
@@ -175,10 +175,10 @@ public class SetupFixture : Shared
 
       // Log off the client to ensure that the user session terminates.
       bool isLoggedIn = true;
-      if (!Client.IsInteractive)
+      if (!client.IsInteractive)
       {
         await client.LogOff();
-        Assert.That(Client.IsLoggedIn, Is.False);
+        Assert.That(client.IsLoggedIn, Is.False);
         isLoggedIn = false;
       }
 

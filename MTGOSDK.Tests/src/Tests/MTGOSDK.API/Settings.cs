@@ -21,7 +21,7 @@ public class Settings : SettingsValidationFixture
     // verify that user settings are being read correctly.
     var lastUserName = SettingsService.GetSetting(Setting.LastLoginName);
     Assert.That(lastUserName, Is.Not.Null.Or.Empty);
-    Assert.That(lastUserName, Is.EqualTo(Client.CurrentUser.Name));
+    Assert.That(lastUserName, Is.EqualTo(client.CurrentUser.Name));
 
     // Verify that the last EULA version agreed to is the current
     // version after the client has started.
