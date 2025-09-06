@@ -45,7 +45,7 @@ public abstract class HistoricalItem<T> : DLRWrapper<IHistoricalItem>
   /// <summary>
   /// The session token for the event or match.
   /// </summary>
-  public Guid Token => Cast<Guid>(Unbind(@base).EventToken);
+  public Guid Token => Cast<Guid>(Unbind(this).EventToken);
 
   // FIXME: Historical items do not have an actual PlayerEvent
   // /// <summary>

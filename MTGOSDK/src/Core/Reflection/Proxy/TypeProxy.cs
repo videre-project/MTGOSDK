@@ -115,12 +115,15 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   public Type? Interface {
     get
     {
+      if (field != null) return field;
+
       // Subtract the base class interfaces from the derived class interfaces
       var interfaces = Class.GetInterfaces().ToHashSet();
       if (Base != null && Base != typeof(object))
         interfaces.ExceptWith(Base.GetInterfaces().ToHashSet());
 
-      return interfaces.First();
+      field = interfaces.First();
+      return field;
     }
   }
 
@@ -130,7 +133,8 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <remarks>
   /// This is the version of the local assembly that the proxied class wraps.
   /// </remarks>
-  public string AssemblyVersion => Class.Assembly.GetName().Version.ToString();
+  public string AssemblyVersion =>
+    field ??= Class.Assembly.GetName().Version.ToString();
 
   /// <summary>
   /// Returns true if the proxied class is static at the IL level.

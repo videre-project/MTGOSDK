@@ -27,7 +27,7 @@ public class GameCardAssociation(dynamic gameCardAssociation)
   /// Represents a card association (e.g. ChosenPlayer, TriggeringSource, etc.).
   /// </summary>
   public CardAssociation Association =>
-    Cast<CardAssociation>(Unbind(@base).Value);
+    Cast<CardAssociation>(Unbind(this).Value);
 
   /// <summary>
   /// The ID of the associated target.

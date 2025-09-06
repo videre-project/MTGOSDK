@@ -1,8 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/global.json",
   "sdk": {
-    "version": "9.0.203",
-    "rollForward": "latestMinor"
+    "version": "10.0.100-preview.7.25380.108",
+    "rollForward": "latestMinor",
+    "allowPrerelease": true
   },
   "msbuild-sdks": {
     "DotNet.ReproducibleBuilds.Isolated": "1.2.25"

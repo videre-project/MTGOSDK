@@ -29,7 +29,7 @@ public partial class EventStructure(Queue queue, dynamic tournamentStructure)
     Bind<ITournamentStructure>(tournamentStructure);
 
   private TournamentStructureValue m_tournamentStructure =>
-    Cast<TournamentStructureValue>(Unbind(@base).Value);
+    Cast<TournamentStructureValue>(Unbind(this).Value);
 
   private LimitedTournamentStyle m_limitedTournamentStyle =>
     Cast<LimitedTournamentStyle>(Unbind(queue).LimitedTournamentStyle);

@@ -28,8 +28,8 @@ public class Users : UserValidationFixture
     Assert.Throws<ArgumentException>(() => new User(1, "$_Invalid"));
 
     // Retrieve the current user for testing (as they are logged-in).
-    int userId = Client.CurrentUser.Id;
-    string username = Client.CurrentUser.Name;
+    int userId = client.CurrentUser.Id;
+    string username = client.CurrentUser.Name;
 
     // If an invalid id is given, assert that the user object is invalid.
     Assert.Throws<ArgumentException>(() => new User(userId, "$_Invalid"));
@@ -44,7 +44,7 @@ public class Users : UserValidationFixture
   public void Test_CurrentUser()
   {
     Log.Trace("Retrieving current user...");
-    User user = Client.CurrentUser;
+    User user = client.CurrentUser;
 
     Assert.That(user.Id, Is.GreaterThan(0));
     Assert.That(user.Name, Is.Not.EqualTo(string.Empty));
@@ -75,7 +75,7 @@ public class Users : UserValidationFixture
   }
 }
 
-public class UserValidationFixture : BaseFixture
+public abstract class UserValidationFixture : BaseFixture
 {
   public void ValidateUser(int id, string name, User user)
   {

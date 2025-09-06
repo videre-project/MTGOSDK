@@ -34,7 +34,7 @@ public static class ChannelManager
   /// A dictionary of all channels by their channel ID.
   /// </summary>
   private static dynamic ChannelsByName =>
-    Unbind(s_channelManager).m_channelsByName;
+    field ??= Unbind(s_channelManager).m_channelsByName;
 
   /// <summary>
   /// All currently queryable channels in the client.

@@ -29,7 +29,7 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   //
 
   public IEnumerable<DeckRegion> Regions =>
-    Map<DeckRegion>(Unbind(@base).Regions,
+    Map<DeckRegion>(Unbind(this).Regions,
       new Func<dynamic, DeckRegion>(e => Cast<DeckRegion>(e.EnumValue)));
 
   /// <summary>
@@ -73,7 +73,7 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   /// </summary>
   /// <param name="region">The deck region to count cards in.</param>
   public int GetRegionCount(DeckRegion region) =>
-    Unbind(@base).GetRegionCount(GetRegionRef(region));
+    Unbind(this).GetRegionCount(GetRegionRef(region));
 
   /// <summary>
   /// Returns the cards in the specified region.
@@ -81,7 +81,7 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   /// <param name="region">The deck region to return cards from.</param>
   /// <returns>An iterator of CardQuantityPair objects.</returns>
   public IEnumerable<CardQuantityPair> GetCards(DeckRegion region) =>
-    Map<CardQuantityPair>(Unbind(@base).GetRegionCards(GetRegionRef(region)));
+    Map<CardQuantityPair>(Unbind(this).GetRegionCards(GetRegionRef(region)));
 
   // public void AddCards(...) => AddCardsToRegion(...)
   // public void RemoveCards(...) => RemoveCardsFromRegion(...)

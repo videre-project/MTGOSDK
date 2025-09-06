@@ -34,8 +34,8 @@ public class ListProxy<T>(
 
   public T this[int index]
   {
-    get => _typeMapper(Unbind(@base)[index]);
-    set => Unbind(@base)[index] = value;
+    get => _typeMapper(Unbind(this)[index]);
+    set => Unbind(this)[index] = value;
   }
 
   //
@@ -50,7 +50,7 @@ public class ListProxy<T>(
 
   public void CopyTo(T[] array, int arrayIndex)
   {
-    var baseRef = Unbind(@base);
+    var baseRef = Unbind(this);
     for (int i = 0; i < this.Count; i++)
     {
       array[arrayIndex + i] = _typeMapper(baseRef[i]);

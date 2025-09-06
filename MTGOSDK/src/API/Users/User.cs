@@ -33,7 +33,7 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   /// The Login ID of the user.
   /// </summary>
   [Default(-1)]
-  public int Id => Unbind(@base).Id;
+  public int Id => Unbind(this).Id;
 
   /// <summary>
   /// The display name of the user.
