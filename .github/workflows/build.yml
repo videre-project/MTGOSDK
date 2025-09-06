@@ -37,9 +37,11 @@ jobs:
       - name: Setup Dev Drive and Checkout
         id: setup_dev_drive_checkout
         uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
+        with:
+          ref: ${{ github.event.workflow_run.head_commit.id }}
 
       - name: Setup .NET and Restore NuGet Packages
-        uses: videre-project/MTGOSDK/.github/actions/setup-dotnet@main
+        uses: ./.github/actions/setup-dotnet
         with:
           WORKSPACE_PATH: ${{ env.WORKSPACE_PATH }}
 
