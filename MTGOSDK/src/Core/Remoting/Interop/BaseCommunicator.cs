@@ -28,9 +28,14 @@ public abstract class BaseCommunicator
   protected readonly CancellationTokenSource _cancellationTokenSource;
 
   /// <summary>
-  /// Cancels all requests in progress (keeping the cancellation token source)
+  /// Cancels all requests in progress (keeping the cancellation token source).
+  /// Safe if the CTS was already disposed due to race during teardown.
   /// </summary>
-  public void Cancel() => _cancellationTokenSource.Cancel();
+  public void Cancel()
+  {
+    try { _cancellationTokenSource.Cancel(); }
+    catch (ObjectDisposedException) { /* swallow: late cancel after dispose */ }
+  }
 
   protected BaseCommunicator(
     string hostname,

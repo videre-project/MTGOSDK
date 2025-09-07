@@ -12,7 +12,11 @@
 
   <PropertyGroup Label="SDKVersions">
     <!-- .NET SDK Versions -->
-    <DotNetSdkVersion>9.0.4</DotNetSdkVersion>
+    <DotNetSdkVersion>10.0.0-preview.7.25380.108</DotNetSdkVersion>
+    <NoWarn>$(NoWarn);
+      <!-- Disables warnings for preview versions of .NET SDK and packages -->
+      NETSDK1057;NU5104;
+    </NoWarn>
     <!-- MSBuild SDK Versions -->
     <ReproducibleBuildsSdkVersion>1.2.25</ReproducibleBuildsSdkVersion>
   </PropertyGroup>

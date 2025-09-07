@@ -34,16 +34,16 @@ public sealed class GameStandingRecord(dynamic gameStandingRecord)
   /// The game's current completion (i.e. "NotStarted", "Started", "Finished")
   /// </summary>
   public GameStatus GameStatus =>
-    Retry(() => Cast<GameStatus>(Unbind(@base).GameState), GameStatus.Invalid);
+    Retry(() => Cast<GameStatus>(Unbind(this).GameState), GameStatus.Invalid);
 
   /// <summary>
   /// The elapsed time to completion since the game started.
   /// </summary>
   public TimeSpan? CompletedDuration =>
-    Retry(() => Cast<TimeSpan>(Unbind(@base).CompletedDuration), null);
+    Retry(() => Cast<TimeSpan>(Unbind(this).CompletedDuration), null);
 
   /// <summary>
   /// The IDs of the winning player(s).
   /// </summary>
-  public IList<int> WinnerIds => Map<IList, int>(Unbind(@base).WinnerIds);
+  public IList<int> WinnerIds => Map<IList, int>(Unbind(this).WinnerIds);
 }

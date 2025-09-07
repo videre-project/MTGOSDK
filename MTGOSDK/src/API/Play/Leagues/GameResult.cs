@@ -46,7 +46,7 @@ public sealed class GameResult(dynamic leagueGameResult)
   /// <summary>
   /// The type of game result (None, Win, Loss, Draw)
   /// </summary>
-  public string Result => Unbind(@base).GameResult.ToString();
+  public string Result => Unbind(this).GameResult.ToString();
 
   /// <summary>
   /// The last time the game result was modified.

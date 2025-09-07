@@ -29,7 +29,8 @@ public sealed class League(dynamic league) : Event
   /// <summary>
   /// Internal reference to the ILeagueLocalParticipant object.
   /// </summary>
-  private ILeagueLocalParticipant LeagueUser => @base.LocalUserInLeague;
+  private ILeagueLocalParticipant LeagueUser =>
+    field ??= @base.LocalUserInLeague;
 
   //
   // ILeague wrapper properties

@@ -84,7 +84,7 @@ public class History : HistoryValidationFixture
   }
 }
 
-public class HistoryValidationFixture : BaseFixture
+public abstract class HistoryValidationFixture : BaseFixture
 {
   public static T GetHistoricalItem<T>(Func<dynamic, bool> predicate = null!)
     where T : class

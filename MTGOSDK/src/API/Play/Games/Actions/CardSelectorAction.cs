@@ -28,9 +28,9 @@ public sealed class CardSelectorAction(dynamic cardSelectorAction) : GameAction
   //
 
   public List<CardSelectorChoice> Choices =>
-    Map<IList, CardSelectorChoice>(Unbind(@base).Choices);
+    Map<IList, CardSelectorChoice>(Unbind(this).Choices);
 
   // TODO: Map CTN to GameCard
   //       (i.e. ICardDataManager.GetCardDefinitionForTextureNumber(CTN))
-  public int SelectedCard => Unbind(@base).SelectedCard;
+  public int SelectedCard => Unbind(this).SelectedCard;
 }

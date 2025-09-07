@@ -40,7 +40,7 @@ public class TradePost(dynamic tradePost) : DLRWrapper<ITradePost>
   /// The format or type of the trade post.
   ///
   public TradePostFormat Format =>
-    Try(() => Cast<TradePostFormat>(Unbind(@base).Format),
+    Try(() => Cast<TradePostFormat>(Unbind(this).Format),
         // Handle each case explicitly to avoid misreporting the post format.
         () => !(Wanted.Any() || Offered.Any())
           ? TradePostFormat.Message

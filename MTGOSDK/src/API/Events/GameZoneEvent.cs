@@ -50,13 +50,13 @@ public sealed partial class Events
     /// Gets the action that caused the event.
     /// </summary>
     public NotifyCollectionChangedAction Action =>
-      Cast<NotifyCollectionChangedAction>(Unbind(@base).Action);
+      Cast<NotifyCollectionChangedAction>(Unbind(this).Action);
 
     /// <summary>
     /// Gets the list of new items involved in the change.
     /// </summary>
     public IEnumerable<GameCard> NewItems =>
-      Map<GameCard>(Unbind(@base).NewItems);
+      Map<GameCard>(Unbind(this).NewItems);
 
     /// <summary>
     /// Gets the index at which the change occurred.
@@ -67,7 +67,7 @@ public sealed partial class Events
     /// Gets the list of items affected by a Replace, Remove, or Move action.
     /// </summary>
     public IEnumerable<GameCard> OldItems =>
-      Map<GameCard>(Unbind(@base).OldItems);
+      Map<GameCard>(Unbind(this).OldItems);
 
     /// <summary>
     /// Gets the index at which a Move, Remove, or Replace action occurred.
