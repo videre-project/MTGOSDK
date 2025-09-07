@@ -331,9 +331,16 @@ public sealed class RemoteClient : DLRWrapper
     // Connect to the MTGO process
     ushort port = Port ??= Cast<ushort>(_clientProcess.Id);
     Log.Trace("Connecting to MTGO process on port {Port}", port);
-    var client = Retry(() => RemoteHandle.Connect(_clientProcess, port, _cts),
-                       // Retry connecting to avoid creating a race condition
-                       delay: 500, retries: 3, raise: true);
+
+    // Suppress expected transient timeouts / connection failures while the
+    // remote process is still spinning up under heavy CPU load.
+    RemoteHandle handle;
+    using (Log.Suppress())
+    {
+      handle = Retry(() => RemoteHandle.Connect(_clientProcess, port, _cts),
+                    // Retry connecting to avoid creating a race condition
+                    delay: 500, retries: 3, raise: true);
+    }
 
     // When the MTGO process exists, trigger the ProcessExited event
     _clientProcess.EnableRaisingEvents = true;
@@ -345,12 +352,12 @@ public sealed class RemoteClient : DLRWrapper
     };
 
     // Verify that the injected assembly is loaded and reponding
-    if (!client.Communicator.CheckAliveness())
+    if (!handle.Communicator.CheckAliveness())
       throw new TimeoutException("Diver is not responding to requests.");
     else
       Log.Debug("Established a connection to the MTGO process.");
 
-    return client;
+    return handle;
   }
 
   /// <summary>
@@ -361,19 +368,11 @@ public sealed class RemoteClient : DLRWrapper
   {
     if (!Retry(@client.Communicator.CheckAliveness))
     {
-      // Suppress expected transient timeouts / connection failures while the
-      // remote process is still spinning up under heavy CPU load.
-      using (Log.Suppress())
-      {
-        if (!Retry(@client.Communicator.CheckAliveness))
-        {
-          Log.Debug("Could not establish a connection to the MTGO process.");
-          Dispose();
-          ProcessExited?.Invoke(null, EventArgs.Empty);
-          ProcessExited = null;
-          return false;
-        }
-      }
+      Log.Debug("Could not establish a connection to the MTGO process.");
+      Dispose();
+      ProcessExited?.Invoke(null, EventArgs.Empty);
+      ProcessExited = null;
+      return false;
     }
 
     return true;
