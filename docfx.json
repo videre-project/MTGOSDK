@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
+  "metadata": [
+    {
+      "src": [{
+        "files": ["MTGOSDK/MTGOSDK.csproj"]
+      }],
+      "output": "docs/_build/_xmldoc/MTGOSDK",
+      "filter": "docs/_build/docfx/filters.yml",
+      "categoryLayout": "nested",
+      "namespaceLayout": "nested",
+      "enumSortOrder": "declaringOrder",
+      "memberLayout": "samePage",
+      "references": [
+        "dist/*/Reference/**/*.dll"
+      ]
+    },
+    {
+      "src": [{
+        "files": ["MTGOSDK.MSBuild/MTGOSDK.MSBuild.csproj"]
+      }],
+      "output": "docs/_build/_xmldoc/MTGOSDK.MSBuild",
+      "filter": "docs/_build/docfx/filters.yml",
+      "categoryLayout": "nested",
+      "namespaceLayout": "nested",
+      "enumSortOrder": "declaringOrder",
+      "memberLayout": "samePage"
+    },
+    {
+      "src": [{
+        "files": ["MTGOSDK.Win32/MTGOSDK.Win32.csproj"]
+      }],
+      "output": "docs/_build/_xmldoc/MTGOSDK.Win32",
+      "filter": "docs/_build/docfx/filters.yml",
+      "categoryLayout": "nested",
+      "namespaceLayout": "nested",
+      "enumSortOrder": "declaringOrder",
+      "memberLayout": "samePage"
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": ["**/*.{md,yml}"],
+        "src": "docs/_build/_xmldoc",
+        "dest": "docs/api"
+      },
+      {
+        "files": ["**/*.{md,yml}"],
+        "src": "docs",
+        "dest": "docs",
+        "exclude": ["_build/**"]
+      },
+      {
+        "files": ["index.md"],
+        "src": "docs/_build/docfx"
+      }
+    ],
+    "resource": [
+      {
+        "files": ["assets/**"]
+      }
+    ],
+    "output": "docs/_build/_site",
+    "template": [
+      "default",
+      "modern",
+      "docs/_build/docfx"
+    ],
+    "globalMetadata": {
+      "_appName": "MTGOSDK",
+      "_appTitle": "MTGOSDK",
+      "_appLogoPath": "assets/icon_28h_5mr.png",
+      "_enableSearch": true
+    }
+  }
+}

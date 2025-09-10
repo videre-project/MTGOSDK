@@ -1,0 +1,9 @@
+apiRules:
+- exclude:
+    uidRegex: ^System\.Object
+    type: Type
+- exclude:
+    uidRegex: ^MTGOSDK.API.Events\..*
+- exclude:
+    hasAttribute:
+      uid: MTGOSDK.Core.Reflection.Attributes.RuntimeInternalAttribute
