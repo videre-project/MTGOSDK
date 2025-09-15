@@ -12,7 +12,7 @@
 
   <PropertyGroup Label="SDKVersions">
     <!-- .NET SDK Versions -->
-    <DotNetSdkVersion>10.0.0-preview.7.25380.108</DotNetSdkVersion>
+    <DotNetSdkVersion>10.0.0-rc.1.25451.107</DotNetSdkVersion>
     <NoWarn>$(NoWarn);
       <!-- Disables warnings for preview versions of .NET SDK and packages -->
       NETSDK1057;NU5104;
