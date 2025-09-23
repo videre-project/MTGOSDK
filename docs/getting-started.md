@@ -5,7 +5,7 @@ This guide will help you quickly set up and use MTGOSDK to interact with the Mag
 ## Prerequisites
 
 - **.NET 10 SDK** (or newer): [Download .NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- **Visual Studio 2022 v17.14+** or any compatible .NET IDE
+- **Visual Studio 2026 v18.0+** or any compatible .NET IDE
 - Access to the MTGO client (running or installed, for live testing)
 
 ## Installation
