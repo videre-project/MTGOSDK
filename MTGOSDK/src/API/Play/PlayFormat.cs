@@ -26,12 +26,12 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <summary>
   /// The name of the format.
   /// </summary>
-  public string Name => @base.Name;
+  public string Name => field ??= @base.Name;
 
   /// <summary>
   /// The code of the format (i.e. "CSTANDARD", "CMODERN", ... "DMRDDST5DN").
   /// </summary>
-  public string Code => @base.Code;
+  public string Code => field ??= @base.Code;
 
   /// <summary>
   /// The minimum number of cards that can be in a deck.
@@ -56,7 +56,7 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <summary>
   /// The format type (i.e. Constructed, Sealed, Draft).
   /// </summary>
-  public PlayFormatType Type => Cast<PlayFormatType>(Unbind(@base).Type);
+  public PlayFormatType Type => Cast<PlayFormatType>(Unbind(this).Type);
 
   /// <summary>
   /// The sets that are legal in this format.
@@ -70,13 +70,14 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
     // causing high memory pressure or GC activity in the MTGO client, as this
     // may be called frequently during deckbuilding and return many set objects.
     //
-    Map<Set>(Unbind(@base).LegalSetsByCode, Lambda(kvp => new Set(kvp.Value)));
+    field ??= Map<Set>(Unbind(this).LegalSetsByCode,
+                       Lambda(kvp => new Set(kvp.Value)));
 
   /// <summary>
   /// Basic land cards that can be used for deckbuilding.
   /// </summary>
   public IEnumerable<Card> BasicLands =>
-    Map<Card>(Unbind(@base).BasicLandsForDeckbuilding);
+    field ??= Map<Card>(Unbind(this).BasicLandsForDeckbuilding);
 
   //
   // IPlayFormat wrapper methods
@@ -112,14 +113,14 @@ public sealed class PlayFormat(dynamic playFormat) : DLRWrapper<IPlayFormat>
   /// <param name="deck">The deck object to check.</param>
   /// <returns>True if the deck is legal, false otherwise.</returns>
   public bool IsDeckLegal(Deck deck) =>
-    Unbind(@base).CheckDeckLegality(/* IDeck */ Unbind(deck), false);
+    Unbind(this).CheckDeckLegality(/* IDeck */ Unbind(deck), false);
 
   /// <summary>
   /// Sets the format legality of a deck to match this format.
   /// </summary>
   /// <param name="deck">The deck object to set legality on.</param>
   public void SetDeckLegality(Deck deck) =>
-    Unbind(@base).SetDeckLegality(/* IDeck */ Unbind(deck));
+    Unbind(this).SetDeckLegality(/* IDeck */ Unbind(deck));
 
   public override string ToString() => this.Name;
 

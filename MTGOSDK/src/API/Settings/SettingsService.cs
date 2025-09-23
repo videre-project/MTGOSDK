@@ -35,7 +35,7 @@ public static class SettingsService
   /// Reads from the client's <c>user_settings</c> file.
   /// </remarks>
   public static SettingsStore UserSettings =>
-    new(Unbind(s_settingsService).m_userSettingsStorage);
+    field ??= new(Unbind(s_settingsService).m_userSettingsStorage);
 
   /// <summary>
   /// The machine level settings registered with the client.
@@ -44,7 +44,7 @@ public static class SettingsService
   /// Reads from the client's <c>application_settings</c> file.
   /// </remarks>
   public static SettingsStore ApplicationSettings =>
-    new(Unbind(s_settingsService).m_machineSettingsStorage);
+    field ??= new(Unbind(s_settingsService).m_machineSettingsStorage);
 
   /// <summary>
   /// Gets the remote key for the specified setting.

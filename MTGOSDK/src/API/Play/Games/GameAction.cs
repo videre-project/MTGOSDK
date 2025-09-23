@@ -22,48 +22,48 @@ public abstract class GameAction : DLRWrapper<IGameAction>
   /// <summary>
   /// The public name of the game action.
   /// </summary>
-  public string Name => Unbind(@base).Name;
+  public string Name => Unbind(this).Name;
 
-  public int ActionId => (int)Unbind(@base).ActionFlags;
+  public int ActionId => (int)Unbind(this).ActionFlags;
 
   /// <summary>
   /// The interaction timestamp of the game action.
   /// </summary>
   [NonSerializable]
   public uint Timestamp =>
-    _timestamp > 0 ? _timestamp : Unbind(@base).Timestamp;
+    _timestamp > 0 ? _timestamp : Unbind(this).Timestamp;
 
   /// <summary>
   /// The type of game action (e.g. ChooseOption, OrderTargets, PayMana, etc.).
   /// </summary>
   public ActionType Type =>
-    Cast<ActionType>(Unbind(@base).ActionType);
+    Cast<ActionType>(Unbind(this).ActionType);
 
   /// <summary>
   /// The bound hotkey for the game action.
   /// </summary>
   [NonSerializable]
-  public uint HotKey => Unbind(@base).HotKey;
+  public uint HotKey => Unbind(this).HotKey;
 
   /// <summary>
   /// The available modifiers for yielding priority (e.g. YieldThroughTurn, etc.).
   /// </summary>
   [NonSerializable]
   public ActionModifiers AvailableModifiers =>
-    Cast<ActionModifiers>(Unbind(@base).AvailableModifiers);
+    Cast<ActionModifiers>(Unbind(this).AvailableModifiers);
 
   /// <summary>
   /// The selected priority modifiers applied to the game action.
   /// </summary>
   [NonSerializable]
   public ActionModifiers SelectedModifiers =>
-    Cast<ActionModifiers>(Unbind(@base).SelectedModifiers);
+    Cast<ActionModifiers>(Unbind(this).SelectedModifiers);
 
   /// <summary>
   /// Whether the game action is the default selectable action.
   /// </summary>
   [NonSerializable]
-  public bool IsDefault => Unbind(@base).IsDefault;
+  public bool IsDefault => Unbind(this).IsDefault;
 
   /// <summary>
   /// Whether the game action is a local action client-side.

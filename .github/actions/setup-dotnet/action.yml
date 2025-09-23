@@ -5,6 +5,10 @@ inputs:
   WORKSPACE_PATH:
     description: 'The path to the workspace'
     required: true
+  RESTORE_ARGS:
+    description: 'Additional arguments to pass to the dotnet restore command'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -33,9 +37,10 @@ runs:
       id: nuget-cache
       uses: actions/cache@v4
       with:
-        path: ${{ inputs.WORKSPACE_PATH }}/packages
+        path: ${{ inputs.WORKSPACE_PATH }}/nuget_packages
         key: ${{ runner.os }}-nuget-${{ hashFiles(format('{0}/**/packages.lock.json', inputs.WORKSPACE_PATH)) }}
         restore-keys: |
+          ${{ runner.os }}-nuget-${{ hashFiles(format('{0}/**/packages.lock.json', inputs.WORKSPACE_PATH)) }}
           ${{ runner.os }}-nuget-
 
     - name: Restore NuGet packages
@@ -44,5 +49,6 @@ runs:
       run: |
         dotnet restore `
           --verbosity quiet `
-          --packages "${{ inputs.WORKSPACE_PATH }}/packages"
+          --packages "${{ inputs.WORKSPACE_PATH }}/nuget_packages" `
+          ${{ inputs.RESTORE_ARGS }}
       working-directory: ${{ inputs.WORKSPACE_PATH }}

@@ -21,5 +21,5 @@ public class FunctionKeyMessageAction(dynamic functionKeyMessageAction)
   //
 
   public FunctionKey Key =>
-    Cast<FunctionKey>(Unbind(@base).MessageParameter);
+    Cast<FunctionKey>(Unbind(this).MessageParameter);
 }

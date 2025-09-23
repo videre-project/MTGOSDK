@@ -41,12 +41,12 @@ public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
   /// Requires the <c>Shiny.Core.Enums</c> reference assembly.
   /// </remarks>
   public GameViewType LayoutType =>
-    Cast<GameViewType>(Unbind(@base).LayoutType);
+    Cast<GameViewType>(Unbind(this).LayoutType);
 
   /// <summary>
   /// Whether the DuelScene is a replay of a previous game.
   /// </summary>
-  public bool IsReplay => Unbind(@base).IsReplay;
+  public bool IsReplay => Unbind(this).IsReplay;
 
   //
   // ReplayCommand wrapper methods
@@ -56,35 +56,35 @@ public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
   /// Starts the playback of a replay.
   /// </summary>
   public void StartReplay() =>
-    Unbind(@base).PlayOrPauseReplayCommand.Execute(true);
+    Unbind(this).PlayOrPauseReplayCommand.Execute(true);
 
   /// <summary>
   /// Pauses the playback of a replay.
   /// </summary>
   public void PauseReplay() =>
-    Unbind(@base).PlayOrPauseReplayCommand.Execute(false);
+    Unbind(this).PlayOrPauseReplayCommand.Execute(false);
 
   /// <summary>
   /// Halts the playback of a replay and closes the DuelScene.
   /// </summary>
   public void CloseReplay() =>
-    Unbind(@base).CloseReplayCommand.Execute();
+    Unbind(this).CloseReplayCommand.Execute();
 
   /// <summary>
   /// Forwards the playback of a replay to the next game action.
   /// </summary>
   public void ReplayNextAction() =>
-    Unbind(@base).PlayOrPauseReplayCommand.Execute(null);
+    Unbind(this).PlayOrPauseReplayCommand.Execute(null);
 
   /// <summary>
   /// Forwards the playback of a replay to the next game step.
   /// </summary>
   public void ReplayNextStep() =>
-    Unbind(@base).NextStepReplayCommand.Execute();
+    Unbind(this).NextStepReplayCommand.Execute();
 
   /// <summary>
   /// Forwards the playback of a replay to the next turn.
   /// </summary>
   public void ReplayNextTurn() =>
-    Unbind(@base).NextTurnReplayCommand.Execute();
+    Unbind(this).NextTurnReplayCommand.Execute();
 }

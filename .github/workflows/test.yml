@@ -22,8 +22,14 @@ jobs:
     runs-on: windows-latest
     if: github.event.workflow_run.conclusion == 'success'
     steps:
+      - name: Setup Dev Drive and Checkout
+        id: setup_dev_drive_checkout
+        uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
+        with:
+          ref: ${{ github.event.workflow_run.head_commit.id }}
+
       - name: Update Commit Status - Pending
-        uses: videre-project/MTGOSDK/.github/actions/update-commit-status@main
+        uses: ./.github/actions/update-commit-status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ github.event.workflow_run.head_sha }}
@@ -31,23 +37,18 @@ jobs:
           description: 'SDK tests are running...'
           status_context: 'Test / Run SDK Tests'
 
-      - name: Setup Dev Drive and Checkout
-        id: setup_dev_drive_checkout
-        uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
-        with:
-          ref: ${{ github.event.workflow_run.head_commit.id }}
-
       - name: Download MTGOSDK Feed
-        uses: videre-project/MTGOSDK/.github/actions/download-artifact@main
+        uses: ./.github/actions/download-artifact
         with:
           name: mtgosdk-feed
           path: ${{ env.WORKSPACE_PATH }}/packages
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup .NET and Restore NuGet Packages
-        uses: videre-project/MTGOSDK/.github/actions/setup-dotnet@main
+        uses: ./.github/actions/setup-dotnet
         with:
           WORKSPACE_PATH: ${{ env.WORKSPACE_PATH }}
+          RESTORE_ARGS: '-p:UseLocalFeed=true'
 
       # Create .env file for integration tests
       - name: Create .env file
@@ -59,7 +60,7 @@ jobs:
 
       # Run the test suite
       - name: Run tests
-        run: dotnet test MTGOSDK.Tests -p:UseLocalFeed=true
+        run: dotnet test MTGOSDK.Tests --no-restore
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
 
@@ -130,7 +131,7 @@ jobs:
 
       - name: Update Commit Status - Result
         if: always()
-        uses: videre-project/MTGOSDK/.github/actions/update-commit-status@main
+        uses: ./.github/actions/update-commit-status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ github.event.workflow_run.head_sha }}

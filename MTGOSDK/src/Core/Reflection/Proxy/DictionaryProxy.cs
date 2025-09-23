@@ -88,7 +88,7 @@ public class DictionaryProxy<TKey, TValue>(
         throw new KeyNotFoundException(
           $"The key '{key}' was not found in the dictionary.");
 
-      return _valueTypeMapper(Unbind(@base)[remoteKey]);
+      return _valueTypeMapper(Unbind(this)[remoteKey]);
     }
     set
     {
@@ -96,7 +96,7 @@ public class DictionaryProxy<TKey, TValue>(
         throw new KeyNotFoundException(
           $"The key '{key}' was not found in the dictionary.");
 
-      Unbind(@base)[remoteKey] = value;
+      Unbind(this)[remoteKey] = value;
     }
   }
 
@@ -125,7 +125,7 @@ public class DictionaryProxy<TKey, TValue>(
 
   public bool ContainsKey(TKey key)
   {
-    foreach (dynamic remoteKey in Unbind(@base))
+    foreach (dynamic remoteKey in Unbind(this))
     {
       if (CompareKeys(key, remoteKey))
         return true;
@@ -139,7 +139,7 @@ public class DictionaryProxy<TKey, TValue>(
     {
       if (CompareKeys(key, remoteKey))
       {
-        value = _valueTypeMapper(Unbind(@base)[remoteKey]);
+        value = _valueTypeMapper(Unbind(this)[remoteKey]);
         return true;
       }
     }
@@ -152,7 +152,7 @@ public class DictionaryProxy<TKey, TValue>(
     foreach (dynamic remoteKey in _remoteKeys)
     {
       if (CompareKeys(item.Key, remoteKey) &&
-          CompareValues(item.Value, Unbind(@base)[remoteKey]))
+          CompareValues(item.Value, Unbind(this)[remoteKey]))
         return true;
     }
     return false;
@@ -164,7 +164,7 @@ public class DictionaryProxy<TKey, TValue>(
     {
       array[arrayIndex++] = new KeyValuePair<TKey, TValue>(
         _keyTypeMapper(remoteKey),
-        _valueTypeMapper(Unbind(@base)[remoteKey]));
+        _valueTypeMapper(Unbind(this)[remoteKey]));
     }
   }
 
@@ -174,7 +174,7 @@ public class DictionaryProxy<TKey, TValue>(
     {
       yield return new KeyValuePair<TKey, TValue>(
         _keyTypeMapper(remoteKey),
-        _valueTypeMapper(Unbind(@base)[remoteKey]));
+        _valueTypeMapper(Unbind(this)[remoteKey]));
     }
   }
 

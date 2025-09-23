@@ -38,13 +38,13 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   /// The User object for the player.
   /// </summary>
   [NonSerializable]
-  public User User => new(Unbind(@base).User.Id);
+  public User User => new(Unbind(this).User.Id);
 
   /// <summary>
   /// The amount of time left on the player's clock.
   /// </summary>
   public TimeSpan ChessClock =>
-    Cast<TimeSpan>(Unbind(@base).ChessClock);
+    Cast<TimeSpan>(Unbind(this).ChessClock);
 
   /// <summary>
   /// The amount of life the player has.

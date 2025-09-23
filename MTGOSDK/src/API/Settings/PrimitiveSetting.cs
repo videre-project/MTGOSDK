@@ -38,7 +38,7 @@ public sealed class PrimitiveSetting<T>(dynamic setting)
   /// <summary>
   /// The setting's value.
   /// </summary>
-  public T Value => Cast<T>(Unbind(@base).Value);
+  public T Value => Cast<T>(Unbind(this).Value);
 
   //
   // ISetting wrapper properties
@@ -47,7 +47,7 @@ public sealed class PrimitiveSetting<T>(dynamic setting)
   /// <summary>
   /// The unique identifier for the setting (in this case, the setting's key).
   /// </summary>
-  public Setting Id => Cast<Setting>(Unbind(@base).ID);
+  public Setting Id => Cast<Setting>(Unbind(this).ID);
 
   /// <summary>
   /// Indicates whether the setting has been loaded or is uninitialized.

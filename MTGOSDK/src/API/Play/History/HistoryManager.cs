@@ -82,7 +82,8 @@ public static class HistoryManager
   {
     // Default to the current user if no username is provided.
     if (string.IsNullOrEmpty(username))
-      username = Client.CurrentUser.Name;
+      username = Client.Current.CurrentUser?.Name
+        ?? throw new InvalidOperationException("Client not initialized.");
     Log.Information("Reading game history for {Username}.", username);
 
     object binaryObject = Unbind(s_isoSerializer).ReadBinaryObject<dynamic>(
@@ -112,7 +113,8 @@ public static class HistoryManager
   {
     // Default to the current user if no username is provided.
     if (string.IsNullOrEmpty(username))
-      username = Client.CurrentUser.Name;
+      username = Client.Current.CurrentUser?.Name
+        ?? throw new InvalidOperationException("Client not initialized.");
     Log.Information("Getting game history files for {Username}.", username);
 
     // Get a list of existing MTGO data directories on the system.

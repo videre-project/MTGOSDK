@@ -36,7 +36,7 @@ public class Trade : TradeValidationFixture
   }
 }
 
-public class TradeValidationFixture : BaseFixture
+public abstract class TradeValidationFixture : BaseFixture
 {
   public void ValidatePost(TradePost post)
   {

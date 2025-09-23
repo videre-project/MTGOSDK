@@ -27,8 +27,8 @@ public sealed class Channel(dynamic chatChannel)
   internal override dynamic obj => Bind<IChatChannel>(chatChannel);
 
   private dynamic ChatLog =>
-    Try(() => Unbind(@base.MessageLog).m_chatLog,
-        () => new List<Message>());
+    field ??= Try(() => Unbind(@base.MessageLog).m_chatLog,
+                  () => new List<Message>());
 
   /// <summary>
   /// The ChatSessionViewModel of the channel.
@@ -38,7 +38,7 @@ public sealed class Channel(dynamic chatChannel)
   /// client to control the client-side management of chat state and UI elements.
   /// </remarks>
   public ChatSessionViewModel? ChatSession =>
-    ChannelManager.GetChatForChannel(chatChannel);
+    field ??= ChannelManager.GetChatForChannel(chatChannel);
 
   //
   // IChannel wrapper properties
@@ -103,7 +103,7 @@ public sealed class Channel(dynamic chatChannel)
   /// The type of chat channel (e.g. "System", "GameChat", "GameLog", etc.)
   /// </summary>
   public ChannelType Type =>
-    Try(() => Cast<ChannelType>(Unbind(@base).ChannelType),
+    Try(() => Cast<ChannelType>(Unbind(this).ChannelType),
         fallback: ChannelType.System);
 
   /// <summary>
@@ -116,7 +116,7 @@ public sealed class Channel(dynamic chatChannel)
   //
 
   private IHistoricalChatChannel m_historicalChatChannel =>
-    Bind<IHistoricalChatChannel>(Unbind(@base).HistoricalChatChannel);
+    field ??= Bind<IHistoricalChatChannel>(Unbind(this).HistoricalChatChannel);
 
   /// <summary>
   /// The local file name of the chat log.

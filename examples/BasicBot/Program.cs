@@ -43,7 +43,7 @@ using var client = new Client(
 );
 Log.Information("Connected to MTGO v{Version}.", Client.Version);
 
-if (!Client.IsConnected)
+if (!client.IsConnected)
 {
   DotEnv.LoadFile();
   // Waits until the client has loaded and is ready.
@@ -51,7 +51,7 @@ if (!Client.IsConnected)
     username: DotEnv.Get("USERNAME"), // String value
     password: DotEnv.Get("PASSWORD")  // SecureString value
   );
-  Log.Information("Connected as {Username}.", Client.CurrentUser.Name);
+  Log.Information("Connected as {Username}.", client.CurrentUser.Name);
 }
 
 // Teardown the bot when the MTGO client disconnects.

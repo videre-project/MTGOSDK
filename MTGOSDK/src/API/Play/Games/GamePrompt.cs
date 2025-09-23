@@ -35,7 +35,7 @@ public sealed class GamePrompt(dynamic gamePrompt) : DLRWrapper<IGamePrompt>
   /// The current interaction timestamp of the game.
   /// </summary>
   [NonSerializable]
-  public uint Timestamp => Unbind(@base).Timestamp;
+  public uint Timestamp => Unbind(this).Timestamp;
 
   /// <summary>
   /// The available game actions for the prompt.

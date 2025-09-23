@@ -9,6 +9,7 @@ using System.IO;
 using System.Net.Http;
 using System.Security;
 using System.Windows;
+using System.Xml;
 
 using Microsoft.Extensions.Logging;
 
@@ -61,11 +62,32 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// View model for the client's login and authentication process.
   /// </summary>
   private static dynamic s_loginManager =>
-    Unbind(s_shellViewModel).m_loginViewModel;
+    field ??= Unbind(s_shellViewModel).m_loginViewModel;
 
   //
   // Static fields and properties
   //
+
+  /// <summary>
+  /// The current instantiated client facade (singleton).
+  /// </summary>
+  public static Client? Current { get; private set; }
+
+  /// <summary>
+  /// Whether the MTGO client is currently installed on the local machine.
+  /// </summary>
+  public static bool IsInstalled =>
+    File.Exists(AppRefPath) && Directory.Exists(MTGOAppDirectory);
+
+  /// <summary>
+  /// Whether an instance of MTGO has started and is currently running.
+  /// </summary>
+  public static bool HasStarted => RemoteClient.HasStarted && ProcessId != -1;
+
+  /// <summary>
+  /// The process ID of the MTGO client process.
+  /// </summary>
+  public static int ProcessId => RemoteClient.MTGOProcess()?.Id ?? -1;
 
   /// <summary>
   /// The current build version of the running MTGO client.
@@ -89,6 +111,30 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         .Attributes["version"].Value
     );
 
+  /// <summary>
+  /// The latest MTGO client version available from the deployment manifest.
+  /// </summary>
+  /// <remarks>
+  /// This always retrieves the latest version from the deployment manifest,
+  /// and does not cache the value. Any failure to load the deployment manifest
+  /// will surface as an exception to the caller.
+  /// </remarks>
+  /// <exception cref="InvalidOperationException">
+  /// If the deployment manifest is missing the version attribute.
+  /// </exception>
+  public static Version LatestVersion
+  {
+    get
+    {
+      var deploymentManifest = new XmlDocument();
+      deploymentManifest.Load(ApplicationUri);
+      var identities = deploymentManifest.GetElementsByTagName("assemblyIdentity");
+      var verAttr = identities[0].Attributes?["version"]?.Value
+        ?? throw new InvalidOperationException("Deployment manifest missing version attribute.");
+      return Version.Parse(verAttr);
+    }
+  }
+
   //
   // Instance fields and properties
   //
@@ -96,38 +142,33 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// Returns the current logged in user's public information.
   /// </summary>
-  public static User CurrentUser => new(s_flsClientSession.LoggedInUser.Id);
+  public User CurrentUser => new(s_flsClientSession.LoggedInUser.Id);
 
   /// <summary>
   /// The MTGO client's user session id.
   /// </summary>
-  public static Guid SessionId => new(s_flsClientSession.SessionId);
-
-  /// <summary>
-  /// Whether the client has started and is currently running.
-  /// </summary>
-  public static bool HasStarted => RemoteClient.HasStarted;
+  public Guid SessionId => new(s_flsClientSession.SessionId);
 
   /// <summary>
   /// Whether the client is currently online and connected.
   /// </summary>
-  public static bool IsConnected => s_flsClientSession.IsConnected;
+  public bool IsConnected => s_flsClientSession.IsConnected;
 
   /// <summary>
   /// Whether the client is currently logged in.
   /// </summary>
-  public static bool IsLoggedIn => s_loginManager.IsLoggedIn;
+  public bool IsLoggedIn => s_loginManager.IsLoggedIn;
 
   /// <summary>
   /// Whether MTGO is currently down for maintenance or is otherwise offline.
   /// </summary>
-  public static bool IsUnderMaintenance =>
+  public bool IsUnderMaintenance =>
     Cast<Visibility>(s_loginManager.WarningVisibility) == Visibility.Visible;
 
   /// <summary>
   /// Whether the client is currently in an interactive session with a user.
   /// </summary>
-  public static bool IsInteractive =>
+  public bool IsInteractive =>
     s_loginManager.IsLoginEnabled == (IsLoggedIn || IsConnected);
 
   //
@@ -195,6 +236,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Initializes the client connection and starts the MTGO client API.
     RemoteClient.EnsureInitialize();
     using var gcContext = GCTimer.SuppressGC();
+    Current = this;
     Log.Information("Initialized the MTGO client API.");
 
     // Minimize the MTGO window after startup.
@@ -208,7 +250,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // that may still be initializing, so for consistency we give our initial
     // checks a few seconds to complete before proceeding.
     //
-    if (options.AcceptEULAPrompt && !Retry(() => IsConnected, delay: 1000))
+    if (options.AcceptEULAPrompt && !Retry(() => this.IsConnected, delay: 1000))
     {
       // Check if the last accepted EULA version is still the latest version.
       var EULAVersion = Retry(() =>
@@ -241,7 +283,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     }
 
     // Verify that any existing user sessions are valid.
-    if (!WaitUntilSync(() => SessionId != Guid.Empty) && IsConnected)
+    if (!WaitUntilSync(() => this.SessionId != Guid.Empty) && this.IsConnected)
       throw new VerificationException("Current user session is invalid.");
   }
 
@@ -373,16 +415,16 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         process.WaitForInputIdle() &&
         !string.IsNullOrEmpty(process.MainWindowTitle)
       );
-    }, retries: (int)timeout.TotalMilliseconds / 250);
+    }, retries: (int) timeout.TotalMilliseconds / 250);
   }
 
-  public static async Task<bool> WaitForUserLogin(TimeSpan timeout = default)
+  public async Task<bool> WaitForUserLogin(TimeSpan timeout = default)
   {
     ObjectProvider.SuppressLogging = true;
     bool res = await WaitUntilAsync(() =>
     {
       ObjectProvider.ResetCache();
-      return Task.FromResult(IsLoggedIn);
+      return Task.FromResult(this.IsLoggedIn);
     }, retries: (int) timeout.TotalMilliseconds / 250);
     ObjectProvider.SuppressLogging = false;
 
@@ -429,7 +471,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </exception>
   public async Task LogOn(string username, SecureString password)
   {
-    if (IsLoggedIn)
+    if (this.IsLoggedIn)
       throw new InvalidOperationException("Cannot log on while logged in.");
 
     // // Verify that MTGO is not under maintenance or is otherwise offline.
@@ -470,16 +512,16 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// </exception>
   public async Task LogOff()
   {
-    if (!(IsLoggedIn || IsConnected))
+    if (!(this.IsLoggedIn || this.IsConnected))
       throw new InvalidOperationException("Cannot log off while disconnected.");
 
-    if (IsInteractive)
+    if (this.IsInteractive)
       throw new InvalidOperationException("Cannot log off an interactive session.");
 
     // Invokes logoff command and disconnects the MTGO client.
     Log.Debug("Logging off and disconnecting the client.");
     s_loginManager.Disconnect();
-    if (!await WaitUntil(() => !IsConnected || !RemoteClient.IsInitialized )) {
+    if (!await WaitUntil(() => !this.IsConnected || !RemoteClient.IsInitialized )) {
       throw new TimeoutException("Failed to log off and disconnect the client.");
     }
   }

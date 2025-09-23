@@ -21,5 +21,5 @@ public class ToggleMessageAction(dynamic toggleMessageAction)
   // ToggleMessageAction wrapper properties
   //
 
-  public bool ToggleState => Unbind(@base).ToggleState;
+  public bool ToggleState => Unbind(this).ToggleState;
 }
