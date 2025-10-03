@@ -175,6 +175,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   // Constructors and destructors
   //
 
+  private readonly ClientOptions _options;
+
   /// <summary>
   /// Creates a new instance of the MTGO client API.
   /// </summary>
@@ -236,6 +238,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Initializes the client connection and starts the MTGO client API.
     RemoteClient.EnsureInitialize();
     using var gcContext = GCTimer.SuppressGC();
+    this._options = options;
     Current = this;
     Log.Information("Initialized the MTGO client API.");
 
@@ -478,7 +481,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // if (Retry(() => IsUnderMaintenance, delay: 1000))
     //   throw new ServerOfflineException("MTGO is currently under maintenance.");
 
-    if (!await RetryAsync(IsLoginAvailable, retries: 3) && !await IsOnline())
+    if (!await RetryAsync(IsLoginAvailable, retries: 3) &&
+        (_options.UseDaybreakAPI && !await IsOnline()))
       throw new ServerOfflineException("The login server is currently offline.");
 
     // Passes the user's credentials to the MTGO client for authentication.

@@ -41,4 +41,9 @@ public struct ClientOptions()
   /// the terms of the EULA are still legally binding when using the client.
   /// </remarks>
   public bool AcceptEULAPrompt { get; init; } = false;
+
+  /// <summary>
+  /// Whether to use the Daybreak API for certain service calls.
+  /// </summary>
+  public bool UseDaybreakAPI { get; init; } = true;
 }

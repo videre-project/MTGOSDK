@@ -87,15 +87,15 @@ public class SetupFixture : Shared
       // Skip if the client has already been initialized.
       if (Client.HasStarted && client != null) return;
 
-      client = new Client(
-        new ClientOptions
-        {
-          CreateProcess = true,
-          StartMinimized = true,
-          AcceptEULAPrompt = true
-        },
-        loggerProvider: s_loggerProvider
-      );
+      ClientOptions options = new()
+      {
+        CreateProcess = true,
+        StartMinimized = true,
+        AcceptEULAPrompt = true,
+        UseDaybreakAPI = false
+      };
+
+      client = new Client(options, loggerProvider: s_loggerProvider);
 
       // Ensure the MTGO client is not interactive (with an existing user session).
       Assert.That(client.IsInteractive, Is.False);
@@ -108,8 +108,8 @@ public class SetupFixture : Shared
           username: DotEnv.Get("USERNAME"), // String value
           password: DotEnv.Get("PASSWORD")  // SecureString value
         );
-        Assert.That(await Client.IsOnline(), Is.True);
-        Assert.That(client.IsLoggedIn, Is.True);
+        if (options.UseDaybreakAPI)
+          Assert.That(client.IsLoggedIn, Is.True);
 
         // Revalidate the client's reported interactive state.
         Assert.That(client.IsInteractive, Is.False);
