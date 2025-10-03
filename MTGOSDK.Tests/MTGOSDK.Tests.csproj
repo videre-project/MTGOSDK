@@ -22,6 +22,9 @@
     <PackageReference Include="NUnit" />
     <PackageReference Include="NUnit.Analyzers" />
     <PackageReference Include="NUnit3TestAdapter" />
+    <!-- Ensure the platform is wired up -->
+    <PackageReference Include="Microsoft.Testing.Platform.MSBuild"
+                      PrivateAssets="All" />
   </ItemGroup>
 
   <!-- Use the MTGOSDK package from the local feed if it exists -->

@@ -6,6 +6,6 @@
     "allowPrerelease": true
   },
   "msbuild-sdks": {
-    "DotNet.ReproducibleBuilds.Isolated": "1.2.25"
+    "DotNet.ReproducibleBuilds.Isolated": "1.2.39"
   }
 }

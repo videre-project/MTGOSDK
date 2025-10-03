@@ -4,9 +4,9 @@
     ".NETFramework,Version=v4.8": {
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
-        "requested": "[1.2.25, )",
-        "resolved": "1.2.25",
-        "contentHash": "xCXiw7BCxHJ8pF6wPepRUddlh2dlQlbr81gXA72hdk4FLHkKXas7EH/n+fk5UCA/YfMqG1Z6XaPiUjDbUNBUzg=="
+        "requested": "[1.2.39, )",
+        "resolved": "1.2.39",
+        "contentHash": "fcFN01tDTIQqDuTwr1jUQK/geofiwjG5DycJQOnC72i1SsLAk1ELe+apBOuZ11UMQG8YKFZG1FgvjZPbqHyatg=="
       },
       "FrameworkExtract.System.Deployment": {
         "type": "Direct",
@@ -16,9 +16,9 @@
       },
       "Meziantou.Polyfill": {
         "type": "Direct",
-        "requested": "[1.0.48, )",
-        "resolved": "1.0.48",
-        "contentHash": "Mk8MpW4wowR+sSMz0akEJp5cco9g527LnxztVOJiDX2kGgcy8ZfU2TyxleIKNJJN78PQf9N0xeiF7TZY5d3c7w=="
+        "requested": "[1.0.52, )",
+        "resolved": "1.0.52",
+        "contentHash": "5ONR3Q+n8EzDEsKB4GKTwP6NzFvlOZdGu3XZwdHYdMSt58fWcQ21COCviqeTvoBfsC8pf72+NBLojZsXCsqi/g=="
       },
       "Microsoft.NETFramework.ReferenceAssemblies": {
         "type": "Direct",

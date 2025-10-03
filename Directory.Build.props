@@ -3,10 +3,6 @@
   <!-- Project Properties -->
   <PropertyGroup>
     <NoWarn>$(NoWarn);NU1702</NoWarn>
-    <!-- Disable Microsoft.Testing.Platform in VSTest mode -->
-    <EnableMSTestRunner>false</EnableMSTestRunner>
-    <TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>
-    <TestingPlatformCaptureOutput>true</TestingPlatformCaptureOutput>
   </PropertyGroup>
 
   <!-- Project Directories -->
@@ -56,13 +52,6 @@
   <PropertyGroup Condition="'$(IsNonDeterministic)' != 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <EnablePackageValidation>true</EnablePackageValidation>
-  </PropertyGroup>
-  <PropertyGroup>
-    <!--
-      Fix for prune package data error in .NET 10+ SDKs
-      See https://github.com/dotnet/reproducible-builds/issues/61
-    -->
-    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(VSTestArtifactsProcessingMode)' == 'collect' Or

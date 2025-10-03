@@ -18,7 +18,7 @@
       NETSDK1057;NU5104;
     </NoWarn>
     <!-- MSBuild SDK Versions -->
-    <ReproducibleBuildsSdkVersion>1.2.25</ReproducibleBuildsSdkVersion>
+    <ReproducibleBuildsSdkVersion>1.2.39</ReproducibleBuildsSdkVersion>
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
@@ -26,7 +26,7 @@
 		<PackageVersion Include="Microsoft.CSharp"
                     Version="4.7.0" />
     <PackageVersion Include="Microsoft.Diagnostics.Runtime"
-                    Version="3.1.512801" />
+                    Version="4.0.0-beta.24360.3" />
     <PackageVersion Include="Microsoft.Extensions.Logging"
                     Version="$(DotNetSdkVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console"
@@ -34,25 +34,25 @@
     <PackageVersion Include="ImpromptuInterface"
                     Version="8.0.6" />
     <PackageVersion Include="Newtonsoft.Json"
-                    Version="13.0.3" />
+                    Version="13.0.4" />
     <!-- MTGOSDK.Core -->
     <PackageVersion Include="System.Reflection.Emit.ILGeneration"
                     Version="4.7.0" />
     <PackageVersion Include="System.Reflection.Emit.Lightweight"
                     Version="4.7.0" />
     <PackageVersion Include="Meziantou.Polyfill"
-                    Version="1.0.48" />
+                    Version="1.0.52" />
     <!-- MTGOSDK/lib/Launcher -->
     <PackageVersion Include="FrameworkExtract.System.Deployment"
                     Version="4.0.30319" />
     <!-- MTGOSDK/lib/ScubaDiver -->
     <PackageVersion Include="Lib.Harmony"
-                    Version="2.3.6" />
+                    Version="2.4.1" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
-                    Version="17.13.9" />
+                    Version="17.14.8" />
     <PackageVersion Include="JetBrains.Refasmer"
-                    Version="2.0.1" />
+                    Version="2.0.2" />
     <PackageVersion Include="Microsoft.ILVerification"
                     Version="$(DotNetSdkVersion)" />
     <!-- MTGOSDK.Win32 -->
@@ -64,24 +64,26 @@
     <PackageVersion Include="coverlet.msbuild"
                     Version="6.0.4" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk"
-                    Version="17.13.0" />
+                    Version="18.0.0" />
     <PackageVersion Include="NUnit"
-                    Version="4.3.2" />
+                    Version="4.4.0" />
     <PackageVersion Include="NUnit.Analyzers"
-                    Version="4.7.0" />
+                    Version="4.10.0" />
     <PackageVersion Include="NUnit3TestAdapter"
-                    Version="5.0.0" />
+                    Version="5.1.0" />
     <PackageVersion Include="ReportGenerator"
-                    Version="5.4.5" />
+                    Version="5.4.16" />
+    <PackageVersion Include="Microsoft.Testing.Platform.MSBuild"
+                    Version="2.0.0-preview.25480.4" />
     <!-- tools/ILLink -->
     <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
                     Version="8.0.15"
                     Condition="'$(UseILLinkTrim)' == 'true'" />
     <!-- tools/ILRepack -->
     <PackageVersion Include="ILRepack"
-                    Version="2.0.40" />
+                    Version="2.0.44" />
     <PackageVersion Include="ILRepack.Lib"
-                    Version="2.0.40" />
+                    Version="2.0.44" />
   </ItemGroup>
 
   <!-- .NET Standard 2.0 -->
@@ -133,7 +135,7 @@
   <ItemGroup Condition="'$(IsPackable)' != 'false' And
                         '$(EnableSourceControlManagerQueries)' != 'false'">
     <GlobalPackageReference Include="MinVer"
-                            Version="6.0.0"
+                            Version="6.1.0-beta.1"
                             PrivateAssets="All" />
   </ItemGroup>
 
