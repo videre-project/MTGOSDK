@@ -56,7 +56,7 @@
 
   <PropertyGroup Condition="'$(VSTestArtifactsProcessingMode)' == 'collect' Or
                             '$(VSTestSessionCorrelationId)' != ''">
-    <IsBuildRunningInVSTest>true</IsBuildRunningInVSTest>
+    <IsBuildRunningInTest>true</IsBuildRunningInTest>
   </PropertyGroup>
 
   <!-- NuGet Package Properties -->

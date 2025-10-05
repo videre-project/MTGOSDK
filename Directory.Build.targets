@@ -35,7 +35,7 @@
       <ProjectUp2DateFile Remove="@(ProjectUp2DateFile)"
                           Condition="!Exists('%(Identity)')" />
     </ItemGroup>
-    <PropertyGroup Condition="'$(IsBuildRunningInVSTest)' == 'false'">
+    <PropertyGroup Condition="'$(IsBuildRunningInTest)' == 'false'">
       <OutputTimeStampBeforeBuild>%(ProjectOutputFiles.ModifiedTime)</OutputTimeStampBeforeBuild>
       <HasBuildRegenerated Condition="@(ProjectOutputFiles -> Count()) == 0">True</HasBuildRegenerated>
     </PropertyGroup>

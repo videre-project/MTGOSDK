@@ -70,11 +70,9 @@
     <PackageVersion Include="NUnit.Analyzers"
                     Version="4.10.0" />
     <PackageVersion Include="NUnit3TestAdapter"
-                    Version="5.1.0" />
+                    Version="5.0.0" />
     <PackageVersion Include="ReportGenerator"
                     Version="5.4.16" />
-    <PackageVersion Include="Microsoft.Testing.Platform.MSBuild"
-                    Version="2.0.0-preview.25480.4" />
     <!-- tools/ILLink -->
     <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
                     Version="8.0.15"

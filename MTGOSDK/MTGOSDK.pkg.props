@@ -24,7 +24,7 @@
     <None Include="$(SolutionDir)\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(IsBuildRunningInVSTest)' == 'true'">
+  <PropertyGroup Condition="'$(IsBuildRunningInTest)' == 'true'">
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 

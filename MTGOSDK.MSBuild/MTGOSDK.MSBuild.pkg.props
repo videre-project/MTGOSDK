@@ -20,7 +20,7 @@
     <EnablePolyfills>false</EnablePolyfills>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(IsBuildRunningInVSTest)' == 'true'">
+  <PropertyGroup Condition="'$(IsBuildRunningInTest)' == 'true'">
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
