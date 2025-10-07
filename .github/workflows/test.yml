@@ -60,7 +60,7 @@ jobs:
 
       # Run the test suite
       - name: Run tests
-        run: dotnet test MTGOSDK.Tests --no-restore
+        run: dotnet test MTGOSDK.Tests --no-restore -p:UseLocalFeed=True
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
 

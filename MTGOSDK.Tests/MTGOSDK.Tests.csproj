@@ -5,7 +5,6 @@
     <LangVersion>Latest</LangVersion>
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);NUnit1033</NoWarn>
-    <UseLocalFeed>false</UseLocalFeed>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
