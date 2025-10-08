@@ -9,6 +9,10 @@ inputs:
     description: 'Additional arguments to pass to the dotnet restore command'
     required: false
     default: ''
+  SKIP_RESTORE:
+    description: 'Skip the NuGet restore step and only install .NET'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -19,6 +23,7 @@ runs:
         global-json-file: ${{ inputs.WORKSPACE_PATH }}/global.json
 
     - name: List package.lock.json files
+      if: inputs.SKIP_RESTORE != 'true'
       id: list-lock-files
       shell: powershell
       run: |
@@ -34,6 +39,7 @@ runs:
         }
 
     - name: Restore NuGet Cache
+      if: inputs.SKIP_RESTORE != 'true'
       id: nuget-cache
       uses: actions/cache@v4
       with:
@@ -44,7 +50,7 @@ runs:
           ${{ runner.os }}-nuget-
 
     - name: Restore NuGet packages
-      if: steps.nuget-cache.outputs.cache-hit != 'true'
+      if: inputs.SKIP_RESTORE != 'true' && steps.nuget-cache.outputs.cache-hit != 'true'
       shell: powershell
       run: |
         dotnet restore `

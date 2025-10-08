@@ -44,11 +44,11 @@ jobs:
           path: ${{ env.WORKSPACE_PATH }}/packages
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup .NET and Restore NuGet Packages
+      - name: Setup .NET Environment
         uses: ./.github/actions/setup-dotnet
         with:
           WORKSPACE_PATH: ${{ env.WORKSPACE_PATH }}
-          RESTORE_ARGS: '-p:UseLocalFeed=true'
+          SKIP_RESTORE: 'true'
 
       # Create .env file for integration tests
       - name: Create .env file
@@ -59,8 +59,14 @@ jobs:
         working-directory: ${{ env.WORKSPACE_PATH }}
 
       # Run the test suite
+      #
+      # This will re-run restore for the MTGOSDK.Tests project only, which
+      # should ensure that our end-to-end test project can correctly resolve
+      # our SDK packages from the local feed without any transitive information
+      # leaking in from the main solution restore.
+      #
       - name: Run tests
-        run: dotnet test MTGOSDK.Tests --no-restore -p:UseLocalFeed=True
+        run: dotnet test MTGOSDK.Tests -p:UseLocalFeed=True
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
 
