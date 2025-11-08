@@ -50,7 +50,7 @@
                     Version="2.4.1" />
     <!-- MTGOSDK.MSBuild -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core"
-                    Version="17.14.8" />
+                    Version="17.14.28" />
     <PackageVersion Include="JetBrains.Refasmer"
                     Version="2.0.2" />
     <PackageVersion Include="Microsoft.ILVerification"
