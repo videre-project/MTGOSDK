@@ -64,7 +64,9 @@ public sealed class Tournament(dynamic tournament) : Event
   {
     get
     {
+      // Total number of rounds w/ playoffs (top 8) rounds.
       int realTotalRounds = TotalRounds + (HasPlayoffs ? 3 : 0);
+
       DateTime endTime = StartTime.AddMinutes(
         // Minutes per round + 2 minutes between rounds.
         (2 * Unbind(this).MatchTimeLimit * realTotalRounds) +
@@ -81,15 +83,19 @@ public sealed class Tournament(dynamic tournament) : Event
   /// <summary>
   /// The number of rounds in the tournament.
   /// </summary>
+  /// <remarks>
+  /// This value is calculated based on the number of swiss rounds associated
+  /// with the tournament, or based on the number of players if unavailable.
+  /// </remarks>
   public int TotalRounds =>
-    Try<int>(() =>
-      EliminationStyle == TournamentEliminationStyle.Swiss
-        ? Math.Max(Try<int>(() => @base.TotalRounds),
-                   Math.Max(GetNumberOfRounds(TotalPlayers),
-                            GetNumberOfRounds(MinimumPlayers)))
-        : @base.TotalRounds)
-    // Remove the top 8 rounds from the swiss count.
-    - ((HasPlayoffs && InPlayoffs) ? 3 : 0);
+    Math.Max(
+      // Get the number of swiss rounds from the stored tournament data.
+      Try(() => @base.TotalRounds - ((HasPlayoffs && InPlayoffs) ? 3 : 0),
+          () => Unbind(this).SyncDataNumberOfRounds) ?? 0,
+      // Fallback to calculating rounds based on the current player counts.
+      Math.Max(GetNumberOfRounds(TotalPlayers),
+               GetNumberOfRounds(MinimumPlayers))
+    );
 
   //
   // ITournament wrapper properties
@@ -147,7 +153,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// <summary>
   /// Whether the tournament has progressed to playoffs (i.e. Top-8)
   /// </summary>
-  public bool InPlayoffs => @base.IsInPlayoffs;
+  public bool InPlayoffs => Try<bool>(() => @base.IsInPlayoffs);
 
   /// <summary>
   /// Whether the tournament has playoffs (i.e. Top-8) or concludes after swiss.
