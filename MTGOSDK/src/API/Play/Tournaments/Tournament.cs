@@ -240,7 +240,7 @@ public sealed class Tournament(dynamic tournament) : Event
       {
         Tournament tournament = new(instance);
 
-        var eventArgs = new TournamentStateChangedEventArgs(args);
+        var eventArgs = new TournamentStateChangedEventArgs(args[0]);
         if (eventArgs.OldValue.Equals(TournamentState.Finished)) return null;
         TournamentState state = eventArgs.NewValue;
 
