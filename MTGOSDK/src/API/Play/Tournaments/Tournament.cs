@@ -59,6 +59,10 @@ public sealed class Tournament(dynamic tournament) : Event
   /// This is a rough approximation of the end time, based on the current number
   /// of players in the tournament. The actual end time may be earlier than this
   /// time if a round finishes early.
+  /// <para>
+  /// This assumes that each round takes the full match time limit to complete,
+  /// and that there is a 2 minute break between rounds (no fast-rounds).
+  /// </para>
   /// </remarks>
   public DateTime EndTime
   {
@@ -69,7 +73,7 @@ public sealed class Tournament(dynamic tournament) : Event
 
       DateTime endTime = StartTime.AddMinutes(
         // Minutes per round + 2 minutes between rounds.
-        (2 * Unbind(this).MatchTimeLimit * realTotalRounds) +
+        (TotalRoundDuration.TotalMinutes * realTotalRounds) +
         (2 * (realTotalRounds - 1)) +
         // Minutes for deckbuilding.
         Try<int>(() => Unbind(this).MinutesForDeckbuilding)
@@ -79,6 +83,28 @@ public sealed class Tournament(dynamic tournament) : Event
       return endTime.AddMinutes(10 - (endTime.Minute % 10));
     }
   }
+
+  /// <summary>
+  /// The total expected duration of a single round in the tournament.
+  /// </summary>
+  /// <remarks>
+  /// This includes the match time limit for both players, sideboarding time,
+  /// and a small buffer to account for clock drift from priority exchanges.
+  /// <para>
+  /// Note that this does not account for game resets, which can cause an
+  /// extended round.
+  /// </para>
+  /// </remarks>
+  public TimeSpan TotalRoundDuration =>
+    TimeSpan.FromMinutes(
+      // The match time limit applies for both players, meaning it is doubled.
+      (2 * (double)Unbind(this).MatchTimeLimit) +
+      // Bo3 games can have at most 2 sideboard periods of 3 minutes each.
+      (2 * 3.0) +
+      // Per MTGO_Tony, as fractions of a second are added to players' clocks
+      // when exchanging priority, we can have an additional 2 minutes added.
+      2.0
+    );
 
   /// <summary>
   /// The number of rounds in the tournament.
@@ -138,7 +164,15 @@ public sealed class Tournament(dynamic tournament) : Event
   /// </para>
   /// </remarks>
   public DateTime RoundEndTime =>
-    ServerTime.ServerTimeAsClientTime(@base.EndServerTime);
+    ServerTime.ServerTimeAsClientTime(this.State switch
+    {
+      // Uses the same server-side calculation of the round end time, based on
+      // the total match time limit for both players plus sideboarding time.
+      TournamentState.RoundInProgress
+        => Unbind(this).CurrentRound.StartTime + this.TotalRoundDuration,
+      // Fallback to the computed end server time.
+      _ => Unbind(this).EndServerTime
+    });
 
   /// <summary>
   /// The current round of the tournament.
