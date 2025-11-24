@@ -18,6 +18,7 @@ using MTGOSDK.Core.Remoting.Structs;
 using MTGOSDK.Resources;
 
 using MTGOSDK.Win32.API;
+using MTGOSDK.Win32.Extensions;
 using MTGOSDK.Win32.Utilities;
 using MTGOSDK.Win32.Deployment;
 
@@ -42,7 +43,6 @@ public sealed class RemoteClient : DLRWrapper
 
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
-  public static Process @process => @this._clientProcess;
 
   /// <summary>
   /// Whether the RemoteClient singleton has been initialized.
@@ -59,6 +59,11 @@ public sealed class RemoteClient : DLRWrapper
   /// Whether to destroy the MTGO process when disposing of the Remote Client.
   /// </summary>
   public static bool CloseOnExit = false;
+
+  /// <summary>
+  /// The native process handle to the MTGO client.
+  /// </summary>
+  public static Process ClientProcess = null!;
 
   /// <summary>
   /// The port to manage the connection to the MTGO client process.
@@ -92,13 +97,48 @@ public sealed class RemoteClient : DLRWrapper
   /// <summary>
   /// Fetches the MTGO client process.
   /// </summary>
-  public static Process? MTGOProcess() =>
-    Try(() =>
-          Process.GetProcessesByName("MTGO")
-            .Where(x => x.Threads.Count > 1)
-            .OrderBy(x => x.StartTime)
-            .First(),
-        fallback: null);
+  /// <param name="throwOnFailure">Whether to throw an exception if the process is not found.</param>
+  /// <returns>The MTGO client process, or null if not found.</returns>
+  /// <exception cref="ExternalErrorException">Thrown if no processes can be queried by the OS and throwOnFailure is true.</exception>
+  /// <exception cref="NullReferenceException">Thrown if the current MTGO process cannot be found and throwOnFailure is true.</exception>
+  public static Process? MTGOProcess(bool throwOnFailure = false)
+  {
+    // If we already have a ClientProcess defined, return it.
+    if (!(_isDisposing || _isDisposed) && ClientProcess != null)
+      return ClientProcess;
+
+    //
+    // Use the Restart Manager API to retrieve a list of processes that have or
+    // were locking the MTGO executable path. This includes the MTGO process
+    // itself, as well as any other previous instances that may have been
+    // terminated abruptly.
+    //
+    // MTGOAppDirectory will always point to the most recent launch directory,
+    // as it sorts all ClickOnce application directories by their creation time.
+    //
+    string executablePath = Path.Combine(MTGOAppDirectory, "MTGO.exe");
+    var processList = new FileInfo(executablePath).GetLockingProcesses();
+
+    // If no processes were found, we want to indicate that our syscalls failed.
+    if (processList.Count == 0 && throwOnFailure)
+      throw new ExternalErrorException("Unable to retrieve MTGO process.");
+
+    var process = Try(() =>
+      processList
+        // Filter out processes without a valid thread count or start time.
+        .Where(p =>
+          Try<bool>(() =>
+            p.Threads.Count > 0 &&
+            p.StartTime != DateTime.MinValue))
+        .OrderByDescending(p => p.StartTime)
+        .FirstOrDefault(),
+      fallback: null);
+
+    if (process == null && throwOnFailure)
+      throw new NullReferenceException("MTGO client process not found.");
+
+    return process;
+  }
 
   /// <summary>
   /// Whether the MTGO client process has started.
@@ -316,37 +356,34 @@ public sealed class RemoteClient : DLRWrapper
   private CancellationTokenSource _cts = new();
 
   /// <summary>
-  /// The native process handle to the MTGO client.
-  /// </summary>
-  private readonly Process _clientProcess =
-    MTGOProcess()
-      ?? throw new NullReferenceException("MTGO client process not found.");
-
-  /// <summary>
   /// Connects to the target process and returns a RemoteNET client handle.
   /// </summary>
   /// <returns>A RemoteNET client handle.</returns>
   private RemoteHandle GetClientHandle()
   {
-    // Connect to the MTGO process
-    ushort port = Port ??= Cast<ushort>(_clientProcess.Id);
-    Log.Trace("Connecting to MTGO process on port {Port}", port);
+    if (ClientProcess is null)
+      ClientProcess = Retry(() => MTGOProcess(true),
+                            delay: 500, retries: 10, raise: true);
+
+    // Connect to the MTGO process using the specified or default port
+    if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id);
+    Log.Trace("Connecting to MTGO process on port {Port}", Port.Value);
 
     // Suppress expected transient timeouts / connection failures while the
     // remote process is still spinning up under heavy CPU load.
     RemoteHandle handle;
     using (Log.Suppress())
     {
-      handle = Retry(() => RemoteHandle.Connect(_clientProcess, port, _cts),
-                    // Retry connecting to avoid creating a race condition
-                    delay: 500, retries: 3, raise: true);
+      handle = Retry(() => RemoteHandle.Connect(ClientProcess, Port.Value, _cts),
+                     // Retry connecting to avoid creating a race condition
+                     delay: 500, retries: 3, raise: true);
     }
 
     // When the MTGO process exists, trigger the ProcessExited event
-    _clientProcess.EnableRaisingEvents = true;
-    _clientProcess.Exited += (s, e) =>
+    ClientProcess.EnableRaisingEvents = true;
+    ClientProcess.Exited += (s, e) =>
     {
-      Log.Debug("MTGO process exited with code {ExitCode}.", _clientProcess.ExitCode);
+      Log.Debug("MTGO process exited with code {ExitCode}.", ClientProcess.ExitCode);
       Dispose();
       ProcessExited?.Invoke(null, EventArgs.Empty);
     };
@@ -394,10 +431,6 @@ public sealed class RemoteClient : DLRWrapper
 
     Log.Debug("Disposing RemoteClient.");
 
-    // Best-effort cleanup; swallow any individual errors.
-    Try(@client.Dispose);
-    Port = null;
-
     //
     // Replace the current CancellationTokenSource with a fresh one so any late
     // callbacks that still hold a reference to the old CTS can safely cancel
@@ -416,11 +449,16 @@ public sealed class RemoteClient : DLRWrapper
       }
     });
 
+    // Best-effort cleanup; swallow any individual errors.
+    Try(@client.Dispose);
+
     if (CloseOnExit)
     {
-      Try(@process.Kill);
+      Try(ClientProcess.Kill);
       CloseOnExit = false;
     }
+    ClientProcess = null!;
+    Port = null;
 
     // Mark disposed before raising events so late subscribers can observe state.
     _isDisposed = true;

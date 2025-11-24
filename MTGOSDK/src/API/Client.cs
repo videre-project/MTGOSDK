@@ -207,7 +207,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   public Client(
     ClientOptions options = default,
     ILoggerProvider? loggerProvider = null,
-    ILoggerFactory? loggerFactory = null
+    ILoggerFactory? loggerFactory = null,
+    Process? process = null
   ) : base(
     //
     // This factory delegate will setup the RemoteClient instance before it
@@ -233,6 +234,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
 
         // Start a new MTGO process.
         await RemoteClient.StartProcess();
+      }
+      else if (process != null)
+      {
+        Log.Debug("Overriding connection to MTGO process (PID={ProcessId}).", process.Id);
+        RemoteClient.ClientProcess = process;
       }
     })
   {
