@@ -62,7 +62,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// View model for the client's login and authentication process.
   /// </summary>
   private static dynamic s_loginManager =>
-    field ??= Unbind(s_shellViewModel).m_loginViewModel;
+    Unbind(s_shellViewModel).m_loginViewModel;
+
+  /// <summary>
+  /// The cancellation token source used to cancel client-dependent operations.
+  /// </summary>
+  private static CancellationTokenSource? s_cts;
 
   //
   // Static fields and properties
@@ -288,6 +293,15 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Verify that any existing user sessions are valid.
     if (!WaitUntilSync(() => this.SessionId != Guid.Empty) && this.IsConnected)
       throw new VerificationException("Current user session is invalid.");
+
+    // Register a cancellation token source for async operations.
+    s_cts = new CancellationTokenSource();
+    RemoteClient.Disposed += (_, _) =>
+    {
+      s_cts?.Cancel();
+      s_cts?.Dispose();
+      s_cts = null;
+    };
   }
 
   /// <summary>
@@ -407,28 +421,29 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
 
   public static async Task<bool> WaitForMTGOProcess(TimeSpan timeout = default)
   {
-    return await WaitUntilAsync(async () =>
+    return await WaitUntil(() =>
     {
       // Check if there exists a valid MTGO process running.
       using var process = RemoteClient.MTGOProcess();
       if (process == null || process.Id <= 0 || process.HasExited) return false;
 
       // Wait for the MTGO process UI to start and open kicker window.
-      return await WaitUntil(() =>
-        process.WaitForInputIdle() &&
-        !string.IsNullOrEmpty(process.MainWindowTitle)
-      );
+      process.WaitForInputIdle();
+      process.Refresh();
+      return !string.IsNullOrEmpty(process.MainWindowTitle);
     }, retries: (int) timeout.TotalMilliseconds / 250);
   }
 
   public async Task<bool> WaitForUserLogin(TimeSpan timeout = default)
   {
+    CancellationToken ct = s_cts?.Token ?? CancellationToken.None;
+
     ObjectProvider.SuppressLogging = true;
-    bool res = await WaitUntilAsync(() =>
+    bool res = await WaitUntil(() =>
     {
       ObjectProvider.ResetCache();
-      return Task.FromResult(this.IsLoggedIn);
-    }, retries: (int) timeout.TotalMilliseconds / 250);
+      return this.IsLoggedIn;
+    }, retries: (int) timeout.TotalMilliseconds / 250, ct: ct);
     ObjectProvider.SuppressLogging = false;
 
     return res;
@@ -441,8 +456,10 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <remarks>
   /// The client may take a few seconds to close the overlay when done loading.
   /// </remarks>
-  public async Task<bool> WaitForClientReady() =>
-    await WaitUntil(() =>
+  public async Task<bool> WaitForClientReady()
+  {
+    CancellationToken ct = s_cts?.Token ?? CancellationToken.None;
+    return await WaitUntil(() =>
       // Checks to see if the ShellViewModel has finished initializing.
       Unbind(s_shellViewModel).IsSessionConnected == true &&
       Unbind(s_shellViewModel).ShowLoadDeckSplashScreen == false &&
@@ -451,9 +468,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count > 0 &&
       Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count > 0 &&
       Unbind(s_shellViewModel.CurrentScene).JoinedEvents.Count >= 0,
-      delay: 500, // in ms
-      retries: 60 // or 30 seconds
+      delay: 500,  // in ms
+      retries: 60, // or 30 seconds
+      ct
     );
+  }
 
   /// <summary>
   /// Creates a new user session and connects MTGO to the main server.
