@@ -361,9 +361,15 @@ public sealed class RemoteClient : DLRWrapper
   /// <returns>A RemoteNET client handle.</returns>
   private RemoteHandle GetClientHandle()
   {
-    if (ClientProcess is null)
+    bool _processHandleOverride = true;
+    void RefreshClientProcess(bool throwOnFailure = false)
+    {
       ClientProcess = Retry(() => MTGOProcess(true),
-                            delay: 500, retries: 10, raise: true);
+                            delay: 500, retries: 10, raise: throwOnFailure);
+      _processHandleOverride = false;
+    }
+
+    if (ClientProcess is null) RefreshClientProcess(throwOnFailure: true);
 
     // Connect to the MTGO process using the specified or default port
     if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id);
@@ -374,9 +380,26 @@ public sealed class RemoteClient : DLRWrapper
     RemoteHandle handle;
     using (Log.Suppress())
     {
-      handle = Retry(() => RemoteHandle.Connect(ClientProcess, Port.Value, _cts),
-                     // Retry connecting to avoid creating a race condition
-                     delay: 500, retries: 3, raise: true);
+      handle = Retry(delegate
+      {
+        try
+        {
+          return RemoteHandle.Connect(ClientProcess, Port.Value, _cts);
+        }
+        //
+        // This means we couldn't access the process's handle, so we need to
+        // retry getting the MTGO process again unless the user has provided
+        // an invalid process handle manually.
+        //
+        catch (InvalidOperationException) when (!_processHandleOverride)
+        {
+          RefreshClientProcess(throwOnFailure: true);
+          _processHandleOverride = true;
+          throw;
+        }
+      },
+      // Retry connecting to avoid creating a race condition
+      delay: 500, retries: 3, raise: true);
     }
 
     // When the MTGO process exists, trigger the ProcessExited event
