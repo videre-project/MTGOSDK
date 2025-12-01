@@ -406,7 +406,7 @@ public sealed class RemoteClient : DLRWrapper
     ClientProcess.EnableRaisingEvents = true;
     ClientProcess.Exited += (s, e) =>
     {
-      Log.Debug("MTGO process exited with code {ExitCode}.", ClientProcess.ExitCode);
+      Log.Debug("MTGO process exited with code {ExitCode}.", ((Process)s).ExitCode);
       Dispose();
       ProcessExited?.Invoke(null, EventArgs.Empty);
     };
