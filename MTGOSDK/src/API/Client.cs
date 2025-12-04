@@ -466,14 +466,30 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   {
     CancellationToken ct = s_cts?.Token ?? CancellationToken.None;
     return await WaitUntil(() =>
-      // Checks to see if the ShellViewModel has finished initializing.
-      Unbind(s_shellViewModel).IsSessionConnected == true &&
-      Unbind(s_shellViewModel).ShowLoadDeckSplashScreen == false &&
-      Unbind(s_shellViewModel).m_blockingProgressInstances.Count == 0 &&
-      // Checks to see if the HomeSceneViewModel has finished initializing.
-      Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count > 0 &&
-      Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count > 0 &&
-      Unbind(s_shellViewModel.CurrentScene).JoinedEvents.Count >= 0,
+      Try(() =>
+        // Checks to see if the ShellViewModel has finished initializing.
+        Unbind(s_shellViewModel).IsSessionConnected == true &&
+        Unbind(s_shellViewModel).ShowLoadDeckSplashScreen == false &&
+        Unbind(s_shellViewModel).m_blockingProgressInstances.Count == 0 &&
+        // Checks to see if the HomeSceneViewModel has finished initializing.
+        Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count > 0 &&
+        Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count > 0 &&
+        Unbind(s_shellViewModel.CurrentScene).JoinedEvents.Count >= 0,
+        //
+        // If we're unable to access these properties, check that we haven't
+        // already navigated to a different scene (in which case we've already
+        // initialized the client).
+        //
+        () => Unbind(s_shellViewModel).CurrentScene.GetType().Name switch
+        {
+          // These scenes indicate that we're still in the login flow, or that
+          // we can access the home scene properties.
+          "LoginViewModel" => false,
+          "HomeSceneViewModel" => false,
+          // We will assume any other scene indicates the client is loaded.
+          _ => true
+        }
+      ),
       delay: 500,  // in ms
       retries: 60, // or 30 seconds
       ct
