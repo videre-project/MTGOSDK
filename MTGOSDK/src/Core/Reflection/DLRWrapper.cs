@@ -473,15 +473,18 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="ct">The cancellation token to monitor (optional).</param>
   /// <returns>True if the function executed successfully.</returns>
   [DebuggerHidden]
   public static async Task<bool> WaitUntil(
     Func<bool> lambda,
     int delay = 250,
-    int retries = 20)
+    int retries = 20,
+    CancellationToken ct = default)
   {
     for (; retries > 0; retries--)
     {
+      if (ct.IsCancellationRequested) return false;
       try { if (lambda()) return true; } catch { }
       await Task.Delay(delay).ConfigureAwait(false);
     }
@@ -494,15 +497,18 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="ct">The cancellation token to monitor (optional).</param>
   /// <returns>True if the function executed successfully.</returns>
   [DebuggerHidden]
   public static bool WaitUntilSync(
     Func<bool> lambda,
     int delay = 250,
-    int retries = 20)
+    int retries = 20,
+    CancellationToken ct = default)
   {
     for (; retries > 0; retries--)
     {
+      if (ct.IsCancellationRequested) return false;
       try { if (lambda()) return true; } catch { }
       Thread.Sleep(delay);
     }
@@ -515,15 +521,18 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="ct">The cancellation token to monitor (optional).</param>
   /// <returns>True if the function executed successfully.</returns>
   [DebuggerHidden]
   public static async Task<bool> WaitUntilAsync(
     Func<Task<bool>> lambda,
     int delay = 250,
-    int retries = 20)
+    int retries = 20,
+    CancellationToken ct = default)
   {
     for (; retries > 0; retries--)
     {
+      if (ct.IsCancellationRequested) return false;
       try { if (await lambda()) return true; } catch { }
       await Task.Delay(delay).ConfigureAwait(false);
     }

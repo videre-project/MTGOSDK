@@ -99,16 +99,21 @@ public static class Bootstrapper
     DirectoryInfo AppDataDirInfo = new DirectoryInfo(AppDataDir);
     if (!AppDataDirInfo.Exists) AppDataDirInfo.Create();
 
+    // Create a random temporary directory to be deleted when the process exits
+    string tempDir = Path.Combine(AppDataDir, Path.GetRandomFileName());
+    Directory.CreateDirectory(tempDir);
+    AppDomain.CurrentDomain.ProcessExit += (s, e) => Directory.Delete(tempDir, true);
+
     // Get the .NET diver assembly to inject into the target process
     byte[] diverResource = GetBinaryResource(@"Resources\Microsoft.Diagnostics.Runtime.dll");
-    string diverPath = Path.Combine(AppDataDir, "Microsoft.Diagnostics.Runtime.dll");
+    string diverPath = Path.Combine(tempDir, "Microsoft.Diagnostics.Runtime.dll");
 
     // Check if injector or bootstrap resources differ from copies on disk
     OverrideFileIfChanged(diverPath, diverResource);
 
     // Update all diver dependencies
     byte[] harmonyResource = GetBinaryResource(@"Resources\0Harmony.dll");
-    string harmonyPath = Path.Combine(AppDataDir, "0Harmony.dll");
+    string harmonyPath = Path.Combine(tempDir, "0Harmony.dll");
     OverrideFileIfChanged(harmonyPath, harmonyResource);
 
     var injector = new InjectorBase();

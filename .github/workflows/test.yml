@@ -96,6 +96,14 @@ jobs:
             Write-Host $line
           }
         shell: powershell
+      - if: ${{ always() }}
+        run: |
+          $TEST_LOG_PATH = Get-ChildItem -Path $env:WORKSPACE_PATH\MTGOSDK.Tests\bin\* -Recurse -Include MTGOSDK.Tests*.log | Select-Object -First 1 -ExpandProperty FullName
+          foreach ($line in Get-Content -Path $TEST_LOG_PATH) {
+            Write-Host $line
+          }
+        shell: powershell
+        continue-on-error: true
 
       - if: always()
         run: |

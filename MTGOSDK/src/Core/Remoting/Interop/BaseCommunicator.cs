@@ -103,7 +103,17 @@ public abstract class BaseCommunicator
     }
     catch (OperationCanceledException)
     {
-      Log.Warning("Request timed out or was cancelled");
+      if (!_cancellationTokenSource.IsCancellationRequested)
+      {
+#if DEBUG
+        var queryInfo = queryParams != null
+          ? string.Join(", ", queryParams.Select(kvp => $"{kvp.Key}={kvp.Value}"))
+          : "no query parameters";
+        Log.Warning($"Request to '{path}' with {queryInfo} was cancelled or timed out.");
+#else
+        Log.Warning($"Request to '{path}' was cancelled or timed out.");
+#endif
+      }
       throw;
     }
     catch (HttpRequestException ex)

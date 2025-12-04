@@ -70,11 +70,9 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   public override void Clear()
   {
     _eventHook = null;
-    try
-    {
-      RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);
-    }
-    catch (NullReferenceException) when (!RemoteClient.IsInitialized) { }
+    if (!RemoteClient.IsInitialized) return;
+
+    RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);
   }
 
   //
@@ -100,13 +98,9 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     e._eventHook -= (Action<I,T>)c;
 
     // If there are no more subscribers, remove the hook.
-    if (e._eventHook == null)
+    if (e._eventHook == null && RemoteClient.IsInitialized)
     {
-      try
-      {
-        RemoteClient.UnhookMethod(e._typeName, e._methodName, e._hookAction);
-      }
-      catch (NullReferenceException) when (!RemoteClient.IsInitialized) { }
+      RemoteClient.UnhookMethod(e._typeName, e._methodName, e._hookAction);
     }
 
     return e;
