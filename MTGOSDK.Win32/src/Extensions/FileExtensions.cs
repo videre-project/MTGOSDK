@@ -34,14 +34,14 @@ public static class FileExtensions
     try
     {
       string[] resources = { file.FullName };
-      res = Rstrtmgr.RmRegisterResources(handle, (uint)resources.Length, resources, 0, null, 0, null);
+      res = Rstrtmgr.RmRegisterResources(handle, (uint)resources.Length, resources, 0, null!, 0, null!);
       if (res != 0) throw new Exception("Could not register resources.");
 
       uint pnProcInfoNeeded = 0;
       uint pnProcInfo = 0;
       uint lpdwRebootReasons = 0;
 
-      res = Rstrtmgr.RmGetList(handle, out pnProcInfoNeeded, ref pnProcInfo, null, out lpdwRebootReasons);
+      res = Rstrtmgr.RmGetList(handle, out pnProcInfoNeeded, ref pnProcInfo, null!, out lpdwRebootReasons);
 
       if (res == 234) // ERROR_MORE_DATA
       {
