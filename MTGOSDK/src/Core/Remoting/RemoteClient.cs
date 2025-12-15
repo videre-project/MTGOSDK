@@ -399,7 +399,7 @@ public sealed class RemoteClient : DLRWrapper
         }
       },
       // Retry connecting to avoid creating a race condition
-      delay: 500, retries: 3, raise: true);
+      delay: 500, retries: 10, raise: true); // 5s
     }
 
     // When the MTGO process exists, trigger the ProcessExited event
@@ -700,6 +700,18 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   /// <summary>
+  /// Creates a new instance of a remote object of type T.
+  /// </summary>
+  /// <typeparam name="T">The type of the remote object to create.</typeparam>
+  /// <param name="parameters">The parameters to pass to the remote object's constructor.</param>
+  /// <returns>A dynamic wrapper around the remote object.</returns>
+  public static dynamic CreateInstance<T>(
+    params object[] parameters)
+  {
+    return CreateInstance(typeof(T).FullName!, parameters);
+  }
+
+  /// <summary>
   /// Creates a new instance of a remote enum object from the given query path.
   /// </summary>
   /// <param name="queryPath">The query path to the remote enum object.</param>
@@ -715,6 +727,22 @@ public sealed class RemoteClient : DLRWrapper
       .GetValue(null);
 
     return enumValue;
+  }
+
+  public static dynamic CreateEnum<T>(string valueName) =>
+    CreateEnum(typeof(T).FullName!, valueName);
+
+  public static void SetProperty(
+    DynamicRemoteObject dro,
+    string propertyName,
+    object value)
+  {
+    var propInfo = dro.GetType().GetProperty(propertyName);
+    if (propInfo is null)
+      throw new MissingMemberException(
+          $"Property '{propertyName}' not found on remote object.");
+
+    propInfo.SetValue(dro, value);
   }
 
   //
