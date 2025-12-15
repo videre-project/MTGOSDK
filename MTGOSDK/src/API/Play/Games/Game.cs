@@ -188,8 +188,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </exception>
   public GameZone GetGameZone(GamePlayer player, CardZone cardZone)
   {
-    var key = RemoteClient.CreateEnum(
-      "WotC.MtGO.Client.Model.Play.CardZone",
+    var key = RemoteClient.CreateEnum<WotC.MtGO.Client.Model.Play.CardZone>(
       Enum.GetName(typeof(CardZone), cardZone));
 
     var playerKey = Unbind(player);
@@ -210,8 +209,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </exception>
   public GameZone GetGameZone(CardZone cardZone)
   {
-    var key = RemoteClient.CreateEnum(
-      "WotC.MtGO.Client.Model.Play.CardZone",
+    var key = RemoteClient.CreateEnum<WotC.MtGO.Client.Model.Play.CardZone>(
       Enum.GetName(typeof(CardZone), cardZone));
 
     var zoneEntry = Unbind(this).m_sharedZones[key];
