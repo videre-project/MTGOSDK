@@ -44,6 +44,9 @@ public sealed class Tournament(dynamic tournament) : Event
   public IDictionary<string, IList<EventPrize>> Prizes =>
     field ??= EventPrize.FromPrizeStructure(@base.Prizes, HasPlayoffs);
 
+  /// <summary>
+  /// The event structure of the tournament.
+  /// </summary>
   public EventStructure EventStructure =>
     field ??= new(m_queue, Unbind(this).TournamentStructure);
 
