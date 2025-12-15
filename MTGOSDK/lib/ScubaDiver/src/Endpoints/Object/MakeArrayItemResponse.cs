@@ -25,11 +25,7 @@ public partial class Diver : IDisposable
 {
   private string MakeArrayItemResponse(HttpListenerRequest arg)
   {
-    string body = null;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
+    string body = ReadRequestBody(arg);
 
     if (string.IsNullOrEmpty(body))
       return QuickError("Missing body");

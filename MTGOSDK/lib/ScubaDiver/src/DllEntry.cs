@@ -88,9 +88,10 @@ public class DllEntry
     ParameterizedThreadStart func = DiverHost;
     Thread diverHostThread = new(func)
     {
-      IsBackground = true,
       Name = "DiverHostThread",
+      IsBackground = true,
     };
+    diverHostThread.SetApartmentState(ApartmentState.STA);
     diverHostThread.Start(pwzArgument);
 
     // Block the thread until the diver has exited.

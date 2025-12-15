@@ -26,11 +26,7 @@ public partial class Diver : IDisposable
   private string MakeSetFieldResponse(HttpListenerRequest arg)
   {
     Log.Debug("[Diver] Got /set_field request!");
-    string body = null;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
+    string body = ReadRequestBody(arg);
 
     if (string.IsNullOrEmpty(body))
     {
@@ -112,6 +108,11 @@ public partial class Diver : IDisposable
       // Reading back value to return to caller. This is expected C# behaviour:
       // int x = this.field_y = 3; // Makes both x and field_y equal 3.
       results = fieldInfo.GetValue(instance);
+    }
+    catch (Exception e) when (STAThread.RequiresSTAThread(e))
+    {
+      // Re-throw STA-related exceptions so the dispatcher can retry on STA thread
+      throw;
     }
     catch (Exception e)
     {

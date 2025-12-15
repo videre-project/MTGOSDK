@@ -36,6 +36,10 @@ public partial class Diver : IDisposable
   // HTTP Responses fields
   private readonly Dictionary<string, Func<HttpListenerRequest, string>> _responseBodyCreators;
 
+  // Cached request body for STA thread retries (body can only be read once from InputStream)
+  // Using AsyncLocal so the value flows to the STA worker thread during Execute()
+  private static readonly AsyncLocal<string> _cachedRequestBody = new();
+
   // Callbacks Endpoint of the Controller process
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
   private readonly ConcurrentDictionary<int, RegisteredMethodHookInfo> _remoteHooks;
@@ -114,6 +118,15 @@ public partial class Diver : IDisposable
     return JsonConvert.SerializeObject(errResults);
   }
 
+  /// <summary>
+  /// Returns the pre-cached request body. The body is cached in the dispatcher
+  /// before handlers run to support STA thread retries.
+  /// </summary>
+  public static string ReadRequestBody(HttpListenerRequest request)
+  {
+    return _cachedRequestBody.Value ?? string.Empty;
+  }
+
   #region HTTP Dispatching
   public async Task DispatcherAsync(
     HttpListener listener,
@@ -177,14 +190,66 @@ public partial class Diver : IDisposable
     HttpListenerRequest request = requestContext.Request;
     var response = requestContext.Response;
 
+    // Pre-read and cache the request body before any handler runs.
+    // This is necessary because InputStream can only be read once, and we may
+    // need to retry the handler on the STA thread after the first attempt fails.
+    using (StreamReader sr = new(request.InputStream))
+    {
+      _cachedRequestBody.Value = sr.ReadToEnd();
+    }
+
     string body;
     if (_responseBodyCreators.TryGetValue(
       request.Url.AbsolutePath,
       out var respBodyGenerator))
     {
+      // Check if the client explicitly requested UI thread execution
+      bool forceUIThread = request.QueryString["ui_thread"] == "true";
+
       try
       {
-        body = respBodyGenerator(request);
+        if (forceUIThread)
+        {
+          // Execute directly on UI thread (no retry needed)
+          var cachedBody = _cachedRequestBody.Value;
+          body = STAThread.Execute(() =>
+          {
+            _cachedRequestBody.Value = cachedBody;
+            return respBodyGenerator(request);
+          });
+        }
+        else
+        {
+          body = respBodyGenerator(request);
+        }
+      }
+      catch (Exception ex) when (!forceUIThread && STAThread.RequiresSTAThread(ex))
+      {
+        // Retry the request on the STA thread for WPF/COM operations
+        Log.Debug("[Diver] Retrying request on STA thread due to: " + ex.Message);
+        try
+        {
+          // Capture the cached body to pass to the STA thread
+          // (AsyncLocal doesn't flow to the dedicated STA worker thread)
+          var cachedBody = _cachedRequestBody.Value;
+          body = STAThread.Execute(() =>
+          {
+            _cachedRequestBody.Value = cachedBody;
+            return respBodyGenerator(request);
+          });
+        }
+        catch (Exception staEx)
+        {
+          // Unwrap TargetInvocationException to get the real error
+          var innerEx = staEx;
+          while (innerEx.InnerException != null)
+            innerEx = innerEx.InnerException;
+
+          Log.Error("[Diver] Exception occurred in STA handler.", staEx);
+          Log.Debug("[Diver] STA Inner exception: " + innerEx.Message);
+          Log.Debug("[Diver] STA Full stack trace: " + staEx.ToString());
+          body = QuickError(innerEx.Message, staEx.ToString());
+        }
       }
       catch (Exception ex)
       {
@@ -224,6 +289,7 @@ public partial class Diver : IDisposable
     _cts.Dispose();
     _runtime?.Dispose();
     _clientCallbacks.Clear();
+    STAThread.Stop(); // Cleanup the STA worker thread.
     ReverseCommunicator.Dispose(); // Cleanup the shared HttpClient instance.
   }
 }

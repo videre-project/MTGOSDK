@@ -27,11 +27,7 @@ public partial class Diver : IDisposable
   private string MakeCreateObjectResponse(HttpListenerRequest arg)
   {
     Log.Debug("[Diver] Got /create_object request!");
-    string body = null;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
+    string body = ReadRequestBody(arg);
 
     if (string.IsNullOrEmpty(body))
     {
@@ -52,7 +48,10 @@ public partial class Diver : IDisposable
     }
 
     List<object> paramsList = new();
-    if (request.Parameters.Any())
+    if (request.Parameters is null)
+      request.Parameters = new();
+
+    if (request.Parameters.Count > 0)
     {
       Log.Debug($"[Diver] Ctor'ing with parameters. Count: {request.Parameters.Count}");
       paramsList = request.Parameters.Select(_runtime.ParseParameterObject).ToList();
@@ -69,10 +68,15 @@ public partial class Diver : IDisposable
       object[] paramsArray = paramsList.ToArray();
       createdObject = Activator.CreateInstance(t, paramsArray);
     }
-    catch
+    catch (Exception ex) when (STAThread.RequiresSTAThread(ex))
     {
-      Debugger.Launch();
-      return QuickError("Activator.CreateInstance threw an exception");
+      // Re-throw STA-related exceptions so the dispatcher can retry on STA thread
+      throw;
+    }
+    catch (Exception ex)
+    {
+      // Preserve full exception detail for the client (message + stack/inner exceptions)
+      return QuickError(ex.Message, ex.ToString());
     }
 
     if (createdObject == null)

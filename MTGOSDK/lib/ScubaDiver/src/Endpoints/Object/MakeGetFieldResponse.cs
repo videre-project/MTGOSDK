@@ -26,11 +26,7 @@ public partial class Diver : IDisposable
   private string MakeGetFieldResponse(HttpListenerRequest arg)
   {
     Log.Debug("[Diver] Got /get_field request!");
-    string body = null;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
+    string body = ReadRequestBody(arg);
 
     if (string.IsNullOrEmpty(body))
     {
@@ -88,6 +84,11 @@ public partial class Diver : IDisposable
       try
       {
         results = fieldInfo.GetValue(instance);
+      }
+      catch (Exception e) when (STAThread.RequiresSTAThread(e))
+      {
+        // Re-throw STA-related exceptions so the dispatcher can retry on STA thread
+        throw;
       }
       catch (Exception e)
       {

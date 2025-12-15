@@ -37,6 +37,39 @@ public class DiverCommunicator : BaseCommunicator
   private int? _process_id = null;
   private readonly CallbacksListener _listener;
 
+  /// <summary>
+  /// Ambient flag to force all requests to execute on the UI thread.
+  /// Use <see cref="BeginUIThreadScope"/> to enable this for a block of code.
+  /// </summary>
+  private static readonly AsyncLocal<bool> s_forceUIThread = new();
+
+  /// <summary>
+  /// Gets or sets whether requests should be forced to execute on the UI thread.
+  /// </summary>
+  public static bool ForceUIThread
+  {
+    get => s_forceUIThread.Value;
+    set => s_forceUIThread.Value = value;
+  }
+
+  /// <summary>
+  /// Creates a scope that forces all requests to execute on the remote UI thread.
+  /// Use this when creating WPF objects that need to interact with each other.
+  /// </summary>
+  /// <returns>A disposable scope that resets the flag when disposed.</returns>
+  public static IDisposable BeginUIThreadScope() => new UIThreadScope();
+
+  private sealed class UIThreadScope : IDisposable
+  {
+    private readonly bool _previousValue;
+    public UIThreadScope()
+    {
+      _previousValue = ForceUIThread;
+      ForceUIThread = true;
+    }
+    public void Dispose() => ForceUIThread = _previousValue;
+  }
+
   public bool IsConnected => _process_id.HasValue;
 
   public DiverCommunicator(
@@ -61,6 +94,19 @@ public class DiverCommunicator : BaseCommunicator
     : this(ipa.ToString(), diverPort, null) { }
   public DiverCommunicator(IPEndPoint ipe)
     : this(ipe.Address, ipe.Port) { }
+
+  protected override string BuildUrl(
+    string path,
+    Dictionary<string, string> queryParams = null)
+  {
+    // Add ui_thread=true parameter when ForceUIThread is set
+    if (ForceUIThread)
+    {
+      queryParams ??= new Dictionary<string, string>();
+      queryParams["ui_thread"] = "true";
+    }
+    return base.BuildUrl(path, queryParams);
+  }
 
   protected override string HandleResponse(string body)
   {
@@ -194,14 +240,31 @@ public class DiverCommunicator : BaseCommunicator
     var requestJsonBody = JsonConvert.SerializeObject(invocReq);
     var resJson = SendRequest("invoke", null, requestJsonBody);
 
+    if (string.IsNullOrWhiteSpace(resJson))
+    {
+      throw new InvalidOperationException(
+        "Diver returned an empty response to an invoke request. " +
+        "This usually indicates the diver endpoint is unavailable, timed out, or the request failed at the transport layer.");
+    }
+
     InvocationResults res;
     try
     {
       res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
     }
-    catch
+    catch (Exception ex)
     {
-      return null;
+      var preview = resJson.Length > 2000 ? resJson[..2000] + "..." : resJson;
+      throw new InvalidOperationException(
+        $"Failed to deserialize diver invoke response for '{targetTypeFullName}.{methodName}'. Response: {preview}",
+        ex);
+    }
+
+    if (res is null)
+    {
+      var preview = resJson.Length > 2000 ? resJson[..2000] + "..." : resJson;
+      throw new InvalidOperationException(
+        $"Diver invoke response deserialized to null for '{targetTypeFullName}.{methodName}'. Response: {preview}");
     }
 
     return res;

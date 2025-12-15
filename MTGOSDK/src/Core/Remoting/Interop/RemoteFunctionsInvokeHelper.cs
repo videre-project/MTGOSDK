@@ -131,6 +131,13 @@ public static class RemoteFunctionsInvokeHelper
         remoteParams
       );
 
+      if (invokeRes is null)
+      {
+        throw new InvalidOperationException(
+          $"Static remote invocation '{declaringType.FullName}.{funcName}' returned no result (null). " +
+          "This usually indicates a diver/transport failure or an unexpected response format.");
+      }
+
       if (invokeRes.VoidReturnType)
       {
         hasResults = false;

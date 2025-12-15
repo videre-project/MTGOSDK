@@ -69,14 +69,20 @@ public class RemoteObject : IObjectReference
   public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(
     string methodName,
     params ObjectOrRemoteAddress[] args)
-  => InvokeMethod(methodName, args);
+  => InvokeMethod(methodName, Array.Empty<string>(), args);
 
   public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(
     string methodName,
     string[] genericArgsFullTypeNames,
     params ObjectOrRemoteAddress[] args)
   {
-    InvocationResults invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
+    InvocationResults? invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
+    if (invokeRes is null)
+    {
+      throw new InvalidOperationException(
+        $"Remote invocation '{GetType().FullName}.{methodName}' returned no result (null). " +
+        "This usually indicates a diver/transport failure or an unexpected response format.");
+    }
     if (invokeRes.VoidReturnType)
     {
       return (false, null);

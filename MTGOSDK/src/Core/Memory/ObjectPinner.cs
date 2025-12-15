@@ -187,8 +187,6 @@ public class ObjectPinner : IDisposable
         throw new InvalidOperationException(
           "Failed to pin object. Address collision or internal error occurred.");
     }
-    Log.Trace($"Pinned object {obj} at address {objAddr}.");
-    Log.Trace($"Now {_addrMap.Count} objects pinned.");
     return objAddr;
   }
 
@@ -213,8 +211,6 @@ public class ObjectPinner : IDisposable
 
       // Return index to free list
       _freeIndices.Push(pinningInfo.Index);
-      Log.Trace($"Unpinned object {obj} at address {pinningInfo.Address}.");
-      Log.Trace($"Now {_addrMap.Count} objects pinned.");
     }
     finally
     {

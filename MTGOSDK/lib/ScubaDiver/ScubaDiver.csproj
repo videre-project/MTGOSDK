@@ -43,4 +43,11 @@
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>
 
+  <!-- WPF assemblies for Dispatcher support -->
+  <ItemGroup>
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+  </ItemGroup>
+
 </Project>

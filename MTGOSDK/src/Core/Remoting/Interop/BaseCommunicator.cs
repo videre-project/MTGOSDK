@@ -99,7 +99,8 @@ public abstract class BaseCommunicator
         return null;
 
       response.EnsureSuccessStatusCode();
-      return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+      var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+      return HandleResponse(body);
     }
     catch (OperationCanceledException)
     {
@@ -124,7 +125,10 @@ public abstract class BaseCommunicator
         Log.Debug(ex.StackTrace);
       }
 
-      return null;
+      var uri = request?.RequestUri?.ToString() ?? $"http://{_hostname}:{_port}/{path}";
+      throw new InvalidOperationException(
+        $"Request to '{uri}' failed: {ex.Message}",
+        ex);
     }
     catch (Exception ex)
     {
@@ -134,7 +138,10 @@ public abstract class BaseCommunicator
         Log.Debug(ex.StackTrace);
       }
 
-      return null;
+      var uri = request?.RequestUri?.ToString() ?? $"http://{_hostname}:{_port}/{path}";
+      throw new InvalidOperationException(
+        $"Request to '{uri}' failed: {ex.Message}",
+        ex);
     }
     finally
     {

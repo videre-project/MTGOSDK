@@ -28,11 +28,7 @@ public partial class Diver : IDisposable
   private string MakeInvokeResponse(HttpListenerRequest arg)
   {
     Log.Debug("[Diver] Got /Invoke request!");
-    string body = null;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
+    string body = ReadRequestBody(arg);
 
     if (string.IsNullOrEmpty(body))
     {
@@ -154,9 +150,20 @@ public partial class Diver : IDisposable
       Log.Debug($"[Diver] Invoking {method.Name} with those args (Count: {paramsList.Count}): `{argsSummary}`");
       results = method.Invoke(instance, paramsList.ToArray());
     }
+    catch (Exception e) when (STAThread.RequiresSTAThread(e))
+    {
+      // Re-throw STA-related exceptions so the dispatcher can retry on STA thread
+      throw;
+    }
     catch (Exception e)
     {
-      return QuickError($"Invocation caused exception: {e}");
+      // Unwrap TargetInvocationException to get the real error
+      var innerEx = e;
+      while (innerEx.InnerException != null)
+        innerEx = innerEx.InnerException;
+
+      Log.Debug($"[Diver] Invocation of {method.Name} failed: {innerEx.Message}");
+      return QuickError($"Invocation caused exception: {innerEx.Message}", e.ToString());
     }
 
     InvocationResults invocResults;

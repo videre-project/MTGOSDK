@@ -19,11 +19,7 @@ public partial class Diver : IDisposable
 {
   private string MakeTypeResponse(HttpListenerRequest req)
   {
-    string body = null;
-    using (StreamReader sr = new(req.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
+    string body = ReadRequestBody(req);
     if (string.IsNullOrEmpty(body))
     {
       return QuickError("Missing body");

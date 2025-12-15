@@ -33,11 +33,7 @@ public partial class Diver : IDisposable
   {
     Log.Debug("[Diver] Got Hook Method request!");
 
-    string body;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
+    string body = ReadRequestBody(arg);
     if (string.IsNullOrEmpty(body))
       return QuickError("Missing body");
 
