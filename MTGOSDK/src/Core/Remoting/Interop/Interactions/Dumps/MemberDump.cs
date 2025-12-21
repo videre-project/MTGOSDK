@@ -13,7 +13,5 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 public struct MemberDump
 {
   public string Name { get; set; }
-  public bool HasEncodedValue { get; set; }
-  public string EncodedValue { get; set; }
   public string RetrievalError { get; set; }
 }

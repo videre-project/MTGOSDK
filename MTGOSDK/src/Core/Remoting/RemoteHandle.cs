@@ -48,6 +48,16 @@ public class RemoteHandle : DLRWrapper, IDisposable
         try
         {
           od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
+
+          // Check if we have a cached RemoteType with its SourceTypeDump.
+          Type cachedType = TypeResolver.Instance.Resolve(null, od.Type);
+          if (cachedType is RemoteType rt && rt.SourceTypeDump != null)
+          {
+            td = rt.SourceTypeDump;
+            return; // Use TypeDump from cached RemoteType
+          }
+
+          // Type not in cache - fetch full type info from Diver
           td = _app.Communicator.DumpType(od.Type);
         }
         catch (Exception e)
@@ -238,7 +248,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
   {
     // Use discovery to check for existing diver
     string diverAddr = "127.0.0.1";
-    switch(Bootstrapper.QueryStatus(target, diverAddr, diverPort))
+    switch (Bootstrapper.QueryStatus(target, diverAddr, diverPort))
     {
       case DiverState.NoDiver:
         // No diver, we need to inject one

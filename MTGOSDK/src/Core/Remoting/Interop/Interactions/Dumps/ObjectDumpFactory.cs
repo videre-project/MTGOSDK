@@ -4,8 +4,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Diagnostics;
 using System.Reflection;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
 
 
@@ -28,7 +30,10 @@ public static class ObjectDumpFactory
     ulong retrievalAddr,
     ulong pinAddr)
   {
+    var sw = Stopwatch.StartNew();
     Type dumpedObjType = instance.GetType();
+    Log.Debug($"[ObjectDumpFactory] GetType: {sw.ElapsedMilliseconds}ms, type={dumpedObjType.Name}");
+
     ObjectDump od;
     if (dumpedObjType.IsPrimitiveEtc())
     {
@@ -84,91 +89,59 @@ public static class ObjectDumpFactory
     else
     {
       // General non-array or primitive object
+      sw.Restart();
+      var hashCode = instance.GetHashCode();
+      Log.Debug($"[ObjectDumpFactory] GetHashCode: {sw.ElapsedMilliseconds}ms");
+
+      sw.Restart();
+      var fullName = dumpedObjType.FullName;
+      Log.Debug($"[ObjectDumpFactory] FullName: {sw.ElapsedMilliseconds}ms, len={fullName?.Length}");
+
       od = new ObjectDump()
       {
         ObjectType = ObjectType.NonPrimitive,
         RetrievalAddress = retrievalAddr,
         PinnedAddress = pinAddr,
-        Type = dumpedObjType.FullName,
-        HashCode = instance.GetHashCode()
+        Type = fullName,
+        HashCode = hashCode
       };
     }
 
+    sw.Restart();
     List<MemberDump> fields = new();
     var eventNames = dumpedObjType
-      .GetEvents((BindingFlags)0xffff)
+      .GetEvents((BindingFlags) 0xffff)
       .Select(eventInfo => eventInfo.Name);
-    foreach (var fieldInfo in dumpedObjType
-        .GetFields((BindingFlags)0xffff)
-        .Where(fieldInfo => !eventNames.Contains(fieldInfo.Name)))
+    Log.Debug($"[ObjectDumpFactory] GetEvents: {sw.ElapsedMilliseconds}ms");
+
+    sw.Restart();
+    var allFields = dumpedObjType.GetFields((BindingFlags) 0xffff);
+    Log.Debug($"[ObjectDumpFactory] GetFields: {sw.ElapsedMilliseconds}ms, count={allFields.Length}");
+
+    sw.Restart();
+    foreach (var fieldInfo in allFields.Where(fieldInfo => !eventNames.Contains(fieldInfo.Name)))
     {
-      try
-      {
-        var fieldValue = fieldInfo.GetValue(instance);
-        bool hasEncValue = false;
-        string encValue = null;
-        if (fieldValue != null)
-        {
-          hasEncValue = PrimitivesEncoder.TryEncode(fieldValue, out encValue);
-        }
-
-        fields.Add(new MemberDump()
-        {
-          Name = fieldInfo.Name,
-          HasEncodedValue = hasEncValue,
-          EncodedValue = encValue
-        });
-      }
-      catch (Exception e)
-      {
-        fields.Add(new MemberDump()
-        {
-          Name = fieldInfo.Name,
-          HasEncodedValue = false,
-          RetrievalError = $"Failed to read. Exception: {e}"
-        });
-      }
+      // Only collect field names - values are fetched lazily via /get_field endpoint
+      fields.Add(new MemberDump() { Name = fieldInfo.Name });
     }
+    Log.Debug($"[ObjectDumpFactory] Field loop: {sw.ElapsedMilliseconds}ms, added={fields.Count}");
 
+    sw.Restart();
     List<MemberDump> props = new();
-    foreach (var propInfo in dumpedObjType.GetProperties((BindingFlags)0xffff))
+    var allProps = dumpedObjType.GetProperties((BindingFlags) 0xffff);
+    Log.Debug($"[ObjectDumpFactory] GetProperties: {sw.ElapsedMilliseconds}ms, count={allProps.Length}");
+
+    sw.Restart();
+    foreach (var propInfo in allProps)
     {
       // Skip properties that don't have a getter
       if (propInfo.GetMethod == null)
         continue;
 
-      try
-      {
-        //
-        // Property dumping is disabled. It should be accessed using the 'get_' function.
-        //
-
-        //var propValue = propInfo.GetValue(instance);
-        //bool hasEncValue = false;
-        //string encValue = null;
-        //if (propValue.GetType().IsPrimitiveEtc() || propValue is IEnumerable)
-        //{
-        //    hasEncValue = true;
-        //    encValue = PrimitivesEncoder.Encode(propValue);
-        //}
-
-        props.Add(new MemberDump()
-        {
-          Name = propInfo.Name,
-          HasEncodedValue = false,
-          EncodedValue = null,
-        });
-      }
-      catch (Exception e)
-      {
-        props.Add(new MemberDump()
-        {
-          Name = propInfo.Name,
-          HasEncodedValue = false,
-          RetrievalError = $"Failed to read. Exception: {e}"
-        });
-      }
+      // Only collect property names - values are accessed via 'get_PropertyName' method
+      props.Add(new MemberDump() { Name = propInfo.Name });
     }
+    Log.Debug($"[ObjectDumpFactory] Property loop: {sw.ElapsedMilliseconds}ms, added={props.Count}");
 
     // Populate fields and properties
     od.Fields = fields;
