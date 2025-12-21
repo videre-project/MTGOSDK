@@ -17,65 +17,65 @@ public class FileLoggerProvider(FileLoggerOptions options)
 {
   private readonly ConcurrentDictionary<string, StreamWriter> _fileHandles = new();
 
-  /// <summary>
-  /// Gets the log file stream based on the provided options.
-  /// </summary>
-  /// <param name="options">The options to use for logging.</param>
-  /// <returns>The log file stream.</returns>
-  private StreamWriter GetLogFile(FileLoggerOptions options)
+/// <summary>
+/// Gets the log file stream based on the provided options.
+/// </summary>
+/// <param name="options">The options to use for logging.</param>
+/// <returns>The log file stream.</returns>
+private StreamWriter GetLogFile(FileLoggerOptions options)
+{
+  string filePath = Path.Combine(options.LogDirectory, options.FileName);
+  if (!Directory.Exists(options.LogDirectory))
   {
-    string filePath = Path.Combine(options.LogDirectory, options.FileName);
-    if (!Directory.Exists(options.LogDirectory))
+    _ = Directory.CreateDirectory(options.LogDirectory);
+  }
+  // Delete old log files if the max age is set
+  else if (options.MaxAge.HasValue)
+  {
+    foreach (var oldFile in Directory.GetFiles(options.LogDirectory))
     {
-      _ = Directory.CreateDirectory(options.LogDirectory);
-    }
-    // Delete old log files if the max age is set
-    else if (options.MaxAge.HasValue)
-    {
-      foreach (var oldFile in Directory.GetFiles(options.LogDirectory))
+      if (File.GetCreationTime(oldFile) < DateTime.Now - options.MaxAge)
       {
-        if (File.GetCreationTime(oldFile) < DateTime.Now - options.MaxAge)
+        try
         {
-          try
-          {
-            File.Delete(oldFile);
-          }
-          catch (IOException)
-          {
-            // Ignore error if the file is locked by another process
-          }
+          File.Delete(oldFile);
+        }
+        catch (IOException)
+        {
+          // Ignore error if the file is locked by another process
         }
       }
     }
-
-    if (!_fileHandles.TryGetValue(filePath, out var file))
-    {
-      // Create a new log file if it does not exist
-      if (!File.Exists(filePath))
-      {
-        File.Create(filePath).Dispose();
-      }
-
-      file = Retry(() => new StreamWriter(filePath));
-      _ = _fileHandles.TryAdd(filePath, file);
-    }
-    return file;
   }
 
-  public ILogger CreateLogger(string categoryName)
+  if (!_fileHandles.TryGetValue(filePath, out var file))
   {
-    return new FileLogger(categoryName, GetLogFile(options), options);
-  }
-
-  public void Dispose()
-  {
-    foreach (var logFile in _fileHandles.Values)
+    // Create a new log file if it does not exist
+    if (!File.Exists(filePath))
     {
-      lock (logFile)
-      {
-        logFile.Dispose();
-      }
+      File.Create(filePath).Dispose();
     }
-    _fileHandles.Clear();
+
+    file = Retry(() => new StreamWriter(filePath));
+    _ = _fileHandles.TryAdd(filePath, file);
   }
+  return file;
+}
+
+public ILogger CreateLogger(string categoryName)
+{
+  return new FileLogger(categoryName, GetLogFile(options), options);
+}
+
+public void Dispose()
+{
+  foreach (var logFile in _fileHandles.Values)
+  {
+    lock (logFile)
+    {
+      logFile.Dispose();
+    }
+  }
+  _fileHandles.Clear();
+}
 }
