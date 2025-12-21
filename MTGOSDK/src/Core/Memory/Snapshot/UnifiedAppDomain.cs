@@ -57,6 +57,9 @@ public class UnifiedAppDomain
 
   public Type ResolveType(string typeFullName, string assemblyName = null)
   {
+    // Skip invalid type requests
+    if (typeFullName.StartsWith("TInterface`")) return typeof(object);
+
     // TODO: Nullable gets a special case but in general we should switch to a
     //       recursive type-resolution to account for types like:
     //           Dictionary<FirstAssembly.FirstType, SecondAssembly.SecondType>

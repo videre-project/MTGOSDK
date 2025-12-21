@@ -11,6 +11,8 @@ using System.Windows.Media.Imaging;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using WotC.MtGO.Client.Model.ResourceManagement;
+
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Remoting;
@@ -109,8 +111,8 @@ public static class CardRenderer
     if (s_cachedRenderTarget is null)
     {
       s_cachedRenderTarget = RemoteClient.CreateInstance<RenderTargetBitmap>(
-        (int)ExportWidth,
-        (int)ExportHeight,
+        (int) ExportWidth,
+        (int) ExportHeight,
         96.0,
         96.0,
         s_cachedPixelFormat
@@ -152,7 +154,7 @@ public static class CardRenderer
       // Get the back buffer pointer and stride from the remote WriteableBitmap
       IntPtr backBuffer = Cast<IntPtr>(writeableBitmap.BackBuffer);
       int stride = writeableBitmap.BackBufferStride;
-      int bufferSize = stride * (int)ExportHeight;
+      int bufferSize = stride * (int) ExportHeight;
 
       // Read the pixel data directly from the remote process memory
       byte[] pixels = new byte[bufferSize];
@@ -160,7 +162,7 @@ public static class CardRenderer
         RemoteClient.ClientProcess.Handle,
         backBuffer,
         pixels,
-        (nuint)bufferSize,
+        (nuint) bufferSize,
         out nuint _
       );
 
@@ -273,8 +275,8 @@ public static class CardRenderer
 
   public static void SaveCardAsPng(byte[] pixelData, string filePath)
   {
-    int width = (int)ExportWidth;
-    int height = (int)ExportHeight;
+    int width = (int) ExportWidth;
+    int height = (int) ExportHeight;
     int stride = width * 4; // BGRA32
 
     var bitmap = new WriteableBitmap(
@@ -303,5 +305,64 @@ public static class CardRenderer
       encoder.Frames.Add(BitmapFrame.Create(bitmap));
       encoder.Save(fileStream);
     }
+  }
+
+  //
+  // Card Art Export Methods
+  //
+
+  /// <summary>
+  /// Ensures the card's visual resource is loaded, blocking until complete.
+  /// </summary>
+  /// <param name="card">The card to load the resource for.</param>
+  /// <returns>The local file path to the card art, or null if unavailable.</returns>
+  private static async Task<string?> EnsureCardArtLoaded(Card card)
+  {
+    // Access the ICardDefinition's Resource property via dynamic
+    dynamic cardDef = Unbind(card);
+    dynamic resource = cardDef.Resource;
+    if (resource == null) return null;
+
+    // Check if already loaded
+    var loadState = Cast<VisualResourceLoadState>(resource.LoadState);
+    if (loadState != VisualResourceLoadState.Loaded)
+    {
+      // Force synchronous download by blocking on the async task
+      var downloadTask = resource.DownloadResourceAsync();
+      await Task.Run(() => downloadTask.Wait());
+    }
+
+    // Get the View URI which should now point to the local file
+    var viewUri = resource.View;
+    if (viewUri == null || viewUri.OriginalString == ".") return null;
+
+    // Return the local file path
+    return viewUri.IsFile ? viewUri.LocalPath : null;
+  }
+
+  /// <summary>
+  /// Gets the raw bytes of a card's art image.
+  /// </summary>
+  /// <param name="card">The card to get art for.</param>
+  /// <returns>The raw image file bytes, or null if unavailable.</returns>
+  public static async Task<string?> GetCardArtPath(Card card)
+  {
+    var localPath = await EnsureCardArtLoaded(card);
+    if (localPath == null || !File.Exists(localPath)) return null;
+
+    return localPath;
+  }
+
+  /// <summary>
+  /// Gets the file path to a card's art image.
+  /// </summary>
+  /// <param name="card">The card to get art for.</param>
+  /// <returns>The local file path to the art image, or null if unavailable.</returns>
+  public static async Task<byte[]?> GetCardArtBytes(Card card)
+  {
+    var path = await GetCardArtPath(card);
+    if (path == null) return null;
+
+    return await File.ReadAllBytesAsync(path);
   }
 }

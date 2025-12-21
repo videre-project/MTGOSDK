@@ -10,6 +10,7 @@ using System.Threading;
 
 using Newtonsoft.Json;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
@@ -25,6 +26,9 @@ public partial class Diver : IDisposable
     bool hashCodeFallback = arg.QueryString.Get("hashcode_fallback").ToUpper() == "TRUE";
     string hashCodeStr = arg.QueryString.Get("hashcode");
     int userHashcode = 0;
+
+    Log.Debug($"[Diver] Got /object request: addr={objAddrStr}, type={typeName}, pinRequest={pinningRequested}");
+
     if (objAddrStr == null)
     {
       return QuickError("Missing parameter 'address'");
@@ -43,21 +47,30 @@ public partial class Diver : IDisposable
 
     // Attempt to dump the object and remote type
     ObjectDump od = null!;
+    var sw = System.Diagnostics.Stopwatch.StartNew();
     try
     {
+      Log.Debug($"[Diver] Calling GetHeapObject for {objAddrStr}...");
       (object instance, ulong pinnedAddress) = _runtime.GetHeapObject(
         objAddr,
         pinningRequested,
         typeName,
         hashCodeFallback ? userHashcode : null
       );
+      Log.Debug($"[Diver] GetHeapObject completed in {sw.ElapsedMilliseconds}ms");
+
+      sw.Restart();
       od = ObjectDumpFactory.Create(instance, objAddr, pinnedAddress);
+      Log.Debug($"[Diver] ObjectDumpFactory.Create completed in {sw.ElapsedMilliseconds}ms");
     }
     catch (Exception e)
     {
       return QuickError("Failed to retrieve the remote object. Error: " + e.Message);
     }
 
-    return JsonConvert.SerializeObject(od);
+    sw.Restart();
+    var json = JsonConvert.SerializeObject(od);
+    Log.Debug($"[Diver] JSON serialization completed in {sw.ElapsedMilliseconds}ms, size={json.Length} bytes");
+    return json;
   }
 }

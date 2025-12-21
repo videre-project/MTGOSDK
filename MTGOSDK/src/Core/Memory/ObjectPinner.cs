@@ -50,14 +50,17 @@ public class ObjectPinner : IDisposable
   private readonly ConditionalWeakTable<object, PinningInfo> _weakTable = new();
   private readonly ConcurrentDictionary<IntPtr, WeakReference> _addrMap = new();
 
-  public ObjectPinner(uint size = 1_048_576)
+  public ObjectPinner(uint size = 16_384)
   {
     if (size == 0) throw new ArgumentOutOfRangeException(nameof(size), "Size must be greater than zero.");
     _size = size;
 
     // Create the dynamic method for the pinning loop
+    Log.Debug($"[ObjectPinner] Starting ObjectPinner construction with size={size}");
     DynamicMethod method = GeneratePinningLoopIL(_size);
-    var loopDelegate = (PinningLoopDelegate)method.CreateDelegate(typeof(PinningLoopDelegate));
+    Log.Debug($"[ObjectPinner] IL generation complete, creating delegate...");
+    var loopDelegate = (PinningLoopDelegate) method.CreateDelegate(typeof(PinningLoopDelegate));
+    Log.Debug($"[ObjectPinner] Delegate created, starting background task...");
 
     // Start the background task
     _pinningTask = Task.Factory.StartNew(
@@ -182,10 +185,29 @@ public class ObjectPinner : IDisposable
     if (!TryPinObject(obj, out IntPtr objAddr))
     {
       if (IsFull())
+      {
         throw new InvalidOperationException("Failed to pin object. No free slots available.");
+      }
       else
-        throw new InvalidOperationException(
-          "Failed to pin object. Address collision or internal error occurred.");
+      {
+        // Detect if there was an address collision
+        if (TryGetPinningAddress(obj, out objAddr))
+        {
+          return objAddr; // Successfully pinned in a retry
+        }
+        // Check if the task has faulted
+        else if (_pinningTask.IsFaulted)
+        {
+          throw new InvalidOperationException(
+            "Failed to pin object. The background pinning task has faulted.",
+            _pinningTask.Exception);
+        }
+        else
+        {
+          throw new InvalidOperationException(
+            "Failed to pin object. Address collision or internal error occurred.");
+        }
+      };
     }
     return objAddr;
   }
@@ -194,7 +216,7 @@ public class ObjectPinner : IDisposable
   {
     if (obj == null) throw new ArgumentNullException(nameof(obj));
 
-    _lock.EnterWriteLock();
+    // _lock.EnterWriteLock();
     try
     {
       if (!_weakTable.TryGetValue(obj, out PinningInfo? pinningInfo))
@@ -210,6 +232,7 @@ public class ObjectPinner : IDisposable
       _signal.Set(); // Signal background task
 
       // Return index to free list
+      _lock.EnterWriteLock();
       _freeIndices.Push(pinningInfo.Index);
     }
     finally
@@ -256,6 +279,49 @@ public class ObjectPinner : IDisposable
     }
   }
 
+  /// <summary>
+  /// Queue a non-blocking unpin request by pinned object address. This
+  /// attempts to remove the address-to-weakref mapping and, if possible,
+  /// retrieves the original index from the weak-table to enqueue a targeted
+  /// unpin request. This avoids taking the pinner's write lock on the caller
+  /// thread and defers the actual pinned-local release to the background
+  /// pinning loop.
+  /// </summary>
+  public void QueueUnpinByAddress(IntPtr objAddress)
+  {
+    if (objAddress == IntPtr.Zero)
+      return;
+
+    if (!_addrMap.TryRemove(objAddress, out WeakReference? weakRef))
+    {
+      return;
+    }
+
+    if (weakRef == null)
+    {
+      _signal.Set();
+      return;
+    }
+
+    if (weakRef.TryGetTarget(out object? obj) && obj != null)
+    {
+      if (_weakTable.TryGetValue(obj, out PinningInfo? pinInfo))
+      {
+        // Remove the weak-table entry and enqueue a targeted unpin for the
+        // corresponding index. No write lock taken here; the background
+        // loop will perform the pinned-local update.
+        try { _weakTable.Remove(obj); } catch { /* best-effort */ }
+        _requestQueue.Enqueue(new PinRequest(null, pinInfo.Index));
+        _signal.Set();
+        return;
+      }
+    }
+
+    // If we couldn't retrieve the object or its index, just signal the
+    // background loop so it can perform any necessary cleanup.
+    _signal.Set();
+  }
+
   private unsafe bool TryPinObject(object obj, out IntPtr objAddr)
   {
     _lock.EnterUpgradeableReadLock();
@@ -293,7 +359,7 @@ public class ObjectPinner : IDisposable
         var b = Unsafe.As<Pinnable>(obj);
         fixed (byte* c = &b.Data)
         {
-          objAddr = (IntPtr)(c - IntPtr.Size);
+          objAddr = (IntPtr) (c - IntPtr.Size);
         }
 
         // Add to mappings before signaling background task
@@ -328,8 +394,11 @@ public class ObjectPinner : IDisposable
 
   private static DynamicMethod GeneratePinningLoopIL(uint size)
   {
+    var methodName = "PinningLoop_" + Guid.NewGuid().ToString("N");
+    Log.Debug($"[ObjectPinner] Generating IL for {methodName} with size={size}");
+
     var method = new DynamicMethod(
-      "PinningLoop_" + Guid.NewGuid().ToString("N"),
+      methodName,
       null, // Return type void
       new[] {
         typeof(ConcurrentQueue<PinRequest>), // Arg 0: requestQueue
@@ -339,8 +408,12 @@ public class ObjectPinner : IDisposable
       typeof(ObjectPinner).Module,
       true // skipVisibility
     );
+    Log.Debug($"[ObjectPinner] DynamicMethod created");
 
-    ILGenerator il = method.GetILGenerator();
+    ILGenerator rawIl = method.GetILGenerator();
+    // var il = new LoggingILGenerator(rawIl);
+    var il = rawIl;
+    Log.Debug($"[ObjectPinner] ILGenerator obtained");
 
     // --- Get MethodInfo for Unsafe.As ---
     MethodInfo unsafeAsMethod = typeof(Unsafe)
@@ -351,15 +424,21 @@ public class ObjectPinner : IDisposable
     // --- Get FieldInfo for Pinnable.Data ---
     FieldInfo pinnableDataField = typeof(Pinnable).GetField("Data")
       ?? throw new MissingFieldException("Cannot find Pinnable.Data field");
+    Log.Debug($"[ObjectPinner] Reflection lookups complete");
 
     // --- Locals ---
+    Log.Debug($"[ObjectPinner] Declaring {size} pinned locals...");
     LocalBuilder[] pinnedLocals = new LocalBuilder[size];
     for (int i = 0; i < size; i++)
     {
+      // Declare pinned local - defaults to null managed pointer, no explicit init needed
       pinnedLocals[i] = il.DeclareLocal(typeof(byte).MakeByRefType(), pinned: true);
-      // Initialize pinned locals to null
-      il.Emit(OpCodes.Ldnull);
-      il.Emit(OpCodes.Stloc, pinnedLocals[i]);
+
+      // Log progress every 4096 locals
+      if ((i + 1) % 4096 == 0)
+      {
+        Log.Debug($"[ObjectPinner] Declared {i + 1}/{size} locals...");
+      }
     }
     LocalBuilder requestLocal = il.DeclareLocal(typeof(PinRequest));
     LocalBuilder objLocal = il.DeclareLocal(typeof(object));
@@ -422,7 +501,9 @@ public class ObjectPinner : IDisposable
 
     // --- HandleUnpin ---
     il.MarkLabel(handleUnpin);
-    il.Emit(OpCodes.Ldnull);
+    // Use null pointer (0 converted to native int) instead of Ldnull for byte& compatibility
+    il.Emit(OpCodes.Ldc_I4_0);
+    il.Emit(OpCodes.Conv_U);
     // Fall through to storeResult
 
     // Store result (managed ref or null) into pinned local
@@ -464,6 +545,9 @@ public class ObjectPinner : IDisposable
     // --- Exit Point ---
     il.MarkLabel(loopExit);
     il.Emit(OpCodes.Ret);
+
+    // // Flush the IL log for debugging
+    // il.FlushToLog();
 
     return method;
   }

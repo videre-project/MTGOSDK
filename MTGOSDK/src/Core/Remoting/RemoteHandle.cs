@@ -238,7 +238,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
   /// <returns>A provider for the given process</returns>
   public static RemoteHandle Connect(Process target)
   {
-    return Connect(target, (ushort)target.Id);
+    return Connect(target, (ushort) target.Id);
   }
 
   public static RemoteHandle Connect(

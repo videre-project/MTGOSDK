@@ -14,6 +14,7 @@ using Microsoft.Diagnostics.Runtime;
 
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Compiler;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -132,7 +133,7 @@ public class SnapshotRuntime : IDisposable
   //
 
   public bool TryGetPinnedObject(ulong objAddress, out object instance) =>
-    _pinner.TryGetPinnedObject((IntPtr)objAddress, out instance);
+    _pinner.TryGetPinnedObject((IntPtr) objAddress, out instance);
 
   public ulong PinObject(object instance)
   {
@@ -143,17 +144,27 @@ public class SnapshotRuntime : IDisposable
       objAddress = _pinner.Pin(instance);
     }
 
-    return (ulong)objAddress;
+    return (ulong) objAddress;
   }
 
   public bool UnpinObject(ulong objAddress)
   {
     // Ignore if the object is not found in the pinned object pool.
-    if (!_pinner.TryGetPinnedObject((IntPtr)objAddress, out object obj))
+    if (!_pinner.TryGetPinnedObject((IntPtr) objAddress, out object obj))
       return false;
 
     _pinner.Unpin(obj);
     return true;
+  }
+
+  /// <summary>
+  /// Queue a non-blocking unpin request by object address. This attempts to
+  /// remove the address mapping and enqueue the unpin request without
+  /// taking heavy write locks on the caller thread.
+  /// </summary>
+  public void QueueUnpinObject(ulong objAddress)
+  {
+    _pinner.QueueUnpinByAddress((IntPtr) objAddress);
   }
 
   public void UnpinAllObjects() => _pinner.UnpinAllObjects();
@@ -246,7 +257,7 @@ public class SnapshotRuntime : IDisposable
             try
             {
               // Get the snapshot process handle
-              var _snapshotHandle = (IntPtr)dr.GetType()
+              var _snapshotHandle = (IntPtr) dr.GetType()
                 .GetField("_snapshotHandle",
                     BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(dr);
@@ -264,7 +275,7 @@ public class SnapshotRuntime : IDisposable
           }
 
           // Close the native process handle
-          var nativeHandle = (IntPtr)dr.GetType()
+          var nativeHandle = (IntPtr) dr.GetType()
             .GetField("_process",
                 BindingFlags.NonPublic | BindingFlags.Instance)
             .GetValue(dr);
@@ -341,9 +352,9 @@ public class SnapshotRuntime : IDisposable
       unsafe
       {
         TypedReference tr = __makeref(obj);
-        IntPtr ptr = *(IntPtr*)(&tr);
+        IntPtr ptr = *(IntPtr*) (&tr);
 
-        return (ulong)ptr.ToInt64();
+        return (ulong) ptr.ToInt64();
       }
     }
     finally
@@ -409,8 +420,10 @@ public class SnapshotRuntime : IDisposable
     // Check if we have this object in our pinned pool
     if (TryGetPinnedObject(objAddr, out object pinnedObj))
     {
+      Log.Debug($"[SnapshotRuntime] Object 0x{objAddr:X} found in pinned pool");
       return (pinnedObj, objAddr);
     }
+    Log.Debug($"[SnapshotRuntime] Object 0x{objAddr:X} NOT in pinned pool, falling back to ClrMD lookup");
 
     //
     // The object is not pinned, so falling back to the last dumped runtime can
@@ -422,9 +435,16 @@ public class SnapshotRuntime : IDisposable
       throw new Exception("No object in this address.");
     }
 
-    // Make sure it's still in place by refreshing the runtime
-    RefreshRuntime();
-    ClrObject clrObj = GetClrObject(objAddr);
+    ClrObject clrObj = lastKnownClrObj;
+    if (clrObj.Type?.Name != typeName)
+    {
+      Log.Debug($"[SnapshotRuntime] RefreshRuntime() starting for object 0x{objAddr:X}...");
+      var sw = Stopwatch.StartNew();
+      RefreshRuntime();
+      Log.Debug($"[SnapshotRuntime] RefreshRuntime() completed in {sw.ElapsedMilliseconds}ms");
+
+      clrObj = GetClrObject(objAddr);
+    }
 
     //
     // Figuring out the Method Table value and the actual Object's address

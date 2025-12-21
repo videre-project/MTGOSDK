@@ -23,8 +23,8 @@ public partial class Diver : IDisposable
     }
     Log.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
 
-    // Remove if we have this object in our pinned pool, otherwise ignore.
-    _runtime.UnpinObject(objAddr);
+    // Queue a lightweight unpin so the request handler does not block.
+    _runtime.QueueUnpinObject(objAddr);
 
     return "{\"status\":\"OK\"}";
   }

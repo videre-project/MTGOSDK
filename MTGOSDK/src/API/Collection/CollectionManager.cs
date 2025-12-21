@@ -6,14 +6,14 @@
 using System.Collections;
 using System.Collections.Concurrent;
 
-using MTGOSDK.Core.Remoting;
-
 using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
 
+using MTGOSDK.Core.Remoting;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
+
 
 namespace MTGOSDK.API.Collection;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class CollectionManager
 {
@@ -36,28 +36,33 @@ public static class CollectionManager
   /// </summary>
   public static ConcurrentDictionary<int, Card> Cards { get; } = new();
 
+  // public static IDictionary<string, List<int>> CardNameToIds =>
+  //   field ??= BuildCardNameToCatalogIdsFromXml();
+
+  private static dynamic CardNameToIds =>
+    field ??= Unbind(s_cardDataManager).NameToCardDefinitions;
+
   /// <summary>
   /// Returns a list of catalog ids for the given card name.
   /// </summary>
   /// <param name="cardName">The name of the card to query.</param>
-  /// <param name="excludeGoldBorders">
-  /// Whether to exclude gold-bordered cards (non-tournament legal).
-  /// </param>
-  /// <param name="excludeNonMtgoCards">
-  /// Whether to exclude cards that are not available on MTGO.
-  /// </param>
   /// <returns>A list of catalog ids.</returns>
-  public static IList<int> GetCardIds(
-    string cardName,
-    bool excludeGoldBorders = true,
-    bool excludeNonMtgoCards = false
-  ) =>
-    Map<IList, int>(
-      s_cardDataManager.GetCatalogIdsForNameInPreferentialOrder(
-        cardName,
-        excludeGoldBorders,
-        excludeNonMtgoCards
-      ));
+  public static IList<int> GetCardIds(string cardName) =>
+    Map<IList, int>(CardNameToIds[cardName]);
+  // Map<IList, int>(
+  //   Unbind(s_cardDataManager).GetCatalogIdsForNameInPreferentialOrder(
+  //     cardName,
+  //     true,
+  //     false
+  //   ));
+
+  public static IList<Card> GetCardPrintings(string cardName) =>
+    Map<IList, Card>(
+      Try(() => CardNameToIds[cardName.ToLower()])
+        ?? throw new KeyNotFoundException(
+          $"No card found with name \"{cardName}\"."),
+      proxy: true
+    );
 
   /// <summary>
   /// Returns a card object by the given catalog id.
@@ -91,12 +96,7 @@ public static class CollectionManager
   /// <exception cref="KeyNotFoundException">
   /// Thrown if no card is found with the given name.
   /// </exception>
-  public static Card GetCard(string cardName) =>
-    GetCard(
-      (int?)GetCardIds(cardName).FirstOrDefault()
-        ?? throw new KeyNotFoundException(
-            $"No card found with name \"{cardName}\".")
-    );
+  public static Card GetCard(string cardName) => GetCardPrintings(cardName)[0];
 
   /// <summary>
   /// Returns a list of card objects by the given card name.
