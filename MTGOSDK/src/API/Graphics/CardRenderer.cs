@@ -178,10 +178,34 @@ public static class CardRenderer
   }
 
   /// <summary>
+  /// Ensures the card's visual resources are loaded before rendering.
+  /// This downloads the card art if not already cached locally.
+  /// </summary>
+  /// <param name="card">The card to load resources for.</param>
+  private static async Task EnsureResourcesLoaded(Card card)
+  {
+    dynamic cardDef = Unbind(card);
+    dynamic resource = cardDef.Resource;
+    if (resource == null) return;
+
+    // Check if already loaded
+    var loadState = Cast<VisualResourceLoadState>(resource.LoadState);
+    if (loadState != VisualResourceLoadState.Loaded)
+    {
+      // Trigger the async download and wait for it to complete
+      var downloadTask = resource.DownloadResourceAsync();
+      await Task.Run(() => downloadTask.Wait());
+    }
+  }
+
+  /// <summary>
   /// Renders a single card. Opens a UI thread scope for each card.
   /// </summary>
-  private static byte[] RenderCardToPixels(Card cardDefinition)
+  private static async Task<byte[]> RenderCardToPixelsAsync(Card cardDefinition)
   {
+    // Pre-load card resources (art, etc.) before rendering
+    await EnsureResourcesLoaded(cardDefinition);
+
     // All WPF operations must be on the same UI thread
     using (DiverCommunicator.BeginUIThreadScope())
     {
@@ -193,6 +217,14 @@ public static class CardRenderer
 
       return RenderCardToPixelsCore(detailsViewModel);
     }
+  }
+
+  /// <summary>
+  /// Renders a single card synchronously.
+  /// </summary>
+  private static byte[] RenderCardToPixels(Card cardDefinition)
+  {
+    return RenderCardToPixelsAsync(cardDefinition).GetAwaiter().GetResult();
   }
 
   /// <summary>
@@ -216,8 +248,15 @@ public static class CardRenderer
   /// <returns>Raw BGRA pixel data for each card, yielded as rendered.</returns>
   public static IEnumerable<byte[]> RenderCardsBatch(IEnumerable<Card> cards)
   {
+    var cardList = cards.ToList();
+
+    // Pre-load all card resources in parallel (downloads card art, frames, etc)
+    Task.WhenAll(cardList.Select(EnsureResourcesLoaded))
+      .GetAwaiter()
+      .GetResult();
+
     // Create all ViewModels in parallel (doesn't need UI thread)
-    var viewModels = cards
+    var viewModels = cardList
       .AsParallel()
       .AsOrdered()
       .Select(card => new DetailsViewModel(card))
