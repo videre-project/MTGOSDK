@@ -14,8 +14,7 @@ public abstract class BaseCommunicator
   protected readonly string _hostname;
   protected readonly int _port;
 
-  protected static readonly SemaphoreSlim s_semaphore =
-    new(2 * Environment.ProcessorCount);
+  protected static readonly SemaphoreSlim s_semaphore = new(50);
   protected static readonly HttpClient s_client = new(new HttpClientHandler
   {
     MaxConnectionsPerServer = 20
@@ -104,7 +103,7 @@ public abstract class BaseCommunicator
     }
     catch (OperationCanceledException)
     {
-      if (!_cancellationTokenSource.IsCancellationRequested)
+      if (!_cancellationTokenSource.IsCancellationRequested && !SuppressionContext.IsSuppressed())
       {
 #if DEBUG
         var queryInfo = queryParams != null
@@ -119,7 +118,7 @@ public abstract class BaseCommunicator
     }
     catch (HttpRequestException ex)
     {
-      if (!_cancellationTokenSource.IsCancellationRequested)
+      if (!_cancellationTokenSource.IsCancellationRequested && !SuppressionContext.IsSuppressed())
       {
         Log.Error($"HTTP request failed: {ex.Message}");
         Log.Debug(ex.StackTrace);
@@ -132,7 +131,7 @@ public abstract class BaseCommunicator
     }
     catch (Exception ex)
     {
-      if (!_cancellationTokenSource.IsCancellationRequested)
+      if (!_cancellationTokenSource.IsCancellationRequested && !SuppressionContext.IsSuppressed())
       {
         Log.Error($"Unexpected error during request: {ex.Message}");
         Log.Debug(ex.StackTrace);

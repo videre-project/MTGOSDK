@@ -67,7 +67,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
             $"This is likely due to the object being invalid or not being a managed object.",
             e);
         }
-      }, raise: true);
+      }, delay: 10, raise: true);
 
       var objRef = new RemoteObjectRef(od, td, _app.Communicator);
       var remoteObject = new RemoteObject(objRef, _app);
