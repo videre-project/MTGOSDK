@@ -57,8 +57,21 @@ public class UnifiedAppDomain
 
   public Type ResolveType(string typeFullName, string assemblyName = null)
   {
-    // Skip invalid type requests
+    // Skip invalid type requests (like TInterface`1, Task`1 without namespace)
+    // These are typically internal framework types that shouldn't be resolved
     if (typeFullName.StartsWith("TInterface`")) return typeof(object);
+
+    // Check if this is a short name without namespace (no dots before any backtick)
+    bool isShortName = !typeFullName.Contains('.') ||
+                       (typeFullName.Contains('`') &&
+                        !typeFullName.Substring(0, typeFullName.IndexOf('`')).Contains('.'));
+
+    // For short names like "Task`1", return typeof(object) as fallback
+    // These cannot be reliably resolved without the full type namespace
+    if (isShortName)
+    {
+      return typeof(object);
+    }
 
     // TODO: Nullable gets a special case but in general we should switch to a
     //       recursive type-resolution to account for types like:
@@ -73,7 +86,7 @@ public class UnifiedAppDomain
       string genericParams = typeFullName.Substring(typeFullName.LastIndexOf('<'));
       int numOfParams = genericParams.Split(',').Length;
 
-      string nonGenericPart = typeFullName.Substring(0,typeFullName.LastIndexOf('<'));
+      string nonGenericPart = typeFullName.Substring(0, typeFullName.LastIndexOf('<'));
       // TODO: Does this event work? it turns List<int> and List<string> both to List`1?
       typeFullName = $"{nonGenericPart}`{numOfParams}";
     }
@@ -118,8 +131,7 @@ public class UnifiedAppDomain
     innerTypeName = innerTypeName.Substring(0, innerTypeName.IndexOf(',')).Trim();
 
     Type innerType = ResolveType(innerTypeName);
-    if(innerType == null)
-      return null;
+    if (innerType == null) return null;
 
     Type nullable = typeof(Nullable<>);
     return nullable.MakeGenericType(innerType);

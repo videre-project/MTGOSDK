@@ -41,25 +41,29 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   private static readonly ConcurrentDictionary<Type, PropertyInfo?> s_binderTypeArgsProp = new();
   private static readonly ConcurrentDictionary<(Type ObjType, string MemberName), CallSite<Func<CallSite, object, object>>> s_getMemberCallSites = new();
 
+  // Static cache for DynamicRemoteMethod to avoid recreating on repeated calls
+  // Keyed by (typeFullName, methodName) - using FullName string to avoid RemoteType.GetHashCode issues
+  private static readonly ConcurrentDictionary<(string, string), DynamicRemoteMethod> s_methodProxyCache = new();
+
   public class DynamicRemoteMethod : DynamicObject
   {
     private readonly string _name;
     private readonly List<RemoteMethodInfo> _methods;
-    private readonly DynamicRemoteObject _parent;
     private readonly Type[] _genericArguments;
     // Pre-group overloads by arity to avoid repeated filtering.
     private readonly Dictionary<int, List<RemoteMethodInfo>> _overloadsByArity;
 
+    // Parent is now passed at invoke time instead of being stored
+    // This enables static caching across all instances of the same type
+
     public DynamicRemoteMethod(
       string name,
-      DynamicRemoteObject parent,
       List<RemoteMethodInfo> methods,
       Type[] genericArguments = null)
     {
       genericArguments ??= Array.Empty<Type>();
 
       _name = name;
-      _parent = parent;
       _methods = methods;
 
       _genericArguments = genericArguments;
@@ -78,13 +82,10 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       }
     }
 
-    public override bool TryInvoke(
-      InvokeBinder binder,
-      object[] args,
-      out object result)
-    => TryInvoke(args, out result);
+    // Note: TryInvoke from DynamicObject base class cannot be overridden to add parameters
+    // So we provide a public method that takes the parent
 
-    public bool TryInvoke(object[] args, out object result)
+    public bool TryInvoke(DynamicRemoteObject parent, object[] args, out object result)
     {
       // Start from pre-grouped arity bucket to reduce work.
       List<RemoteMethodInfo> overloads = _overloadsByArity.TryGetValue(args?.Length ?? 0, out var byArity)
@@ -97,7 +98,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       // Note: __type.Methods is expected to include all overloads for this type
       if (overloads.Count != 1)
       {
-        var extras = this._parent.__type.Methods.Where(m => m.Name == _name && m.GetParameters().Length == (args?.Length ?? 0));
+        var extras = parent.__type.Methods.Where(m => m.Name == _name && m.GetParameters().Length == (args?.Length ?? 0));
         if (extras.Any())
         {
           overloads = overloads
@@ -126,7 +127,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           // OK, invoking with generic arguments
           result = overload
             .MakeGenericMethod(_genericArguments)
-            .Invoke(_parent.__ro, args);
+            .Invoke(parent.__ro, args);
         }
         else
         {
@@ -136,7 +137,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           }
           // OK, invoking without generic arguments
           result = overloads.Single()
-            .Invoke(_parent.__ro, args);
+            .Invoke(parent.__ro, args);
         }
       }
       else if (overloads.Count > 1)
@@ -154,11 +155,11 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
             // If the argument provided is null, we cannot deduce a type match.
             if (args[i] == null) continue;
 
-            Type? argType   = args[i]?.GetType();
+            Type? argType = args[i]?.GetType();
             Type? paramType = parameters[i]?.ParameterType;
 
             // Check assignment if local types, otherwise compare by FullName.
-            bool bothLocal = argType.GetType().FullName   == "System.RuntimeType"
+            bool bothLocal = argType.GetType().FullName == "System.RuntimeType"
                           && paramType.GetType().FullName == "System.RuntimeType";
 
             bool valid = bothLocal
@@ -179,7 +180,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         if (matchingOverloads.Count == 1)
         {
           // We found a single matching overload, so we can invoke it.
-          result = matchingOverloads.Single().Invoke(_parent.__ro, args);
+          result = matchingOverloads.Single().Invoke(parent.__ro, args);
         }
         else
         {
@@ -203,7 +204,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     {
       return obj is DynamicRemoteMethod method &&
           _name == method._name &&
-          EqualityComparer<DynamicRemoteObject>.Default.Equals(_parent, method._parent) &&
           EqualityComparer<Type[]>.Default.Equals(_genericArguments, method._genericArguments);
     }
 
@@ -211,7 +211,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     {
       int hashCode = -734779080;
       hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(_name);
-      hashCode = hashCode * -1521134295 + EqualityComparer<DynamicRemoteObject>.Default.GetHashCode(_parent);
       hashCode = hashCode * -1521134295 + EqualityComparer<Type[]>.Default.GetHashCode(_genericArguments);
       return hashCode;
     }
@@ -233,7 +232,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // MyOtherFunc[t,p,q]
 
     public DynamicRemoteMethod this[Type t] =>
-      new DynamicRemoteMethod(_name, _parent, _methods,
+      new DynamicRemoteMethod(_name, _methods,
           _genericArguments.Concat(new Type[] { t }).ToArray());
 
     public DynamicRemoteMethod this[Type t1, Type t2] =>
@@ -337,7 +336,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     {
       if (nextType == null)
         yield break;
-      var members = nextType.GetMembers((BindingFlags)0xffff);
+      var members = nextType.GetMembers((BindingFlags) 0xffff);
       foreach (MemberInfo member in members)
       {
         if (member is MethodBase newMethods)
@@ -361,13 +360,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       lastType = nextType;
       nextType = nextType.BaseType;
     }
-  while (nextType != null && lastType != typeof(object));
+    while (nextType != null && lastType != typeof(object));
   }
 
   // Cached per-type reflection helpers
   private static MemberInfo[] GetCachedMembers(Type t)
   {
-    return s_membersByType.GetOrAdd(t, static type => type.GetMembers((BindingFlags)0xffff));
+    return s_membersByType.GetOrAdd(t, static type => type.GetMembers((BindingFlags) 0xffff));
   }
 
   private static Dictionary<string, List<MemberInfo>> GetCachedMembersByNameMap(Type t)
@@ -417,7 +416,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       {
         yield return member;
       }
-      while(__ongoingMembersDumperEnumerator.MoveNext())
+      while (__ongoingMembersDumperEnumerator.MoveNext())
       {
         var member = __ongoingMembersDumperEnumerator.Current;
         __membersInner.Add(member);
@@ -433,10 +432,10 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   public T InvokeMethod<T>(string name, params object[] args)
   {
     var matchingMethods = from member in __members
-        where member.Name == name
-        where ((MethodInfo)member).GetParameters().Length == args.Length
-        select member;
-    return (T)(matchingMethods.Single() as MethodInfo).Invoke(__ro, args);
+                          where member.Name == name
+                          where ((MethodInfo) member).GetParameters().Length == args.Length
+                          select member;
+    return (T) (matchingMethods.Single() as MethodInfo).Invoke(__ro, args);
   }
 
   #region Dynamic Object API
@@ -513,7 +512,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       case MemberTypes.Field:
         try
         {
-          result = Retry(() => ((FieldInfo)firstMember).GetValue(__ro),
+          result = Retry(() => ((FieldInfo) firstMember).GetValue(__ro),
                          delay: 10, raise: true);
         }
         catch (Exception ex)
@@ -524,7 +523,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       case MemberTypes.Property:
         try
         {
-          result = Retry(() => ((PropertyInfo)firstMember).GetValue(__ro),
+          result = Retry(() => ((PropertyInfo) firstMember).GetValue(__ro),
                          delay: 10, raise: true);
         }
         catch (Exception ex)
@@ -552,7 +551,14 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   private DynamicRemoteMethod GetMethodProxy(string name)
   {
-  var methods = __members.Where(member => member.Name == name).ToArray();
+    // Check static cache first - keyed by (typeFullName, methodName)
+    // Skip cache if __type is null (can happen with parameterless constructor)
+    var typeFullName = __type?.FullName;
+    var cacheKey = typeFullName != null ? (typeFullName, name) : default;
+    if (typeFullName != null && s_methodProxyCache.TryGetValue(cacheKey, out var cached))
+      return cached;
+
+    var methods = __members.Where(member => member.Name == name).ToArray();
     if (methods.Length == 0)
     {
       throw new Exception($"Method \"{name}\" wasn't found in the members of type {__type.Name}.");
@@ -571,11 +577,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     methodGroup.AddRange(methods.Cast<RemoteMethodInfo>());
     try
     {
-      return new DynamicRemoteMethod(name, this, methodGroup);
+      var result = new DynamicRemoteMethod(name, methodGroup);
+      if (typeFullName != null)
+        s_methodProxyCache[cacheKey] = result;
+      return result;
     }
     catch (Exception ex)
     {
-
       throw new Exception($"Constructing {nameof(DynamicRemoteMethod)} of \"{name}\" threw an exception", innerException: ex);
     }
   }
@@ -622,7 +630,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     bool success;
     try
     {
-      success = Retry(() => drm.TryInvoke(args, out obj), raise: true);
+      success = Retry(() => drm.TryInvoke(this, args, out obj), raise: true);
     }
     catch (NullReferenceException ex)
     {
@@ -680,7 +688,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         // }
         try
         {
-          ((FieldInfo)firstMember).SetValue(__ro, value);
+          ((FieldInfo) firstMember).SetValue(__ro, value);
         }
         catch (Exception ex)
         {
@@ -694,7 +702,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         // }
         try
         {
-          ((PropertyInfo)firstMember).SetValue(__ro, value);
+          ((PropertyInfo) firstMember).SetValue(__ro, value);
         }
         catch (Exception ex)
         {
