@@ -223,34 +223,6 @@ public partial class Diver : IDisposable
           body = respBodyGenerator(request);
         }
       }
-      catch (Exception ex) when (!forceUIThread && STAThread.RequiresSTAThread(ex))
-      {
-        // Retry the request on the STA thread for WPF/COM operations
-        Log.Debug("[Diver] Retrying request on STA thread due to: " + ex.Message);
-        try
-        {
-          // Capture the cached body to pass to the STA thread
-          // (AsyncLocal doesn't flow to the dedicated STA worker thread)
-          var cachedBody = _cachedRequestBody.Value;
-          body = STAThread.Execute(() =>
-          {
-            _cachedRequestBody.Value = cachedBody;
-            return respBodyGenerator(request);
-          });
-        }
-        catch (Exception staEx)
-        {
-          // Unwrap TargetInvocationException to get the real error
-          var innerEx = staEx;
-          while (innerEx.InnerException != null)
-            innerEx = innerEx.InnerException;
-
-          Log.Error("[Diver] Exception occurred in STA handler.", staEx);
-          Log.Debug("[Diver] STA Inner exception: " + innerEx.Message);
-          Log.Debug("[Diver] STA Full stack trace: " + staEx.ToString());
-          body = QuickError(innerEx.Message, staEx.ToString());
-        }
-      }
       catch (Exception ex)
       {
         Log.Error("[Diver] Exception occurred in handler.", ex);

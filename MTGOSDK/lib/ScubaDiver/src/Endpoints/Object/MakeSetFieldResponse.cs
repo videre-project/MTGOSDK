@@ -66,10 +66,6 @@ public partial class Diver : IDisposable
         {
           return QuickError($"The invalid address for '${request.TypeFullName}'.");
         }
-
-        // Make sure it's still in place
-        _runtime.RefreshRuntime();
-        clrObj = _runtime.GetClrObject(request.ObjAddress);
       }
       if (clrObj.Type == null)
       {
@@ -108,11 +104,6 @@ public partial class Diver : IDisposable
       // Reading back value to return to caller. This is expected C# behaviour:
       // int x = this.field_y = 3; // Makes both x and field_y equal 3.
       results = fieldInfo.GetValue(instance);
-    }
-    catch (Exception e) when (STAThread.RequiresSTAThread(e))
-    {
-      // Re-throw STA-related exceptions so the dispatcher can retry on STA thread
-      throw;
     }
     catch (Exception e)
     {

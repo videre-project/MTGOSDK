@@ -68,11 +68,6 @@ public partial class Diver : IDisposable
       object[] paramsArray = paramsList.ToArray();
       createdObject = Activator.CreateInstance(t, paramsArray);
     }
-    catch (Exception ex) when (STAThread.RequiresSTAThread(ex))
-    {
-      // Re-throw STA-related exceptions so the dispatcher can retry on STA thread
-      throw;
-    }
     catch (Exception ex)
     {
       // Preserve full exception detail for the client (message + stack/inner exceptions)

@@ -85,11 +85,6 @@ public partial class Diver : IDisposable
       {
         results = fieldInfo.GetValue(instance);
       }
-      catch (Exception e) when (STAThread.RequiresSTAThread(e))
-      {
-        // Re-throw STA-related exceptions so the dispatcher can retry on STA thread
-        throw;
-      }
       catch (Exception e)
       {
         return QuickError($"Invocation caused exception: {e}");

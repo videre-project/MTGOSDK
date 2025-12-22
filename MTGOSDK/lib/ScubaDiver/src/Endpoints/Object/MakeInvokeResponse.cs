@@ -77,10 +77,6 @@ public partial class Diver : IDisposable
           {
             return QuickError("'address' points at an invalid address");
           }
-
-          // Make sure it's still in place
-          _runtime.RefreshRuntime();
-          clrObj = _runtime.GetClrObject(request.ObjAddress);
         }
         if (clrObj.Type == null)
         {
@@ -149,11 +145,6 @@ public partial class Diver : IDisposable
 
       Log.Debug($"[Diver] Invoking {method.Name} with those args (Count: {paramsList.Count}): `{argsSummary}`");
       results = method.Invoke(instance, paramsList.ToArray());
-    }
-    catch (Exception e) when (STAThread.RequiresSTAThread(e))
-    {
-      // Re-throw STA-related exceptions so the dispatcher can retry on STA thread
-      throw;
     }
     catch (Exception e)
     {
