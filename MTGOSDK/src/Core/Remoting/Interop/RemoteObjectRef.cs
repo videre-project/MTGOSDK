@@ -16,13 +16,15 @@ internal class RemoteObjectRef(
   TypeDump typeInfo,
   DiverCommunicator creatingCommunicator)
 {
-  private bool _isReleased = false;
-  private int _refCount = 0;
-  private readonly object _lock = new();
+  /// <summary>
+  /// State flag: 0 = active, 1 = released. Uses Interlocked/Volatile for atomic access.
+  /// </summary>
+  private int _state; // 0 = active, 1 = released
+  private int _refCount;
 
   private void ThrowIfReleased()
   {
-    if (_isReleased)
+    if (Volatile.Read(ref _state) != 0)
     {
       throw new ObjectDisposedException(
           "Cannot use RemoteObjectRef object after `Release` have been called");
@@ -31,11 +33,10 @@ internal class RemoteObjectRef(
 
   internal void AddReference()
   {
-    lock (_lock)
-    {
-      ThrowIfReleased();
-      Interlocked.Increment(ref _refCount);
-    }
+    if (Volatile.Read(ref _state) != 0)
+      throw new ObjectDisposedException(
+          "Cannot use RemoteObjectRef object after `Release` have been called");
+    Interlocked.Increment(ref _refCount);
   }
 
   /// <summary>
@@ -44,36 +45,29 @@ internal class RemoteObjectRef(
   /// <param name="useJitter">Whether to apply jitter to the release delay.</param>
   internal void ReleaseReference(bool useJitter = false)
   {
-    lock (_lock)
-    {
-      if (_isReleased) return; // Already released
+    if (Volatile.Read(ref _state) != 0) return; // Already released
 
-      int newCount = Interlocked.Decrement(ref _refCount);
-      if (newCount == 0)
-      {
-        // Last reference released, proceed with unpinning
-        RemoteRelease(useJitter);
-      }
+    int newCount = Interlocked.Decrement(ref _refCount);
+    if (newCount == 0)
+    {
+      // Last reference released, proceed with unpinning
+      RemoteRelease(useJitter);
     }
   }
 
   public void ForceRelease()
   {
-    lock (_lock)
-    {
-      if (_isReleased) return; // Already released
-
-      _isReleased = true;
-      _refCount = 0;
-      RemoteRelease(false);
-    }
+    // Atomically transition to released state; only proceed if we were the one to set it
+    if (Interlocked.Exchange(ref _state, 1) != 0) return;
+    Volatile.Write(ref _refCount, 0);
+    RemoteRelease(false);
   }
 
   private static readonly Random _random = new Random();
   private static readonly TimeSpan _minDelay = TimeSpan.FromSeconds(1);
   private static readonly TimeSpan _maxDelay = TimeSpan.FromSeconds(5);
 
-  public bool IsValid => !_isReleased && creatingCommunicator.IsConnected;
+  public bool IsValid => Volatile.Read(ref _state) == 0 && creatingCommunicator.IsConnected;
 
   /// <summary>
   /// Releases hold of the remote object in the remote process and the local proxy.
@@ -81,12 +75,12 @@ internal class RemoteObjectRef(
   public void RemoteRelease(bool useJitter = false)
   {
     // Check if already released to avoid redundant calls
-    if (_isReleased) return;
+    if (Volatile.Read(ref _state) != 0) return;
 
     // Guard against disconnected communicator
     if (creatingCommunicator is null || !creatingCommunicator.IsConnected)
     {
-      _isReleased = true;
+      Volatile.Write(ref _state, 1);
       return;
     }
 
@@ -126,7 +120,7 @@ internal class RemoteObjectRef(
     }
     finally
     {
-      _isReleased = true;
+      Volatile.Write(ref _state, 1);
     }
   }
 

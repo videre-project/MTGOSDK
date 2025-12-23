@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -24,16 +25,14 @@ public class RemoteHandle : DLRWrapper, IDisposable
 {
   internal class RemoteObjectsCollection
   {
-    // The WeakReferences are to RemoteObject
-    private readonly Dictionary<ulong, WeakReference<RemoteObject>> _pinnedAddressesToRemoteObjects;
-    private readonly ReaderWriterLockSlim _rwLock = new();
-
+    // Lock-free cache using ConcurrentDictionary for better concurrent performance
+    private readonly ConcurrentDictionary<ulong, WeakReference<RemoteObject>> _pinnedAddressesToRemoteObjects;
     private readonly RemoteHandle _app;
 
     public RemoteObjectsCollection(RemoteHandle app)
     {
       _app = app;
-      _pinnedAddressesToRemoteObjects = new();
+      _pinnedAddressesToRemoteObjects = new ConcurrentDictionary<ulong, WeakReference<RemoteObject>>();
     }
 
     private RemoteObject GetRemoteObjectUncached(
@@ -80,113 +79,50 @@ public class RemoteHandle : DLRWrapper, IDisposable
       string typeName,
       int? hashcode = null)
     {
-      RemoteObject ro;
-      WeakReference<RemoteObject> weakRef;
-
-      _rwLock.EnterUpgradeableReadLock();
-      try
+      // Fast path: try to get existing valid reference
+      if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var weakRef))
       {
-        // Check cache under upgradeable read lock
-        if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out weakRef))
+        if (weakRef.TryGetTarget(out var ro) && ro.IsValid)
         {
-          if (weakRef.TryGetTarget(out ro) && ro.IsValid)
-          {
-            // Tentatively valid, try to secure reference
-            ro.AddReference();
-            if (ro.IsValid)
-            {
-              // Still valid after adding reference, return it
-              return ro;
-            }
-            else
-            {
-              // Became invalid between IsValid check and AddReference/second IsValid check.
-              // Need to remove the stale entry.
-              _rwLock.EnterWriteLock();
-              try
-              {
-                // Re-check if the entry is still the same weakRef before removing
-                if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var currentWeakRef) && currentWeakRef == weakRef)
-                {
-                  _pinnedAddressesToRemoteObjects.Remove(address);
-                }
-                // If it changed, another thread already handled it, so we do nothing here.
-              }
-              finally
-              {
-                _rwLock.ExitWriteLock();
-              }
-              // Fall through to fetch uncached version
-            }
-          }
-          else
-          {
-            // Object was GC'd or initially invalid. Need write lock to remove.
-            _rwLock.EnterWriteLock();
-            try
-            {
-              // Re-check if the entry is still the same weakRef before removing
-              if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var currentWeakRef) && currentWeakRef == weakRef)
-              {
-                _pinnedAddressesToRemoteObjects.Remove(address);
-              }
-              // If it changed, another thread already handled it, so we do nothing here.
-            }
-            finally
-            {
-              _rwLock.ExitWriteLock();
-            }
-            // Fall through to fetch uncached version
-          }
+          ro.AddReference();
+          if (ro.IsValid) return ro;
+          // Became invalid after AddReference
+          ro.ReleaseReference();
         }
-
-        // Object not in cache or was removed. Need write lock to add.
-        _rwLock.EnterWriteLock();
-        try
-        {
-          // Double-check: Another thread might have added it while waiting for the write lock.
-          if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out weakRef))
-          {
-            if (weakRef.TryGetTarget(out ro) && ro.IsValid)
-            {
-              ro.AddReference();
-              if (ro.IsValid)
-              {
-                // Added by another thread and still valid.
-                return ro;
-              }
-              else
-              {
-                // Added by another thread but became invalid quickly. Remove it again.
-                _pinnedAddressesToRemoteObjects.Remove(address);
-                // Fall through to fetch uncached version outside the write lock (but still in upgradeable read)
-              }
-            }
-            else
-            {
-              // Added by another thread but already GC'd or invalid. Remove it.
-              _pinnedAddressesToRemoteObjects.Remove(address);
-              // Fall through to fetch uncached version outside the write lock (but still in upgradeable read)
-            }
-          }
-
-          // Get remote (object not in cache or was invalid/removed)
-          ro = GetRemoteObjectUncached(address, typeName, hashcode);
-
-          // Add to cache
-          weakRef = new WeakReference<RemoteObject>(ro);
-          _pinnedAddressesToRemoteObjects.Add(ro.RemoteToken, weakRef); // Add under write lock
-          return ro; // Return the newly created object
-        }
-        finally
-        {
-          _rwLock.ExitWriteLock();
-        }
+        // Stale entry
+        _pinnedAddressesToRemoteObjects.TryRemove(address, out _);
       }
-      finally
+
+      // Slow path: create new object
+      var newRo = GetRemoteObjectUncached(address, typeName, hashcode);
+      var newWeakRef = new WeakReference<RemoteObject>(newRo);
+
+      // Use AddOrUpdate to handle race conditions atomically
+      var resultWeakRef = _pinnedAddressesToRemoteObjects.AddOrUpdate(
+        newRo.RemoteToken,
+        newWeakRef,
+        (key, existing) =>
+        {
+          // If another thread added a valid object, prefer it
+          if (existing.TryGetTarget(out var existingRo) && existingRo.IsValid)
+          {
+            // Release our newly created object since we won't use it
+            newRo.ReleaseReference();
+            return existing;
+          }
+          return newWeakRef;
+        });
+
+      // If we lost the race and another thread's object was kept, return it
+      if (resultWeakRef != newWeakRef &&
+          resultWeakRef.TryGetTarget(out var winningRo) &&
+          winningRo.IsValid)
       {
-        _rwLock.ExitUpgradeableReadLock();
+        winningRo.AddReference();
+        return winningRo;
       }
+
+      return newRo;
     }
   }
 
