@@ -4,8 +4,10 @@
 **/
 
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Dynamic;
 using System.Reflection;
+using System.Threading.Tasks;
 
 #if !MTGOSDKCORE
 using System.Text.Encodings.Web;
@@ -133,11 +135,30 @@ public static class JsonSerializableExtensions
     var expandoDict = (IDictionary<string, object>)expando;
     expandoDict["$type"] = obj.GetType().Name;
 
-    // Serialize each property of the object.
-    foreach (var property in filteredProperties)
+    // Serialize each property of the object in parallel for better performance.
+    // This is especially beneficial when properties trigger remote invocations.
+    if (filteredProperties.Count > 1)
     {
-      expandoDict[property.Name] = SerializeRecursive(obj, property, options);
+      // Use ConcurrentDictionary for thread-safe parallel property fetching
+      var results = new ConcurrentDictionary<string, object>();
+      Parallel.ForEach(filteredProperties, property =>
+      {
+        results[property.Name] = SerializeRecursive(obj, property, options);
+      });
+      foreach (var kvp in results)
+      {
+        expandoDict[kvp.Key] = kvp.Value;
+      }
     }
+    else
+    {
+      // Single property - no benefit from parallelism
+      foreach (var property in filteredProperties)
+      {
+        expandoDict[property.Name] = SerializeRecursive(obj, property, options);
+      }
+    }
+
     // If the method was called recursively, defer serialization to the caller.
     if (isRecursive) return expando;
 
