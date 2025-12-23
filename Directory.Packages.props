@@ -35,6 +35,10 @@
                     Version="8.0.6" />
     <PackageVersion Include="Newtonsoft.Json"
                     Version="13.0.4" />
+    <PackageVersion Include="MessagePack"
+                    Version="3.1.4" />
+    <PackageVersion Include="MessagePack.Annotations"
+                    Version="3.1.4" />
     <!-- MTGOSDK.Core -->
     <PackageVersion Include="System.Reflection.Emit.ILGeneration"
                     Version="4.7.0" />

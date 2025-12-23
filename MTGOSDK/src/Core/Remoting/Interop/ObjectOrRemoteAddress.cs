@@ -4,6 +4,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MessagePack;
+
 
 namespace MTGOSDK.Core.Remoting.Interop;
 
@@ -11,19 +13,28 @@ namespace MTGOSDK.Core.Remoting.Interop;
 /// Represents either an encoded object (for primitive types like int, string,
 /// primitive arrays...) or info of a remote object.
 /// </summary>
+[MessagePackObject]
 public class ObjectOrRemoteAddress
 {
   /// <summary>
   /// Whether <see cref="RemoteAddress"/> or <see cref="EncodedObject"/> are set.
   /// </summary>
+  [Key(0)]
   public bool IsRemoteAddress { get; set; }
+  [Key(1)]
   public bool IsType { get; set; }
+  [Key(2)]
   public string Type { get; set; }
+  [Key(3)]
   public string Assembly { get; set; }
+  [Key(4)]
   public ulong RemoteAddress { get; set; }
+  [Key(5)]
   public string EncodedObject { get; set; }
+  [IgnoreMember]
   public bool IsNull => IsRemoteAddress && RemoteAddress == 0;
 
+  [Key(6)]
   public DateTime Timestamp = DateTime.Now;
 
   public static ObjectOrRemoteAddress FromObj(object o) =>

@@ -4,11 +4,24 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MessagePack;
+
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
-public class DomainDump(string name, IList<string> modules)
+[MessagePackObject]
+public class DomainDump
 {
-  public string Name { get; set; } = name;
-  public IList<string> Modules { get; set; } = modules;
+  [Key(0)]
+  public string Name { get; set; }
+  [Key(1)]
+  public IList<string> Modules { get; set; }
+
+  public DomainDump() { }
+
+  public DomainDump(string name, IList<string> modules)
+  {
+    Name = name;
+    Modules = modules;
+  }
 }

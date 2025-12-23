@@ -27,6 +27,8 @@
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="ImpromptuInterface" />
+    <PackageReference Include="MessagePack" GeneratePathProperty="true" />
+    <PackageReference Include="MessagePack.Annotations" GeneratePathProperty="true" />
     <PackageReference Include="Newtonsoft.Json" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>

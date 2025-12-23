@@ -17,7 +17,7 @@ public abstract class BaseCommunicator
   protected static readonly SemaphoreSlim s_semaphore = new(50);
   protected static readonly HttpClient s_client = new(new HttpClientHandler
   {
-    MaxConnectionsPerServer = 20
+    MaxConnectionsPerServer = 50
   })
   {
     Timeout = TimeSpan.FromSeconds(30),

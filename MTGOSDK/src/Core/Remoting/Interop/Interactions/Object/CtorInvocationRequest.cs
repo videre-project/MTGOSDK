@@ -4,11 +4,16 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MessagePack;
+
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
-public class CtorInvocationRequest()
+[MessagePackObject]
+public class CtorInvocationRequest
 {
+  [Key(0)]
   public string TypeFullName { get; set; }
+  [Key(1)]
   public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
 }

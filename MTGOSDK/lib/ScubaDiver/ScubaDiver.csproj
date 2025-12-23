@@ -37,6 +37,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
+    <PackageReference Include="MessagePack" />
+    <PackageReference Include="MessagePack.Annotations" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Lib.Harmony" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
