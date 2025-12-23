@@ -36,10 +36,7 @@ public static class CollectionManager
   /// </summary>
   public static ConcurrentDictionary<int, Card> Cards { get; } = new();
 
-  // public static IDictionary<string, List<int>> CardNameToIds =>
-  //   field ??= BuildCardNameToCatalogIdsFromXml();
-
-  private static dynamic CardNameToIds =>
+  private static dynamic s_cardNameToDefinitions =>
     field ??= Unbind(s_cardDataManager).NameToCardDefinitions;
 
   /// <summary>
@@ -48,17 +45,21 @@ public static class CollectionManager
   /// <param name="cardName">The name of the card to query.</param>
   /// <returns>A list of catalog ids.</returns>
   public static IList<int> GetCardIds(string cardName) =>
-    Map<IList, int>(CardNameToIds[cardName]);
-  // Map<IList, int>(
-  //   Unbind(s_cardDataManager).GetCatalogIdsForNameInPreferentialOrder(
-  //     cardName,
-  //     true,
-  //     false
-  //   ));
+    Map<IList, int>(
+      Try(() => s_cardNameToDefinitions[cardName.ToLower()])
+        ?? throw new KeyNotFoundException(
+          $"No card found with name \"{cardName}\"."),
+      Lambda<int>(c => c.Id)
+    );
 
+  /// <summary>
+  /// Returns a list of card objects for the given card name.
+  /// </summary>
+  /// <param name="cardName">The name of the card to query.</param>
+  /// <returns>A list of card objects.</returns>
   public static IList<Card> GetCardPrintings(string cardName) =>
     Map<IList, Card>(
-      Try(() => CardNameToIds[cardName.ToLower()])
+      Try(() => s_cardNameToDefinitions[cardName.ToLower()])
         ?? throw new KeyNotFoundException(
           $"No card found with name \"{cardName}\"."),
       proxy: true
