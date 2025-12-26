@@ -108,10 +108,12 @@ public static class ObjectDumpFactory
     }
 
     sw.Restart();
-    List<MemberDump> fields = new();
-    var eventNames = dumpedObjType
-      .GetEvents((BindingFlags) 0xffff)
-      .Select(eventInfo => eventInfo.Name);
+    var eventInfos = dumpedObjType.GetEvents((BindingFlags) 0xffff);
+    var eventNames = new HashSet<string>(eventInfos.Length);
+    foreach (var eventInfo in eventInfos)
+    {
+      eventNames.Add(eventInfo.Name);
+    }
     Log.Debug($"[ObjectDumpFactory] GetEvents: {sw.ElapsedMilliseconds}ms");
 
     sw.Restart();
@@ -119,10 +121,11 @@ public static class ObjectDumpFactory
     Log.Debug($"[ObjectDumpFactory] GetFields: {sw.ElapsedMilliseconds}ms, count={allFields.Length}");
 
     sw.Restart();
-    foreach (var fieldInfo in allFields.Where(fieldInfo => !eventNames.Contains(fieldInfo.Name)))
+    var fields = new List<MemberDump>(allFields.Length);
+    foreach (var fieldInfo in allFields)
     {
-      // Only collect field names - values are fetched lazily via /get_field endpoint
-      fields.Add(new MemberDump() { Name = fieldInfo.Name });
+      if (!eventNames.Contains(fieldInfo.Name))
+        fields.Add(new MemberDump { Name = fieldInfo.Name });
     }
     Log.Debug($"[ObjectDumpFactory] Field loop: {sw.ElapsedMilliseconds}ms, added={fields.Count}");
 

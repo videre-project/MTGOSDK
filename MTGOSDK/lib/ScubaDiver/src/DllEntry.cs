@@ -7,8 +7,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
 using System.Reflection;
+using System.Threading;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Resources;
@@ -25,8 +25,36 @@ public class DllEntry
       name + ".dll"
     );
 
-    if (File.Exists(assemblyPath))
-      return Assembly.LoadFrom(assemblyPath);
+    // Retry logic for non-deterministic file availability issues
+    // The file may not be immediately available after extraction
+    const int maxRetries = 5;
+    const int initialDelayMs = 50;
+
+    for (int attempt = 0; attempt < maxRetries; attempt++)
+    {
+      if (File.Exists(assemblyPath))
+      {
+        try
+        {
+          return Assembly.LoadFrom(assemblyPath);
+        }
+        catch (IOException) when (attempt < maxRetries - 1)
+        {
+          // File exists but may be locked; wait and retry
+          Thread.Sleep(initialDelayMs * (1 << attempt)); // Exponential backoff
+        }
+        catch (BadImageFormatException)
+        {
+          // File is corrupted or incomplete; wait for it to be fully written
+          Thread.Sleep(initialDelayMs * (1 << attempt));
+        }
+      }
+      else if (attempt < maxRetries - 1)
+      {
+        // File doesn't exist yet; wait for extraction to complete
+        Thread.Sleep(initialDelayMs * (1 << attempt));
+      }
+    }
 
     return null;
   }

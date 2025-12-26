@@ -8,16 +8,19 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.Http;
 using System.Security;
+using System.Text.Json;
 using System.Windows;
 using System.Xml;
 
 using Microsoft.Extensions.Logging;
 
-using Newtonsoft.Json.Linq;
+using FlsClient.Interface;
+using Shiny.Core.Interfaces;
+using WotC.MtGO.Client.Model;
 
 using MTGOSDK.API.Collection;
-using MTGOSDK.API.Users;
 using MTGOSDK.API.Settings;
+using MTGOSDK.API.Users;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Memory;
@@ -26,10 +29,6 @@ using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
 using MTGOSDK.Resources;
 using static MTGOSDK.Win32.Constants;
-
-using FlsClient.Interface;
-using Shiny.Core.Interfaces;
-using WotC.MtGO.Client.Model;
 
 
 namespace MTGOSDK.API;
@@ -331,15 +330,16 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         throw new HttpRequestException("Failed to fetch server status");
 
       using var content = response.Content;
-      var json = JObject.Parse(await content.ReadAsStringAsync());
+      using var json = JsonDocument.Parse(await content.ReadAsStringAsync());
+      var root = json.RootElement;
 
-      if (json["returned"].ToObject<int>() == 0)
+      if (root.GetProperty("returned").GetInt32() == 0)
         throw new ExternalErrorException("No MTGO servers were found");
 
       // Check if any servers are online.
-      string[] statuses = [ "high", "medium", "low" ];
-      return json["game_server_status_list"].Any(s =>
-          statuses.Contains(s["last_reported_state"].ToObject<string>()));
+      string[] statuses = ["high", "medium", "low"];
+      return root.GetProperty("game_server_status_list").EnumerateArray().Any(s =>
+          statuses.Contains(s.GetProperty("last_reported_state").GetString()));
     }
   }
 
@@ -361,13 +361,14 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         throw new HttpRequestException("Failed to fetch server status");
 
       using var content = response.Content;
-      var json = JObject.Parse(await content.ReadAsStringAsync());
+      using var json = JsonDocument.Parse(await content.ReadAsStringAsync());
+      var root = json.RootElement;
 
-      if (!json["response"].ToObject<string>().Equals("success"))
+      if (!root.GetProperty("response").GetString()?.Equals("success") ?? true)
         throw new HttpRequestException("Failed to fetch server status");
 
       // Check if the login server is up.
-      return json["message"].ToObject<string>() == "UP";
+      return root.GetProperty("message").GetString() == "UP";
     }
   }
 
@@ -566,7 +567,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Invokes logoff command and disconnects the MTGO client.
     Log.Debug("Logging off and disconnecting the client.");
     s_loginManager.Disconnect();
-    if (!await WaitUntil(() => !this.IsConnected || !RemoteClient.IsInitialized )) {
+    if (!await WaitUntil(() => !this.IsConnected || !RemoteClient.IsInitialized))
+    {
       throw new TimeoutException("Failed to log off and disconnect the client.");
     }
   }

@@ -4,8 +4,14 @@
 **/
 
 using System.Net.Http;
-using System.Text;
+using System.Net.Http.Headers;
+
+using MessagePack;
+
+using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+
 
 namespace MTGOSDK.Core.Remoting.Interop;
 
@@ -24,16 +30,17 @@ public abstract class BaseCommunicator
     DefaultRequestHeaders = { ConnectionClose = false }
   };
 
+  private static readonly MediaTypeHeaderValue s_msgpackContentType = new("application/msgpack");
+
   protected readonly CancellationTokenSource _cancellationTokenSource;
 
   /// <summary>
-  /// Cancels all requests in progress (keeping the cancellation token source).
-  /// Safe if the CTS was already disposed due to race during teardown.
+  /// Cancels all requests in progress.
   /// </summary>
   public void Cancel()
   {
     try { _cancellationTokenSource.Cancel(); }
-    catch (ObjectDisposedException) { /* swallow: late cancel after dispose */ }
+    catch (ObjectDisposedException) { }
   }
 
   protected BaseCommunicator(
@@ -41,40 +48,38 @@ public abstract class BaseCommunicator
     int port,
     CancellationTokenSource cancellationTokenSource = null)
   {
-    this._hostname = hostname;
-    this._port = port;
+    _hostname = hostname;
+    _port = port;
     _cancellationTokenSource = cancellationTokenSource ?? new CancellationTokenSource();
   }
 
-  private HttpRequestMessage CreateRequestMessage(
+  private HttpRequestMessage CreateBinaryRequest(
     string path,
     Dictionary<string, string> queryParams,
-    string jsonBody)
+    ReadOnlyMemory<byte>? body)
   {
     var url = BuildUrl(path, queryParams);
     var msg = new HttpRequestMessage(
-      jsonBody == null ? HttpMethod.Get : HttpMethod.Post,
+      body.HasValue ? HttpMethod.Post : HttpMethod.Get,
       url);
 
-    if (jsonBody != null)
+    if (body.HasValue)
     {
-      msg.Content = new StringContent(
-        jsonBody,
-        Encoding.UTF8,
-        "application/json");
+      msg.Content = new ReadOnlyMemoryContent(body.Value);
+      msg.Content.Headers.ContentType = s_msgpackContentType;
     }
 
     return msg;
   }
 
-  protected virtual async Task<string?> SendRequestAsync(
+  protected virtual async Task<T> SendRequestAsync<T>(
     string path,
     Dictionary<string, string> queryParams = null,
-    string jsonBody = null,
-    bool ignoreResponse = false,
+    ReadOnlyMemory<byte>? body = null,
     CancellationToken cancellationToken = default)
   {
-    if (cancellationToken.IsCancellationRequested) return null;
+    if (cancellationToken.IsCancellationRequested)
+      return default;
 
     HttpRequestMessage request = null;
     try
@@ -85,21 +90,25 @@ public abstract class BaseCommunicator
       timeoutCts.CancelAfter(s_client.Timeout);
 
       await s_semaphore.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
-      request = CreateRequestMessage(path, queryParams, jsonBody);
+      request = CreateBinaryRequest(path, queryParams, body);
 
       using var response = await s_client.SendAsync(
         request,
-        ignoreResponse
-          ? HttpCompletionOption.ResponseHeadersRead
-          : HttpCompletionOption.ResponseContentRead,
+        HttpCompletionOption.ResponseHeadersRead,
         timeoutCts.Token).ConfigureAwait(false);
 
-      if (ignoreResponse)
-        return null;
-
       response.EnsureSuccessStatusCode();
-      var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-      return HandleResponse(body);
+
+      using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+      var wrapper = await MessagePackSerializer.DeserializeAsync<DiverResponse<T>>(stream, cancellationToken: timeoutCts.Token)
+        .ConfigureAwait(false);
+
+      if (wrapper.IsError)
+      {
+        throw new RemoteException(wrapper.ErrorMessage, wrapper.ErrorStackTrace);
+      }
+
+      return wrapper.Data;
     }
     catch (OperationCanceledException)
     {
@@ -125,9 +134,7 @@ public abstract class BaseCommunicator
       }
 
       var uri = request?.RequestUri?.ToString() ?? $"http://{_hostname}:{_port}/{path}";
-      throw new InvalidOperationException(
-        $"Request to '{uri}' failed: {ex.Message}",
-        ex);
+      throw new InvalidOperationException($"Request to '{uri}' failed: {ex.Message}", ex);
     }
     catch (Exception ex)
     {
@@ -138,9 +145,7 @@ public abstract class BaseCommunicator
       }
 
       var uri = request?.RequestUri?.ToString() ?? $"http://{_hostname}:{_port}/{path}";
-      throw new InvalidOperationException(
-        $"Request to '{uri}' failed: {ex.Message}",
-        ex);
+      throw new InvalidOperationException($"Request to '{uri}' failed: {ex.Message}", ex);
     }
     finally
     {
@@ -149,14 +154,82 @@ public abstract class BaseCommunicator
     }
   }
 
-  public string? SendRequest(
+  protected virtual async Task SendRequestAsync(
     string path,
     Dictionary<string, string> queryParams = null,
-    string jsonBody = null,
-    bool ignoreResponse = false)
+    ReadOnlyMemory<byte>? body = null,
+    CancellationToken cancellationToken = default)
   {
-    return SendRequestAsync(path, queryParams, jsonBody, ignoreResponse)
-      .GetAwaiter().GetResult();
+    if (cancellationToken.IsCancellationRequested)
+      return;
+
+    HttpRequestMessage request = null;
+    try
+    {
+      using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
+        cancellationToken,
+        _cancellationTokenSource.Token);
+      timeoutCts.CancelAfter(s_client.Timeout);
+
+      await s_semaphore.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+      request = CreateBinaryRequest(path, queryParams, body);
+
+      using var response = await s_client.SendAsync(
+        request,
+        HttpCompletionOption.ResponseHeadersRead,
+        timeoutCts.Token).ConfigureAwait(false);
+
+      response.EnsureSuccessStatusCode();
+    }
+    catch (OperationCanceledException)
+    {
+      if (!_cancellationTokenSource.IsCancellationRequested && !SuppressionContext.IsSuppressed())
+        Log.Warning($"Request to '{path}' was cancelled or timed out.");
+      throw;
+    }
+    catch (HttpRequestException ex)
+    {
+      if (!_cancellationTokenSource.IsCancellationRequested && !SuppressionContext.IsSuppressed())
+      {
+        Log.Error($"HTTP request failed: {ex.Message}");
+        Log.Debug(ex.StackTrace);
+      }
+
+      var uri = request?.RequestUri?.ToString() ?? $"http://{_hostname}:{_port}/{path}";
+      throw new InvalidOperationException($"Request to '{uri}' failed: {ex.Message}", ex);
+    }
+    catch (Exception ex)
+    {
+      if (!_cancellationTokenSource.IsCancellationRequested && !SuppressionContext.IsSuppressed())
+      {
+        Log.Error($"Unexpected error during request: {ex.Message}");
+        Log.Debug(ex.StackTrace);
+      }
+
+      var uri = request?.RequestUri?.ToString() ?? $"http://{_hostname}:{_port}/{path}";
+      throw new InvalidOperationException($"Request to '{uri}' failed: {ex.Message}", ex);
+    }
+    finally
+    {
+      request?.Dispose();
+      s_semaphore.Release();
+    }
+  }
+
+  public T SendRequest<T>(
+    string path,
+    Dictionary<string, string> queryParams = null,
+    ReadOnlyMemory<byte>? body = null)
+  {
+    return SendRequestAsync<T>(path, queryParams, body).GetAwaiter().GetResult();
+  }
+
+  public void SendRequest(
+    string path,
+    Dictionary<string, string> queryParams = null,
+    ReadOnlyMemory<byte>? body = null)
+  {
+    SendRequestAsync(path, queryParams, body).GetAwaiter().GetResult();
   }
 
   protected virtual string BuildUrl(
@@ -171,11 +244,6 @@ public abstract class BaseCommunicator
       url += $"?{query}";
     }
     return url;
-  }
-
-  protected virtual string HandleResponse(string body)
-  {
-    return body;
   }
 
   public static void Dispose() => s_client.Dispose();

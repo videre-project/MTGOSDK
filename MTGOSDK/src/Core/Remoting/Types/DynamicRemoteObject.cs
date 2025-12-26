@@ -8,9 +8,9 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Dynamic;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Linq.Expressions;
 
 using Microsoft.CSharp.RuntimeBinder;
 using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
@@ -425,7 +425,8 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       __ongoingMembersDumper = null;
       __ongoingMembersDumperEnumerator = null;
 
-    };
+    }
+    ;
     return Aggregator();
   }
 
@@ -786,7 +787,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       }
       else if (item.IsRemoteAddress)
       {
-        var remoteObject = this.__ra.GetRemoteObject(item.RemoteAddress, item.Type);
+        var remoteObject = this.__ra.GetRemoteObject(item.RemoteAddress, item.Type, item.HashCode);
         dynamic dro = remoteObject.Dynamify();
         dro.__timestamp = item.Timestamp;
 

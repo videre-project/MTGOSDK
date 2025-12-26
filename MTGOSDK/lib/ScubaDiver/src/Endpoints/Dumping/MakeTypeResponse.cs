@@ -5,10 +5,9 @@
 **/
 
 using System;
-using System.IO;
 using System.Net;
 
-using Newtonsoft.Json;
+using MessagePack;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -17,38 +16,41 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeTypeResponse(HttpListenerRequest req)
+  private byte[] MakeTypeResponse(HttpListenerRequest req)
   {
-    string body = ReadRequestBody(req);
-    if (string.IsNullOrEmpty(body))
-    {
+    var body = ReadRequestBody(req);
+    if (body == null || body.Length == 0)
       return QuickError("Missing body");
-    }
 
-    var request = JsonConvert.DeserializeObject<TypeDumpRequest>(body);
-    if (request == null)
+    TypeDumpRequest request;
+    try
+    {
+      request = MessagePackSerializer.Deserialize<TypeDumpRequest>(body);
+    }
+    catch
     {
       return QuickError("Failed to deserialize body");
     }
 
+    if (request == null)
+      return QuickError("Failed to deserialize body");
+
     return MakeTypeResponse(request);
   }
 
-  public string MakeTypeResponse(TypeDumpRequest dumpRequest)
+  public byte[] MakeTypeResponse(TypeDumpRequest dumpRequest)
   {
     string type = dumpRequest.TypeFullName;
     if (string.IsNullOrEmpty(type))
-    {
       return QuickError("Missing parameter 'TypeFullName'");
-    }
 
     string assembly = dumpRequest.Assembly;
     Type resolvedType = _runtime.ResolveType(type, assembly);
 
     if (resolvedType != null)
     {
-      TypeDump recursiveTypeDump = TypeDump.ParseType(resolvedType);
-      return JsonConvert.SerializeObject(recursiveTypeDump);
+      var typeDump = TypeDump.ParseType(resolvedType);
+      return WrapSuccess(typeDump);
     }
 
     return QuickError("Failed to find type in searched assemblies");

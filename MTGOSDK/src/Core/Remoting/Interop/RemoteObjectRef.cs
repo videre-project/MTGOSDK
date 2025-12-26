@@ -63,6 +63,17 @@ internal class RemoteObjectRef(
     RemoteRelease(false);
   }
 
+  /// <summary>
+  /// Suppresses the remote unpin operation when disposing this reference.
+  /// Used when discarding duplicate RemoteObjects that share the same remote token.
+  /// </summary>
+  public void SuppressUnpin()
+  {
+    // Just mark as released locally without calling remote unpin
+    Interlocked.Exchange(ref _state, 1);
+    Volatile.Write(ref _refCount, 0);
+  }
+
   private static readonly Random _random = new Random();
   private static readonly TimeSpan _minDelay = TimeSpan.FromSeconds(1);
   private static readonly TimeSpan _maxDelay = TimeSpan.FromSeconds(5);
@@ -95,7 +106,7 @@ internal class RemoteObjectRef(
         );
 
         // Add jitter between 80-120% of base delay
-        var jitteredDelay = (int)(baseDelay * (0.8 + (_random.NextDouble() * 0.4)));
+        var jitteredDelay = (int) (baseDelay * (0.8 + (_random.NextDouble() * 0.4)));
 
         // Use Task.Delay instead of Thread.Sleep to avoid blocking
         Task.Delay(jitteredDelay).ContinueWith(_ =>

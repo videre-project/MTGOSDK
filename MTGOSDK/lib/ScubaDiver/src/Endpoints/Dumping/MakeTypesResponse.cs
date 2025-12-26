@@ -9,8 +9,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
 
-using Newtonsoft.Json;
-
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
@@ -18,20 +16,20 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeTypesResponse(HttpListenerRequest req)
+  private byte[] MakeTypesResponse(HttpListenerRequest req)
   {
     string assembly = req.QueryString.Get("assembly");
     Assembly matchingAssembly = _runtime.ResolveAssembly(assembly);
     if (matchingAssembly == null)
       return QuickError($"No assemblies found matching the query '{assembly}'");
 
-    List<TypesDump.TypeIdentifiers> types = new();
+    var types = new List<TypesDump.TypeIdentifiers>();
     try
     {
       foreach (Type type in matchingAssembly.GetTypes())
       {
         if (type == null) continue;
-        types.Add(new TypesDump.TypeIdentifiers() { TypeName = type.FullName });
+        types.Add(new TypesDump.TypeIdentifiers { TypeName = type.FullName });
       }
     }
     catch (ReflectionTypeLoadException rtle)
@@ -54,7 +52,7 @@ public partial class Diver : IDisposable
       return QuickError($"Failed to load types from assembly '{assembly}': {ex.Message}");
     }
 
-    TypesDump dump = new() { AssemblyName = assembly, Types = types };
-    return JsonConvert.SerializeObject(dump);
+    var dump = new TypesDump { AssemblyName = assembly, Types = types };
+    return WrapSuccess(dump);
   }
 }

@@ -224,7 +224,7 @@
           "MessagePack.Annotations": "[3.1.4, )",
           "Microsoft.Diagnostics.Runtime": "[4.0.0-beta.24360.3, )",
           "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )",
-          "Newtonsoft.Json": "[13.0.4, )"
+          "System.Threading.Channels": "[10.0.1, )"
         }
       },
       "mtgosdk.win32": {
@@ -275,11 +275,11 @@
           "Microsoft.Diagnostics.NETCore.Client": "0.2.510501"
         }
       },
-      "Newtonsoft.Json": {
+      "System.Threading.Channels": {
         "type": "CentralTransitive",
-        "requested": "[13.0.4, )",
-        "resolved": "13.0.4",
-        "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
+        "requested": "[10.0.1, )",
+        "resolved": "10.0.1",
+        "contentHash": "YRqU6Y2Cl6C+HrG5h1ftgKZ5VDTSA7j1wMKs5RtlauPeQ2EZ639Jt5aOFHdX3naP01hDDWFOWPApmNDVKwOpmg=="
       }
     }
   }

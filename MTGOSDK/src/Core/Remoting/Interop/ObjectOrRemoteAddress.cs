@@ -31,34 +31,42 @@ public class ObjectOrRemoteAddress
   public ulong RemoteAddress { get; set; }
   [Key(5)]
   public string EncodedObject { get; set; }
+  [Key(6)]
+  public int? HashCode { get; set; }
   [IgnoreMember]
   public bool IsNull => IsRemoteAddress && RemoteAddress == 0;
 
-  [Key(6)]
+  [Key(7)]
   public DateTime Timestamp = DateTime.Now;
 
   public static ObjectOrRemoteAddress FromObj(object o) =>
-    new() {
+    new()
+    {
       EncodedObject = PrimitivesEncoder.Encode(o),
       Type = o.GetType().FullName
     };
 
-  public static ObjectOrRemoteAddress FromToken(ulong addr, string type) =>
-    new() {
+  public static ObjectOrRemoteAddress FromToken(ulong addr, string type, int? hashCode = null) =>
+    new()
+    {
       IsRemoteAddress = true,
       RemoteAddress = addr,
-      Type = type
+      Type = type,
+      HashCode = hashCode
     };
 
-  public static ObjectOrRemoteAddress Null =>
-    new() {
-      IsRemoteAddress = true,
-      RemoteAddress = 0,
-      Type = typeof(object).FullName
-    };
+  private static readonly ObjectOrRemoteAddress s_null = new()
+  {
+    IsRemoteAddress = true,
+    RemoteAddress = 0,
+    Type = typeof(object).FullName
+  };
+
+  public static ObjectOrRemoteAddress Null => s_null;
 
   public static ObjectOrRemoteAddress FromType(Type type) =>
-    new() {
+    new()
+    {
       Type = type.FullName,
       Assembly = type.Assembly.GetName().Name,
       IsType = true

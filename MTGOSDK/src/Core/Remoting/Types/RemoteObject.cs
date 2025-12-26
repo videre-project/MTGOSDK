@@ -4,6 +4,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
+
 using MTGOSDK.Core.Memory;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
@@ -23,6 +25,16 @@ public class RemoteObject : IObjectReference
     _ref?.ReleaseReference(useJitter);
   }
 
+  /// <summary>
+  /// Suppresses the remote unpin when disposing.
+  /// </summary>
+  internal void SuppressUnpin()
+  {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    _ref?.SuppressUnpin();
+  }
+
   public bool IsValid => _ref != null && _ref.IsValid && !_isDisposed;
 
   private bool _isDisposed = false;
@@ -40,7 +52,7 @@ public class RemoteObject : IObjectReference
   private readonly RemoteObjectRef _ref;
   private Type _type = null;
 
-  private readonly Dictionary<Delegate, DiverCommunicator.LocalEventCallback> _eventCallbacksAndProxies = new();
+  private readonly ConcurrentDictionary<Delegate, DiverCommunicator.LocalEventCallback> _eventCallbacksAndProxies = new();
 
   public ulong RemoteToken => _ref.Token;
 
@@ -113,7 +125,7 @@ public class RemoteObject : IObjectReference
       DynamicRemoteObject[] droParameters = new DynamicRemoteObject[args.Length];
       for (int i = 0; i < args.Length; i++)
       {
-        RemoteObject ro = _app.GetRemoteObject(args[i].RemoteAddress, args[i].Type);
+        RemoteObject ro = _app.GetRemoteObject(args[i].RemoteAddress, args[i].Type, args[i].HashCode);
         DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
         dro.__timestamp = args[i].Timestamp;
 
@@ -131,11 +143,9 @@ public class RemoteObject : IObjectReference
 
   public void EventUnsubscribe(string eventName, Delegate callback)
   {
-    if (_eventCallbacksAndProxies.TryGetValue(callback, out DiverCommunicator.LocalEventCallback callbackProxy))
+    if (_eventCallbacksAndProxies.TryRemove(callback, out DiverCommunicator.LocalEventCallback callbackProxy))
     {
       _ref.EventUnsubscribe(eventName, callbackProxy);
-
-      _eventCallbacksAndProxies.Remove(callback);
     }
   }
 

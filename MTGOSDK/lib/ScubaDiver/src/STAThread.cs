@@ -226,9 +226,9 @@ public static class STAThread
       }
 
       // COM threading exceptions
-      if (current.HResult == unchecked((int)0x8001010E) || // RPC_E_WRONG_THREAD
-          current.HResult == unchecked((int)0x80010100) || // RPC_E_SYS_CALL_FAILED
-          current.HResult == unchecked((int)0x800401F0))   // CO_E_NOTINITIALIZED
+      if (current.HResult == unchecked((int) 0x8001010E) || // RPC_E_WRONG_THREAD
+          current.HResult == unchecked((int) 0x80010100) || // RPC_E_SYS_CALL_FAILED
+          current.HResult == unchecked((int) 0x800401F0))   // CO_E_NOTINITIALIZED
       {
         return true;
       }

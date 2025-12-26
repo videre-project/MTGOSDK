@@ -7,25 +7,22 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Threading;
 
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
-using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Core.Remoting.Structs;
+using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Resources;
-
 using MTGOSDK.Win32.API;
+using MTGOSDK.Win32.Deployment;
 using MTGOSDK.Win32.Extensions;
 using MTGOSDK.Win32.Utilities;
-using MTGOSDK.Win32.Deployment;
-
 
 namespace MTGOSDK.Core.Remoting;
-using static MTGOSDK.Win32.Constants;
+
 using static MTGOSDK.Resources.EmbeddedResources;
+using static MTGOSDK.Win32.Constants;
 
 /// <summary>
 /// A singleton class that manages the connection to the MTGO client process.
@@ -361,6 +358,9 @@ public sealed class RemoteClient : DLRWrapper
   /// <returns>A RemoteNET client handle.</returns>
   private RemoteHandle GetClientHandle()
   {
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    Log.Trace("[Timing] GetClientHandle started");
+
     bool _processHandleOverride = true;
     void RefreshClientProcess(bool throwOnFailure = false)
     {
@@ -370,52 +370,57 @@ public sealed class RemoteClient : DLRWrapper
     }
 
     if (ClientProcess is null) RefreshClientProcess(throwOnFailure: true);
+    Log.Trace("[Timing] Process discovery took {Elapsed}ms", sw.ElapsedMilliseconds);
 
     // Connect to the MTGO process using the specified or default port
     if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id);
     Log.Trace("Connecting to MTGO process on port {Port}", Port.Value);
+    Log.Trace("[Timing] Starting RemoteHandle.Connect after {Elapsed}ms", sw.ElapsedMilliseconds);
 
     // Suppress expected transient timeouts / connection failures while the
     // remote process is still spinning up under heavy CPU load.
     RemoteHandle handle;
-    using (Log.Suppress())
+    // using (Log.Suppress())
+    // {
+    handle = Retry(delegate
     {
-      handle = Retry(delegate
+      try
       {
-        try
-        {
-          return RemoteHandle.Connect(ClientProcess, Port.Value, _cts);
-        }
-        //
-        // This means we couldn't access the process's handle, so we need to
-        // retry getting the MTGO process again unless the user has provided
-        // an invalid process handle manually.
-        //
-        catch (InvalidOperationException) when (!_processHandleOverride)
-        {
-          RefreshClientProcess(throwOnFailure: true);
-          _processHandleOverride = true;
-          throw;
-        }
-      },
-      // Retry connecting to avoid creating a race condition
-      delay: 500, retries: 10, raise: true); // 5s
-    }
+        return RemoteHandle.Connect(ClientProcess, Port.Value, _cts);
+      }
+      //
+      // This means we couldn't access the process's handle, so we need to
+      // retry getting the MTGO process again unless the user has provided
+      // an invalid process handle manually.
+      //
+      catch (InvalidOperationException) when (!_processHandleOverride)
+      {
+        RefreshClientProcess(throwOnFailure: true);
+        _processHandleOverride = true;
+        throw;
+      }
+    },
+    // Retry connecting to avoid creating a race condition
+    delay: 500, retries: 10, raise: true); // 5s
+    // }
+    Log.Trace("[Timing] RemoteHandle.Connect took {Elapsed}ms", sw.ElapsedMilliseconds);
 
     // When the MTGO process exists, trigger the ProcessExited event
     ClientProcess.EnableRaisingEvents = true;
     ClientProcess.Exited += (s, e) =>
     {
-      Log.Debug("MTGO process exited with code {ExitCode}.", ((Process)s).ExitCode);
+      Log.Debug("MTGO process exited with code {ExitCode}.", ((Process) s).ExitCode);
       Dispose();
       ProcessExited?.Invoke(null, EventArgs.Empty);
     };
 
     // Verify that the injected assembly is loaded and reponding
+    Log.Trace("[Timing] Starting CheckAliveness after {Elapsed}ms", sw.ElapsedMilliseconds);
     if (!handle.Communicator.CheckAliveness())
       throw new TimeoutException("Diver is not responding to requests.");
     else
       Log.Debug("Established a connection to the MTGO process.");
+    Log.Trace("[Timing] GetClientHandle completed in {Elapsed}ms total", sw.ElapsedMilliseconds);
 
     return handle;
   }
@@ -610,7 +615,7 @@ public sealed class RemoteClient : DLRWrapper
   {
     var queryRefs = GetInstanceTypes(queryPath).ToList();
     if (queryRefs.Count == 0)
-      throw new  InvalidOperationException($"Type '{queryPath}' not found.");
+      throw new InvalidOperationException($"Type '{queryPath}' not found.");
 
     if (queryRefs.Count > 1)
       throw new AmbiguousMatchException(
@@ -626,16 +631,19 @@ public sealed class RemoteClient : DLRWrapper
   /// <returns>A collection of dynamic wrappers around the remote types.</returns>
   public static IEnumerable<Type> GetInstanceTypes(string queryPath)
   {
-    IEnumerable<CandidateType> queryRefs = @client.QueryTypes(queryPath);
-    foreach (var candidate in queryRefs)
+    // Directly get the type without searching through all assemblies
+    // GetRemoteType will dump the type on-demand from the communicator
+    Type remoteType;
+    try
     {
-      var queryObject = @client.GetRemoteType(candidate);
-      yield return queryObject;
+      remoteType = @client.GetRemoteType(queryPath, assembly: null);
+    }
+    catch (Exception)
+    {
+      throw new InvalidOperationException($"Type '{queryPath}' not found.");
     }
 
-    // If no types were found, throw an exception
-    if (!queryRefs.Any())
-      throw new InvalidOperationException($"Type '{queryPath}' not found.");
+    yield return remoteType;
   }
 
   /// <summary>
@@ -671,7 +679,7 @@ public sealed class RemoteClient : DLRWrapper
     string methodName)
   {
     Type type = GetInstanceType(queryPath);
-    var methods = type.GetMethods((BindingFlags)0xffff)
+    var methods = type.GetMethods((BindingFlags) 0xffff)
       .Where(mInfo => mInfo.Name == methodName);
 
     if (!methods.Any())
@@ -759,7 +767,7 @@ public sealed class RemoteClient : DLRWrapper
   public static MethodInfo? GetMethod(
     string queryPath,
     string methodName,
-    Type[]? genericTypes=null)
+    Type[]? genericTypes = null)
   {
     try
     {
@@ -790,7 +798,7 @@ public sealed class RemoteClient : DLRWrapper
   public static dynamic InvokeMethod(
     string queryPath,
     string methodName,
-    Type[]? genericTypes=null,
+    Type[]? genericTypes = null,
     params object[]? args)
   {
     var remoteMethod = GetMethod(queryPath, methodName, genericTypes);

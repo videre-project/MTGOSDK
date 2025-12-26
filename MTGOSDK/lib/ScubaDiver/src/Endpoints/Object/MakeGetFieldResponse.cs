@@ -6,11 +6,10 @@
 
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Net;
 using System.Reflection;
 
-using Newtonsoft.Json;
+using MessagePack;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -23,59 +22,51 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeGetFieldResponse(HttpListenerRequest arg)
+  private byte[] MakeGetFieldResponse(HttpListenerRequest arg)
   {
     Log.Debug("[Diver] Got /get_field request!");
-    string body = ReadRequestBody(arg);
+    var body = ReadRequestBody(arg);
 
-    if (string.IsNullOrEmpty(body))
-    {
+    if (body == null || body.Length == 0)
       return QuickError("Missing body");
-    }
 
-    TextReader textReader = new StringReader(body);
-    FieldSetRequest request = JsonConvert.DeserializeObject<FieldSetRequest>(body);
-    if (request == null)
+    FieldSetRequest request;
+    try
+    {
+      request = MessagePackSerializer.Deserialize<FieldSetRequest>(body);
+    }
+    catch
     {
       return QuickError("Failed to deserialize body");
     }
 
-    // Need to figure target instance and the target type.
-    // In case of a static call the target instance stays null.
+    if (request == null)
+      return QuickError("Failed to deserialize body");
+
     Type dumpedObjType;
     object results;
+
     if (request.ObjAddress == 0)
     {
-      // Null Target -- Getting a Static field
       dumpedObjType = _runtime.ResolveType(request.TypeFullName);
       FieldInfo staticFieldInfo = dumpedObjType.GetField(request.FieldName);
       if (!staticFieldInfo.IsStatic)
-      {
-        return QuickError("Trying to get field with a null target bu the field was not a static one");
-      }
+        return QuickError("Trying to get field with a null target but the field was not a static one");
 
       results = staticFieldInfo.GetValue(null);
     }
     else
     {
-      object instance;
-      // Check if we have this objects in our pinned pool
-      if (_runtime.TryGetPinnedObject(request.ObjAddress, out instance))
-      {
-        // Found pinned object!
-        dumpedObjType = instance.GetType();
-      }
-      else
-      {
-        return QuickError("Can't get field of a unpinned objects");
-      }
+      if (!_runtime.TryGetPinnedObject(request.ObjAddress, out object instance))
+        return QuickError("Can't get field of an unpinned object");
 
-      // Search the method with the matching signature
+      dumpedObjType = instance.GetType();
+
       var fieldInfo = dumpedObjType.GetFieldRecursive(request.FieldName);
       if (fieldInfo == null)
       {
         Debugger.Launch();
-        Log.Debug($"[Diver] Failed to Resolved field :/");
+        Log.Debug("[Diver] Failed to Resolved field :/");
         return QuickError("Couldn't find field in type.");
       }
 
@@ -91,30 +82,25 @@ public partial class Diver : IDisposable
       }
     }
 
-
-    // Return the value we just set to the field to the caller...
-    InvocationResults invocResults;
+    ObjectOrRemoteAddress returnValue;
+    if (results.GetType().IsPrimitiveEtc())
     {
-      ObjectOrRemoteAddress returnValue;
-      if (results.GetType().IsPrimitiveEtc())
-      {
-        returnValue = ObjectOrRemoteAddress.FromObj(results);
-      }
-      else
-      {
-        // Pinning results
-        ulong resultsAddress = _runtime.PinObject(results);
-        Type resultsType = results.GetType();
-        returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name);
-      }
-
-      invocResults = new InvocationResults()
-      {
-        VoidReturnType = false,
-        ReturnedObjectOrAddress = returnValue
-      };
+      returnValue = ObjectOrRemoteAddress.FromObj(results);
+    }
+    else
+    {
+      ulong resultsAddress = _runtime.PinObject(results);
+      Type resultsType = results.GetType();
+      int hashCode = results.GetHashCode();
+      returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name, hashCode);
     }
 
-    return JsonConvert.SerializeObject(invocResults);
+    var invocResults = new InvocationResults
+    {
+      VoidReturnType = false,
+      ReturnedObjectOrAddress = returnValue
+    };
+
+    return WrapSuccess(invocResults);
   }
 }

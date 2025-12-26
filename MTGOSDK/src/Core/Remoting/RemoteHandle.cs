@@ -7,15 +7,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
 
-using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
-using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Core.Remoting.Structs;
-
+using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Resources;
 
 
@@ -26,13 +23,13 @@ public class RemoteHandle : DLRWrapper, IDisposable
   internal class RemoteObjectsCollection
   {
     // Lock-free cache using ConcurrentDictionary for better concurrent performance
-    private readonly ConcurrentDictionary<ulong, WeakReference<RemoteObject>> _pinnedAddressesToRemoteObjects;
+    private readonly ConcurrentDictionary<ulong, Lazy<WeakReference<RemoteObject>>> _pinnedAddressesToRemoteObjects;
     private readonly RemoteHandle _app;
 
     public RemoteObjectsCollection(RemoteHandle app)
     {
       _app = app;
-      _pinnedAddressesToRemoteObjects = new ConcurrentDictionary<ulong, WeakReference<RemoteObject>>();
+      _pinnedAddressesToRemoteObjects = new ConcurrentDictionary<ulong, Lazy<WeakReference<RemoteObject>>>();
     }
 
     private RemoteObject GetRemoteObjectUncached(
@@ -79,50 +76,44 @@ public class RemoteHandle : DLRWrapper, IDisposable
       string typeName,
       int? hashcode = null)
     {
-      // Fast path: try to get existing valid reference
-      if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var weakRef))
+      const int maxRetries = 5;
+
+      for (int attempt = 0; attempt < maxRetries; attempt++)
       {
-        if (weakRef.TryGetTarget(out var ro) && ro.IsValid)
+        // Fast path: try to get existing valid reference
+        if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var existingLazy))
         {
-          ro.AddReference();
-          if (ro.IsValid) return ro;
-          // Became invalid after AddReference
-          ro.ReleaseReference();
-        }
-        // Stale entry
-        _pinnedAddressesToRemoteObjects.TryRemove(address, out _);
-      }
-
-      // Slow path: create new object
-      var newRo = GetRemoteObjectUncached(address, typeName, hashcode);
-      var newWeakRef = new WeakReference<RemoteObject>(newRo);
-
-      // Use AddOrUpdate to handle race conditions atomically
-      var resultWeakRef = _pinnedAddressesToRemoteObjects.AddOrUpdate(
-        newRo.RemoteToken,
-        newWeakRef,
-        (key, existing) =>
-        {
-          // If another thread added a valid object, prefer it
-          if (existing.TryGetTarget(out var existingRo) && existingRo.IsValid)
+          var weakRef = existingLazy.Value;
+          if (weakRef.TryGetTarget(out var ro) && ro.IsValid)
           {
-            // Release our newly created object since we won't use it
-            newRo.ReleaseReference();
-            return existing;
+            ro.AddReference();
+            if (ro.IsValid) return ro;
+            ro.ReleaseReference();
           }
-          return newWeakRef;
-        });
+          // Stale entry - remove it and retry
+          _pinnedAddressesToRemoteObjects.TryRemove(address, out _);
+          continue;
+        }
 
-      // If we lost the race and another thread's object was kept, return it
-      if (resultWeakRef != newWeakRef &&
-          resultWeakRef.TryGetTarget(out var winningRo) &&
-          winningRo.IsValid)
-      {
-        winningRo.AddReference();
-        return winningRo;
+        // Slow path: create new object and try to add it
+        var newRo = GetRemoteObjectUncached(address, typeName, hashcode);
+        var newLazy = new Lazy<WeakReference<RemoteObject>>(
+          () => new WeakReference<RemoteObject>(newRo),
+          LazyThreadSafetyMode.ExecutionAndPublication);
+
+        // Try to add our new object
+        if (_pinnedAddressesToRemoteObjects.TryAdd(address, newLazy))
+        {
+          // We won - return our object
+          return newRo;
+        }
+
+        // Lost race - suppress unpin on discarded object
+        newRo.SuppressUnpin();
       }
 
-      return newRo;
+      // Exhausted retries - create object directly without caching
+      return GetRemoteObjectUncached(address, typeName, hashcode);
     }
   }
 
@@ -145,19 +136,6 @@ public class RemoteHandle : DLRWrapper, IDisposable
     _communicator = communicator;
 
     _currentDomain = communicator.DumpDomain();
-    foreach (string assembly in _currentDomain.Modules)
-    {
-      try
-      {
-        if (_remoteTypes.ContainsKey(assembly)) continue;
-        _remoteTypes.Add(assembly, communicator.DumpTypes(assembly));
-      }
-      catch (Exception e)
-      {
-        Log.Error("Failed to dump types for assembly '{Assembly}': {Message}",
-          assembly, e.Message);
-      }
-    }
     _remoteObjects = new RemoteObjectsCollection(this);
     Activator = new RemoteActivator(communicator, this);
     Harmony = new RemoteHarmony(this);
@@ -264,30 +242,45 @@ public class RemoteHandle : DLRWrapper, IDisposable
   /// <returns></returns>
   public Type GetRemoteType(string typeFullName, string assembly = null)
   {
-    // Easy case: Trying to resolve from cache or from local assemblies
     var resolver = TypeResolver.Instance;
-    Type res = resolver.Resolve(assembly, typeFullName);
-    if (res != null)
+
+    // When assembly is specified, we can try cache/local resolution first.
+    // When assembly is null, we MUST dump from remote to get actual method info,
+    // as local reference assemblies only have stub methods.
+    if (assembly != null)
     {
-      // Either found in cache or found locally.
-
-      // If it's a local type we need to wrap it in a "fake" RemoteType (So
-      // method invocations will actually happened in the remote app, for
-      // example) (But not for primitives...)
-      if (!(res is RemoteType) && !res.IsPrimitive)
+      Type res = resolver.Resolve(assembly, typeFullName);
+      if (res != null)
       {
-        res = new RemoteType(this, res);
-        // TODO: Registering here in the cache is a hack but we couldn't
-        // register within "TypeResolver.Resolve" because we don't have the
-        // RemoteHandle to associate the fake remote type with.
-        // Maybe this should move somewhere else...
-        resolver.RegisterType(res);
-      }
+        // Either found in cache or found locally.
 
-      return res;
+        // If it's a local type we need to wrap it in a "fake" RemoteType (So
+        // method invocations will actually happened in the remote app, for
+        // example) (But not for primitives...)
+        if (!(res is RemoteType) && !res.IsPrimitive)
+        {
+          res = new RemoteType(this, res);
+          // TODO: Registering here in the cache is a hack but we couldn't
+          // register within "TypeResolver.Resolve" because we don't have the
+          // RemoteHandle to associate the fake remote type with.
+          // Maybe this should move somewhere else...
+          resolver.RegisterType(res);
+        }
+
+        return res;
+      }
+    }
+    else
+    {
+      // Check cache first for already-dumped remote types, but skip local resolution
+      Type cached = resolver.Resolve(null, typeFullName);
+      if (cached is RemoteType)
+      {
+        return cached;
+      }
     }
 
-    // Harder case: Dump the remote type. This takes much more time (includes
+    // Dump the remote type. This takes much more time (includes
     // dumping of dependent types) and should be avoided as much as possible.
     RemoteTypesFactory rtf = new RemoteTypesFactory(resolver, Communicator);
     var dumpedType = Communicator.DumpType(typeFullName, assembly);

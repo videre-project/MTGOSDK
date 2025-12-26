@@ -30,7 +30,7 @@ public static class PrimitivesEncoder
     // Use a higher precision format to encode date objects
     if (t == typeof(DateTime))
     {
-      return ((DateTime)toEncode).ToString("O");
+      return ((DateTime) toEncode).ToString("O");
     }
 
     if (t.IsPrimitiveEtc() || t.IsStringCoercible() || t.IsEnum)
@@ -52,22 +52,19 @@ public static class PrimitivesEncoder
     }
 
     // Otherwise - this is an array of primitives.
-    string output = string.Empty;
-    object[] objectsEnumerable = enumerable.Cast<object>().ToArray();
-    foreach (object o in objectsEnumerable)
+    var sb = new System.Text.StringBuilder();
+    int length = enumerable.Length;
+    for (int i = 0; i < length; i++)
     {
+      object o = enumerable.GetValue(i);
       string currObjectValue = Encode(o);
-      // Escape commas
       currObjectValue = currObjectValue.Replace(",", "\\,");
-      if (output != string.Empty)
-      {
-        output += ",";
-      }
-
-      output += $"\"{currObjectValue}\"";
+      if (sb.Length > 0)
+        sb.Append(',');
+      sb.Append('"').Append(currObjectValue).Append('"');
     }
 
-    return output;
+    return sb.ToString();
   }
 
   public static bool TryEncode(object toEncode, out string res)

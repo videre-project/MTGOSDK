@@ -15,19 +15,18 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeEventUnsubscribeResponse(HttpListenerRequest arg)
+  private byte[] MakeEventUnsubscribeResponse(HttpListenerRequest arg)
   {
     string tokenStr = arg.QueryString.Get("token");
     if (tokenStr == null || !int.TryParse(tokenStr, out int token))
-    {
-      return QuickError("Missing parameter 'address'");
-    }
+      return QuickError("Missing parameter 'token'");
+
     Log.Debug($"[Diver][MakeEventUnsubscribeResponse] Called! Token: {token}");
 
     if (_remoteEventHandler.TryRemove(token, out RegisteredEventHandlerInfo eventInfo))
     {
       eventInfo.EventInfo.RemoveEventHandler(eventInfo.Target, eventInfo.RegisteredProxy);
-      return "{\"status\":\"OK\"}";
+      return s_okResponse;
     }
     return QuickError("Unknown token for event callback subscription");
   }

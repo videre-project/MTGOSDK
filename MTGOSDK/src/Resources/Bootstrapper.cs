@@ -10,7 +10,6 @@ using System.Net;
 using System.Net.Sockets;
 
 using MTGOSDK.Core.Remoting.Interop;
-
 using MTGOSDK.Win32.Extensions;
 using MTGOSDK.Win32.Injection;
 
@@ -92,6 +91,32 @@ public static class Bootstrapper
     return DiverState.NoDiver;
   }
 
+  /// <summary>
+  /// Verifies that a file exists on disk, with retry logic for non-deterministic
+  /// file availability issues that can occur after extraction.
+  /// </summary>
+  private static void VerifyFileExists(string filePath, string fileName)
+  {
+    const int maxRetries = 10;
+    const int delayMs = 50;
+
+    for (int i = 0; i < maxRetries; i++)
+    {
+      if (File.Exists(filePath))
+      {
+        // Verify file is not empty (indicates incomplete write)
+        var fileInfo = new FileInfo(filePath);
+        if (fileInfo.Length > 0)
+          return;
+      }
+      Thread.Sleep(delayMs);
+    }
+
+    throw new FileNotFoundException(
+      $"Failed to verify {fileName} exists after extraction. " +
+      $"Path: {filePath}");
+  }
+
   public static void Inject(Process target, ushort diverPort)
   {
 #if !MTGOSDKCORE
@@ -115,6 +140,10 @@ public static class Bootstrapper
     byte[] harmonyResource = GetBinaryResource(@"Resources\0Harmony.dll");
     string harmonyPath = Path.Combine(tempDir, "0Harmony.dll");
     OverrideFileIfChanged(harmonyPath, harmonyResource);
+
+    // Verify all files are fully written before injection
+    VerifyFileExists(diverPath, "Microsoft.Diagnostics.Runtime.dll");
+    VerifyFileExists(harmonyPath, "0Harmony.dll");
 
     var injector = new InjectorBase();
     injector.Inject(target, diverPath, "ScubaDiver.DllEntry", "EntryPoint");
