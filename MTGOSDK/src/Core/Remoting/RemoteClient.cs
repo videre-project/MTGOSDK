@@ -380,8 +380,8 @@ public sealed class RemoteClient : DLRWrapper
     // Suppress expected transient timeouts / connection failures while the
     // remote process is still spinning up under heavy CPU load.
     RemoteHandle handle;
-    // using (Log.Suppress())
-    // {
+    using (Log.Suppress())
+    {
     handle = Retry(delegate
     {
       try
@@ -402,7 +402,7 @@ public sealed class RemoteClient : DLRWrapper
     },
     // Retry connecting to avoid creating a race condition
     delay: 500, retries: 10, raise: true); // 5s
-    // }
+    }
     Log.Trace("[Timing] RemoteHandle.Connect took {Elapsed}ms", sw.ElapsedMilliseconds);
 
     // When the MTGO process exists, trigger the ProcessExited event
