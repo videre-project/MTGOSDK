@@ -8,6 +8,9 @@ using System.IO;
 using System.Reflection;
 using System.Xml;
 
+using MTGOSDK.Core.Logging;
+using MTGOSDK.Win32.Extensions;
+
 
 namespace MTGOSDK.Resources;
 
@@ -102,7 +105,24 @@ public static class EmbeddedResources
 
     if (fileChanged)
     {
-      File.WriteAllBytes(filePath, data);
+      try
+      {
+        File.WriteAllBytes(filePath, data);
+      }
+      catch (Exception)
+      {
+        var processList = new FileInfo(filePath).GetLockingProcesses();
+        if (processList.Count > 0)
+        {
+          Log.Warning($"File {filePath} is locked by the following processes:");
+          foreach (var process in processList)
+          {
+            Log.Warning($"  {process.ProcessName} ({process.Id})");
+          }
+        }
+
+        throw;
+      }
     }
   }
 }

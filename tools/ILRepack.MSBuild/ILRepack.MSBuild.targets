@@ -38,10 +38,16 @@
           AfterTargets="ComputeInputAssemblies"
           Condition="@(InputAssemblies) != '' And
                      '$(UseILRepack)' == 'true'">
+    <!-- Build library paths including NuGet package locations -->
+    <PropertyGroup>
+      <_ILRepackLibPaths>$(OutputPath)</_ILRepackLibPaths>
+      <_ILRepackLibPaths Condition="'$(PkgMessagePack)' != ''">$(_ILRepackLibPaths);$(PkgMessagePack)\lib\netstandard2.0</_ILRepackLibPaths>
+      <_ILRepackLibPaths Condition="'$(PkgMessagePack_Annotations)' != ''">$(_ILRepackLibPaths);$(PkgMessagePack_Annotations)\lib\netstandard2.0</_ILRepackLibPaths>
+    </PropertyGroup>
     <!-- Merge all reference assemblies into the main assembly -->
     <ILRepack
       Union="true"
-      LibraryPath="$(OutputPath)"
+      LibraryPath="$(_ILRepackLibPaths)"
       OutputFile="$(ILRepackOutput)"
       InputAssemblies="@(InputAssemblies)"
       NoRepackRes="true"

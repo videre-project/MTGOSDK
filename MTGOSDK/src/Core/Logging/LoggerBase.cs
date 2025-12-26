@@ -70,8 +70,7 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
       {
         // If logging is suppressed and the caller type is a suppressed type,
         // return a null logger to prevent logging from suppressed sources.
-        if (SuppressionContext.IsSuppressedCallerType())
-          return s_nulllogger;
+        if (SuppressionContext.IsSuppressed()) return s_nulllogger;
 
         // Get the caller type of the calling method or class.
         Type callerType;

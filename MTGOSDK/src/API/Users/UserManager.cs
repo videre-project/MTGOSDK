@@ -27,6 +27,9 @@ public static class UserManager
   private static readonly IUserManager s_userManager =
     ObjectProvider.Get<IUserManager>();
 
+  private static dynamic m_usersById =>
+    field ??= Unbind(s_userManager).m_usersById;
+
   /// <summary>
   /// Retrieves a user object from the client's UserManager.
   /// </summary>
@@ -56,8 +59,8 @@ public static class UserManager
           $"User ID {id} does not match username '{name}'.");
     }
 
-    IUser? user = s_userManager.GetUser(id, name, null);
-    if (string.IsNullOrEmpty(user?.Name))
+    var user = m_usersById[id];
+    if (string.IsNullOrEmpty(user?.Name) || user.Name != name)
       throw new ArgumentException($"User '{name}' (#{id}) cannot be found.");
 
     return new(user);
@@ -102,7 +105,7 @@ public static class UserManager
       throw new ArgumentException(
           $"User ID must be greater than zero. Got {id}.");
 
-    IUser? user = s_userManager.GetUser(id, null, null);
+    var user = m_usersById[id];
     if (string.IsNullOrEmpty(user?.Name))
       throw new KeyNotFoundException($"User #{id} cannot be found.");
 

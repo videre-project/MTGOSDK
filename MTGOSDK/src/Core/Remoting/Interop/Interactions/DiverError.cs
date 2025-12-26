@@ -4,11 +4,24 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MessagePack;
+
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions;
 
-public class DiverError(string err, string stackTrace)
+[MessagePackObject]
+public class DiverError
 {
-  public string Error { get; set; } = err;
-  public string StackTrace { get; set; } = stackTrace;
+  [Key(0)]
+  public string Error { get; set; }
+  [Key(1)]
+  public string StackTrace { get; set; }
+
+  public DiverError() { }
+
+  public DiverError(string err, string stackTrace)
+  {
+    Error = err;
+    StackTrace = stackTrace;
+  }
 }

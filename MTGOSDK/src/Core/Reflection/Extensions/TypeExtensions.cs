@@ -67,7 +67,7 @@ public static class TypeExtensions
     Type[]? parameterTypes)
   {
     // Find all methods with the given name
-    var methods = t.GetMethods((BindingFlags)0xffff)
+    var methods = t.GetMethods((BindingFlags) 0xffff)
       .Where(m => m.Name == methodName);
 
     // Filter methods by generic argument types (if provided)
@@ -115,7 +115,7 @@ public static class TypeExtensions
       return null; // No more parents
 
     // Check parent (until `object`)
-    return t.BaseType.GetMethodRecursive(methodName, parameterTypes);
+    return t.BaseType.GetMethodRecursive(methodName, genericArgumentTypes, parameterTypes);
   }
   public static MethodInfo GetMethodRecursive(this Type t, string methodName)
     => GetMethodRecursive(t, methodName, null);
@@ -126,7 +126,7 @@ public static class TypeExtensions
   {
     ConstructorInfo ctorInfo = default;
 
-    var methods = resolvedType.GetConstructors((BindingFlags)0xffff);
+    var methods = resolvedType.GetConstructors((BindingFlags) 0xffff);
     ConstructorInfo[] exactMatches = methods
       .Where(m =>
         m.GetParameters()
@@ -157,7 +157,7 @@ public static class TypeExtensions
   /// <param name="fieldName">Field name to search</param>
   public static FieldInfo GetFieldRecursive(this Type t, string fieldName)
   {
-    var field = t.GetFields((BindingFlags)0xffff)
+    var field = t.GetFields((BindingFlags) 0xffff)
       .SingleOrDefault(fi => fi.Name == fieldName);
     if (field != null)
       return field;

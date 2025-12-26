@@ -50,9 +50,12 @@ public class Collection : CollectionValidationFixture
   {
     var card = CollectionManager.GetCard(65378);
     ValidateCard(card);
+    Assert.That(card.Name, Is.EqualTo("Colossal Dreadmaw"));
     ValidateCard(CollectionManager.GetCard("Colossal Dreadmaw"));
 
-    Assert.That(card.Name, Is.EqualTo("Colossal Dreadmaw"));
+    Assert.That(
+      CollectionManager.GetCardIds("Colossal Dreadmaw"),
+      Is.Not.Empty);
     Assert.That(
       CollectionManager.GetCards("Colossal Dreadmaw").Any(e => e.Id == 65378),
       Is.True);

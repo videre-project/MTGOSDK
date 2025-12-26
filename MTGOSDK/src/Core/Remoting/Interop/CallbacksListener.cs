@@ -4,12 +4,12 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.IO;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-using Newtonsoft.Json;
+using MessagePack;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Hooking;
@@ -31,15 +31,11 @@ public class CallbacksListener
   public IPAddress IP { get; set; }
   public int Port { get; set; }
 
-  private readonly JsonSerializerSettings _withErrors = new()
-  {
-    MissingMemberHandling = MissingMemberHandling.Error,
-  };
-  private readonly Dictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
-  private readonly Dictionary<LocalEventCallback, int> _eventHandlersToToken = new();
+  private readonly ConcurrentDictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
+  private readonly ConcurrentDictionary<LocalEventCallback, int> _eventHandlersToToken = new();
 
-  private readonly Dictionary<int, LocalHookCallback> _tokensToHookCallbacks = new();
-  private readonly Dictionary<LocalHookCallback, int> _hookCallbacksToTokens = new();
+  private readonly ConcurrentDictionary<int, LocalHookCallback> _tokensToHookCallbacks = new();
+  private readonly ConcurrentDictionary<LocalHookCallback, int> _hookCallbacksToTokens = new();
 
   private readonly DiverCommunicator _communicator;
 
@@ -51,7 +47,7 @@ public class CallbacksListener
     {
       var listener = new TcpListener(IPAddress.Any, 0);
       listener.Start();
-      var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+      var port = ((IPEndPoint) listener.LocalEndpoint).Port;
       listener.Stop();
       return port;
     }
@@ -98,7 +94,7 @@ public class CallbacksListener
     }
   }
 
-  private readonly SemaphoreSlim _semaphore = new(2 * Environment.ProcessorCount);
+  private readonly ChannelScheduler _scheduler = new();
 
   private async Task Dispatcher(HttpListener listener)
   {
@@ -107,8 +103,7 @@ public class CallbacksListener
       try
       {
         HttpListenerContext context = await listener.GetContextAsync();
-        await _semaphore.WaitAsync();
-        _ = HandleDispatchedRequestAsync(context).ContinueWith(_ => _semaphore.Release());
+        _scheduler.Enqueue(() => HandleDispatchedRequestAsync(context));
       }
       catch (HttpListenerException e)
       {
@@ -134,8 +129,6 @@ public class CallbacksListener
     HttpListenerRequest request = context.Request;
     HttpListenerResponse response = context.Response;
 
-    string body = null;
-
     if (request.Url.AbsolutePath == "/ping")
     {
       string pongRes = "{\"status\":\"pong\"}";
@@ -151,12 +144,9 @@ public class CallbacksListener
 
     if (request.Url.AbsolutePath == "/invoke_callback")
     {
-      using (StreamReader sr = new(request.InputStream))
-      {
-        body = await sr.ReadToEndAsync();
-      }
-      var res = JsonConvert.DeserializeObject<CallbackInvocationRequest>(body, _withErrors);
-      context.Response.StatusCode = (int)HttpStatusCode.OK;
+      var res = await MessagePackSerializer.DeserializeAsync<CallbackInvocationRequest>(
+        request.InputStream);
+      context.Response.StatusCode = (int) HttpStatusCode.OK;
       context.Response.Close();
 
       //
@@ -197,10 +187,9 @@ public class CallbacksListener
 
   public int EventUnsubscribe(LocalEventCallback callback)
   {
-    if (_eventHandlersToToken.TryGetValue(callback, out int token))
+    if (_eventHandlersToToken.TryRemove(callback, out int token))
     {
-      _tokensToEventHandlers.Remove(token);
-      _eventHandlersToToken.Remove(callback);
+      _tokensToEventHandlers.TryRemove(token, out _);
       return token;
     }
     else
@@ -217,10 +206,9 @@ public class CallbacksListener
 
   public int HookUnsubscribe(LocalHookCallback callback)
   {
-    if (_hookCallbacksToTokens.TryGetValue(callback, out int token))
+    if (_hookCallbacksToTokens.TryRemove(callback, out int token))
     {
-      _tokensToHookCallbacks.Remove(token);
-      _hookCallbacksToTokens.Remove(callback);
+      _tokensToHookCallbacks.TryRemove(token, out _);
       return token;
     }
     else

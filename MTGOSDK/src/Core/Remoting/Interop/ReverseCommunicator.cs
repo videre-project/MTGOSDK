@@ -6,7 +6,7 @@
 
 using System.Net;
 
-using Newtonsoft.Json;
+using MessagePack;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
@@ -15,16 +15,10 @@ namespace MTGOSDK.Core.Remoting.Interop;
 
 /// <summary>
 /// The reverse communicator is used by the Diver to communicate back with its
-/// controller regarding callbacks invocations
+/// controller regarding callbacks invocations.
 /// </summary>
 public class ReverseCommunicator : BaseCommunicator
 {
-  private static readonly JsonSerializerSettings s_jsonSettings = new()
-  {
-    TypeNameHandling = TypeNameHandling.None,
-    DefaultValueHandling = DefaultValueHandling.Ignore
-  };
-
   public ReverseCommunicator(
     string hostname,
     int port,
@@ -51,8 +45,8 @@ public class ReverseCommunicator : BaseCommunicator
         _cancellationTokenSource.Token,
         timeoutCts.Token);
 
-      var resJson = await SendRequestAsync("ping", cancellationToken: linkedCts.Token);
-      return resJson?.Contains("pong") == true;
+      await SendRequestAsync("ping", null, null, linkedCts.Token);
+      return true;
     }
     catch
     {
@@ -60,7 +54,7 @@ public class ReverseCommunicator : BaseCommunicator
     }
   }
 
-  public Task InvokeCallback(
+  public void InvokeCallback(
     int token,
     DateTime timestamp,
     params ObjectOrRemoteAddress[] args)
@@ -69,10 +63,10 @@ public class ReverseCommunicator : BaseCommunicator
     {
       Timestamp = timestamp,
       Token = token,
-      Parameters = args.ToList()
+      Parameters = new List<ObjectOrRemoteAddress>(args)
     };
 
-    var requestJsonBody = JsonConvert.SerializeObject(invocReq, s_jsonSettings);
-    return SendRequestAsync("invoke_callback", null, requestJsonBody, true);
+    var body = MessagePackSerializer.Serialize(invocReq);
+    SendRequest("invoke_callback", null, body);
   }
 }

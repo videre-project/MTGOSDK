@@ -4,7 +4,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-
 using System;
 using System.Net;
 
@@ -18,13 +17,12 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeUnhookMethodResponse(HttpListenerRequest arg)
+  private byte[] MakeUnhookMethodResponse(HttpListenerRequest arg)
   {
     string tokenStr = arg.QueryString.Get("token");
     if (tokenStr == null || !int.TryParse(tokenStr, out int token))
-    {
-      return QuickError("Missing parameter 'address'");
-    }
+      return QuickError("Missing parameter 'token'");
+
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Called! Token: {token}");
 
     if (_remoteHooks.TryRemove(token, out RegisteredMethodHookInfo rmhi))
@@ -35,8 +33,7 @@ public partial class Diver : IDisposable
         tokenSource.Dispose();
       }
       HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
-
-      return "{\"status\":\"OK\"}";
+      return s_okResponse;
     }
 
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Unknown token for event callback subscription. Token: {token}");

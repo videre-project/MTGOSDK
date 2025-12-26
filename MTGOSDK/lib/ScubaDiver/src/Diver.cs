@@ -10,15 +10,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using MessagePack;
 
 using MTGOSDK.Core;
-using MTGOSDK.Core.Memory.Snapshot;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Memory.Snapshot;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -30,13 +29,14 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  // Runtime analysis and exploration fields
+  private const string MsgPackContentType = "application/msgpack";
+
   private SnapshotRuntime _runtime;
 
-  // HTTP Responses fields
-  private readonly Dictionary<string, Func<HttpListenerRequest, string>> _responseBodyCreators;
+  private readonly Dictionary<string, Func<HttpListenerRequest, byte[]>> _responseBodyCreators;
 
-  // Callbacks Endpoint of the Controller process
+  private static readonly AsyncLocal<byte[]> _cachedRequestBody = new();
+
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
   private readonly ConcurrentDictionary<int, RegisteredMethodHookInfo> _remoteHooks;
 
@@ -47,7 +47,7 @@ public partial class Diver : IDisposable
 
   public Diver()
   {
-    _responseBodyCreators = new Dictionary<string, Func<HttpListenerRequest, string>>()
+    _responseBodyCreators = new Dictionary<string, Func<HttpListenerRequest, byte[]>>()
     {
       // Diver maintenance
       {"/ping", MakePingResponse},
@@ -79,15 +79,12 @@ public partial class Diver : IDisposable
 
   public void Start(ushort listenPort)
   {
-    // Start the ClrMD runtime
     _runtime = new SnapshotRuntime();
 
-    // Start session
     HttpListener listener = new();
     string listeningUrl = $"http://127.0.0.1:{listenPort}/";
     listener.Prefixes.Add(listeningUrl);
 
-    // Set timeout
     var manager = listener.TimeoutManager;
     manager.IdleConnection = TimeSpan.FromSeconds(5);
     listener.Start();
@@ -104,15 +101,26 @@ public partial class Diver : IDisposable
     Log.Debug("[Diver] Exiting");
   }
 
-  public string QuickError(string error, string stackTrace = null)
+  public byte[] QuickError(string error, string stackTrace = null)
   {
-    if (stackTrace == null)
+    stackTrace ??= new StackTrace(true).ToString();
+    var errResponse = new DiverResponse<object>
     {
-      stackTrace = (new StackTrace(true)).ToString();
-    }
-    DiverError errResults = new(error, stackTrace);
-    return JsonConvert.SerializeObject(errResults);
+      IsError = true,
+      ErrorMessage = error,
+      ErrorStackTrace = stackTrace
+    };
+    return MessagePackSerializer.Serialize(errResponse);
   }
+
+  public static byte[] WrapSuccess<T>(T data) =>
+    MessagePackSerializer.Serialize(DiverResponse<T>.Success(data));
+
+  public static byte[] ReadRequestBody(HttpListenerRequest request) =>
+    _cachedRequestBody.Value ?? Array.Empty<byte>();
+
+  public static T DeserializeRequest<T>(HttpListenerRequest request) =>
+    MessagePackSerializer.Deserialize<T>(_cachedRequestBody.Value);
 
   #region HTTP Dispatching
   public async Task DispatcherAsync(
@@ -135,7 +143,7 @@ public partial class Diver : IDisposable
       {
         if (e.Message.StartsWith("The I/O operation has been aborted"))
         {
-          Log.Debug($"[Diver][Dispatcher] Listener was aborted. Exiting.");
+          Log.Debug("[Diver][Dispatcher] Listener was aborted. Exiting.");
           break;
         }
         Log.Error("[Diver][Dispatcher] HttpListenerException", e);
@@ -148,7 +156,6 @@ public partial class Diver : IDisposable
         continue;
       }
 
-      // Use SyncThread to control concurrency and backpressure, with a 30s timeout
       _ = SyncThread.EnqueueAsync(() =>
         HandleDispatchedRequestAsync(context, cancellationToken),
             timeout: TimeSpan.FromSeconds(30));
@@ -177,34 +184,54 @@ public partial class Diver : IDisposable
     HttpListenerRequest request = requestContext.Request;
     var response = requestContext.Response;
 
-    string body;
+    // Read request body as binary
+    using (var ms = new MemoryStream())
+    {
+      await request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
+      _cachedRequestBody.Value = ms.ToArray();
+    }
+
+    byte[] responseBody;
     if (_responseBodyCreators.TryGetValue(
       request.Url.AbsolutePath,
       out var respBodyGenerator))
     {
+      bool forceUIThread = request.QueryString["ui_thread"] == "true";
+
       try
       {
-        body = respBodyGenerator(request);
+        if (forceUIThread)
+        {
+          var cachedBody = _cachedRequestBody.Value;
+          responseBody = STAThread.Execute(() =>
+          {
+            _cachedRequestBody.Value = cachedBody;
+            return respBodyGenerator(request);
+          });
+        }
+        else
+        {
+          responseBody = respBodyGenerator(request);
+        }
       }
       catch (Exception ex)
       {
         Log.Error("[Diver] Exception occurred in handler.", ex);
-        Log.Debug("[Diver] Stack trace: " + ex.Message + "\n" + ex.StackTrace);
-        body = QuickError(ex.Message, ex.StackTrace);
+        Log.Debug($"[Diver] Stack trace: {ex.Message}\n{ex.StackTrace}");
+        responseBody = QuickError(ex.Message, ex.StackTrace);
       }
     }
     else
     {
-      body = QuickError("Unknown Command");
+      responseBody = QuickError("Unknown Command");
     }
 
-    byte[] buffer = Encoding.UTF8.GetBytes(body);
-    response.ContentLength64 = buffer.Length;
-    response.ContentType = "application/json";
+    response.ContentLength64 = responseBody.Length;
+    response.ContentType = MsgPackContentType;
 
     try
     {
-      await response.OutputStream.WriteAsync(buffer, 0, buffer.Length, cancellationToken);
+      await response.OutputStream.WriteAsync(responseBody, 0, responseBody.Length, cancellationToken);
     }
     catch (Exception ex)
     {
@@ -217,13 +244,13 @@ public partial class Diver : IDisposable
   }
   #endregion
 
-  // IDisposable
   public void Dispose()
   {
     _cts.Cancel();
     _cts.Dispose();
     _runtime?.Dispose();
     _clientCallbacks.Clear();
-    ReverseCommunicator.Dispose(); // Cleanup the shared HttpClient instance.
+    STAThread.Stop();
+    ReverseCommunicator.Dispose();
   }
 }

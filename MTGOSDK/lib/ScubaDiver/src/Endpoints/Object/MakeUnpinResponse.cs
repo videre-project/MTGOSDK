@@ -14,18 +14,18 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeUnpinResponse(HttpListenerRequest arg)
+  private static readonly byte[] s_okResponse =
+    WrapSuccess(new StatusResponse { Status = "OK" });
+
+  private byte[] MakeUnpinResponse(HttpListenerRequest arg)
   {
     string objAddrStr = arg.QueryString.Get("address");
     if (objAddrStr == null || !ulong.TryParse(objAddrStr, out var objAddr))
-    {
       return QuickError("Missing parameter 'address'");
-    }
+
     Log.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
+    _runtime.QueueUnpinObject(objAddr);
 
-    // Remove if we have this object in our pinned pool, otherwise ignore.
-    _runtime.UnpinObject(objAddr);
-
-    return "{\"status\":\"OK\"}";
+    return s_okResponse;
   }
 }

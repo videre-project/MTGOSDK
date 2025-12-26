@@ -7,20 +7,30 @@
 using System.Diagnostics;
 using System.Reflection;
 
+using MessagePack;
+
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 [DebuggerDisplay("TypeDump of {" + nameof(Type) + "} (Assembly: {" + nameof(Assembly) + "})")]
+[MessagePackObject]
 public class TypeDump
 {
+  [MessagePackObject]
   public struct TypeMethod
   {
+    [MessagePackObject]
     public struct MethodParameter
     {
+      [Key(0)]
       public bool IsGenericType { get; set; }
+      [Key(1)]
       public bool IsGenericParameter { get; set; }
+      [Key(2)]
       public string Type { get; set; }
+      [Key(3)]
       public string Name { get; set; }
+      [Key(4)]
       public string Assembly { get; set; }
 
       public MethodParameter() {}
@@ -54,15 +64,21 @@ public class TypeDump
       }
     }
 
+    [Key(0)]
     public string Visibility { get; set; }
+    [Key(1)]
     public string Name { get; set; }
+    [Key(2)]
     public string ReturnTypeFullName { get; set; }
     // This is not a list of the PARAMETERS which are generic -> This is the list of TYPES place holders usually found between
     // the "LESS THEN" and "GEATER THEN" signs so for this methods:
     // void SomeMethod<T,S>(T item, string item2, S item3)
     // You'll get ["T", "S"]
+    [Key(3)]
     public List<string> GenericArgs { get; set; }
+    [Key(4)]
     public List<MethodParameter> Parameters { get; set; }
+    [Key(5)]
     public string ReturnTypeAssembly { get; set; }
 
     public TypeMethod() {}
@@ -128,46 +144,101 @@ public class TypeDump
     }
   }
 
-  public struct TypeField(FieldInfo fi)
+  [MessagePackObject]
+  public struct TypeField
   {
-    public string Visibility = fi.IsPublic ? "Public" : "Private";
-    public string Name = fi.Name;
-    public string TypeFullName = fi.FieldType.FullName;
-    public string Assembly = fi.FieldType.Assembly.GetName().Name;
+    [Key(0)]
+    public string Visibility { get; set; }
+    [Key(1)]
+    public string Name { get; set; }
+    [Key(2)]
+    public string TypeFullName { get; set; }
+    [Key(3)]
+    public string Assembly { get; set; }
+
+    public TypeField() {}
+
+    public TypeField(FieldInfo fi)
+    {
+      Visibility = fi.IsPublic ? "Public" : "Private";
+      Name = fi.Name;
+      TypeFullName = fi.FieldType.FullName;
+      Assembly = fi.FieldType.Assembly.GetName().Name;
+    }
   }
 
-  public struct TypeEvent(EventInfo ei)
+  [MessagePackObject]
+  public struct TypeEvent
   {
-    public string Name = ei.Name;
-    public string TypeFullName = ei.EventHandlerType.FullName;
-    public string Assembly = ei.EventHandlerType.Assembly.GetName().Name;
+    [Key(0)]
+    public string Name { get; set; }
+    [Key(1)]
+    public string TypeFullName { get; set; }
+    [Key(2)]
+    public string Assembly { get; set; }
+
+    public TypeEvent() {}
+
+    public TypeEvent(EventInfo ei)
+    {
+      Name = ei.Name;
+      TypeFullName = ei.EventHandlerType.FullName;
+      Assembly = ei.EventHandlerType.Assembly.GetName().Name;
+    }
   }
 
-  public struct TypeProperty(PropertyInfo pi)
+  [MessagePackObject]
+  public struct TypeProperty
   {
-    public string Name = pi.Name;
-    public string TypeFullName = pi.PropertyType.FullName;
-    public string Assembly = pi.PropertyType.Assembly.GetName().Name;
-    public string GetVisibility = pi.GetMethod != null
-      ? (pi.GetMethod.IsPublic ? "Public" : "Private")
-      : null!;
-    public string SetVisibility = pi.SetMethod != null
-      ? (pi.SetMethod.IsPublic ? "Public" : "Private")
-      : null!;
+    [Key(0)]
+    public string Name { get; set; }
+    [Key(1)]
+    public string TypeFullName { get; set; }
+    [Key(2)]
+    public string Assembly { get; set; }
+    [Key(3)]
+    public string GetVisibility { get; set; }
+    [Key(4)]
+    public string SetVisibility { get; set; }
+
+    public TypeProperty() {}
+
+    public TypeProperty(PropertyInfo pi)
+    {
+      Name = pi.Name;
+      TypeFullName = pi.PropertyType.FullName;
+      Assembly = pi.PropertyType.Assembly.GetName().Name;
+      GetVisibility = pi.GetMethod != null
+        ? (pi.GetMethod.IsPublic ? "Public" : "Private")
+        : null!;
+      SetVisibility = pi.SetMethod != null
+        ? (pi.SetMethod.IsPublic ? "Public" : "Private")
+        : null!;
+    }
   }
 
+  [Key(0)]
   public string Type { get; set; }
+  [Key(1)]
   public string Assembly { get; set; }
 
+  [Key(2)]
   public bool IsArray { get; set; }
 
+  [Key(3)]
   public string ParentFullTypeName { get; set; }
+  [Key(4)]
   public string ParentAssembly { get; set; }
 
+  [Key(5)]
   public List<TypeMethod> Methods { get; set; }
+  [Key(6)]
   public List<TypeMethod> Constructors { get; set; }
+  [Key(7)]
   public List<TypeField> Fields { get; set; }
+  [Key(8)]
   public List<TypeEvent> Events { get; set; }
+  [Key(9)]
   public List<TypeProperty> Properties { get; set; }
 
   public static TypeDump ParseType(Type typeObj)

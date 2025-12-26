@@ -7,6 +7,7 @@
 using System.Reflection;
 
 using MTGOSDK.Core.Reflection.Types;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Reflection;
 
 
@@ -21,6 +22,12 @@ public class RemoteType : TypeStub
   private readonly List<RemoteEventInfo> _events = new List<RemoteEventInfo>();
   private readonly bool _isArray;
   private readonly bool _isGenericParameter;
+
+  /// <summary>
+  /// The source TypeDump used to create this RemoteType.
+  /// Used for cache optimization to avoid duplicate HTTP calls.
+  /// </summary>
+  internal TypeDump SourceTypeDump { get; private set; }
 
   public RemoteHandle App;
   public List<RemoteMethodInfo> Methods => _methods;
@@ -77,7 +84,8 @@ public class RemoteType : TypeStub
     string fullName,
     string assemblyName,
     bool isArray,
-    bool isGenericParameter = false)
+    bool isGenericParameter = false,
+    TypeDump sourceTypeDump = null)
       : base(name: GetNameFromFullName(fullName),
              assembly: new RemoteAssembly(assemblyName),
              fullName: fullName)
@@ -85,6 +93,7 @@ public class RemoteType : TypeStub
     App = app;
     _isGenericParameter = isGenericParameter;
     _isArray = isArray;
+    SourceTypeDump = sourceTypeDump;
   }
 
   private static string GetNameFromFullName(string fullName)

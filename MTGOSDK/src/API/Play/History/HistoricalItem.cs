@@ -24,6 +24,8 @@ public abstract class HistoricalItem<T> : DLRWrapper<IHistoricalItem>
   [RuntimeInternal]
   internal override Type type => typeof(T);
 
+  private Queue m_queue => field ??= new(Unbind(this));
+
   [RuntimeInternal]
   public sealed class Default(dynamic historicalItem) : HistoricalItem<dynamic>
   {
@@ -43,15 +45,20 @@ public abstract class HistoricalItem<T> : DLRWrapper<IHistoricalItem>
   public int Id => @base.EventId;
 
   /// <summary>
-  /// The session token for the event or match.
+  /// The name of the event or match.
   /// </summary>
-  public Guid Token => Cast<Guid>(Unbind(this).EventToken);
+  public string Name => @base.Description;
 
-  // FIXME: Historical items do not have an actual PlayerEvent
-  // /// <summary>
-  // /// The event object (e.g. League, Tournament, Match, etc.).
-  // /// </summary>
-  // public T Event => EventManager.PlayerEventFactory(@base.PlayerEvent);
+  /// <summary>
+  /// A class describing the event format (e.g. Standard, Modern, Legacy, etc.).
+  /// </summary>
+  public PlayFormat Format => new(@base.PlayFormat);
+
+  /// <summary>
+  /// The event structure of the historical item.
+  /// </summary>
+  public EventStructure EventStructure =>
+    field ??= new(m_queue, Unbind(this).TournamentStructure);
 
   /// <summary>
   /// The start time of the event or match.

@@ -10,7 +10,7 @@ namespace MTGOSDK.Core.Exceptions;
 /// <summary>
 /// Encapsulates an exception that was thrown in the remote object and catched by the Diver.
 /// </summary>
-public class RemoteException(string msg, string remoteStackTrace) : Exception
+public class RemoteException(string msg, string remoteStackTrace) : Exception(msg)
 {
   public string RemoteMessage { get; private set; } = msg;
 
@@ -21,5 +21,5 @@ public class RemoteException(string msg, string remoteStackTrace) : Exception
       $"--- End of remote exception stack trace ---\n" +
       $"{base.StackTrace}";
 
-  public override string ToString() => RemoteMessage;
+  public override string ToString() => base.ToString();
 }
