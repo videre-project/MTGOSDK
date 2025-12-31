@@ -358,9 +358,6 @@ public sealed class RemoteClient : DLRWrapper
   /// <returns>A RemoteNET client handle.</returns>
   private RemoteHandle GetClientHandle()
   {
-    var sw = System.Diagnostics.Stopwatch.StartNew();
-    Log.Trace("[Timing] GetClientHandle started");
-
     bool _processHandleOverride = true;
     void RefreshClientProcess(bool throwOnFailure = false)
     {
@@ -370,12 +367,10 @@ public sealed class RemoteClient : DLRWrapper
     }
 
     if (ClientProcess is null) RefreshClientProcess(throwOnFailure: true);
-    Log.Trace("[Timing] Process discovery took {Elapsed}ms", sw.ElapsedMilliseconds);
 
     // Connect to the MTGO process using the specified or default port
     if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id);
     Log.Trace("Connecting to MTGO process on port {Port}", Port.Value);
-    Log.Trace("[Timing] Starting RemoteHandle.Connect after {Elapsed}ms", sw.ElapsedMilliseconds);
 
     // Suppress expected transient timeouts / connection failures while the
     // remote process is still spinning up under heavy CPU load.
@@ -403,7 +398,6 @@ public sealed class RemoteClient : DLRWrapper
     // Retry connecting to avoid creating a race condition
     delay: 500, retries: 10, raise: true); // 5s
     }
-    Log.Trace("[Timing] RemoteHandle.Connect took {Elapsed}ms", sw.ElapsedMilliseconds);
 
     // When the MTGO process exists, trigger the ProcessExited event
     ClientProcess.EnableRaisingEvents = true;
@@ -415,12 +409,10 @@ public sealed class RemoteClient : DLRWrapper
     };
 
     // Verify that the injected assembly is loaded and reponding
-    Log.Trace("[Timing] Starting CheckAliveness after {Elapsed}ms", sw.ElapsedMilliseconds);
     if (!handle.Communicator.CheckAliveness())
       throw new TimeoutException("Diver is not responding to requests.");
     else
       Log.Debug("Established a connection to the MTGO process.");
-    Log.Trace("[Timing] GetClientHandle completed in {Elapsed}ms total", sw.ElapsedMilliseconds);
 
     return handle;
   }
