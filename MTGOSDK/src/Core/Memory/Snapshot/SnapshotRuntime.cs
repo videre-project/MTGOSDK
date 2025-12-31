@@ -484,6 +484,14 @@ public class SnapshotRuntime : IDisposable
           "could not be found in the heap.");
       }
 
+      // Ensure we have type information before searching
+      if (lastKnownClrObj.Type == null)
+      {
+        throw new RemoteObjectMovedException(objAddr,
+          $"Object 0x{objAddr:X} has no type information. " +
+          "This may indicate the object has been garbage collected or is corrupted.");
+      }
+
       // Directly search the heap for the moved object by type and hashcode
       bool found = false;
       string expectedTypeName = lastKnownClrObj.Type.Name;

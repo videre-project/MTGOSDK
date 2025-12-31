@@ -158,13 +158,29 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
             Type? argType = args[i]?.GetType();
             Type? paramType = parameters[i]?.ParameterType;
 
-            // Check assignment if local types, otherwise compare by FullName.
+            // Check assignment if local types, otherwise check inheritance for remote types.
             bool bothLocal = argType.GetType().FullName == "System.RuntimeType"
                           && paramType.GetType().FullName == "System.RuntimeType";
 
-            bool valid = bothLocal
-              ? paramType.IsAssignableFrom(argType)
-              : argType.FullName == paramType.FullName;
+            bool valid;
+            if (bothLocal)
+            {
+              valid = paramType.IsAssignableFrom(argType);
+            }
+            else
+            {
+              // For remote types, check exact match first
+              if (argType.FullName == paramType.FullName)
+              {
+                valid = true;
+              }
+              else
+              {
+                // Check if argType implements paramType (interface inheritance)
+                // Walk the interface list and base types of argType
+                valid = IsRemoteTypeAssignableTo(argType, paramType);
+              }
+            }
 
             if (!valid)
             {
@@ -198,6 +214,54 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
            "arguments were passed with the wrong type (or in the wrong order).");
       }
       return true;
+    }
+
+    /// <summary>
+    /// Checks if a remote type is assignable to another remote type by walking
+    /// the interface list and base type hierarchy.
+    /// </summary>
+    private static bool IsRemoteTypeAssignableTo(Type argType, Type paramType)
+    {
+      if (argType == null || paramType == null)
+        return false;
+
+      string targetFullName = paramType.FullName;
+
+      // Check implemented interfaces
+      try
+      {
+        var interfaces = argType.GetInterfaces();
+        foreach (var iface in interfaces)
+        {
+          if (iface.FullName == targetFullName)
+            return true;
+        }
+      }
+      catch { /* Ignore if GetInterfaces fails */ }
+
+      // Walk base type hierarchy
+      Type? currentType = argType.BaseType;
+      while (currentType != null && currentType != typeof(object))
+      {
+        if (currentType.FullName == targetFullName)
+          return true;
+
+        // Also check interfaces of base types
+        try
+        {
+          var baseInterfaces = currentType.GetInterfaces();
+          foreach (var iface in baseInterfaces)
+          {
+            if (iface.FullName == targetFullName)
+              return true;
+          }
+        }
+        catch { /* Ignore if GetInterfaces fails */ }
+
+        currentType = currentType.BaseType;
+      }
+
+      return false;
     }
 
     public override bool Equals(object obj)
@@ -260,6 +324,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
   private List<MemberInfo> __membersInner = null;
+  private readonly object __membersLock = new();
   public IEnumerable<MemberInfo> __members => GetMembers();
 
   public DynamicRemoteObject(RemoteHandle ra, RemoteObject ro)
@@ -400,34 +465,40 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   private IEnumerable<MemberInfo> GetMembers()
   {
+    // Fast path: if enumeration is complete, return the cached list directly
+    // (no lock needed for reads once __ongoingMembersDumper is null)
     if (__membersInner != null && __ongoingMembersDumper == null)
     {
       return __membersInner;
     }
-    // Defining a new method so we can use "yield return" (Outer function
-    // already returned a "real" IEnumerable in the above case) so using
-    // "yield return" as well is forbidden.
-    IEnumerable<MemberInfo> Aggregator()
+
+    // Thread-safe path: complete enumeration under lock and return snapshot
+    lock (__membersLock)
     {
+      // Double-check after acquiring lock
+      if (__membersInner != null && __ongoingMembersDumper == null)
+      {
+        return __membersInner;
+      }
+
+      // Initialize if needed
       __membersInner ??= new List<MemberInfo>();
       __ongoingMembersDumper ??= GetAllMembersRecursive();
       __ongoingMembersDumperEnumerator ??= __ongoingMembersDumper.GetEnumerator();
-      foreach (var member in __membersInner)
-      {
-        yield return member;
-      }
+
+      // Complete the entire enumeration under lock
       while (__ongoingMembersDumperEnumerator.MoveNext())
       {
         var member = __ongoingMembersDumperEnumerator.Current;
         __membersInner.Add(member);
-        yield return member;
       }
+
+      // Mark enumeration as complete
       __ongoingMembersDumper = null;
       __ongoingMembersDumperEnumerator = null;
 
+      return __membersInner;
     }
-    ;
-    return Aggregator();
   }
 
   public T InvokeMethod<T>(string name, params object[] args)
