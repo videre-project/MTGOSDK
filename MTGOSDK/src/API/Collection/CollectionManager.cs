@@ -31,10 +31,8 @@ public static class CollectionManager
   // ICardDefinition wrapper methods
   //
 
-  /// <summary>
-  /// A dictionary of cached Card objects.
-  /// </summary>
-  public static ConcurrentDictionary<int, Card> Cards { get; } = new();
+  private static dynamic s_cardIdToDefinitions =>
+    field ??= Unbind(s_cardDataManager).DigitalObjectsByCatId;
 
   private static dynamic s_cardNameToDefinitions =>
     field ??= Unbind(s_cardDataManager).NameToCardDefinitions;
@@ -73,21 +71,9 @@ public static class CollectionManager
   /// <exception cref="KeyNotFoundException">
   /// Thrown if no card is found with the given catalog id.
   /// </exception>
-  public static Card GetCard(int id)
-  {
-    if (!Cards.TryGetValue(id, out var card))
-    {
-      Cards[id] = card = new Card(
-        s_cardDataManager.GetCardDefinitionForCatId(id)
-        ?? throw new KeyNotFoundException(
-            $"No card found with catalog id #{id}.")
-      );
-      // Set callback to remove user from cache when the client is disposed.
-      RemoteClient.Disposed += (s, e) => Cards.TryRemove(id, out _);
-    }
-
-    return card;
-  }
+  public static Card GetCard(int id) =>
+    new(Try(() => s_cardIdToDefinitions[id])
+      ?? throw new KeyNotFoundException($"No card found with catalog id #{id}."));
 
   /// <summary>
   /// Returns a card object by the given card name.
