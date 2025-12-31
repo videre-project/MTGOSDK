@@ -8,9 +8,12 @@ using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Reflection.Extensions;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
+using MTGOSDK.Core.Remoting.Types;
 
 using WotC.MtGO.Client.Model.Play;
+using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
 namespace MTGOSDK.API.Play;
@@ -50,9 +53,9 @@ public static class EventManager
   /// </remarks>
   public static IEnumerable<dynamic> Events =>
     Map<dynamic>(
-      Filter(
-        eventsById.Values,
-        new Predicate(e => Try<bool>(() => e.EventId != -1))),
+      ((DynamicRemoteObject)eventsById.Values)
+        .Filter<IPlayerEvent>(e => e.EventId != -1)
+        .Sort<IPlayerEvent, int>(e => e.EventId),
       PlayerEventFactory);
 
   /// <summary>
@@ -64,14 +67,25 @@ public static class EventManager
   /// 10-20 seconds to complete, depending on the number of tournaments.
   /// </remarks>
   public static IEnumerable<Tournament> FeaturedEvents =>
-    Map<Tournament>(Unbind(s_playService).GetFeaturedFilterables(),
-                    Lambda<Tournament>(f => new(f.PlayerEvent)));
+    Map<Tournament>(
+      ((DynamicRemoteObject)
+        Unbind(s_playService).GetFeaturedFilterables())
+          .Filter<IPlayerEvent>(e => e.MinimumPlayers > 2)
+          .Sort<ITournament, DateTime>(e => e.ScheduledStartTime),
+      e => new(e.PlayerEvent)
+    );
+
+  public static int FeaturedEventsCount =>
+    Unbind(s_playService).GetFeaturedFilterables().Count;
 
   /// <summary>
   /// All joined events that the player is currently participating in.
   /// </summary>
   public static IEnumerable<dynamic> JoinedEvents =>
     Map<dynamic>(Unbind(s_playService).JoinedEvents, PlayerEventFactory);
+
+  public static int JoinedEventsCount =>
+    Unbind(s_playService).JoinedEvents.Count;
 
   //
   // IPlayerEvent wrapper methods

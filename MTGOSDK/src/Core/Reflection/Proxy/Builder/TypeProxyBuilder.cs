@@ -3,6 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
+using System.Linq.Expressions;
+
 using ImpromptuInterface.Optimization;
 
 
@@ -10,6 +13,8 @@ namespace MTGOSDK.Core.Reflection.Proxy.Builder;
 
 public static class TypeProxyBuilder
 {
+  // Cache for compiled proxy factory delegates: Type -> Func<IProxyInitialize>
+  private static readonly ConcurrentDictionary<Type, Func<IProxyInitialize>> s_proxyFactoryCache = new();
   /// <summary>
   /// Fixes the target context of the specified object.
   /// </summary>
@@ -43,7 +48,16 @@ public static class TypeProxyBuilder
     IDictionary<string, Type> propertySpec = null,
     TypeAssembler maker = null)
   {
-    var tProxy = (IProxyInitialize)Activator.CreateInstance(proxytype);
+    // Use cached factory delegate instead of slow Activator.CreateInstance
+    var factory = s_proxyFactoryCache.GetOrAdd(proxytype, type =>
+    {
+      // Compile a parameterless constructor call: () => new ProxyType()
+      var newExpr = Expression.New(type);
+      var lambda = Expression.Lambda<Func<IProxyInitialize>>(newExpr);
+      return lambda.Compile();
+    });
+
+    var tProxy = factory();
     tProxy.Initialize(original, interfaces, propertySpec,
                       maker ?? DynamicTypeBuilder.s_assembler);
     return tProxy;
