@@ -10,6 +10,7 @@ using System.Reflection;
 using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Reflection.Serialization;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Reflection;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -105,11 +106,30 @@ public abstract class DLRWrapper : SerializableBase
   {
     // Return the object if it is not a proxy type.
     if (!TypeProxy<dynamic>.IsProxy(obj))
+    {
+      // Check if it's a raw LazyRemoteObject (not wrapped in a proxy)
+      if (obj is LazyRemoteObject lazyObj)
+      {
+        var resolved = lazyObj.GetResolvedInstance();
+        if (resolved == null)
+          throw new InvalidOperationException("LazyRemoteObject failed to resolve.");
+        return resolved;
+      }
       return obj;
+    }
 
     var unbound_obj = TypeProxy<dynamic>.From(obj)
       ?? throw new InvalidOperationException(
           $"Unable to unbind types from {obj.GetType().Name}.");
+
+    // Check if the unbound object is a LazyRemoteObject
+    if (unbound_obj is LazyRemoteObject lazyUnbound)
+    {
+      var resolved = lazyUnbound.GetResolvedInstance();
+      if (resolved == null)
+        throw new InvalidOperationException("LazyRemoteObject failed to resolve.");
+      return resolved;
+    }
 
     // Recursively unbind any nested interface types.
     if (TypeProxy<dynamic>.IsProxy(unbound_obj))
