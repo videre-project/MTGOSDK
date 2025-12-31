@@ -92,46 +92,54 @@ public static class ObjectProvider
     bool useHeap = false,
     bool useLazy = true)
   {
-    lock (s_lock)
+    // Fast path: check cache without lock (ConcurrentDictionary is thread-safe)
+    if (useCache && s_instances.TryGetValue(queryPath, out dynamic cachedInstance))
     {
-      // Check if the instance is already cached
-      if (useCache && s_instances.TryGetValue(queryPath, out dynamic instance))
-      {
-        if (!SuppressLogging)
-          Log.Trace("Retrieved cached instance type {Type}", queryPath);
-        return instance;
-      }
-      // Otherwise create a lazy instance and store its resetter for future use.
-      else if (useLazy) return Defer(queryPath, useCache, useHeap);
-
-      // Query using the ObjectProvider.Get<T>() method on the client
-      if (!useHeap)
-      {
-        // Get the RemoteType from the type's query path
-        if (!SuppressLogging)
-          Log.Trace("Retrieving instance type {Type}", queryPath);
-        Type genericType = RemoteClient.GetInstanceType(queryPath);
-
-        // Invoke the Get<T>() method on the client's ObjectProvider class
-        instance = RemoteClient.InvokeMethod(s_proxy, "Get", [genericType]);
-      }
-      // Query the for the instance type from the client's object heap
-      else
-      {
-        if (!SuppressLogging)
-          Log.Trace("Retrieving heap instance of type {Type}", queryPath);
-        instance = RemoteClient.GetInstance(queryPath);
-      }
-
-      // Cache the instance for future use
-      s_instances.TryAdd(queryPath, instance);
-
-      // Register a callback to reset the instance when disposed
-      RegisterCallback(queryPath,
-        new Func<dynamic>(() => Get(queryPath, useCache, useHeap, useLazy)));
-
-      return instance;
+      if (!SuppressLogging)
+        Log.Trace("Retrieved cached instance type {Type}", queryPath);
+      return cachedInstance;
     }
+    
+    // For lazy loading, create deferred instance without holding lock during slow calls
+    if (useLazy) return Defer(queryPath, useCache, useHeap);
+
+    // Query the RemoteClient (slow IPC call) - do this OUTSIDE the lock
+    dynamic instance;
+    if (!useHeap)
+    {
+      if (!SuppressLogging)
+        Log.Trace("Retrieving instance type {Type}", queryPath);
+      Type genericType = RemoteClient.GetInstanceType(queryPath);
+      instance = RemoteClient.InvokeMethod(s_proxy, "Get", [genericType]);
+    }
+    else
+    {
+      if (!SuppressLogging)
+        Log.Trace("Retrieving heap instance of type {Type}", queryPath);
+      instance = RemoteClient.GetInstance(queryPath);
+    }
+
+    // Only hold lock briefly for cache update
+    if (useCache)
+    {
+      lock (s_lock)
+      {
+        // Double-check: another thread may have cached it while we were querying
+        if (!s_instances.TryGetValue(queryPath, out var existing))
+        {
+          s_instances.TryAdd(queryPath, instance);
+          RegisterCallback(queryPath,
+            new Func<dynamic>(() => Get(queryPath, useCache, useHeap, useLazy)));
+        }
+        else
+        {
+          // Use the instance that was cached by another thread
+          instance = existing;
+        }
+      }
+    }
+
+    return instance;
   }
 
   /// <summary>

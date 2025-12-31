@@ -20,11 +20,8 @@ public abstract class BaseCommunicator
   protected readonly string _hostname;
   protected readonly int _port;
 
-  protected static readonly SemaphoreSlim s_semaphore = new(50);
-  protected static readonly HttpClient s_client = new(new HttpClientHandler
-  {
-    MaxConnectionsPerServer = 50
-  })
+  // No artificial limit on concurrent requests - let the caller manage parallelism
+  protected static readonly HttpClient s_client = new()
   {
     Timeout = TimeSpan.FromSeconds(30),
     DefaultRequestHeaders = { ConnectionClose = false }
@@ -89,7 +86,6 @@ public abstract class BaseCommunicator
         _cancellationTokenSource.Token);
       timeoutCts.CancelAfter(s_client.Timeout);
 
-      await s_semaphore.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
       request = CreateBinaryRequest(path, queryParams, body);
 
       using var response = await s_client.SendAsync(
@@ -150,7 +146,6 @@ public abstract class BaseCommunicator
     finally
     {
       request?.Dispose();
-      s_semaphore.Release();
     }
   }
 
@@ -171,7 +166,6 @@ public abstract class BaseCommunicator
         _cancellationTokenSource.Token);
       timeoutCts.CancelAfter(s_client.Timeout);
 
-      await s_semaphore.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
       request = CreateBinaryRequest(path, queryParams, body);
 
       using var response = await s_client.SendAsync(
@@ -212,7 +206,6 @@ public abstract class BaseCommunicator
     finally
     {
       request?.Dispose();
-      s_semaphore.Release();
     }
   }
 

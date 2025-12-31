@@ -17,8 +17,6 @@ namespace MTGOSDK.Core;
 /// <param name="handler">The method to be wrapped.</param>
 public static class SyncThread
 {
-  private static readonly int s_maxQueueSize = Environment.ProcessorCount * 100;
-  private static readonly SemaphoreSlim s_queueSemaphore = new(s_maxQueueSize, s_maxQueueSize);
 
   private static readonly CancellationTokenSource s_cancellationTokenSource = new();
   private static readonly CancellationToken s_cancellationToken =
@@ -150,53 +148,17 @@ public static class SyncThread
 
   public static async Task EnqueueAsync(
     Func<Task> callback,
-    bool skipQueue = false,
     TimeSpan? timeout = null)
   {
     if (s_cancellationToken.IsCancellationRequested)
       return;
 
-    // Wait for queue space with optional timeout
-    if (!skipQueue)
-    {
-      if (timeout.HasValue)
-      {
-        if (!await s_queueSemaphore.WaitAsync(timeout.Value, s_cancellationToken))
-          throw new TimeoutException("Task queue is full");
-      }
-      else
-      {
-        await s_queueSemaphore.WaitAsync(s_cancellationToken);
-      }
-    }
-
-    try
-    {
-      await s_taskFactory.StartNew(WrapCallbackAsync(async () =>
-      {
-        try
-        {
-          await callback();
-        }
-        finally
-        {
-          if (!skipQueue)
-            s_queueSemaphore.Release();
-        }
-      }), s_cancellationToken);
-    }
-    catch
-    {
-      if (!skipQueue)
-        s_queueSemaphore.Release();
-      throw;
-    }
+    await s_taskFactory.StartNew(WrapCallbackAsync(callback), s_cancellationToken);
   }
 
   public static async Task EnqueueAsync(
     Func<Task> callback,
     string groupId,
-    bool skipQueue = false,
     TimeSpan? timeout = null)
   {
     if (string.IsNullOrEmpty(groupId))
@@ -208,67 +170,22 @@ public static class SyncThread
     if (s_cancellationToken.IsCancellationRequested)
       return;
 
-    // Wait for queue space
-    if (!skipQueue)
+    Task newTask;
+    if (s_groupTasks.TryGetValue(groupId, out var existingTask) &&
+        !existingTask.IsCompleted && !existingTask.IsFaulted && !existingTask.IsCanceled)
     {
-      if (timeout.HasValue)
-      {
-        if (!await s_queueSemaphore.WaitAsync(timeout.Value, s_cancellationToken))
-          throw new TimeoutException("Task queue is full");
-      }
-      else
-      {
-        await s_queueSemaphore.WaitAsync(s_cancellationToken);
-      }
+      newTask = existingTask.ContinueWith(
+        _ => WrapCallbackAsync(callback)(),
+        s_cancellationToken,
+        TaskContinuationOptions.None,
+        s_taskScheduler);
+    }
+    else
+    {
+      newTask = s_taskFactory.StartNew(WrapCallbackAsync(callback), s_cancellationToken);
     }
 
-    try
-    {
-      Task newTask;
-      if (s_groupTasks.TryGetValue(groupId, out var existingTask) &&
-          !existingTask.IsCompleted && !existingTask.IsFaulted && !existingTask.IsCanceled)
-      {
-        newTask = existingTask.ContinueWith(
-          _ => WrapCallbackAsync(async () =>
-          {
-            try
-            {
-              await callback();
-            }
-            finally
-            {
-              if (!skipQueue)
-                s_queueSemaphore.Release();
-            }
-          })(),
-          s_cancellationToken,
-          TaskContinuationOptions.None,
-          s_taskScheduler);
-      }
-      else
-      {
-        newTask = s_taskFactory.StartNew(WrapCallbackAsync(async () =>
-        {
-          try
-          {
-            await callback();
-          }
-          finally
-          {
-            if (!skipQueue)
-              s_queueSemaphore.Release();
-          }
-        }), s_cancellationToken);
-      }
-
-      s_groupTasks[groupId] = newTask;
-    }
-    catch
-    {
-      if (!skipQueue)
-        s_queueSemaphore.Release();
-      throw;
-    }
+    s_groupTasks[groupId] = newTask;
   }
 
   public static void Stop()

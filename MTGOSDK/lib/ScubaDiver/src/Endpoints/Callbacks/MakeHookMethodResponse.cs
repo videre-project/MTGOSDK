@@ -153,7 +153,6 @@ public partial class Diver : IDisposable
 
       _ = SyncThread.EnqueueAsync(
         async () => await InvokeControllerCallback(endpoint, token, timestamp, obj, mappedArgs),
-        true,
         TimeSpan.FromSeconds(5));
     };
 
