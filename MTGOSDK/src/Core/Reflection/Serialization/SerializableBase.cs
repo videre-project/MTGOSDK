@@ -4,6 +4,8 @@
 **/
 
 using System.Collections.Concurrent;
+using System.Dynamic;
+using System.Linq.Expressions;
 using System.Reflection;
 
 
@@ -12,6 +14,14 @@ namespace MTGOSDK.Core.Reflection.Serialization;
 public abstract class SerializableBase : IJsonSerializable
 {
   private static readonly ConcurrentDictionary<Type, PropertyFilter> k__PropertyFilters = new();
+  // Cache for interface property names used by SerializeAs<T>()
+  private static readonly ConcurrentDictionary<Type, IList<string>> s_interfacePropertyNames = new();
+
+  // Fast path: Cache mapping (sourceType, interfaceType) -> list of (sourceProperty, interfaceProperty, needsConversion) tuples
+  private static readonly ConcurrentDictionary<(Type, Type), IList<(PropertyInfo source, PropertyInfo target, bool needsConversion)>> s_propertyMappingCache = new();
+
+  // Cache for compiled property getters: PropertyInfo -> Func<object, object>
+  private static readonly ConcurrentDictionary<PropertyInfo, Func<object, object>> s_compiledGetters = new();
 
   private Type k__DerivedType = null!;
   private IList<PropertyInfo>? k__SerializableProperties;
@@ -90,20 +100,246 @@ public abstract class SerializableBase : IJsonSerializable
     IList<string> exclude = default,
     bool strict = false)
   {
-    TypeProxy<dynamic> proxy = new(typeof(TInterface));
-    if (!proxy.IsInterface)
+    var interfaceType = typeof(TInterface);
+    if (!interfaceType.IsInterface)
     {
       throw new ArgumentException(
-        $"The specified type {typeof(TInterface)} must be an interface.");
+        $"The specified type {interfaceType} must be an interface.");
     }
 
-    // Get all properties of the specified interface.
-    var filter = new PropertyFilter(include, exclude, strict, proxy.Class);
-    IList<string> properties = filter.Properties.Select(p => p.Name).ToList();
+    // Use the fast path: get or build property mappings
+    var sourceType = this.GetType();
+    var cacheKey = (sourceType, interfaceType);
 
-    this.SetSerializationProperties(properties, strict: true);
-    var serializable = this.ToSerializable();
-    return (TInterface)BindExpandoToInterface(serializable, proxy.Class);
+    var propertyMappings = s_propertyMappingCache.GetOrAdd(cacheKey, key =>
+    {
+      var (srcType, ifaceType) = key;
+      var mappings = new List<(PropertyInfo source, PropertyInfo target, bool needsConversion)>();
+
+      // Get interface properties
+      var ifaceProps = ifaceType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+      // Get source properties
+      var sourceProps = srcType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+        .ToDictionary(p => p.Name, p => p);
+
+      foreach (var ifaceProp in ifaceProps)
+      {
+        if (sourceProps.TryGetValue(ifaceProp.Name, out var sourceProp))
+        {
+          // Pre-compile the getter for this property
+          GetOrCompileGetter(sourceProp);
+          // Determine if type conversion is needed (optimization: skip conversion call when types match)
+          var needsConversion = sourceProp.PropertyType != ifaceProp.PropertyType && 
+                               !ifaceProp.PropertyType.IsAssignableFrom(sourceProp.PropertyType);
+          mappings.Add((sourceProp, ifaceProp, needsConversion));
+        }
+      }
+
+      return mappings;
+    });
+
+    // Apply include/exclude filters if needed
+    IEnumerable<(PropertyInfo source, PropertyInfo target, bool needsConversion)> effectiveMappings = propertyMappings;
+    if ((include != null && include.Count > 0) || (exclude != null && exclude.Count > 0))
+    {
+      effectiveMappings = propertyMappings
+        .Where(m => (include == null || include.Count == 0 || include.Contains(m.source.Name)) &&
+                    (exclude == null || !exclude.Contains(m.source.Name)));
+    }
+
+    // Fast path: directly populate an ExpandoObject without Retry() overhead
+    var expando = new ExpandoObject();
+    var expandoDict = (IDictionary<string, object>)expando;
+
+    // Convert mappings to list for processing
+    var mappingsList = effectiveMappings.ToList();
+    
+    // Sequential property access - outer AsParallel handles parallelism across cards
+    // Nested parallelism causes thread pool contention and massive slowdown
+    foreach (var (source, target, needsConversion) in mappingsList)
+    {
+      // Use TryGetValue to avoid exception overhead if getter doesn't exist
+      object value = s_compiledGetters.TryGetValue(source, out var getter)
+        ? getter(this)
+        : source.GetValue(this); // Fallback only if not in cache (should not happen)
+      
+      expandoDict[target.Name] = needsConversion 
+        ? ConvertValueToTargetType(value, target.PropertyType) 
+        : value;
+    }
+
+    return (TInterface)BindExpandoToInterface(expando, interfaceType);
+  }
+
+  /// <summary>
+  /// Asynchronously serializes the object to a specified interface type.
+  /// Uses Task.WhenAll to overlap IPC latency across properties.
+  /// </summary>
+  /// <typeparam name="TInterface">The interface type to serialize to.</typeparam>
+  /// <param name="include">Properties to include.</param>
+  /// <param name="exclude">Properties to exclude.</param>
+  /// <param name="strict">If true, only the properties in the include list will be serialized.</param>
+  /// <returns>A task that resolves to an object of the specified interface type.</returns>
+  /// <remarks>
+  /// This method parallelizes property fetches to overlap I/O latency.
+  /// Use with sequential item enumeration (not AsParallel).
+  /// </remarks>
+  public async Task<TInterface> SerializeAsAsync<TInterface>(
+    IList<string> include = default,
+    IList<string> exclude = default,
+    bool strict = false)
+  {
+    var interfaceType = typeof(TInterface);
+    if (!interfaceType.IsInterface)
+    {
+      throw new ArgumentException(
+        $"The specified type {interfaceType} must be an interface.");
+    }
+
+    // Use the fast path: get or build property mappings (same as sync version)
+    var sourceType = this.GetType();
+    var cacheKey = (sourceType, interfaceType);
+
+    var propertyMappings = s_propertyMappingCache.GetOrAdd(cacheKey, key =>
+    {
+      var (srcType, ifaceType) = key;
+      var mappings = new List<(PropertyInfo source, PropertyInfo target, bool needsConversion)>();
+
+      var ifaceProps = ifaceType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+      var sourceProps = srcType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+        .ToDictionary(p => p.Name, p => p);
+
+      foreach (var ifaceProp in ifaceProps)
+      {
+        if (sourceProps.TryGetValue(ifaceProp.Name, out var sourceProp))
+        {
+          GetOrCompileGetter(sourceProp);
+          var needsConversion = sourceProp.PropertyType != ifaceProp.PropertyType && 
+                               !ifaceProp.PropertyType.IsAssignableFrom(sourceProp.PropertyType);
+          mappings.Add((sourceProp, ifaceProp, needsConversion));
+        }
+      }
+
+      return mappings;
+    });
+
+    // Apply include/exclude filters
+    IEnumerable<(PropertyInfo source, PropertyInfo target, bool needsConversion)> effectiveMappings = propertyMappings;
+    if ((include != null && include.Count > 0) || (exclude != null && exclude.Count > 0))
+    {
+      effectiveMappings = propertyMappings
+        .Where(m => (include == null || include.Count == 0 || include.Contains(m.source.Name)) &&
+                    (exclude == null || !exclude.Contains(m.source.Name)));
+    }
+
+    var mappingsList = effectiveMappings.ToList();
+
+    // Fetch all properties in parallel to overlap IPC latency
+    var expando = new ExpandoObject();
+    var expandoDict = (IDictionary<string, object>)expando;
+    
+    // Create tasks for each property fetch
+    var propertyTasks = mappingsList.Select(async mapping =>
+    {
+      var (source, target, needsConversion) = mapping;
+      
+      // Yield to allow parallel execution
+      await Task.Yield();
+      
+      object value = s_compiledGetters.TryGetValue(source, out var getter)
+        ? getter(this)
+        : source.GetValue(this);
+      
+      return (target.Name, Value: needsConversion 
+        ? ConvertValueToTargetType(value, target.PropertyType) 
+        : value);
+    }).ToList();
+
+    // Wait for all property fetches to complete
+    var results = await Task.WhenAll(propertyTasks).ConfigureAwait(false);
+    
+    // Populate expando with results
+    foreach (var (name, value) in results)
+    {
+      expandoDict[name] = value;
+    }
+
+    return (TInterface)BindExpandoToInterface(expando, interfaceType);
+  }
+
+  /// <summary>
+  /// Converts a value to the specified target type, handling enum and primitive conversions.
+  /// </summary>
+  private static object ConvertValueToTargetType(object value, Type targetType)
+  {
+    if (value == null) return null;
+    
+    var valueType = value.GetType();
+    
+    // If types already match or are assignable, return as-is
+    if (valueType == targetType || targetType.IsAssignableFrom(valueType))
+      return value;
+    
+    // Handle enum conversions
+    if (targetType.IsEnum)
+    {
+      if (valueType == typeof(string))
+      {
+        return Enum.Parse(targetType, (string)value);
+      }
+      else if (valueType.IsEnum)
+      {
+        // Convert between different enum types
+        return Enum.ToObject(targetType, Convert.ToInt32(value));
+      }
+      else if (valueType.IsPrimitive || valueType == typeof(int))
+      {
+        // Convert from numeric to enum
+        return Enum.ToObject(targetType, value);
+      }
+    }
+    
+    // Handle string target from enum
+    if (targetType == typeof(string) && valueType.IsEnum)
+    {
+      return value.ToString();
+    }
+    
+    // Handle nullable types
+    var underlyingType = Nullable.GetUnderlyingType(targetType);
+    if (underlyingType != null)
+    {
+      return ConvertValueToTargetType(value, underlyingType);
+    }
+    
+    // Try general conversion
+    try
+    {
+      return Convert.ChangeType(value, targetType);
+    }
+    catch
+    {
+      return value; // Return original if conversion fails
+    }
+  }
+
+  /// <summary>
+  /// Gets or creates a compiled getter delegate for the specified property.
+  /// </summary>
+  private static Func<object, object> GetOrCompileGetter(PropertyInfo property)
+  {
+    return s_compiledGetters.GetOrAdd(property, prop =>
+    {
+      // Create a compiled expression for fast property access
+      var instanceParam = Expression.Parameter(typeof(object), "instance");
+      var castInstance = Expression.Convert(instanceParam, prop.DeclaringType);
+      var propertyAccess = Expression.Property(castInstance, prop);
+      var boxedResult = Expression.Convert(propertyAccess, typeof(object));
+
+      var lambda = Expression.Lambda<Func<object, object>>(boxedResult, instanceParam);
+      return lambda.Compile();
+    });
   }
 
   private static object BindExpandoToInterface(object obj, Type interfaceType)
@@ -120,12 +356,15 @@ public abstract class SerializableBase : IJsonSerializable
       {
         if (expandoDict.TryGetValue(prop.Name, out var value) && value != null)
         {
+          var valueType = value.GetType();
+          var targetType = prop.PropertyType;
+
           // Handle collections of interfaces
-          if (prop.PropertyType.IsGenericType &&
-              typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType) &&
-              prop.PropertyType.GetGenericArguments()[0].IsInterface)
+          if (targetType.IsGenericType &&
+              typeof(System.Collections.IEnumerable).IsAssignableFrom(targetType) &&
+              targetType.GetGenericArguments()[0].IsInterface)
           {
-            var elemType = prop.PropertyType.GetGenericArguments()[0];
+            var elemType = targetType.GetGenericArguments()[0];
             if (value is System.Collections.IEnumerable enumerable)
             {
               var listType = typeof(List<>).MakeGenericType(elemType);
@@ -138,9 +377,31 @@ public abstract class SerializableBase : IJsonSerializable
             }
           }
           // Handle nested interface
-          else if (prop.PropertyType.IsInterface && value is System.Dynamic.ExpandoObject)
+          else if (targetType.IsInterface && value is System.Dynamic.ExpandoObject)
           {
-            expandoDict[prop.Name] = BindExpandoToInterface(value, prop.PropertyType);
+            expandoDict[prop.Name] = BindExpandoToInterface(value, targetType);
+          }
+          // Handle enum to string conversion
+          else if (targetType == typeof(string) && valueType.IsEnum)
+          {
+            expandoDict[prop.Name] = value.ToString();
+          }
+          // Handle string to enum conversion
+          else if (targetType.IsEnum && valueType == typeof(string))
+          {
+            expandoDict[prop.Name] = Enum.Parse(targetType, (string)value);
+          }
+          // Handle other type conversions (e.g., int to long, etc.)
+          else if (targetType != valueType && !targetType.IsAssignableFrom(valueType))
+          {
+            try
+            {
+              expandoDict[prop.Name] = Convert.ChangeType(value, targetType);
+            }
+            catch
+            {
+              // Keep original value if conversion fails
+            }
           }
         }
       }
@@ -150,3 +411,99 @@ public abstract class SerializableBase : IJsonSerializable
   }
 #endif
 }
+
+#if !MTGOSDKCORE
+/// <summary>
+/// Extension methods for batch serialization with combined parallelism.
+/// </summary>
+public static class SerializationExtensions
+{
+  /// <summary>
+  /// Serializes all items in a collection with combined outer (across items) and inner (across properties) parallelism.
+  /// This provides optimal I/O overlap for remote object serialization.
+  /// </summary>
+  /// <typeparam name="TSource">The source item type in the collection.</typeparam>
+  /// <typeparam name="TInterface">The interface type to serialize to.</typeparam>
+  /// <param name="source">The collection of items to process.</param>
+  /// <param name="selector">A function to extract the serializable object from each item.</param>
+  /// <param name="maxDegreeOfParallelism">Maximum number of items to process concurrently. Default is -1 (system default).</param>
+  /// <returns>A task that resolves to a list of serialized objects.</returns>
+  /// <example>
+  /// <code>
+  /// var dtos = await cards.SerializeAllAsync&lt;CardQuantityPair, ICardDTO&gt;(c => c.Card);
+  /// </code>
+  /// </example>
+  public static async Task<List<TInterface>> SerializeAllAsync<TSource, TInterface>(
+    this IEnumerable<TSource> source,
+    Func<TSource, SerializableBase> selector,
+    int maxDegreeOfParallelism = -1)
+  {
+    var items = source.ToList();
+    var results = new TInterface[items.Count];
+    
+    var options = new ParallelOptions
+    {
+      MaxDegreeOfParallelism = maxDegreeOfParallelism > 0 ? maxDegreeOfParallelism : Environment.ProcessorCount
+    };
+    
+    await Parallel.ForEachAsync(
+      Enumerable.Range(0, items.Count),
+      options,
+      async (index, cancellationToken) =>
+      {
+        var item = items[index];
+        var serializable = selector(item);
+        results[index] = await serializable.SerializeAsAsync<TInterface>().ConfigureAwait(false);
+      }).ConfigureAwait(false);
+    
+    return results.ToList();
+  }
+  
+  /// <summary>
+  /// Serializes all items in a collection with combined parallelism, projecting additional data.
+  /// </summary>
+  /// <typeparam name="TSource">The source item type.</typeparam>
+  /// <typeparam name="TInterface">The interface type to serialize to.</typeparam>
+  /// <typeparam name="TResult">The result type including projected data.</typeparam>
+  /// <param name="source">The collection of items.</param>
+  /// <param name="selector">Function to extract the serializable object.</param>
+  /// <param name="resultSelector">Function to combine source item with serialized result.</param>
+  /// <param name="maxDegreeOfParallelism">Maximum concurrent items.</param>
+  /// <returns>A task that resolves to projected results.</returns>
+  /// <example>
+  /// <code>
+  /// var results = await cards.SerializeAllAsync&lt;CardQuantityPair, ICardDTO, (int Qty, ICardDTO Card)&gt;(
+  ///   c => c.Card,
+  ///   (c, dto) => (c.Quantity, dto)
+  /// );
+  /// </code>
+  /// </example>
+  public static async Task<List<TResult>> SerializeAllAsync<TSource, TInterface, TResult>(
+    this IEnumerable<TSource> source,
+    Func<TSource, SerializableBase> selector,
+    Func<TSource, TInterface, TResult> resultSelector,
+    int maxDegreeOfParallelism = -1)
+  {
+    var items = source.ToList();
+    var results = new TResult[items.Count];
+    
+    var options = new ParallelOptions
+    {
+      MaxDegreeOfParallelism = maxDegreeOfParallelism > 0 ? maxDegreeOfParallelism : Environment.ProcessorCount
+    };
+    
+    await Parallel.ForEachAsync(
+      Enumerable.Range(0, items.Count),
+      options,
+      async (index, cancellationToken) =>
+      {
+        var item = items[index];
+        var serializable = selector(item);
+        var dto = await serializable.SerializeAsAsync<TInterface>().ConfigureAwait(false);
+        results[index] = resultSelector(item, dto);
+      }).ConfigureAwait(false);
+    
+    return results.ToList();
+  }
+}
+#endif
