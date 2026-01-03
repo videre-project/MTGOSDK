@@ -105,13 +105,15 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   /// </summary>
   private static ILogger CreateLogger(Type callerType)
   {
-    if (s_provider != null)
+    // Prefer a real provider over the factory
+    if (s_provider != NullLoggerProvider.Instance)
       return s_provider.CreateLogger(callerType.FullName);
-    if (s_factory != null)
+    // Use the factory if no real provider is set
+    if (s_factory != NullLoggerFactory.Instance)
       return s_factory.CreateLogger(callerType);
 
-    throw new InvalidOperationException(
-        "No logger provider or factory has been set.");
+    // Fall back to the null logger
+    return s_provider.CreateLogger(callerType.FullName);
   }
 
   /// <summary>
