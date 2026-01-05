@@ -87,7 +87,7 @@ public static class STAThread
   public static void Execute(Action action, TimeSpan? timeout = null)
   {
     var dispatcher = GetApplicationDispatcher();
-    var waitTimeout = timeout ?? TimeSpan.FromSeconds(60);
+    var waitTimeout = timeout ?? TimeSpan.FromSeconds(5);
 
     // If we're already on the dispatcher thread, execute directly
     if (dispatcher != null && dispatcher.CheckAccess())
@@ -101,8 +101,9 @@ public static class STAThread
     {
       Log.Debug("[STAThread] Executing on WPF Dispatcher thread.");
       Exception caughtException = null;
+      var completionEvent = new System.Threading.ManualResetEventSlim(false);
 
-      var operation = dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+      dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
       {
         try
         {
@@ -112,14 +113,21 @@ public static class STAThread
         {
           caughtException = ex;
         }
+        finally
+        {
+          completionEvent.Set();
+        }
       }));
 
-      // Wait for completion with timeout
-      var result = operation.Wait(waitTimeout);
-      if (result != DispatcherOperationStatus.Completed)
+      // Wait for completion with proper timeout using ManualResetEventSlim
+      // This ensures timeout is respected even if dispatcher is blocked
+      if (!completionEvent.Wait(waitTimeout))
       {
-        throw new TimeoutException($"Dispatcher operation timed out after {waitTimeout.TotalSeconds} seconds.");
+        Log.Debug($"[STAThread] Dispatcher operation timed out after {waitTimeout.TotalSeconds} seconds.");
+        throw new TimeoutException($"Dispatcher operation timed out after {waitTimeout.TotalSeconds} seconds. The WPF UI thread may be blocked.");
       }
+
+      completionEvent.Dispose();
 
       if (caughtException != null)
       {

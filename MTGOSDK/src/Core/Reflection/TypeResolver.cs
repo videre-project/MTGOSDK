@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Reflection;
 
 using MTGOSDK.Core.Remoting.Types;
@@ -14,10 +15,11 @@ namespace MTGOSDK.Core.Reflection;
 /// <summary>
 /// Resolves local and remote types. Contains a cache so the same TypeFullName
 /// object is returned for different resolutions for the same remote type.
+/// Thread-safe for concurrent access.
 /// </summary>
 public class TypeResolver()
 {
-  private readonly Dictionary<Tuple<string, string>, Type> _cache = new();
+  private readonly ConcurrentDictionary<Tuple<string, string>, Type> _cache = new();
 
   // Since the resolver works with a cache that should be global we make the
   // whole class a singleton

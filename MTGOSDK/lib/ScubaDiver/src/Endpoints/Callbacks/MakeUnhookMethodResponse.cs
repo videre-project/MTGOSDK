@@ -5,7 +5,6 @@
 **/
 
 using System;
-using System.Net;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -17,11 +16,13 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeUnhookMethodResponse(HttpListenerRequest arg)
+  private byte[] MakeUnhookMethodResponse()
   {
-    string tokenStr = arg.QueryString.Get("token");
-    if (tokenStr == null || !int.TryParse(tokenStr, out int token))
-      return QuickError("Missing parameter 'token'");
+    var request = DeserializeRequest<HookUnsubscriptionRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
+
+    int token = request.Token;
 
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Called! Token: {token}");
 

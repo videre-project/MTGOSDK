@@ -18,4 +18,7 @@ public class IndexedItemAccessRequest
   public bool PinRequest { get; set; }
   [Key(2)]
   public ObjectOrRemoteAddress Index { get; set; }
+  [Key(3)]
+  public bool ForceUIThread { get; set; }
 }
+

@@ -127,7 +127,18 @@ public static class Bootstrapper
     // Create a random temporary directory to be deleted when the process exits
     string tempDir = Path.Combine(AppDataDir, Path.GetRandomFileName());
     Directory.CreateDirectory(tempDir);
-    AppDomain.CurrentDomain.ProcessExit += (s, e) => Directory.Delete(tempDir, true);
+    AppDomain.CurrentDomain.ProcessExit += delegate
+    {
+      try
+      {
+        Directory.Delete(tempDir, true);
+      }
+      catch (UnauthorizedAccessException)
+      {
+        // Given we had permissions to write this directory, we assume this
+        // is caused by a file lock from the MTGO process (if it's still running).
+      }
+    };
 
     // Get the .NET diver assembly to inject into the target process
     byte[] diverResource = GetBinaryResource(@"Resources\Microsoft.Diagnostics.Runtime.dll");

@@ -8,7 +8,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
 
 using Microsoft.Diagnostics.Runtime;
 
@@ -21,20 +20,18 @@ public partial class Diver : IDisposable
 {
   private ClrAppDomain _currentDomain = null;
 
-  private byte[] MakeDomainsResponse(HttpListenerRequest req)
+  private byte[] MakeDomainsResponse()
   {
-    List<string> modules = new();
     string currentDomain = AppDomain.CurrentDomain.FriendlyName;
-    lock (_runtime.clrLock)
-    {
-      _currentDomain ??= _runtime.GetClrAppDomains()
-        .FirstOrDefault(ad => ad.Name == currentDomain);
+    
+    // GetClrAppDomains() has internal read lock
+    _currentDomain ??= _runtime.GetClrAppDomains()
+      .FirstOrDefault(ad => ad.Name == currentDomain);
 
-      modules = _currentDomain.Modules
-        .Select(m => Path.GetFileNameWithoutExtension(m.Name))
-        .Where(m => !string.IsNullOrWhiteSpace(m))
-        .ToList();
-    }
+    var modules = _currentDomain?.Modules
+      .Select(m => Path.GetFileNameWithoutExtension(m.Name))
+      .Where(m => !string.IsNullOrWhiteSpace(m))
+      .ToList() ?? new List<string>();
 
     var domainDump = new DomainDump(currentDomain, modules);
     return WrapSuccess(domainDump);

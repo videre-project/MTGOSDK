@@ -63,6 +63,17 @@
           "Microsoft.NETFramework.ReferenceAssemblies.net48": "1.0.3"
         }
       },
+      "System.IO.Pipelines": {
+        "type": "Direct",
+        "requested": "[10.0.1, )",
+        "resolved": "10.0.1",
+        "contentHash": "26LbFXHKd7PmRnWlkjnYgmjd5B6HYVG+1MpTO25BdxTJnx6D0O16JPAC/S4YBqjtt4YpfGj1QO/Ss6SPMGEGQw==",
+        "dependencies": {
+          "System.Buffers": "4.6.1",
+          "System.Memory": "4.6.3",
+          "System.Threading.Tasks.Extensions": "4.6.3"
+        }
+      },
       "Azure.Core": {
         "type": "Transitive",
         "resolved": "1.38.0",
@@ -342,6 +353,7 @@
           "Microsoft.CSharp": "[4.7.0, )",
           "Microsoft.Diagnostics.Runtime": "[4.0.0-beta.24360.3, )",
           "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )",
+          "System.IO.Pipelines": "[10.0.1, )",
           "System.Threading.Channels": "[10.0.1, )"
         }
       },

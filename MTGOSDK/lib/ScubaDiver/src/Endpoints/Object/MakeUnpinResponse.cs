@@ -5,9 +5,9 @@
 **/
 
 using System;
-using System.Net;
 
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
 
 namespace ScubaDiver;
@@ -17,11 +17,13 @@ public partial class Diver : IDisposable
   private static readonly byte[] s_okResponse =
     WrapSuccess(new StatusResponse { Status = "OK" });
 
-  private byte[] MakeUnpinResponse(HttpListenerRequest arg)
+  private byte[] MakeUnpinResponse()
   {
-    string objAddrStr = arg.QueryString.Get("address");
-    if (objAddrStr == null || !ulong.TryParse(objAddrStr, out var objAddr))
-      return QuickError("Missing parameter 'address'");
+    var request = DeserializeRequest<UnpinRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
+
+    ulong objAddr = request.Address;
 
     Log.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
     _runtime.QueueUnpinObject(objAddr);

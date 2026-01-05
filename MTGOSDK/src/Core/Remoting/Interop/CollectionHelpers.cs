@@ -47,16 +47,16 @@ public static class CollectionHelpers
     int operatorCode, 
     object value)
   {
-    // Get element type from collection
-    var elementType = GetElementType(collection.GetType());
-    var property = elementType.GetProperty(propertyName)
-      ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{elementType.Name}'");
-    
     var comparer = Comparer<object>.Default;
     var result = new List<object>();
 
     foreach (var item in (IEnumerable)collection)
     {
+      // Get property from item's actual runtime type
+      var type = item.GetType();
+      var property = type.GetProperty(propertyName)
+        ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
+      
       var propValue = property.GetValue(item);
       int cmp = comparer.Compare(propValue, value);
       
@@ -94,18 +94,21 @@ public static class CollectionHelpers
     if (items.Count == 0)
       return items;
     
-    // Get element type from the first item's runtime type (not collection's declared type)
-    // This is necessary because chained calls may pass List<object> containing typed items
-    var elementType = items[0].GetType();
-    var property = elementType.GetProperty(propertyName)
-      ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{elementType.Name}'");
-    
     var comparer = Comparer<object>.Default;
+    
+    // Helper to get property value from an item's actual runtime type
+    object GetPropertyValue(object item)
+    {
+      var type = item.GetType();
+      var prop = type.GetProperty(propertyName)
+        ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
+      return prop.GetValue(item);
+    }
     
     items.Sort((a, b) =>
     {
-      var va = property.GetValue(a);
-      var vb = property.GetValue(b);
+      var va = GetPropertyValue(a);
+      var vb = GetPropertyValue(b);
       int result = comparer.Compare(va, vb);
       return descending ? -result : result;
     });

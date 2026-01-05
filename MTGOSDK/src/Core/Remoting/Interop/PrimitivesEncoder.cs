@@ -4,6 +4,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
+using System.Reflection;
+
 using MTGOSDK.Core.Reflection.Extensions;
 
 
@@ -11,6 +14,10 @@ namespace MTGOSDK.Core.Remoting.Interop;
 
 public static class PrimitivesEncoder
 {
+  // Cache for Parse methods to avoid reflection per-call
+  private static readonly ConcurrentDictionary<RuntimeTypeHandle, MethodInfo> 
+    s_parseMethodCache = new();
+
   /// <summary>
   /// Encodes a primitive or array of primitives
   /// </summary>
@@ -107,10 +114,12 @@ public static class PrimitivesEncoder
     }
 
     // If the type is a primitive or string coercible, we can parse it
-    // directly from the string using the type's Parse method.
+    // directly from the string using the type's cached Parse method.
     if (resultType.IsPrimitiveEtc() || resultType.IsStringCoercible())
     {
-      var parseMethod = resultType.GetMethod("Parse", [typeof(string)]);
+      var parseMethod = s_parseMethodCache.GetOrAdd(
+        resultType.TypeHandle,
+        _ => resultType.GetMethod("Parse", [typeof(string)]));
       return parseMethod.Invoke(null, new object[] { toDecode });
     }
 

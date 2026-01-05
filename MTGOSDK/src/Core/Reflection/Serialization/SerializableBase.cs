@@ -148,25 +148,36 @@ public abstract class SerializableBase : IJsonSerializable
                     (exclude == null || !exclude.Contains(m.source.Name)));
     }
 
-    // Fast path: directly populate an ExpandoObject without Retry() overhead
-    var expando = new ExpandoObject();
-    var expandoDict = (IDictionary<string, object>)expando;
+    // Fast path: use ConcurrentDictionary for thread-safe parallel property access
+    var results = new ConcurrentDictionary<string, object>();
 
-    // Convert mappings to list for processing
+    // Convert mappings to list for parallel processing
     var mappingsList = effectiveMappings.ToList();
     
-    // Sequential property access - outer AsParallel handles parallelism across cards
-    // Nested parallelism causes thread pool contention and massive slowdown
-    foreach (var (source, target, needsConversion) in mappingsList)
+    // Parallelize property access to overlap IPC latency for remote objects
+    // Bounded parallelism avoids thread pool exhaustion
+    Parallel.ForEach(
+      mappingsList,
+      new ParallelOptions { MaxDegreeOfParallelism = Math.Min(mappingsList.Count, Environment.ProcessorCount) },
+      mapping =>
+      {
+        var (source, target, needsConversion) = mapping;
+        
+        object value = s_compiledGetters.TryGetValue(source, out var getter)
+          ? getter(this)
+          : source.GetValue(this);
+        
+        results[target.Name] = needsConversion 
+          ? ConvertValueToTargetType(value, target.PropertyType) 
+          : value;
+      });
+
+    // Build ExpandoObject from results
+    var expando = new ExpandoObject();
+    var expandoDict = (IDictionary<string, object>)expando;
+    foreach (var kvp in results)
     {
-      // Use TryGetValue to avoid exception overhead if getter doesn't exist
-      object value = s_compiledGetters.TryGetValue(source, out var getter)
-        ? getter(this)
-        : source.GetValue(this); // Fallback only if not in cache (should not happen)
-      
-      expandoDict[target.Name] = needsConversion 
-        ? ConvertValueToTargetType(value, target.PropertyType) 
-        : value;
+      expandoDict[kvp.Key] = kvp.Value;
     }
 
     return (TInterface)BindExpandoToInterface(expando, interfaceType);
@@ -182,10 +193,11 @@ public abstract class SerializableBase : IJsonSerializable
   /// <param name="strict">If true, only the properties in the include list will be serialized.</param>
   /// <returns>A task that resolves to an object of the specified interface type.</returns>
   /// <remarks>
-  /// This method parallelizes property fetches to overlap I/O latency.
-  /// Use with sequential item enumeration (not AsParallel).
+  /// This method is designed to be called from an outer parallelism context
+  /// (e.g., SerializeAllAsync with Parallel.ForEachAsync). Property fetches
+  /// are sequential within each item to avoid thread pool contention.
   /// </remarks>
-  public async Task<TInterface> SerializeAsAsync<TInterface>(
+  public Task<TInterface> SerializeAsAsync<TInterface>(
     IList<string> include = default,
     IList<string> exclude = default,
     bool strict = false)
@@ -235,37 +247,23 @@ public abstract class SerializableBase : IJsonSerializable
 
     var mappingsList = effectiveMappings.ToList();
 
-    // Fetch all properties in parallel to overlap IPC latency
+    // Sequential property access - outer parallelism handles concurrency across items
+    // This avoids N×M thread pool contention when combined with Parallel.ForEachAsync
     var expando = new ExpandoObject();
     var expandoDict = (IDictionary<string, object>)expando;
     
-    // Create tasks for each property fetch
-    var propertyTasks = mappingsList.Select(async mapping =>
+    foreach (var (source, target, needsConversion) in mappingsList)
     {
-      var (source, target, needsConversion) = mapping;
-      
-      // Yield to allow parallel execution
-      await Task.Yield();
-      
       object value = s_compiledGetters.TryGetValue(source, out var getter)
         ? getter(this)
         : source.GetValue(this);
       
-      return (target.Name, Value: needsConversion 
+      expandoDict[target.Name] = needsConversion 
         ? ConvertValueToTargetType(value, target.PropertyType) 
-        : value);
-    }).ToList();
-
-    // Wait for all property fetches to complete
-    var results = await Task.WhenAll(propertyTasks).ConfigureAwait(false);
-    
-    // Populate expando with results
-    foreach (var (name, value) in results)
-    {
-      expandoDict[name] = value;
+        : value;
     }
 
-    return (TInterface)BindExpandoToInterface(expando, interfaceType);
+    return Task.FromResult((TInterface)BindExpandoToInterface(expando, interfaceType));
   }
 
   /// <summary>

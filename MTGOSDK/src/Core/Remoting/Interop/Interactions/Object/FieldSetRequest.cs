@@ -20,4 +20,7 @@ public class FieldSetRequest
   public string FieldName { get; set; }
   [Key(3)]
   public ObjectOrRemoteAddress Value { get; set; }
+  [Key(4)]
+  public bool ForceUIThread { get; set; }
 }
+

@@ -3,11 +3,11 @@
   Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
-using System;
-using System.Diagnostics;
-using System.Net;
 
-using MessagePack;
+using System;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Reflection;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -22,26 +22,27 @@ public partial class Diver : IDisposable
 {
   private static readonly TypeStub s_typeStub = new();
 
-  private byte[] MakeInvokeResponse(HttpListenerRequest arg)
+  // Endpoint-level method cache: uses string keys for safety
+  // Key: (typeFullName, methodName, paramCount, paramTypeHash)
+  private static readonly ConcurrentDictionary<(string, string, int, int), MethodInfo> 
+    s_methodCache = new();
+
+  private static int ComputeTypeHash(Type[] types)
+  {
+    if (types == null) return 0;
+    int hash = 17;
+    foreach (var t in types)
+      hash = hash * 31 + (t?.FullName?.GetHashCode() ?? 0);
+    return hash;
+  }
+
+  private byte[] MakeInvokeResponse()
   {
     Log.Debug("[Diver] Got /Invoke request!");
-    var body = ReadRequestBody(arg);
 
-    if (body == null || body.Length == 0)
-      return QuickError("Missing body");
-
-    InvocationRequest request;
-    try
-    {
-      request = MessagePackSerializer.Deserialize<InvocationRequest>(body);
-    }
-    catch
-    {
-      return QuickError("Failed to deserialize body");
-    }
-
+    var request = DeserializeRequest<InvocationRequest>();
     if (request == null)
-      return QuickError("Failed to deserialize body");
+      return QuickError("Missing or invalid request body");
 
     object instance = null;
     Type dumpedObjType;
@@ -63,110 +64,106 @@ public partial class Diver : IDisposable
 
     for (int i = 0; i < paramCount; i++)
     {
-      var parsed = _runtime.ParseParameterObject(request.Parameters[i]);
-      paramsArray[i] = parsed;
-      argumentTypes[i] = parsed?.GetType() ?? s_typeStub;
+      paramsArray[i] = _runtime.ParseParameterObject(request.Parameters[i]);
+      argumentTypes[i] = paramsArray[i]?.GetType() ?? typeof(object);
     }
 
-    int genericCount = request.GenericArgsTypeFullNames?.Length ?? 0;
-    Type[] genericArgumentTypes = new Type[genericCount];
-    for (int i = 0; i < genericCount; i++)
+    // Create cache key
+    var cacheKey = (dumpedObjType.FullName, request.MethodName, paramCount, ComputeTypeHash(argumentTypes));
+
+    // Try cache first
+    if (!s_methodCache.TryGetValue(cacheKey, out var method))
     {
-      genericArgumentTypes[i] = _runtime.ResolveType(request.GenericArgsTypeFullNames[i]);
+      // Use existing reflection helper
+      method = dumpedObjType.GetMethodRecursive(
+        request.MethodName,
+        argumentTypes
+      );
+
+      if (method != null)
+        s_methodCache[cacheKey] = method;
     }
 
-    var method = dumpedObjType.GetMethodRecursive(request.MethodName, genericArgumentTypes, argumentTypes);
     if (method == null)
+      return QuickError($"Couldn't find method '{request.MethodName}' on type '{dumpedObjType.FullName}'");
+
+    // Handle generics
+    if (request.GenericArgsTypeFullNames?.Length > 0)
     {
-      Debugger.Launch();
-      Log.Debug("[Diver] Failed to Resolved method :/");
-      return QuickError("Couldn't find method in type.");
+      Type[] genericArgs = new Type[request.GenericArgsTypeFullNames.Length];
+      for (int i = 0; i < request.GenericArgsTypeFullNames.Length; i++)
+      {
+        genericArgs[i] = _runtime.ResolveType(request.GenericArgsTypeFullNames[i]);
+        if (genericArgs[i] == null)
+          return QuickError($"Failed to resolve generic type: {request.GenericArgsTypeFullNames[i]}");
+      }
+      method = method.MakeGenericMethod(genericArgs);
     }
+    // Check if this invocation requires UI thread affinity
+    // DispatcherObject instances must be accessed on their owning thread
+    bool isDispatcherObject = instance != null && instance is System.Windows.Threading.DispatcherObject;
+    bool needsUIThread = request.ForceUIThread && isDispatcherObject;
 
-    Log.Debug($"[Diver] Resolved method: {method.Name}, Containing Type: {method.DeclaringType}");
-
-    // Handle generic method definitions that weren't properly constructed
-    // This can happen if the method was found via recursion or wildcard matching
-    if (method.IsGenericMethodDefinition)
-    {
-      if (genericArgumentTypes == null || genericArgumentTypes.Length == 0)
-      {
-        return QuickError($"Method '{method.Name}' is generic and requires type arguments, but none were provided.");
-      }
-      if (method.GetGenericArguments().Length != genericArgumentTypes.Length)
-      {
-        return QuickError($"Method '{method.Name}' requires {method.GetGenericArguments().Length} type argument(s), but {genericArgumentTypes.Length} were provided.");
-      }
-      try
-      {
-        method = method.MakeGenericMethod(genericArgumentTypes);
-        Log.Debug($"[Diver] Constructed generic method: {method.Name}");
-      }
-      catch (Exception e)
-      {
-        return QuickError($"Failed to construct generic method '{method.Name}': {e.Message}", e.ToString());
-      }
-    }
-    // Also check if the method's declaring type has unbound generic parameters
-    else if (method.ContainsGenericParameters)
-    {
-      return QuickError($"Method '{method.Name}' or its declaring type contains unbound generic parameters. Ensure the type is a constructed generic type.");
-    }
-
-
-    object results = null;
+    object results;
     try
     {
-      Log.Debug($"[Diver] Invoking {method.Name} with {paramCount} args");
-      results = method.Invoke(instance, paramsArray);
-    }
-    catch (Exception e)
-    {
-      var innerEx = e;
-      while (innerEx.InnerException != null)
-        innerEx = innerEx.InnerException;
-
-      Log.Debug($"[Diver] Invocation of {method.Name} failed: {innerEx.Message}");
-      return QuickError($"Invocation caused exception: {innerEx.Message}", e.ToString());
-    }
-
-    InvocationResults invocResults;
-    if (method.ReturnType == typeof(void))
-    {
-      invocResults = new InvocationResults { VoidReturnType = true };
-    }
-    else
-    {
-      if (results == null)
+      if (needsUIThread && !STAThread.IsDispatcherThread)
       {
-        invocResults = new InvocationResults
-        {
-          VoidReturnType = false,
-          ReturnedObjectOrAddress = ObjectOrRemoteAddress.Null
-        };
+        // For DispatcherObject instances with ForceUIThread, invoke on UI thread proactively
+        Log.Debug($"[Diver] Invoking {request.MethodName} on UI thread (DispatcherObject target)");
+        results = STAThread.Execute(() => method.Invoke(instance, paramsArray));
       }
       else
       {
-        ObjectOrRemoteAddress returnValue;
-        if (results.GetType().IsPrimitiveEtc())
-        {
-          returnValue = ObjectOrRemoteAddress.FromObj(results);
-        }
-        else
-        {
-          ulong resultsAddress = _runtime.PinObject(results);
-          Type resultsType = results.GetType();
-          int hashCode = results.GetHashCode();
-          returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name, hashCode);
-        }
-
-        invocResults = new InvocationResults
-        {
-          VoidReturnType = false,
-          ReturnedObjectOrAddress = returnValue
-        };
+        // Try direct execution first - most operations don't need UI thread
+        results = method.Invoke(instance, paramsArray);
       }
     }
+    catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
+                               (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
+    {
+      // Retry on STA/UI thread only for operations that actually need it
+      Log.Debug($"[Diver] Retrying Invoke on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
+      try
+      {
+        results = STAThread.Execute(() => method.Invoke(instance, paramsArray));
+      }
+      catch (Exception retryEx)
+      {
+        return QuickError($"Invocation caused exception (after STA retry): {retryEx}");
+      }
+    }
+    catch (Exception e)
+    {
+      return QuickError($"Invocation caused exception: {e}");
+    }
+
+    ObjectOrRemoteAddress returnValue;
+    if (method.ReturnType == typeof(void))
+    {
+      returnValue = ObjectOrRemoteAddress.Null;
+    }
+    else if (results == null)
+    {
+      returnValue = ObjectOrRemoteAddress.Null;
+    }
+    else if (results.GetType().IsPrimitiveEtc())
+    {
+      returnValue = ObjectOrRemoteAddress.FromObj(results);
+    }
+    else
+    {
+      ulong resultsAddress = _runtime.PinObject(results);
+      Type resultsType = results.GetType();
+      int hashCode = results.GetHashCode();
+      returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.FullName ?? resultsType.Name, hashCode);
+    }
+
+    var invocResults = new InvocationResults
+    {
+      VoidReturnType = method.ReturnType == typeof(void),
+      ReturnedObjectOrAddress = returnValue
+    };
 
     return WrapSuccess(invocResults);
   }

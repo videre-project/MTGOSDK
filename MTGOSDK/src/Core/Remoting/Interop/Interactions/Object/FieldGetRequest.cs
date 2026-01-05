@@ -18,4 +18,7 @@ public class FieldGetRequest
   public string TypeFullName { get; set; }
   [Key(2)]
   public string FieldName { get; set; }
+  [Key(3)]
+  public bool ForceUIThread { get; set; }
 }
+

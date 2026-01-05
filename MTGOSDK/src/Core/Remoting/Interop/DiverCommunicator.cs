@@ -4,14 +4,15 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
 
 using MessagePack;
 
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
@@ -19,14 +20,21 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 namespace MTGOSDK.Core.Remoting.Interop;
 
 /// <summary>
-/// Communicates with a diver in a remote process.
+/// TCP-based communicator with the Diver in a remote process.
 /// </summary>
-public class DiverCommunicator : BaseCommunicator
+public class DiverCommunicator : IDisposable
 {
+  private readonly TcpCommunicator _tcp;
   private int? _process_id = null;
-  private readonly CallbacksListener _listener;
+
+  // Callback handling
+  private readonly ConcurrentDictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
+  private readonly ConcurrentDictionary<LocalEventCallback, int> _eventHandlersToToken = new();
+  private readonly ConcurrentDictionary<int, LocalHookCallback> _tokensToHookCallbacks = new();
+  private readonly ConcurrentDictionary<LocalHookCallback, int> _hookCallbacksToTokens = new();
 
   private static readonly AsyncLocal<bool> s_forceUIThread = new();
+  private volatile bool _isDisposed = false;
 
   public static bool ForceUIThread
   {
@@ -39,70 +47,146 @@ public class DiverCommunicator : BaseCommunicator
   private sealed class UIThreadScope : IDisposable
   {
     private readonly bool _previousValue;
+    private readonly bool _suppressed;
+    private readonly System.Threading.AsyncFlowControl _flowControl;
+
     public UIThreadScope()
     {
       _previousValue = ForceUIThread;
+      
+      // Suppress ExecutionContext flow to prevent AsyncLocal bleeding
+      // to concurrent/parallel operations
+      if (!System.Threading.ExecutionContext.IsFlowSuppressed())
+      {
+        _flowControl = System.Threading.ExecutionContext.SuppressFlow();
+        _suppressed = true;
+      }
+      
       ForceUIThread = true;
     }
-    public void Dispose() => ForceUIThread = _previousValue;
+
+    public void Dispose()
+    {
+      ForceUIThread = _previousValue;
+      if (_suppressed)
+        _flowControl.Undo();
+    }
   }
 
-  public bool IsConnected => _process_id.HasValue;
+  public bool IsConnected => _tcp.IsConnected;
 
   public bool Disconnect()
   {
     if (!IsConnected) return false;
-    return UnregisterClient(_process_id.Value);
+    return UnregisterClient(_process_id);
   }
+
+  public void Cancel() => _tcp?.Dispose();
 
   public DiverCommunicator(
     string hostname,
     int diverPort,
     CancellationTokenSource cts = null)
-      : base(hostname, diverPort, cts)
   {
-    _listener = new CallbacksListener(this);
+    _tcp = new TcpCommunicator(hostname, diverPort, cts);
+
+    // Register callback handler for incoming events/hooks from Diver
+    _tcp.SetCallbackHandler(HandleCallback);
+
     RemoteClient.Disposed += (s, e) =>
     {
+      _isDisposed = true;
       SyncThread.Enqueue(() =>
       {
-        base.Cancel();
+        Cancel();
         _process_id = null;
-        if (_listener.IsOpen)
-          _listener.Close();
       });
     };
   }
 
-  public DiverCommunicator(IPAddress ipa, int diverPort)
-    : this(ipa.ToString(), diverPort, null) { }
-
-  public DiverCommunicator(IPEndPoint ipe)
-    : this(ipe.Address, ipe.Port) { }
-
-  protected override string BuildUrl(
-    string path,
-    Dictionary<string, string> queryParams = null)
+  /// <summary>
+  /// Connect to the Diver via TCP.
+  /// </summary>
+  public async Task ConnectAsync(CancellationToken cancellationToken = default)
   {
-    if (ForceUIThread)
+    await _tcp.ConnectAsync(cancellationToken).ConfigureAwait(false);
+  }
+
+  /// <summary>
+  /// Handles callbacks (events/hooks) received from the Diver.
+  /// </summary>
+  private void HandleCallback(string endpoint, byte[] body)
+  {
+    if (endpoint == "/invoke_callback")
     {
-      queryParams ??= new Dictionary<string, string>();
-      queryParams["ui_thread"] = "true";
+      var request = MessagePackSerializer.Deserialize<CallbackInvocationRequest>(body);
+
+      // Set the timestamp for the sender
+      if (request.Parameters.Count > 0)
+        request.Parameters[0].Timestamp = request.Timestamp;
+
+      if (_tokensToEventHandlers.TryGetValue(request.Token, out LocalEventCallback callback))
+      {
+        // Set timestamps for event args
+        if (request.Parameters.Count > 1)
+          request.Parameters[1].Timestamp = request.Timestamp;
+
+        callback([.. request.Parameters]);
+      }
+      else if (_tokensToHookCallbacks.TryGetValue(request.Token, out LocalHookCallback hook))
+      {
+        hook(new HookContext(request.Timestamp),
+             request.Parameters.FirstOrDefault(),
+             [.. request.Parameters.Skip(1)]);
+      }
     }
-    return base.BuildUrl(path, queryParams);
   }
 
   private static ReadOnlyMemory<byte> Serialize<T>(T value) =>
     MessagePackSerializer.Serialize(value);
 
+  /// <summary>
+  /// Ensures the TCP connection is established.
+  /// </summary>
+  private void EnsureConnected()
+  {
+    if (_isDisposed)
+      throw new ObjectDisposedException(nameof(DiverCommunicator), "MTGO process has closed");
+
+    if (!_tcp.IsConnected)
+    {
+      _tcp.ConnectAsync().GetAwaiter().GetResult();
+    }
+  }
+
+  /// <summary>
+  /// Sends a request and returns the response.
+  /// </summary>
+  private T SendRequest<T>(string endpoint, object request = null)
+  {
+    EnsureConnected();
+    byte[] body = request != null ? MessagePackSerializer.Serialize(request) : null;
+    return _tcp.SendRequestAsync<T>("/" + endpoint, body).GetAwaiter().GetResult();
+  }
+
+  /// <summary>
+  /// Sends a request without expecting a response.
+  /// </summary>
+  private void SendRequest(string endpoint, object request = null)
+  {
+    EnsureConnected();
+    byte[] body = request != null ? MessagePackSerializer.Serialize(request) : null;
+    _tcp.SendRequestAsync("/" + endpoint, body).GetAwaiter().GetResult();
+  }
+
   public HeapDump DumpHeap(string typeFilter = null, bool dumpHashcodes = true)
   {
-    var queryParams = new Dictionary<string, string>();
-    if (typeFilter != null)
-      queryParams["type_filter"] = typeFilter;
-    queryParams["dump_hashcodes"] = dumpHashcodes.ToString();
-
-    return SendRequest<HeapDump>("heap", queryParams);
+    var request = new HeapDumpRequest
+    {
+      TypeFilter = typeFilter,
+      DumpHashcodes = dumpHashcodes
+    };
+    return SendRequest<HeapDump>("heap", request);
   }
 
   public DomainDump DumpDomain() =>
@@ -110,20 +194,18 @@ public class DiverCommunicator : BaseCommunicator
 
   public TypesDump DumpTypes(string assembly)
   {
-    var queryParams = new Dictionary<string, string>
-    {
-      ["assembly"] = assembly
-    };
-    return SendRequest<TypesDump>("types", queryParams);
+    var request = new TypesDumpRequest { Assembly = assembly };
+    return SendRequest<TypesDump>("types", request);
   }
 
   public TypeDump DumpType(string type, string assembly = null)
   {
-    var dumpRequest = new TypeDumpRequest { TypeFullName = type };
-    if (assembly != null)
-      dumpRequest.Assembly = assembly;
-
-    return SendRequest<TypeDump>("type", null, Serialize(dumpRequest));
+    var dumpRequest = new TypeDumpRequest
+    {
+      TypeFullName = type,
+      Assembly = assembly
+    };
+    return SendRequest<TypeDump>("type", dumpRequest);
   }
 
   public ObjectDump DumpObject(
@@ -132,29 +214,21 @@ public class DiverCommunicator : BaseCommunicator
     bool pinObject = false,
     int? hashcode = null)
   {
-    var queryParams = new Dictionary<string, string>
+    var request = new ObjectDumpRequest
     {
-      ["address"] = address.ToString(),
-      ["type_name"] = typeName,
-      ["pinRequest"] = pinObject.ToString(),
-      ["hashcode_fallback"] = "false"
+      Address = address,
+      TypeName = typeName,
+      PinRequest = pinObject,
+      Hashcode = hashcode,
+      HashcodeFallback = hashcode.HasValue
     };
-    if (hashcode.HasValue)
-    {
-      queryParams["hashcode"] = hashcode.Value.ToString();
-      queryParams["hashcode_fallback"] = "true";
-    }
-
-    return SendRequest<ObjectDump>("object", queryParams);
+    return SendRequest<ObjectDump>("object", request);
   }
 
   public void UnpinObject(ulong address)
   {
-    var queryParams = new Dictionary<string, string>
-    {
-      ["address"] = address.ToString()
-    };
-    SendRequest("unpin", queryParams);
+    var request = new UnpinRequest { Address = address };
+    SendRequest("unpin", request);
   }
 
   public InvocationResults InvokeMethod(
@@ -170,10 +244,10 @@ public class DiverCommunicator : BaseCommunicator
       TypeFullName = targetTypeFullName,
       MethodName = methodName,
       GenericArgsTypeFullNames = genericArgsFullTypeNames,
-      Parameters = new List<ObjectOrRemoteAddress>(args)
+      Parameters = new List<ObjectOrRemoteAddress>(args),
+      ForceUIThread = ForceUIThread
     };
-
-    return SendRequest<InvocationResults>("invoke", new Dictionary<string, string>(), Serialize(invocReq));
+    return SendRequest<InvocationResults>("invoke", invocReq);
   }
 
   public bool RegisterClient(int? process_id = null)
@@ -182,11 +256,8 @@ public class DiverCommunicator : BaseCommunicator
 
     try
     {
-      var queryParams = new Dictionary<string, string>
-      {
-        ["process_id"] = _process_id.Value.ToString()
-      };
-      SendRequest("register_client", queryParams);
+      var request = new RegisterClientRequest { ProcessId = _process_id.Value };
+      SendRequest("register_client", request);
       return true;
     }
     catch
@@ -201,11 +272,8 @@ public class DiverCommunicator : BaseCommunicator
 
     try
     {
-      var queryParams = new Dictionary<string, string>
-      {
-        ["process_id"] = _process_id.Value.ToString()
-      };
-      SendRequest("unregister_client", queryParams);
+      var request = new UnregisterClientRequest { ProcessId = _process_id.Value };
+      SendRequest("unregister_client", request);
       return true;
     }
     catch
@@ -237,10 +305,10 @@ public class DiverCommunicator : BaseCommunicator
     {
       CollectionAddress = token,
       PinRequest = true,
-      Index = key
+      Index = key,
+      ForceUIThread = ForceUIThread
     };
-
-    var result = SendRequest<InvocationResults>("get_item", null, Serialize(request));
+    var result = SendRequest<InvocationResults>("get_item", request);
     return result.ReturnedObjectOrAddress;
   }
 
@@ -264,10 +332,10 @@ public class DiverCommunicator : BaseCommunicator
     var ctorInvocReq = new CtorInvocationRequest
     {
       TypeFullName = typeFullName,
-      Parameters = new List<ObjectOrRemoteAddress>(args)
+      Parameters = new List<ObjectOrRemoteAddress>(args),
+      ForceUIThread = ForceUIThread
     };
-
-    return SendRequest<InvocationResults>("create_object", new Dictionary<string, string>(), Serialize(ctorInvocReq));
+    return SendRequest<InvocationResults>("create_object", ctorInvocReq);
   }
 
   public InvocationResults SetField(
@@ -281,10 +349,10 @@ public class DiverCommunicator : BaseCommunicator
       ObjAddress = targetAddr,
       TypeFullName = targetTypeFullName,
       FieldName = fieldName,
-      Value = newValue
+      Value = newValue,
+      ForceUIThread = ForceUIThread
     };
-
-    return SendRequest<InvocationResults>("set_field", new Dictionary<string, string>(), Serialize(invocReq));
+    return SendRequest<InvocationResults>("set_field", invocReq);
   }
 
   public InvocationResults GetField(
@@ -296,10 +364,10 @@ public class DiverCommunicator : BaseCommunicator
     {
       ObjAddress = targetAddr,
       TypeFullName = targetTypeFullName,
-      FieldName = fieldName
+      FieldName = fieldName,
+      ForceUIThread = ForceUIThread
     };
-
-    return SendRequest<InvocationResults>("get_field", new Dictionary<string, string>(), Serialize(invocReq));
+    return SendRequest<InvocationResults>("get_field", invocReq);
   }
 
   public void EventSubscribe(
@@ -307,33 +375,25 @@ public class DiverCommunicator : BaseCommunicator
     string eventName,
     LocalEventCallback callback)
   {
-    if (!_listener.IsOpen)
-      _listener.Open();
-
-    var queryParams = new Dictionary<string, string>
+    var request = new EventSubscriptionRequest
     {
-      ["address"] = targetAddr.ToString(),
-      ["event"] = eventName,
-      ["ip"] = _listener.IP.ToString(),
-      ["port"] = _listener.Port.ToString()
+      Address = targetAddr,
+      EventName = eventName
     };
-
-    var regRes = SendRequest<EventRegistrationResults>("event_subscribe", queryParams);
-    _listener.EventSubscribe(callback, regRes.Token);
+    var regRes = SendRequest<EventRegistrationResults>("event_subscribe", request);
+    _tokensToEventHandlers[regRes.Token] = callback;
+    _eventHandlersToToken[callback] = regRes.Token;
   }
 
   public void EventUnsubscribe(LocalEventCallback callback)
   {
-    int token = _listener.EventUnsubscribe(callback);
+    if (!_eventHandlersToToken.TryRemove(callback, out int token))
+      throw new Exception("EventUnsubscribe: callback not found");
 
-    var queryParams = new Dictionary<string, string>
-    {
-      ["token"] = token.ToString()
-    };
-    SendRequest("event_unsubscribe", queryParams);
+    _tokensToEventHandlers.TryRemove(token, out _);
 
-    if (!_listener.HasActiveCallbacks)
-      _listener.Close();
+    var request = new EventUnsubscriptionRequest { Token = token };
+    SendRequest("event_unsubscribe", request);
   }
 
   public bool HookMethod(
@@ -343,37 +403,35 @@ public class DiverCommunicator : BaseCommunicator
     LocalHookCallback callback,
     List<string> parametersTypeFullNames = null)
   {
-    if (!_listener.IsOpen)
-      _listener.Open();
-
-    var req = new FunctionHookRequest
+    var req = new HookSubscriptionRequest
     {
-      IP = _listener.IP.ToString(),
-      Port = _listener.Port,
       TypeFullName = type,
       MethodName = methodName,
       HookPosition = pos.ToString(),
       ParametersTypeFullNames = parametersTypeFullNames
     };
 
-    var regRes = SendRequest<EventRegistrationResults>("hook_method", null, Serialize(req));
-    _listener.HookSubscribe(callback, regRes.Token);
+    var regRes = SendRequest<EventRegistrationResults>("hook_method", req);
+    _tokensToHookCallbacks[regRes.Token] = callback;
+    _hookCallbacksToTokens[callback] = regRes.Token;
     return true;
   }
 
   public void UnhookMethod(LocalHookCallback callback)
   {
-    int token = _listener.HookUnsubscribe(callback);
+    if (!_hookCallbacksToTokens.TryRemove(callback, out int token))
+      throw new Exception("UnhookMethod: callback not found");
 
-    var queryParams = new Dictionary<string, string>
-    {
-      ["token"] = token.ToString()
-    };
-    SendRequest("unhook_method", queryParams);
+    _tokensToHookCallbacks.TryRemove(token, out _);
 
-    if (!_listener.HasActiveCallbacks)
-      _listener.Close();
+    var request = new HookUnsubscriptionRequest { Token = token };
+    SendRequest("unhook_method", request);
   }
 
   public delegate void LocalEventCallback(ObjectOrRemoteAddress[] args);
+
+  public void Dispose()
+  {
+    _tcp?.Dispose();
+  }
 }

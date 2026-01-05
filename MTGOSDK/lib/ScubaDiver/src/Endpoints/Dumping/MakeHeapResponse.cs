@@ -6,7 +6,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Net;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
@@ -15,11 +14,11 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeHeapResponse(HttpListenerRequest arg)
+  private byte[] MakeHeapResponse()
   {
-    string filter = arg.QueryString.Get("type_filter");
-    string dumpHashcodesStr = arg.QueryString.Get("dump_hashcodes");
-    bool dumpHashcodes = dumpHashcodesStr?.ToLowerInvariant() == "true";
+    var request = DeserializeRequest<HeapDumpRequest>();
+    string filter = request?.TypeFilter;
+    bool dumpHashcodes = request?.DumpHashcodes ?? false;
 
     Predicate<string> matchesFilter = typeName => typeName == filter;
 

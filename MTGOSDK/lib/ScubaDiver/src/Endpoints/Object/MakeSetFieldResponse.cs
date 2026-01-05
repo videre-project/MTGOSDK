@@ -6,11 +6,8 @@
 
 using System;
 using System.Diagnostics;
-using System.Net;
 
 using Microsoft.Diagnostics.Runtime;
-
-using MessagePack;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -23,26 +20,13 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeSetFieldResponse(HttpListenerRequest arg)
+  private byte[] MakeSetFieldResponse()
   {
     Log.Debug("[Diver] Got /set_field request!");
-    var body = ReadRequestBody(arg);
 
-    if (body == null || body.Length == 0)
-      return QuickError("Missing body");
-
-    FieldSetRequest request;
-    try
-    {
-      request = MessagePackSerializer.Deserialize<FieldSetRequest>(body);
-    }
-    catch
-    {
-      return QuickError("Failed to deserialize body");
-    }
-
+    var request = DeserializeRequest<FieldSetRequest>();
     if (request == null)
-      return QuickError("Failed to deserialize body");
+      return QuickError("Missing or invalid request body");
 
     if (request.ObjAddress == 0)
       return QuickError("Can't set field of a null target");
@@ -56,15 +40,10 @@ public partial class Diver : IDisposable
     }
     else
     {
-      ClrObject clrObj = default;
-      lock (_runtime.clrLock)
-      {
-        clrObj = _runtime.GetClrObject(request.ObjAddress);
-        if (clrObj.Type == null)
-          return QuickError($"The invalid address for '{request.TypeFullName}'.");
-      }
+      // GetClrObject() has internal read lock
+      ClrObject clrObj = _runtime.GetClrObject(request.ObjAddress);
       if (clrObj.Type == null)
-        return QuickError($"The address for '{request.TypeFullName}' moved since last refresh.");
+        return QuickError($"The invalid address for '{request.TypeFullName}'.");
 
       ulong mt = clrObj.Type.MethodTable;
       dumpedObjType = _runtime.ResolveType(clrObj.Type.Name);
@@ -91,9 +70,29 @@ public partial class Diver : IDisposable
     object results;
     try
     {
+      // Try direct execution first - most field operations don't need UI thread
       object value = _runtime.ParseParameterObject(request.Value);
       fieldInfo.SetValue(instance, value);
       results = fieldInfo.GetValue(instance);
+    }
+    catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
+                               (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
+    {
+      // Retry on STA/UI thread only for fields that actually need it
+      Log.Debug($"[Diver] Retrying SetField on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
+      try
+      {
+        object value = _runtime.ParseParameterObject(request.Value);
+        results = STAThread.Execute(() =>
+        {
+          fieldInfo.SetValue(instance, value);
+          return fieldInfo.GetValue(instance);
+        });
+      }
+      catch (Exception retryEx)
+      {
+        return QuickError($"Invocation caused exception (after STA retry): {retryEx}");
+      }
     }
     catch (Exception e)
     {

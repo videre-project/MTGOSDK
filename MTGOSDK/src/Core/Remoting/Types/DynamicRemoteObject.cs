@@ -18,6 +18,7 @@ using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
@@ -362,6 +363,43 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   public new Type GetType() => __type;
 
   /// <summary>
+  /// Processes the result from a direct Communicator invocation.
+  /// Handles void returns, null, primitives, and remote objects.
+  /// </summary>
+  private object ProcessInvocationResult(InvocationResults invokeRes)
+  {
+    if (invokeRes == null || invokeRes.VoidReturnType)
+      return null;
+
+    var oora = invokeRes.ReturnedObjectOrAddress;
+    if (oora == null || oora.IsNull)
+      return null;
+
+    if (!oora.IsRemoteAddress)
+      return PrimitivesEncoder.Decode(oora);
+
+    // Remote object - wrap in DynamicRemoteObject
+    RemoteObject ro = __ra.GetRemoteObject(oora.RemoteAddress, oora.Type, oora.HashCode);
+    dynamic dro = ro.Dynamify();
+    dro.__timestamp = oora.Timestamp;
+    return dro;
+  }
+
+  /// <summary>
+  /// Encodes parameters for direct Communicator invocation.
+  /// </summary>
+  private ObjectOrRemoteAddress[] EncodeParameters(object[] args)
+  {
+    if (args == null || args.Length == 0)
+      return Array.Empty<ObjectOrRemoteAddress>();
+
+    var result = new ObjectOrRemoteAddress[args.Length];
+    for (int i = 0; i < args.Length; i++)
+      result[i] = RemoteFunctionsInvokeHelper.CreateRemoteParameter(args[i]);
+    return result;
+  }
+
+  /// <summary>
   /// Indicates whether this proxy should be treated as "nullish" for boolean checks.
   /// Returns true when the RemoteClient is not initialized/disposed, or when the
   /// underlying RemoteObject is null/invalid.
@@ -562,8 +600,10 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     {
       return false;
     }
+
     // Use cached member list per type and pre-bucketed name map
     var byName = GetCachedMembersByNameMap(t);
+
     List<MemberInfo> matches = byName.TryGetValue(name, out var list)
       ? list
       : new List<MemberInfo>(0);
@@ -584,8 +624,12 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       case MemberTypes.Field:
         try
         {
-          result = Retry(() => ((FieldInfo) firstMember).GetValue(__ro),
-                         delay: 10, raise: true);
+          // Fast path: call Communicator directly, bypassing RemoteFieldInfo indirection
+          var fieldResult = __ra.Communicator.GetField(
+            __ro.RemoteToken,
+            t.FullName,
+            name);
+          result = ProcessInvocationResult(fieldResult);
         }
         catch (Exception ex)
         {
@@ -595,8 +639,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       case MemberTypes.Property:
         try
         {
-          result = Retry(() => ((PropertyInfo) firstMember).GetValue(__ro),
-                         delay: 10, raise: true);
+          // Fast path: call Communicator directly, bypassing RemotePropertyInfo/RemoteMethodInfo indirection
+          var propResult = __ra.Communicator.InvokeMethod(
+            __ro.RemoteToken,
+            t.FullName,
+            $"get_{name}",
+            Array.Empty<string>());
+          result = ProcessInvocationResult(propResult);
         }
         catch (Exception ex)
         {
@@ -665,44 +714,30 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     object[] args,
     out object result)
   {
-    // If "TryInvokeMember" was called first (instead of "TryGetMember")
-    // it means that the user specified generic args (if any are even requied)
-    // within '<' and '>' signs or there aren't any generic args. We can just
-    // do the call here instead of letting the dynamic runtime resort to
-    // calling 'TryGetMember'
-
-    DynamicRemoteMethod drm = GetMethodProxy(binder.Name);
-    Type binderType = binder.GetType();
-    PropertyInfo TypeArgumentsPropInfo = s_binderTypeArgsProp.GetOrAdd(binderType, static bt => bt.GetProperty("TypeArguments"));
-    if (TypeArgumentsPropInfo != null)
-    {
-      // We got ourself a binder which implemented .NET's internal
-      // "ICSharpInvokeOrInvokeMemberBinder" Interface:
-      // https://github.com/microsoft/referencesource/blob/master/Microsoft.CSharp/Microsoft/CSharp/ICSharpInvokeOrInvokeMemberBinder.cs
-      //
-      // We can now see if the invoked for the function specified generic types
-      // In that case, we can hijack and do the call here
-      // Otherwise - Just let TryGetMember return a proxy
-      if (TypeArgumentsPropInfo.GetValue(binder) is IList<Type> genArgs)
-      {
-        foreach (Type t in genArgs)
-        {
-          // Aggregate the generic types into the dynamic remote method
-          // Example:
-          //  * Invoke method is Insert<,>
-          //  * Given types are ['T', 'S']
-          //  * First loop iteration: Inert<,> --> Insert<T,>
-          //  * Second loop iteration: Inert<T,> --> Insert<T,S>
-          drm = drm[t];
-        }
-      }
-    }
-
-    object obj = null;
-    bool success;
     try
     {
-      success = Retry(() => drm.TryInvoke(this, args, out obj), raise: true);
+      // Extract generic type arguments from binder if present
+      string[] genericArgsFullNames = Array.Empty<string>();
+      Type binderType = binder.GetType();
+      PropertyInfo TypeArgumentsPropInfo = s_binderTypeArgsProp.GetOrAdd(binderType, static bt => bt.GetProperty("TypeArguments"));
+      if (TypeArgumentsPropInfo != null)
+      {
+        if (TypeArgumentsPropInfo.GetValue(binder) is IList<Type> genArgs && genArgs.Count > 0)
+        {
+          genericArgsFullNames = genArgs.Select(t => t.FullName).ToArray();
+        }
+      }
+
+      // Fast path: call Communicator directly, bypassing DynamicRemoteMethod/RemoteMethodInfo
+      var encodedArgs = EncodeParameters(args);
+      var invokeResult = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        binder.Name,
+        genericArgsFullNames,
+        encodedArgs);
+      result = ProcessInvocationResult(invokeResult);
+      return true;
     }
     catch (NullReferenceException ex)
     {
@@ -717,8 +752,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         $"DynamicObject threw an exception while trying to invoke member \"{binder.Name}\"",
         ex);
     }
-    result = obj;
-    return success;
   }
 
   public bool HasMember(string name) =>
@@ -850,18 +883,18 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   {
     get
     {
-      ObjectOrRemoteAddress ooraKey = RemoteFunctionsInvokeHelper.CreateRemoteParameter(key);
-      ObjectOrRemoteAddress item = __ro.GetItem(ooraKey);
+      // Fast path: call Communicator directly
+      var ooraKey = RemoteFunctionsInvokeHelper.CreateRemoteParameter(key);
+      var item = __ra.Communicator.GetItem(__ro.RemoteToken, ooraKey);
       if (item.IsNull)
       {
         return null;
       }
       else if (item.IsRemoteAddress)
       {
-        var remoteObject = this.__ra.GetRemoteObject(item.RemoteAddress, item.Type, item.HashCode);
+        var remoteObject = __ra.GetRemoteObject(item.RemoteAddress, item.Type, item.HashCode);
         dynamic dro = remoteObject.Dynamify();
         dro.__timestamp = item.Timestamp;
-
         return dro;
       }
       else
@@ -879,7 +912,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
     try
     {
-      dynamic enumeratorDro = Retry(() => InvokeMethod<object>(nameof(GetEnumerator)), raise: true);
+      // Fast path: call Communicator directly
+      var invokeResult = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        nameof(GetEnumerator),
+        Array.Empty<string>());
+      dynamic enumeratorDro = ProcessInvocationResult(invokeResult);
       return new DynamicRemoteEnumerator(enumeratorDro);
     }
     catch (NullReferenceException ex)

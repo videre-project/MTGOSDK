@@ -22,8 +22,10 @@ public static class SyncThread
   private static readonly CancellationToken s_cancellationToken =
     s_cancellationTokenSource.Token;
 
-  private static readonly int s_minJobThreads = Environment.ProcessorCount >= 2 ? 2 : 1;
-  private static readonly int s_maxJobThreads = Environment.ProcessorCount;
+  // Increased thread limits for high-volume IPC operations
+  // (DispatcherObject detection limits UI thread calls to ~0.5% of operations)
+  private static readonly int s_minJobThreads = Math.Max(4, Environment.ProcessorCount);
+  private static readonly int s_maxJobThreads = Environment.ProcessorCount * 2;
   private static readonly ConcurrentTaskScheduler s_taskScheduler =
     new(s_minJobThreads, s_maxJobThreads, s_cancellationToken);
 
@@ -153,7 +155,9 @@ public static class SyncThread
     if (s_cancellationToken.IsCancellationRequested)
       return;
 
-    await s_taskFactory.StartNew(WrapCallbackAsync(callback), s_cancellationToken);
+    // IMPORTANT: StartNew with async Func<Task> returns Task<Task>.
+    // Must Unwrap() to await the inner async work, not just the scheduling.
+    await s_taskFactory.StartNew(WrapCallbackAsync(callback), s_cancellationToken).Unwrap();
   }
 
   public static async Task EnqueueAsync(

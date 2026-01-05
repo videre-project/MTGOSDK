@@ -16,4 +16,7 @@ public class CtorInvocationRequest
   public string TypeFullName { get; set; }
   [Key(1)]
   public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
+  [Key(2)]
+  public bool ForceUIThread { get; set; }
 }
+

@@ -5,10 +5,8 @@
 **/
 
 using System;
-using System.Net;
 
-using MessagePack;
-
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
@@ -16,24 +14,11 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeTypeResponse(HttpListenerRequest req)
+  private byte[] MakeTypeResponse()
   {
-    var body = ReadRequestBody(req);
-    if (body == null || body.Length == 0)
-      return QuickError("Missing body");
-
-    TypeDumpRequest request;
-    try
-    {
-      request = MessagePackSerializer.Deserialize<TypeDumpRequest>(body);
-    }
-    catch
-    {
-      return QuickError("Failed to deserialize body");
-    }
-
+    var request = DeserializeRequest<TypeDumpRequest>();
     if (request == null)
-      return QuickError("Failed to deserialize body");
+      return QuickError("Missing or invalid request body");
 
     return MakeTypeResponse(request);
   }
@@ -49,6 +34,15 @@ public partial class Diver : IDisposable
 
     if (resolvedType != null)
     {
+      // Log when fallback to System.Object occurs (for debugging)
+      string requestedName = dumpRequest.TypeFullName;
+      if (resolvedType == typeof(object) && 
+          !requestedName.EndsWith("Object") && 
+          !requestedName.Equals("System.Object"))
+      {
+         Log.Debug($"[Diver] Fallback type resolution: Requested {requestedName} resolved to System.Object");
+      }
+
       var typeDump = TypeDump.ParseType(resolvedType);
       return WrapSuccess(typeDump);
     }

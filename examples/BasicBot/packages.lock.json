@@ -223,8 +223,7 @@
           "MessagePack": "[3.1.4, )",
           "MessagePack.Annotations": "[3.1.4, )",
           "Microsoft.Diagnostics.Runtime": "[4.0.0-beta.24360.3, )",
-          "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )",
-          "System.Threading.Channels": "[10.0.1, )"
+          "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )"
         }
       },
       "mtgosdk.win32": {
@@ -274,12 +273,6 @@
           "Azure.Identity": "1.11.4",
           "Microsoft.Diagnostics.NETCore.Client": "0.2.510501"
         }
-      },
-      "System.Threading.Channels": {
-        "type": "CentralTransitive",
-        "requested": "[10.0.1, )",
-        "resolved": "10.0.1",
-        "contentHash": "YRqU6Y2Cl6C+HrG5h1ftgKZ5VDTSA7j1wMKs5RtlauPeQ2EZ639Jt5aOFHdX3naP01hDDWFOWPApmNDVKwOpmg=="
       }
     }
   }

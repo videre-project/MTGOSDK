@@ -5,12 +5,8 @@
 **/
 
 using System;
-using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
 
 using MTGOSDK;
 using MTGOSDK.Core;
@@ -30,24 +26,10 @@ public partial class Diver : IDisposable
   public int AssignCallbackToken() =>
     Interlocked.Increment(ref _nextAvailableCallbackToken);
 
-  private readonly ConcurrentDictionary<IPEndPoint, ReverseCommunicator> _reverseCommunicators = new();
-
-  private bool IsPortOpen(int port)
-  {
-    try
-    {
-      using var tcpClient = new TcpClient();
-      tcpClient.Connect(IPAddress.Loopback, port);
-      return true;
-    }
-    catch (SocketException)
-    {
-      return false;
-    }
-  }
-
-  public async Task InvokeControllerCallback(
-    IPEndPoint callbacksEndpoint,
+  /// <summary>
+  /// Invokes a callback to the connected SDK client over TCP.
+  /// </summary>
+  public void InvokeCallback(
     int token,
     DateTime timestamp,
     params object[] parameters)
@@ -55,7 +37,6 @@ public partial class Diver : IDisposable
     if (!_callbackTokens.TryGetValue(token, out var cts))
       return;
 
-    ulong? addr = null;
     var remoteParams = new ObjectOrRemoteAddress[parameters.Length];
     for (int i = 0; i < parameters.Length; i++)
     {
@@ -70,47 +51,34 @@ public partial class Diver : IDisposable
       }
       else
       {
-        addr = _runtime.PinObject(parameter);
+        ulong addr = _runtime.PinObject(parameter);
         int hashCode = parameter.GetHashCode();
         remoteParams[i] = ObjectOrRemoteAddress.FromToken(
-          addr.Value,
+          addr,
           parameter.GetType().FullName,
           hashCode);
       }
     }
 
-    ReverseCommunicator reverseCommunicator = _reverseCommunicators
-      .GetOrAdd(callbacksEndpoint, endpoint => new ReverseCommunicator(endpoint, cts));
-    try
+    // Send callback over TCP
+    var callbackRequest = new CallbackInvocationRequest
     {
-      reverseCommunicator.InvokeCallback(token, timestamp, remoteParams);
-    }
-    catch (Exception)
-    {
-      if (!IsPortOpen(callbacksEndpoint.Port) ||
-          !await reverseCommunicator.CheckIfAlive())
-      {
-        reverseCommunicator.Cancel();
-        _remoteEventHandler.TryRemove(token, out _);
-        _remoteHooks.TryRemove(token, out _);
-        _reverseCommunicators.TryRemove(callbacksEndpoint, out _);
-        if (addr != null) _runtime.UnpinObject(addr.Value);
-      }
-    }
+      Token = token,
+      Timestamp = timestamp,
+      Parameters = [.. remoteParams]
+    };
+    SendTcpCallback(callbackRequest);
   }
 
-  private byte[] MakeEventSubscribeResponse(HttpListenerRequest arg)
+  private byte[] MakeEventSubscribeResponse()
   {
-    string objAddrStr = arg.QueryString.Get("address");
-    string ipAddrStr = arg.QueryString.Get("ip");
-    string portStr = arg.QueryString.Get("port");
-    if (objAddrStr == null || !ulong.TryParse(objAddrStr, out var objAddr))
-      return QuickError("Missing parameter 'address' (object address)");
+    var request = DeserializeRequest<EventSubscriptionRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
 
-    if (!(IPAddress.TryParse(ipAddrStr, out IPAddress ipAddress) && int.TryParse(portStr, out int port)))
-      return QuickError("Failed to parse either IP Address ('ip' param) or port ('port' param)");
+    ulong objAddr = request.Address;
+    string eventName = request.EventName;
 
-    IPEndPoint endpoint = new IPEndPoint(ipAddress, port);
     Log.Debug($"[Diver][Debug](RegisterEventHandler) objAddrStr={objAddr:X16}");
 
     if (!_runtime.TryGetPinnedObject(objAddr, out object target))
@@ -118,9 +86,8 @@ public partial class Diver : IDisposable
 
     Type resolvedType = target.GetType();
 
-    string eventName = arg.QueryString.Get("event");
-    if (eventName == null)
-      return QuickError("Missing parameter 'event'");
+    if (string.IsNullOrEmpty(eventName))
+      return QuickError("Missing parameter 'EventName'");
 
     EventInfo eventObj = resolvedType.GetEvent(eventName);
     if (eventObj == null)
@@ -135,13 +102,6 @@ public partial class Diver : IDisposable
     int token = AssignCallbackToken();
     _callbackTokens[token] = new CancellationTokenSource();
 
-    int clientPort = arg.RemoteEndPoint.Port;
-    lock (_registeredPidsLock)
-    {
-      if (_clientCallbacks.TryGetValue(clientPort, out var tokens))
-        tokens.Add(token);
-    }
-
     EventHandler eventHandler = (obj, args) =>
     {
       DateTime timestamp = DateTime.Now;
@@ -149,9 +109,7 @@ public partial class Diver : IDisposable
       if (!GlobalEvents.IsValidEvent(eventKey, obj, args, out var mappedArgs))
         return;
 
-      _ = SyncThread.EnqueueAsync(
-        async () => await InvokeControllerCallback(endpoint, token, timestamp, [obj, mappedArgs]),
-        TimeSpan.FromSeconds(5));
+      SyncThread.Enqueue(() => InvokeCallback(token, timestamp, obj, mappedArgs));
     };
 
     try
@@ -169,8 +127,7 @@ public partial class Diver : IDisposable
       {
         EventInfo = eventObj,
         Target = target,
-        RegisteredProxy = my_delegate,
-        Endpoint = endpoint
+        RegisteredProxy = my_delegate
       };
     }
     catch (Exception ex)

@@ -22,4 +22,7 @@ public class InvocationRequest
   public string[] GenericArgsTypeFullNames { get; set; } = Array.Empty<string>();
   [Key(4)]
   public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
+  [Key(5)]
+  public bool ForceUIThread { get; set; }
 }
+

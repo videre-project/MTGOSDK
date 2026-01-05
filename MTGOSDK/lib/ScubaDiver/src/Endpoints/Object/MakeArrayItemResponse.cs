@@ -6,10 +6,6 @@
 
 using System;
 using System.Collections;
-using System.Linq;
-using System.Net;
-
-using MessagePack;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -22,25 +18,11 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeArrayItemResponse(HttpListenerRequest arg)
+  private byte[] MakeArrayItemResponse()
   {
-    var body = ReadRequestBody(arg);
-
-    if (body == null || body.Length == 0)
-      return QuickError("Missing body");
-
-    IndexedItemAccessRequest request;
-    try
-    {
-      request = MessagePackSerializer.Deserialize<IndexedItemAccessRequest>(body);
-    }
-    catch
-    {
-      return QuickError("Failed to deserialize body");
-    }
-
+    var request = DeserializeRequest<IndexedItemAccessRequest>();
     if (request == null)
-      return QuickError("Failed to deserialize body");
+      return QuickError("Missing or invalid request body");
 
     ulong objAddr = request.CollectionAddress;
     object index = _runtime.ParseParameterObject(request.Index);
@@ -77,14 +59,25 @@ public partial class Diver : IDisposable
     }
     else if (pinnedObj is IEnumerable enumerable)
     {
-      object[] asArray = enumerable.Cast<object>().ToArray();
       if (index is not int intIndex)
         return QuickError("Tried to access an IEnumerable with a non-int index");
 
-      if (intIndex >= asArray.Length)
+      // Use early-exit enumeration instead of allocating full array
+      int i = 0;
+      bool found = false;
+      foreach (var obj in enumerable)
+      {
+        if (i == intIndex)
+        {
+          item = obj;
+          found = true;
+          break;
+        }
+        i++;
+      }
+      
+      if (!found)
         return QuickError("Index out of range");
-
-      item = asArray[intIndex];
     }
     else
     {

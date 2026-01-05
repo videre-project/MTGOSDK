@@ -5,11 +5,9 @@
 **/
 
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
 using System.Reflection;
-
-using MessagePack;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -22,26 +20,17 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeGetFieldResponse(HttpListenerRequest arg)
+  // Endpoint-level field cache: (typeFullName, fieldName) → FieldInfo
+  private static readonly ConcurrentDictionary<(string, string), FieldInfo> 
+    s_fieldCache = new();
+
+  private byte[] MakeGetFieldResponse()
   {
     Log.Debug("[Diver] Got /get_field request!");
-    var body = ReadRequestBody(arg);
 
-    if (body == null || body.Length == 0)
-      return QuickError("Missing body");
-
-    FieldSetRequest request;
-    try
-    {
-      request = MessagePackSerializer.Deserialize<FieldSetRequest>(body);
-    }
-    catch
-    {
-      return QuickError("Failed to deserialize body");
-    }
-
+    var request = DeserializeRequest<FieldGetRequest>();
     if (request == null)
-      return QuickError("Failed to deserialize body");
+      return QuickError("Missing or invalid request body");
 
     Type dumpedObjType;
     object results;
@@ -62,7 +51,15 @@ public partial class Diver : IDisposable
 
       dumpedObjType = instance.GetType();
 
-      var fieldInfo = dumpedObjType.GetFieldRecursive(request.FieldName);
+      // Endpoint-level cache: use type fullname + field name as key
+      var cacheKey = (dumpedObjType.FullName, request.FieldName);
+      if (!s_fieldCache.TryGetValue(cacheKey, out var fieldInfo))
+      {
+        fieldInfo = dumpedObjType.GetFieldRecursive(request.FieldName);
+        if (fieldInfo != null)
+          s_fieldCache[cacheKey] = fieldInfo;
+      }
+      
       if (fieldInfo == null)
       {
         Debugger.Launch();
@@ -74,7 +71,22 @@ public partial class Diver : IDisposable
 
       try
       {
+        // Try direct execution first - most field accesses don't need UI thread
         results = fieldInfo.GetValue(instance);
+      }
+      catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
+                                 (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
+      {
+        // Retry on STA/UI thread only for fields that actually need it
+        Log.Debug($"[Diver] Retrying GetField on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
+        try
+        {
+          results = STAThread.Execute(() => fieldInfo.GetValue(instance));
+        }
+        catch (Exception retryEx)
+        {
+          return QuickError($"Invocation caused exception (after STA retry): {retryEx}");
+        }
       }
       catch (Exception e)
       {
@@ -92,7 +104,7 @@ public partial class Diver : IDisposable
       ulong resultsAddress = _runtime.PinObject(results);
       Type resultsType = results.GetType();
       int hashCode = results.GetHashCode();
-      returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name, hashCode);
+      returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.FullName ?? resultsType.Name, hashCode);
     }
 
     var invocResults = new InvocationResults

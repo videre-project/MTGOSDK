@@ -5,7 +5,6 @@
 **/
 
 using System;
-using System.Net;
 
 using MessagePack;
 
@@ -17,7 +16,7 @@ public partial class Diver : IDisposable
   private static readonly byte[] s_pongResponse =
     WrapSuccess(new StatusResponse { Status = "pong" });
 
-  private byte[] MakePingResponse(HttpListenerRequest arg) => s_pongResponse;
+  private byte[] MakePingResponse() => s_pongResponse;
 }
 
 [MessagePackObject]

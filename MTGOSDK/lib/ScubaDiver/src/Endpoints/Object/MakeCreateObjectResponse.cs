@@ -5,9 +5,6 @@
 **/
 
 using System;
-using System.Net;
-
-using MessagePack;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -20,26 +17,13 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeCreateObjectResponse(HttpListenerRequest arg)
+  private byte[] MakeCreateObjectResponse()
   {
     Log.Debug("[Diver] Got /create_object request!");
-    var body = ReadRequestBody(arg);
 
-    if (body == null || body.Length == 0)
-      return QuickError("Missing body");
-
-    CtorInvocationRequest request;
-    try
-    {
-      request = MessagePackSerializer.Deserialize<CtorInvocationRequest>(body);
-    }
-    catch
-    {
-      return QuickError("Failed to deserialize body");
-    }
-
+    var request = DeserializeRequest<CtorInvocationRequest>();
     if (request == null)
-      return QuickError("Failed to deserialize body");
+      return QuickError("Missing or invalid request body");
 
     Type t = _runtime.ResolveType(request.TypeFullName);
     if (t == null)
@@ -53,12 +37,42 @@ public partial class Diver : IDisposable
       paramsArray[i] = _runtime.ParseParameterObject(request.Parameters[i]);
     }
 
-    Log.Debug($"[Diver] Ctor'ing with {paramCount} parameters");
+    Log.Debug($"[Diver] Ctor'ing with {paramCount} parameters (ForceUIThread={request.ForceUIThread})");
+
+    // Check if this type requires UI thread affinity (DispatcherObject-derived types)
+    // These MUST be created on UI thread because they have thread affinity - 
+    // creating on worker thread then retrying operations on UI thread doesn't work.
+    bool isDispatcherObject = typeof(System.Windows.Threading.DispatcherObject).IsAssignableFrom(t);
+    bool needsUIThread = request.ForceUIThread && isDispatcherObject;
 
     object createdObject;
     try
     {
-      createdObject = Activator.CreateInstance(t, paramsArray);
+      if (needsUIThread && !STAThread.IsDispatcherThread)
+      {
+        // For DispatcherObject types with ForceUIThread, create on UI thread proactively
+        Log.Debug($"[Diver] Creating DispatcherObject {t.Name} on UI thread (thread affinity required)");
+        createdObject = STAThread.Execute(() => Activator.CreateInstance(t, paramsArray));
+      }
+      else
+      {
+        // Try creating the object on the current thread first - most don't need UI thread
+        createdObject = Activator.CreateInstance(t, paramsArray);
+      }
+    }
+    catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
+                               (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
+    {
+      // Retry on STA/UI thread for types that throw on worker thread
+      Log.Debug($"[Diver] Retrying CreateInstance on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
+      try
+      {
+        createdObject = STAThread.Execute(() => Activator.CreateInstance(t, paramsArray));
+      }
+      catch (Exception retryEx)
+      {
+        return QuickError(retryEx.Message, retryEx.ToString());
+      }
     }
     catch (Exception ex)
     {

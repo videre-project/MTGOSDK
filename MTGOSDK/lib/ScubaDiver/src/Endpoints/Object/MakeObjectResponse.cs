@@ -5,40 +5,34 @@
 **/
 
 using System;
-using System.Net;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
 
 namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeObjectResponse(HttpListenerRequest arg)
+  private byte[] MakeObjectResponse()
   {
-    string objAddrStr = arg.QueryString.Get("address");
-    string typeName = arg.QueryString.Get("type_name");
-    bool pinningRequested = arg.QueryString.Get("pinRequest")?.ToUpperInvariant() == "TRUE";
-    bool hashCodeFallback = arg.QueryString.Get("hashcode_fallback")?.ToUpperInvariant() == "TRUE";
-    string hashCodeStr = arg.QueryString.Get("hashcode");
-    int userHashcode = 0;
+    var request = DeserializeRequest<ObjectDumpRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
 
-    Log.Debug($"[Diver] Got /object request: addr={objAddrStr}, type={typeName}, pinRequest={pinningRequested}");
+    ulong objAddr = request.Address;
+    string typeName = request.TypeName;
+    bool pinningRequested = request.PinRequest;
+    bool hashCodeFallback = request.HashcodeFallback;
+    int? userHashcode = request.Hashcode;
 
-    if (objAddrStr == null)
-      return QuickError("Missing parameter 'address'");
-
-    if (!ulong.TryParse(objAddrStr, out var objAddr))
-      return QuickError("Parameter 'address' could not be parsed as ulong");
-
-    if (hashCodeFallback && !int.TryParse(hashCodeStr, out userHashcode))
-      return QuickError("Parameter 'hashcode_fallback' was 'true' but the hashcode argument was missing or not an int");
+    Log.Debug($"[Diver] Got /object request: addr={objAddr:X16}, type={typeName}, pinRequest={pinningRequested}");
 
     ObjectDump od;
     try
     {
-      Log.Debug($"[Diver] Calling GetHeapObject for {objAddrStr}...");
+      Log.Debug($"[Diver] Calling GetHeapObject for {objAddr:X16}...");
       (object instance, ulong pinnedAddress) = _runtime.GetHeapObject(
         objAddr,
         pinningRequested,

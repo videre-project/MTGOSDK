@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Reflection;
 
 
@@ -12,6 +13,23 @@ namespace MTGOSDK.Core.Reflection.Extensions;
 public static class TypeExtensions
 {
   private static readonly TypeComparer _wildCardTypesComparer = new();
+  
+  // Reflection caches for method and field lookups
+  // Key: (typeFullName, memberName, genericArgsHash, paramTypesHash)
+  private static readonly ConcurrentDictionary<(string, string, int, int), MethodInfo?> 
+    _methodCache = new();
+  // Key: (typeFullName, fieldName)
+  private static readonly ConcurrentDictionary<(string, string), FieldInfo?> 
+    _fieldCache = new();
+  
+  private static int ComputeTypesHash(Type[]? types)
+  {
+    if (types == null || types.Length == 0) return 0;
+    int hash = 17;
+    foreach (var t in types)
+      hash = hash * 31 + (t?.FullName?.GetHashCode() ?? 0);
+    return hash;
+  }
 
   /// <summary>
   /// Gets all members of a type that have a specific attribute.
@@ -66,6 +84,11 @@ public static class TypeExtensions
     Type[]? genericArgumentTypes,
     Type[]? parameterTypes)
   {
+    // Check cache first
+    var cacheKey = (t.FullName ?? t.Name, methodName, ComputeTypesHash(genericArgumentTypes), ComputeTypesHash(parameterTypes));
+    if (_methodCache.TryGetValue(cacheKey, out var cached))
+      return cached;
+
     // Find all methods with the given name
     var methods = t.GetMethods((BindingFlags) 0xffff)
       .Where(m => m.Name == methodName);
@@ -108,14 +131,22 @@ public static class TypeExtensions
     }
 
     if (method != null)
+    {
+      _methodCache[cacheKey] = method;
       return method;
+    }
 
     // Not found in this type...
     if (t == typeof(object))
+    {
+      _methodCache[cacheKey] = null; // Cache negative result
       return null; // No more parents
+    }
 
     // Check parent (until `object`)
-    return t.BaseType.GetMethodRecursive(methodName, genericArgumentTypes, parameterTypes);
+    var parentResult = t.BaseType.GetMethodRecursive(methodName, genericArgumentTypes, parameterTypes);
+    _methodCache[cacheKey] = parentResult;
+    return parentResult;
   }
   public static MethodInfo GetMethodRecursive(this Type t, string methodName)
     => GetMethodRecursive(t, methodName, null);
@@ -155,19 +186,32 @@ public static class TypeExtensions
   /// </summary>
   /// <param name="t">TypeFullName to search</param>
   /// <param name="fieldName">Field name to search</param>
-  public static FieldInfo GetFieldRecursive(this Type t, string fieldName)
+  public static FieldInfo? GetFieldRecursive(this Type t, string fieldName)
   {
+    // Check cache first
+    var cacheKey = (t.FullName ?? t.Name, fieldName);
+    if (_fieldCache.TryGetValue(cacheKey, out var cached))
+      return cached;
+
     var field = t.GetFields((BindingFlags) 0xffff)
       .SingleOrDefault(fi => fi.Name == fieldName);
     if (field != null)
+    {
+      _fieldCache[cacheKey] = field;
       return field;
+    }
 
     // Not found in this type...
     if (t == typeof(object))
+    {
+      _fieldCache[cacheKey] = null; // Cache negative result
       return null; // No more parents
+    }
 
     // Check parent (until `object`)
-    return t.BaseType.GetFieldRecursive(fieldName);
+    var parentResult = t.BaseType.GetFieldRecursive(fieldName);
+    _fieldCache[cacheKey] = parentResult;
+    return parentResult;
   }
 
   public static bool IsPrimitiveEtcArray(this Type realType)

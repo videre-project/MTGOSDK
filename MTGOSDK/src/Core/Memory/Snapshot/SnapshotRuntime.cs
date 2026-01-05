@@ -90,15 +90,10 @@ public class SnapshotRuntime : IDisposable
 
   public Type ResolveType(string typeFullName, string assemblyName = null)
   {
-    _lock.EnterReadLock();
-    try
-    {
-      return _unifiedAppDomain.ResolveType(typeFullName, assemblyName);
-    }
-    finally
-    {
-      _lock.ExitReadLock();
-    }
+    // UnifiedAppDomain.ResolveType uses a ConcurrentDictionary cache internally,
+    // so we don't need the read lock for the common cached path.
+    // Assembly enumeration is thread-safe and the cache handles concurrent access.
+    return _unifiedAppDomain.ResolveType(typeFullName, assemblyName);
   }
 
   public TypesDump ResolveTypes(string assemblyName)
@@ -354,10 +349,8 @@ public class SnapshotRuntime : IDisposable
     DisposeRuntime();
     _pinnedObjects.Clear();
 
-    if (_lock != null)
-    {
-      _lock.Dispose();
-    }
+    // NOTE: _lock is static and shared across all instances, so we do NOT dispose it.
+    // Disposing a static lock would break subsequent SnapshotRuntime instances.
   }
 
   //

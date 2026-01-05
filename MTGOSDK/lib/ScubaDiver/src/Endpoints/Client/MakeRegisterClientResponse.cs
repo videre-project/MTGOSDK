@@ -6,9 +6,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Net;
 
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 
 using ScubaDiver.Hooking;
@@ -21,11 +21,13 @@ public partial class Diver : IDisposable
   public object _registeredPidsLock = new();
   public List<int> _registeredPids = new();
 
-  private byte[] MakeRegisterClientResponse(HttpListenerRequest arg)
+  private byte[] MakeRegisterClientResponse()
   {
-    string pidString = arg.QueryString.Get("process_id");
-    if (pidString == null || !int.TryParse(pidString, out int pid))
-      return QuickError("Missing parameter 'process_id'");
+    var request = DeserializeRequest<RegisterClientRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
+
+    int pid = request.ProcessId;
 
     lock (_registeredPidsLock)
     {
@@ -36,11 +38,13 @@ public partial class Diver : IDisposable
     return s_okResponse;
   }
 
-  private byte[] MakeUnregisterClientResponse(HttpListenerRequest arg)
+  private byte[] MakeUnregisterClientResponse()
   {
-    string pidString = arg.QueryString.Get("process_id");
-    if (pidString == null || !int.TryParse(pidString, out int pid))
-      return QuickError("Missing parameter 'process_id'");
+    var request = DeserializeRequest<UnregisterClientRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
+
+    int pid = request.ProcessId;
 
     bool removed;
     int remaining;

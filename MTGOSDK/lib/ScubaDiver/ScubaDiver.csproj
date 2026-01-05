@@ -40,6 +40,7 @@
     <PackageReference Include="MessagePack" />
     <PackageReference Include="MessagePack.Annotations" />
     <PackageReference Include="Lib.Harmony" />
+    <PackageReference Include="System.IO.Pipelines" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>

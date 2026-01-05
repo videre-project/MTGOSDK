@@ -50,6 +50,8 @@
     <PackageVersion Include="FrameworkExtract.System.Deployment"
                     Version="4.0.30319" />
     <!-- MTGOSDK/lib/ScubaDiver -->
+    <PackageVersion Include="System.IO.Pipelines"
+                    Version="10.0.1" />
     <PackageVersion Include="Lib.Harmony"
                     Version="2.4.1" />
     <!-- MTGOSDK.MSBuild -->

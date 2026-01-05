@@ -6,7 +6,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Reflection;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -16,9 +15,13 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private byte[] MakeTypesResponse(HttpListenerRequest req)
+  private byte[] MakeTypesResponse()
   {
-    string assembly = req.QueryString.Get("assembly");
+    var request = DeserializeRequest<TypesDumpRequest>();
+    if (request == null || string.IsNullOrEmpty(request.Assembly))
+      return QuickError("Missing or invalid 'Assembly' parameter");
+
+    string assembly = request.Assembly;
     Assembly matchingAssembly = _runtime.ResolveAssembly(assembly);
     if (matchingAssembly == null)
       return QuickError($"No assemblies found matching the query '{assembly}'");
