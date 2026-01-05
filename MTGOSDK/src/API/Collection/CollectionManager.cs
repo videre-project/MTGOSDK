@@ -4,12 +4,12 @@
 **/
 
 using System.Collections;
-using System.Collections.Concurrent;
 
 using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
 
-using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Reflection.Extensions;
+using MTGOSDK.Core.Remoting.Types;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
@@ -189,19 +189,27 @@ public static class CollectionManager
   /// Returns all decks in the user's collection.
   /// </summary>
   public static IEnumerable<Deck> Decks =>
-    s_collectionGroupingManager.Folders
-      .SelectMany(folder =>
-        folder.Contents
-          .Where(grouping => grouping is ICardGrouping)
-          .Select(grouping => new Deck(Unbind(grouping)))
-      );
+    Map<Deck>(Unbind(s_collectionGroupingManager).m_groupingsById.Values);
 
   /// <summary>
   /// Returns a deck object by the given deck id.
   /// </summary>
   /// <param name="id">The id of the deck to return.</param>
   /// <returns>A new deck object.</returns>
-  public static Deck GetDeck(int id) => new(Unbind(GetCollectionItem(id)));
+  public static Deck GetDeck(int id) =>
+    new(Unbind(s_collectionGroupingManager).m_groupingsById[id]);
+
+  /// <summary>
+  /// Returns a deck object by the given deck name.
+  /// </summary>
+  /// <param name="name">The name of the deck to return.</param>
+  /// <returns>A new deck object.</returns>
+  public static Deck GetDeck(string name) =>
+    new(
+      ((DynamicRemoteObject)
+       Unbind(s_collectionGroupingManager).m_groupingsById.Values)
+        .Filter<ICardGrouping>(e => e.Name == name)[0]
+    );
 
   // IDeck ImportTextDeck(FileInfo textFileToImport, string name, IPlayFormat format, IVisualResource deckBoxImage, IDeckFolder location);
   // IDeck CreateNewDeck(string name, IPlayFormat format, IVisualResource deckBoxImage = null, IDeckFolder location = null, IEnumerable<ICardDefinition> initialCards = null);
