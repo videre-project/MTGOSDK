@@ -370,6 +370,51 @@ public class DiverCommunicator : IDisposable
     return SendRequest<InvocationResults>("get_field", invocReq);
   }
 
+  /// <summary>
+  /// Fetches multiple property values in a single IPC call.
+  /// </summary>
+  /// <param name="targetAddr">Address of the pinned remote object.</param>
+  /// <param name="targetTypeFullName">Full type name of the object.</param>
+  /// <param name="pathsDelimited">Pipe-delimited property paths (e.g., "Name|Id|Rarity.Name").</param>
+  /// <returns>Response containing values dictionary and types dictionary.</returns>
+  public Interactions.Object.BatchMembersResponse GetBatchMembers(
+    ulong targetAddr,
+    string targetTypeFullName,
+    string pathsDelimited)
+  {
+    var request = new Interactions.Object.BatchMembersRequest
+    {
+      ObjAddress = targetAddr,
+      TypeFullName = targetTypeFullName,
+      PathsDelimited = pathsDelimited
+    };
+    return SendRequest<Interactions.Object.BatchMembersResponse>("batch_members", request);
+  }
+
+  /// <summary>
+  /// Fetches properties for all items in a collection in a single IPC call.
+  /// </summary>
+  /// <param name="collectionAddr">Address of the IEnumerable collection.</param>
+  /// <param name="collectionTypeName">Type name of the collection.</param>
+  /// <param name="pathsDelimited">Pipe-delimited property paths.</param>
+  /// <param name="maxItems">Maximum items to process (0 = no limit).</param>
+  /// <returns>Response containing all items' property values.</returns>
+  public Interactions.Object.BatchCollectionResponse GetBatchCollectionMembers(
+    ulong collectionAddr,
+    string collectionTypeName,
+    string pathsDelimited,
+    int maxItems = 0)
+  {
+    var request = new Interactions.Object.BatchCollectionRequest
+    {
+      CollectionAddress = collectionAddr,
+      CollectionTypeName = collectionTypeName,
+      PathsDelimited = pathsDelimited,
+      MaxItems = maxItems
+    };
+    return SendRequest<Interactions.Object.BatchCollectionResponse>("batch_collection", request);
+  }
+
   public void EventSubscribe(
     ulong targetAddr,
     string eventName,

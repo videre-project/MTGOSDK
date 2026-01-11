@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>Latest</LangVersion>
+    <Nullable>enable</Nullable>
+    
+    <!-- Required for source generators -->
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <!-- Suppress RS1042/RS1035 - we use ISourceGenerator which still works -->
+    <NoWarn>$(NoWarn);RS1042;RS1035</NoWarn>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    
+    <!-- Don't produce runtime output - this is only used as an analyzer -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    
+    <!-- Suppress package warnings -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Roslyn dependencies for source generation -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp"
+                      PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

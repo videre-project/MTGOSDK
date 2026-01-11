@@ -107,6 +107,18 @@ public abstract class SerializableBase : IJsonSerializable
         $"The specified type {interfaceType} must be an interface.");
     }
 
+    // Hydrate: batch-fetch all primitive properties for this interface
+    // before parallel property access to minimize IPC calls
+    if (this is DLRWrapper wrapper)
+    {
+      var paths = AccessPathAnalyzer.GetBatchablePathsForInterface(
+        this.GetType(), interfaceType);
+      if (paths.Length > 0)
+      {
+        wrapper.HydrateForInterface<TInterface>(paths);
+      }
+    }
+
     // Use the fast path: get or build property mappings
     var sourceType = this.GetType();
     var cacheKey = (sourceType, interfaceType);
@@ -127,6 +139,10 @@ public abstract class SerializableBase : IJsonSerializable
       {
         if (sourceProps.TryGetValue(ifaceProp.Name, out var sourceProp))
         {
+          // Skip properties marked with [NonSerializable]
+          if (sourceProp.GetCustomAttribute<NonSerializableAttribute>() != null)
+            continue;
+            
           // Pre-compile the getter for this property
           GetOrCompileGetter(sourceProp);
           // Determine if type conversion is needed (optimization: skip conversion call when types match)

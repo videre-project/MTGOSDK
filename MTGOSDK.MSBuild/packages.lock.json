@@ -73,11 +73,6 @@
           "System.Security.Principal.Windows": "5.0.0"
         }
       },
-      "Microsoft.CodeAnalysis.Analyzers": {
-        "type": "Transitive",
-        "resolved": "2.6.1",
-        "contentHash": "VsT6gg2SPeToP8SK7PEcsH6Ftryb7aOqnXh9xg11zBeov05+63gP3k/TvrR+v85XIa8Nn0y3+qNl4M+qzNLBfw=="
-      },
       "Microsoft.CodeAnalysis.Common": {
         "type": "Transitive",
         "resolved": "2.10.0",
@@ -1052,6 +1047,12 @@
         "requested": "[1.21.0, )",
         "resolved": "1.21.0",
         "contentHash": "dv5+81Q1TBQvVMSOOOmRcjJmvWcX3BZPZsIq31+RLc5cNft0IHAyNlkdb7ZarOWG913PyBoFDsDXoCIlKmLclg=="
+      },
+      "Microsoft.CodeAnalysis.Analyzers": {
+        "type": "CentralTransitive",
+        "requested": "[3.11.0, )",
+        "resolved": "2.6.1",
+        "contentHash": "VsT6gg2SPeToP8SK7PEcsH6Ftryb7aOqnXh9xg11zBeov05+63gP3k/TvrR+v85XIa8Nn0y3+qNl4M+qzNLBfw=="
       },
       "Microsoft.Win32.Registry": {
         "type": "CentralTransitive",

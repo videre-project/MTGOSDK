@@ -38,11 +38,11 @@ public partial class Diver : IDisposable
 
   private byte[] MakeInvokeResponse()
   {
-    Log.Debug("[Diver] Got /Invoke request!");
-
     var request = DeserializeRequest<InvocationRequest>();
     if (request == null)
       return QuickError("Missing or invalid request body");
+
+    Log.Debug($"[Diver] Got /Invoke request: method={request.MethodName}, type={request.TypeFullName}, addr={request.ObjAddress:X}");
 
     object instance = null;
     Type dumpedObjType;

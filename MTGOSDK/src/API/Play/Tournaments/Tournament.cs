@@ -98,6 +98,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// extended round.
   /// </para>
   /// </remarks>
+  [NonSerializable]
   public TimeSpan TotalRoundDuration =>
     TimeSpan.FromMinutes(
       // The match time limit applies for both players, meaning it is doubled.

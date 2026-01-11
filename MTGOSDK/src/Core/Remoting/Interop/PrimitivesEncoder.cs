@@ -42,6 +42,10 @@ public static class PrimitivesEncoder
 
     if (t.IsPrimitiveEtc() || t.IsStringCoercible() || t.IsEnum)
     {
+      if (t == typeof(IntPtr))
+      {
+        return ((long)(IntPtr)toEncode).ToString();
+      }
       // These types can just be ".Parse()"-ed back
       return toEncode.ToString();
     }
@@ -111,6 +115,16 @@ public static class PrimitivesEncoder
         return toDecode.Substring(1, toDecode.Length - 2);
       else
         throw new Exception("Missing quotes on encoded string");
+    }
+
+    // Explicitly handle IntPtr
+    if (resultType == typeof(IntPtr))
+    {
+      if (long.TryParse(toDecode, out long ptrVal))
+      {
+        return new IntPtr(ptrVal);
+      }
+      throw new Exception($"Failed to decode IntPtr from value: {toDecode}");
     }
 
     // If the type is a primitive or string coercible, we can parse it
@@ -183,7 +197,7 @@ public static class PrimitivesEncoder
     }
 
     throw new ArgumentException(
-      $"Result type was not a primitive or an array. TypeFullName: {resultType}");
+      $"Result type was not a primitive or an array. TypeFullName: {resultType} Value: {toDecode}");
   }
 
   public static object Decode(string toDecode, string fullTypeName)

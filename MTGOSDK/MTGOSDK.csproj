@@ -13,6 +13,9 @@
     </NoWarn>
     <!-- Allows access to raw pointers for performance-critical IL building -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Emit source generator output to disk for debugging -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(SolutionDir)$(Configuration)\$(TargetFramework)\Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <!-- Import MTGOSDK package properties -->
@@ -34,6 +37,10 @@
     <PackageReference Include="System.IO.Pipelines" />
     <PackageReference Include="System.Threading.Channels" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
+    <!-- Source generator for batch serialization -->
+    <ProjectReference Include="lib\MTGOSDK.SourceGenerators\MTGOSDK.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!-- Import MTGOSDK Resources for embedding manifest and resource files -->

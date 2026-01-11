@@ -4,6 +4,7 @@
 **/
 
 using System.Collections;
+using System.Reflection;
 
 
 namespace MTGOSDK.Core.Remoting.Interop;
@@ -49,13 +50,19 @@ public static class CollectionHelpers
   {
     var comparer = Comparer<object>.Default;
     var result = new List<object>();
+    var propertyCache = new Dictionary<Type, PropertyInfo>();
 
     foreach (var item in (IEnumerable)collection)
     {
-      // Get property from item's actual runtime type
+      if (item is null) continue;
+
       var type = item.GetType();
-      var property = type.GetProperty(propertyName)
-        ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
+      if (!propertyCache.TryGetValue(type, out var property))
+      {
+         property = type.GetProperty(propertyName)
+          ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
+         propertyCache[type] = property;
+      }
       
       var propValue = property.GetValue(item);
       int cmp = comparer.Compare(propValue, value);
@@ -95,13 +102,20 @@ public static class CollectionHelpers
       return items;
     
     var comparer = Comparer<object>.Default;
+    var propertyCache = new Dictionary<Type, PropertyInfo>();
     
     // Helper to get property value from an item's actual runtime type
     object GetPropertyValue(object item)
     {
+      if (item is null) return 0; // Treat nulls as default/min value? Or handle gracefully.
+      
       var type = item.GetType();
-      var prop = type.GetProperty(propertyName)
-        ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
+      if (!propertyCache.TryGetValue(type, out var prop))
+      {
+        prop = type.GetProperty(propertyName)
+          ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
+        propertyCache[type] = prop;
+      }
       return prop.GetValue(item);
     }
     

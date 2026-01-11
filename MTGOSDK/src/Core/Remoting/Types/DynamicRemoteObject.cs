@@ -11,6 +11,7 @@ using System.Dynamic;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 using Microsoft.CSharp.RuntimeBinder;
 using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
@@ -546,6 +547,94 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
                           where ((MethodInfo) member).GetParameters().Length == args.Length
                           select member;
     return (T) (matchingMethods.Single() as MethodInfo).Invoke(__ro, args);
+  }
+
+  /// <summary>
+  /// Enabling 'await' support for DynamicRemoteObjects that wrap System.Threading.Tasks.Task.
+  /// </summary>
+  public TaskAwaiter<object?> GetAwaiter()
+  {
+    if (!IsTaskType(__type))
+    {
+       throw new InvalidOperationException($"Remote object of type {__type?.FullName ?? "null"} is not a Task and cannot be awaited directly.");
+    }
+
+    return WaitRemoteTaskAsync().GetAwaiter();
+  }
+
+  private bool IsTaskType(Type t)
+  {
+     if (t == null) return false;
+     // Check base types
+     Type curr = t;
+     while (curr != null) {
+        if (curr.FullName != null && curr.FullName.StartsWith("System.Threading.Tasks.Task")) return true;
+        curr = curr.BaseType;
+     }
+     return false;
+  }
+
+  private async Task<object?> WaitRemoteTaskAsync()
+  {
+    // Poll IsCompleted
+    int delay = 5;
+    while(true)
+    {
+      var invokeResult = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        "get_IsCompleted",
+        Array.Empty<string>(), 
+        Array.Empty<ObjectOrRemoteAddress>()); 
+      
+      bool isCompleted = (bool)ProcessInvocationResult(invokeResult);
+      
+      if (isCompleted) break;
+      
+      await Task.Delay(delay);
+      if (delay < 50) delay += 5;
+    }
+
+    // Check IsFaulted
+    var faultedRes = __ra.Communicator.InvokeMethod(
+      __ro.RemoteToken,
+      __type.FullName,
+      "get_IsFaulted",
+      Array.Empty<string>(),
+      Array.Empty<ObjectOrRemoteAddress>());
+    bool isFaulted = (bool)ProcessInvocationResult(faultedRes);
+
+    if (isFaulted)
+    {
+      // Get Exception
+      var exRes = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        "get_Exception",
+        Array.Empty<string>(),
+        Array.Empty<ObjectOrRemoteAddress>());
+      
+      dynamic remoteEx = ProcessInvocationResult(exRes);
+      // Try to get message from exception
+      string exMsg = "Unknown Remote Exception";
+      try { exMsg = remoteEx.ToString(); } catch {}
+      
+      throw new Exception($"Remote Task Faulted: {exMsg}");
+    }
+    
+    // Check for Result property (if Task<T>)
+    if (HasMember("Result"))
+    {
+      var resultRes = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        "get_Result",
+        Array.Empty<string>(),
+        Array.Empty<ObjectOrRemoteAddress>());
+      return ProcessInvocationResult(resultRes);
+    }
+    
+    return null;
   }
 
   #region Dynamic Object API

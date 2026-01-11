@@ -59,6 +59,8 @@ public partial class Diver : IDisposable
       {"/set_field", _ => MakeSetFieldResponse()},
       {"/unpin", _ => MakeUnpinResponse()},
       {"/get_item", _ => MakeArrayItemResponse()},
+      {"/batch_members", _ => MakeBatchMembersResponse()},
+      {"/batch_collection", _ => MakeBatchCollectionResponse()},
       {"/event_subscribe", _ => MakeEventSubscribeResponse()},
       {"/event_unsubscribe", _ => MakeEventUnsubscribeResponse()},
       {"/hook_method", _ => MakeHookMethodResponse()},

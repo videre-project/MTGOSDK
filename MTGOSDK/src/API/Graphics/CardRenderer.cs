@@ -230,7 +230,7 @@ public static class CardRenderer
     {
       // Trigger the async download and wait for it to complete
       var downloadTask = resource.DownloadResourceAsync();
-      await Task.Run(() => downloadTask.Wait());
+      await downloadTask;
     }
   }
 
@@ -418,7 +418,7 @@ public static class CardRenderer
     {
       // Force synchronous download by blocking on the async task
       var downloadTask = resource.DownloadResourceAsync();
-      await Task.Run(() => downloadTask.Wait());
+      await downloadTask;
     }
 
     // Get the View URI which should now point to the local file

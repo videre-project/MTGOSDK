@@ -228,7 +228,8 @@ public static class TypeExtensions
     return realType.IsPrimitive ||
       realType == typeof(string) ||
       realType == typeof(decimal) ||
-      realType == typeof(DateTime);
+      realType == typeof(DateTime) ||
+      realType == typeof(IntPtr);
   }
 
   public static bool IsStringCoercible(this Type realType)

@@ -13,6 +13,7 @@ using static MTGOSDK.Core.Reflection.DLRWrapper;
 using MTGOSDK.Core.Remoting.Types;
 
 using WotC.MtGO.Client.Model.Play;
+using WotC.MtGO.Client.Model.Play.Filters;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
@@ -40,8 +41,13 @@ public static class EventManager
   /// <summary>
   /// A dictionary of all events by their event ID.
   /// </summary>
-  private static dynamic eventsById =>
+  private static dynamic m_eventsById =>
     field ??= Unbind(s_playService).m_matchesAndTournamentsAndQueuesById;
+
+  private static dynamic m_sortedEventsById =>
+    ((DynamicRemoteObject)m_eventsById.Values)
+      .Filter<IPlayerEvent>(e => e.EventId != -1)
+      .Sort<IPlayerEvent, int>(e => e.EventId);
 
   /// <summary>
   /// All currently queryable events with GetEvent().
@@ -52,11 +58,13 @@ public static class EventManager
   /// 30 seconds to a minute to complete, depending on the number of events.
   /// </remarks>
   public static IEnumerable<dynamic> Events =>
-    Map<dynamic>(
-      ((DynamicRemoteObject)eventsById.Values)
-        .Filter<IPlayerEvent>(e => e.EventId != -1)
-        .Sort<IPlayerEvent, int>(e => e.EventId),
-      PlayerEventFactory);
+    Map<dynamic>(m_sortedEventsById, PlayerEventFactory);
+
+  private static dynamic m_featuredEvents =>
+    field ??= ((DynamicRemoteObject)
+        Unbind(s_playService).GetFeaturedFilterables())
+          .Filter<IPlayerEvent>(e => e.MinimumPlayers > 2)
+          .Sort<ITournament, DateTime>(e => e.ScheduledStartTime);
 
   /// <summary>
   /// All currently scheduled tournaments queryable with GetEvent().
@@ -67,25 +75,71 @@ public static class EventManager
   /// 10-20 seconds to complete, depending on the number of tournaments.
   /// </remarks>
   public static IEnumerable<Tournament> FeaturedEvents =>
-    Map<Tournament>(
-      ((DynamicRemoteObject)
-        Unbind(s_playService).GetFeaturedFilterables())
-          .Filter<IPlayerEvent>(e => e.MinimumPlayers > 2)
-          .Sort<ITournament, DateTime>(e => e.ScheduledStartTime),
-      e => new(e.PlayerEvent)
-    );
+    Map(m_featuredEvents, Lambda<Tournament>(e => new(e.PlayerEvent)));
 
-  public static int FeaturedEventsCount =>
-    Unbind(s_playService).GetFeaturedFilterables().Count;
+  public static int FeaturedEventsCount => m_featuredEvents.Count;
+
+  private static dynamic m_joinedEvents =>
+    field ??= Unbind(s_playService).JoinedEvents;
 
   /// <summary>
   /// All joined events that the player is currently participating in.
   /// </summary>
   public static IEnumerable<dynamic> JoinedEvents =>
-    Map<dynamic>(Unbind(s_playService).JoinedEvents, PlayerEventFactory);
+    Map<dynamic>(m_joinedEvents, PlayerEventFactory);
 
-  public static int JoinedEventsCount =>
-    Unbind(s_playService).JoinedEvents.Count;
+  public static int JoinedEventsCount => m_joinedEvents.Count;
+
+  //
+  // Batch serialization methods
+  //
+
+  /// <summary>
+  /// Specifies which event collection to serialize.
+  /// </summary>
+  public enum EventCollection
+  {
+    /// <summary>All events (sorted by EventId)</summary>
+    All,
+    /// <summary>Featured tournaments (scheduled events)</summary>
+    Featured,
+    /// <summary>Events the player has joined</summary>
+    Joined
+  }
+
+  /// <summary>
+  /// Serializes events using cross-event batch fetching for primitive properties.
+  /// </summary>
+  /// <typeparam name="TInterface">The interface type to serialize events as.</typeparam>
+  /// <param name="collection">Which event collection to serialize.</param>
+  /// <param name="maxItems">Maximum number of items to serialize (0 = no limit).</param>
+  /// <returns>Enumerable of serialized events implementing TInterface.</returns>
+  /// <remarks>
+  /// This method uses a single IPC call to fetch all items' primitive properties,
+  /// avoiding per-item overhead. Complex properties are still fetched per-item.
+  /// </remarks>
+  public static IEnumerable<TInterface> SerializeEventsAs<TInterface>(
+    EventCollection collection = EventCollection.All,
+    int maxItems = 0)
+    where TInterface : class
+  {
+    // Select the underlying DRO based on collection type
+    DynamicRemoteObject? dro = collection switch
+    {
+      EventCollection.All      => (DynamicRemoteObject)m_sortedEventsById,
+      EventCollection.Featured => (DynamicRemoteObject)m_featuredEvents,
+      EventCollection.Joined   => (DynamicRemoteObject)m_joinedEvents,
+      _ => null
+    };
+    if (dro == null)
+      throw new ArgumentException("Invalid event collection.");
+
+    // Use batch serialization with Tournament as path source
+    return SerializeDroAs<TInterface, Tournaments.Tournament>(
+      dro,
+      pathPrefix: nameof(IFilterablePlayerEvent.PlayerEvent),
+      maxItems);
+  }
 
   //
   // IPlayerEvent wrapper methods

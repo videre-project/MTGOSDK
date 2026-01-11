@@ -240,7 +240,7 @@ public class TcpServer : IDisposable
             if (frame.Type == TcpMessageType.Request)
             {
               // Dispatch to SyncThread for parallel processing
-              SyncThread.EnqueueAsync(async () =>
+              _ = SyncThread.EnqueueAsync(async () =>
               {
                 await ProcessRequestAsync(frame.MessageId, frame.Endpoint, frame.Body, cancellationToken)
                   .ConfigureAwait(false);
