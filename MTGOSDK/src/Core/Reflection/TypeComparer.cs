@@ -15,7 +15,11 @@ public class TypeComparer : IEqualityComparer<Type>
   {
     if (x is TypeStub || y is TypeStub)
       return true;
-    return x.IsAssignableFrom(y);
+    // Check bidirectional assignability:
+    // - x.IsAssignableFrom(y): y can be assigned to x (e.g., x=IEnumerable, y=List<T>)
+    // - y.IsAssignableFrom(x): x can be assigned to y (e.g., x=List<T>, y=IEnumerable)
+    // This allows method resolution to work when either the parameter or argument type is an interface.
+    return x.IsAssignableFrom(y) || y.IsAssignableFrom(x);
   }
 
   public int GetHashCode(Type obj) => obj.GetHashCode();
