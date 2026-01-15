@@ -76,7 +76,7 @@ public class RemoteFieldInfo(
     {
       if (oora.IsRemoteAddress)
       {
-        var remoteObject = App.GetRemoteObject(oora.RemoteAddress, oora.Type, oora.HashCode);
+        var remoteObject = App.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
         dynamic dro = remoteObject.Dynamify();
         dro.__timestamp = oora.Timestamp;
 

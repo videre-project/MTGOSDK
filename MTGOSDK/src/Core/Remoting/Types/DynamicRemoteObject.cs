@@ -379,8 +379,9 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     if (!oora.IsRemoteAddress)
       return PrimitivesEncoder.Decode(oora);
 
-    // Remote object - wrap in DynamicRemoteObject
-    RemoteObject ro = __ra.GetRemoteObject(oora.RemoteAddress, oora.Type, oora.HashCode);
+    // Remote object - wrap in DynamicRemoteObject using lightweight path
+    // /get_field already pinned the object, so we skip /object call
+    RemoteObject ro = __ra.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
     dynamic dro = ro.Dynamify();
     dro.__timestamp = oora.Timestamp;
     return dro;
@@ -981,7 +982,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       }
       else if (item.IsRemoteAddress)
       {
-        var remoteObject = __ra.GetRemoteObject(item.RemoteAddress, item.Type, item.HashCode);
+        var remoteObject = __ra.GetRemoteObjectFromField(item.RemoteAddress, item.Type);
         dynamic dro = remoteObject.Dynamify();
         dro.__timestamp = item.Timestamp;
         return dro;

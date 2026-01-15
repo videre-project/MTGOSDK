@@ -125,7 +125,7 @@ public class RemoteObject : IObjectReference
       DynamicRemoteObject[] droParameters = new DynamicRemoteObject[args.Length];
       for (int i = 0; i < args.Length; i++)
       {
-        RemoteObject ro = _app.GetRemoteObject(args[i].RemoteAddress, args[i].Type, args[i].HashCode);
+        RemoteObject ro = _app.GetRemoteObjectFromField(args[i].RemoteAddress, args[i].Type);
         DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
         dro.__timestamp = args[i].Timestamp;
 

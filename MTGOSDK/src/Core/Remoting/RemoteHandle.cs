@@ -24,19 +24,35 @@ public class RemoteHandle : DLRWrapper, IDisposable
   {
     // Lock-free cache using ConcurrentDictionary for better concurrent performance
     private readonly ConcurrentDictionary<ulong, Lazy<WeakReference<RemoteObject>>> _pinnedAddressesToRemoteObjects;
+    
+    // Cache for RemoteObjectRef to ensure refs are shared across RemoteObject recreations
+    // This prevents multiple refs to the same Diver token from unpinning prematurely
+    private readonly ConcurrentDictionary<ulong, WeakReference<RemoteObjectRef>> _pinnedAddressesToRefs;
+    
     private readonly RemoteHandle _app;
 
     public RemoteObjectsCollection(RemoteHandle app)
     {
       _app = app;
       _pinnedAddressesToRemoteObjects = new ConcurrentDictionary<ulong, Lazy<WeakReference<RemoteObject>>>();
+      _pinnedAddressesToRefs = new ConcurrentDictionary<ulong, WeakReference<RemoteObjectRef>>();
     }
 
-    private RemoteObject GetRemoteObjectUncached(
+
+     private RemoteObject GetRemoteObjectUncached(
       ulong remoteAddress,
       string typeName,
       int? hashCode = null)
     {
+      // Check if we have a cached ref for this token
+      if (_pinnedAddressesToRefs.TryGetValue(remoteAddress, out var weakRef) &&
+          weakRef.TryGetTarget(out var existingRef) &&
+          existingRef.IsValid)
+      {
+        // Reuse existing ref
+        return new RemoteObject(existingRef, _app);
+      }
+
       ObjectDump od = null!;
       TypeDump td = null!;
       Retry(() =>
@@ -66,10 +82,69 @@ public class RemoteHandle : DLRWrapper, IDisposable
       }, delay: 10, raise: true);
 
       var objRef = new RemoteObjectRef(od, td, _app.Communicator);
+      
+      // Cache the ref for future reuse (use PinnedAddress from ObjectDump)
+      _pinnedAddressesToRefs[od.PinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
+      
       var remoteObject = new RemoteObject(objRef, _app);
 
       return remoteObject;
     }
+
+
+    /// <summary>
+    /// Creates a RemoteObject from field response data without calling /object.
+    /// Uses the lightweight RemoteObjectRef constructor.
+    /// Reuses existing RemoteObjectRef if one is already cached for this token.
+    /// </summary>
+    private RemoteObject GetRemoteObjectFromFieldUncached(
+      ulong pinnedAddress,
+      string typeName)
+    {
+      // Check if we have a cached ref for this token (prevents duplicate refs leading to premature unpin)
+      if (_pinnedAddressesToRefs.TryGetValue(pinnedAddress, out var weakRef) &&
+          weakRef.TryGetTarget(out var existingRef) &&
+          existingRef.IsValid)
+      {
+        // Reuse existing ref
+        return new RemoteObject(existingRef, _app);
+      }
+
+      TypeDump td = null!;
+      Retry(() =>
+      {
+        try
+        {
+          // Check if we have a cached RemoteType with its SourceTypeDump.
+          Type cachedType = TypeResolver.Instance.Resolve(null, typeName);
+          if (cachedType is RemoteType rt && rt.SourceTypeDump != null)
+          {
+            td = rt.SourceTypeDump;
+            return;
+          }
+
+          // Type not in cache - fetch type info from Diver
+          td = _app.Communicator.DumpType(typeName);
+        }
+        catch (Exception e)
+        {
+          throw new InvalidOperationException(
+            $"Could not resolve type {typeName} for object at address {pinnedAddress:X}.",
+            e);
+        }
+      }, delay: 10, raise: true);
+
+      // Use lightweight constructor - no /object call needed
+      var objRef = new RemoteObjectRef(pinnedAddress, typeName, td, _app.Communicator);
+      
+      // Cache the ref for future reuse
+      _pinnedAddressesToRefs[pinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
+      
+      var remoteObject = new RemoteObject(objRef, _app);
+
+      return remoteObject;
+    }
+
 
     public RemoteObject GetRemoteObject(
       ulong address,
@@ -114,6 +189,53 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
       // Exhausted retries - create object directly without caching
       return GetRemoteObjectUncached(address, typeName, hashcode);
+    }
+
+    /// <summary>
+    /// Gets a RemoteObject using the lightweight path (no /object call).
+    /// Uses same caching as GetRemoteObject.
+    /// </summary>
+    public RemoteObject GetRemoteObjectFromField(
+      ulong pinnedAddress,
+      string typeName)
+    {
+      const int maxRetries = 5;
+
+      for (int attempt = 0; attempt < maxRetries; attempt++)
+      {
+        // Fast path: try to get existing valid reference
+        if (_pinnedAddressesToRemoteObjects.TryGetValue(pinnedAddress, out var existingLazy))
+        {
+          var weakRef = existingLazy.Value;
+          if (weakRef.TryGetTarget(out var ro) && ro.IsValid)
+          {
+            ro.AddReference();
+            if (ro.IsValid) return ro;
+            ro.ReleaseReference();
+          }
+          // Stale entry - remove it and retry
+          _pinnedAddressesToRemoteObjects.TryRemove(pinnedAddress, out _);
+          continue;
+        }
+
+        // Slow path: create new object using lightweight constructor
+        var newRo = GetRemoteObjectFromFieldUncached(pinnedAddress, typeName);
+        var newLazy = new Lazy<WeakReference<RemoteObject>>(
+          () => new WeakReference<RemoteObject>(newRo),
+          LazyThreadSafetyMode.ExecutionAndPublication);
+
+        // Try to add our new object
+        if (_pinnedAddressesToRemoteObjects.TryAdd(pinnedAddress, newLazy))
+        {
+          return newRo;
+        }
+
+        // Lost race - suppress unpin on discarded object
+        newRo.SuppressUnpin();
+      }
+
+      // Exhausted retries - create object directly without caching
+      return GetRemoteObjectFromFieldUncached(pinnedAddress, typeName);
     }
   }
 
@@ -317,6 +439,17 @@ public class RemoteHandle : DLRWrapper, IDisposable
     int? hashCode = null)
   {
     return _remoteObjects.GetRemoteObject(remoteAddress, typeName, hashCode);
+  }
+
+  /// <summary>
+  /// Gets a RemoteObject using the lightweight path (no /object call).
+  /// The object is already pinned by the /get_field caller.
+  /// </summary>
+  public RemoteObject GetRemoteObjectFromField(
+    ulong pinnedAddress,
+    string typeName)
+  {
+    return _remoteObjects.GetRemoteObjectFromField(pinnedAddress, typeName);
   }
 
   //

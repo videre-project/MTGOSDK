@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 
@@ -18,6 +19,62 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 /// </summary>
 public static class ObjectDumpFactory
 {
+  /// <summary>
+  /// Cached type metadata to avoid repeated reflection calls.
+  /// </summary>
+  private static readonly ConcurrentDictionary<Type, CachedTypeMetadata> s_typeCache = new();
+
+  /// <summary>
+  /// Cached metadata for a type.
+  /// </summary>
+  private class CachedTypeMetadata
+  {
+    public List<MemberDump> Fields { get; set; }
+    public List<MemberDump> Properties { get; set; }
+  }
+
+  /// <summary>
+  /// Gets or creates cached metadata for a type.
+  /// </summary>
+  private static CachedTypeMetadata GetCachedMetadata(Type type)
+  {
+    return s_typeCache.GetOrAdd(type, t =>
+    {
+      var sw = Stopwatch.StartNew();
+
+      // Get events for filtering
+      var eventInfos = t.GetEvents(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+      var eventNames = new HashSet<string>(eventInfos.Length);
+      foreach (var eventInfo in eventInfos)
+      {
+        eventNames.Add(eventInfo.Name);
+      }
+      Log.Debug($"[ObjectDumpFactory:Cache] GetEvents: {sw.ElapsedMilliseconds}ms for {t.Name}");
+
+      sw.Restart();
+      var allFields = t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+      var fields = new List<MemberDump>(allFields.Length);
+      foreach (var fieldInfo in allFields)
+      {
+        if (!eventNames.Contains(fieldInfo.Name))
+          fields.Add(new MemberDump { Name = fieldInfo.Name });
+      }
+      Log.Debug($"[ObjectDumpFactory:Cache] GetFields: {sw.ElapsedMilliseconds}ms, count={fields.Count} for {t.Name}");
+
+      sw.Restart();
+      var allProps = t.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+      var props = new List<MemberDump>(allProps.Length);
+      foreach (var propInfo in allProps)
+      {
+        if (propInfo.GetMethod != null)
+          props.Add(new MemberDump { Name = propInfo.Name });
+      }
+      Log.Debug($"[ObjectDumpFactory:Cache] GetProperties: {sw.ElapsedMilliseconds}ms, count={props.Count} for {t.Name}");
+
+      return new CachedTypeMetadata { Fields = fields, Properties = props };
+    });
+  }
+
   /// <summary>
   /// Creates an ObjectDump from an object instance.
   /// </summary>
@@ -93,63 +150,26 @@ public static class ObjectDumpFactory
       var hashCode = instance.GetHashCode();
       Log.Debug($"[ObjectDumpFactory] GetHashCode: {sw.ElapsedMilliseconds}ms");
 
-      sw.Restart();
-      var fullName = dumpedObjType.FullName;
-      Log.Debug($"[ObjectDumpFactory] FullName: {sw.ElapsedMilliseconds}ms, len={fullName?.Length}");
-
       od = new ObjectDump()
       {
         ObjectType = ObjectType.NonPrimitive,
         RetrievalAddress = retrievalAddr,
         PinnedAddress = pinAddr,
-        Type = fullName,
+        Type = dumpedObjType.FullName,
         HashCode = hashCode
       };
     }
 
+    // Use cached metadata instead of repeated reflection
     sw.Restart();
-    var eventInfos = dumpedObjType.GetEvents((BindingFlags) 0xffff);
-    var eventNames = new HashSet<string>(eventInfos.Length);
-    foreach (var eventInfo in eventInfos)
-    {
-      eventNames.Add(eventInfo.Name);
-    }
-    Log.Debug($"[ObjectDumpFactory] GetEvents: {sw.ElapsedMilliseconds}ms");
+    var metadata = GetCachedMetadata(dumpedObjType);
+    Log.Debug($"[ObjectDumpFactory] GetCachedMetadata: {sw.ElapsedMilliseconds}ms (cache hit if 0ms)");
 
-    sw.Restart();
-    var allFields = dumpedObjType.GetFields((BindingFlags) 0xffff);
-    Log.Debug($"[ObjectDumpFactory] GetFields: {sw.ElapsedMilliseconds}ms, count={allFields.Length}");
-
-    sw.Restart();
-    var fields = new List<MemberDump>(allFields.Length);
-    foreach (var fieldInfo in allFields)
-    {
-      if (!eventNames.Contains(fieldInfo.Name))
-        fields.Add(new MemberDump { Name = fieldInfo.Name });
-    }
-    Log.Debug($"[ObjectDumpFactory] Field loop: {sw.ElapsedMilliseconds}ms, added={fields.Count}");
-
-    sw.Restart();
-    List<MemberDump> props = new();
-    var allProps = dumpedObjType.GetProperties((BindingFlags) 0xffff);
-    Log.Debug($"[ObjectDumpFactory] GetProperties: {sw.ElapsedMilliseconds}ms, count={allProps.Length}");
-
-    sw.Restart();
-    foreach (var propInfo in allProps)
-    {
-      // Skip properties that don't have a getter
-      if (propInfo.GetMethod == null)
-        continue;
-
-      // Only collect property names - values are accessed via 'get_PropertyName' method
-      props.Add(new MemberDump() { Name = propInfo.Name });
-    }
-    Log.Debug($"[ObjectDumpFactory] Property loop: {sw.ElapsedMilliseconds}ms, added={props.Count}");
-
-    // Populate fields and properties
-    od.Fields = fields;
-    od.Properties = props;
+    // Populate fields and properties from cache
+    od.Fields = metadata.Fields;
+    od.Properties = metadata.Properties;
 
     return od;
   }
 }
+

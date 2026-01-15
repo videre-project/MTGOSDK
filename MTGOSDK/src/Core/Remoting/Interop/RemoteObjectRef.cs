@@ -11,11 +11,48 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 namespace MTGOSDK.Core.Remoting.Interop;
 
-internal class RemoteObjectRef(
-  ObjectDump remoteObjectInfo,
-  TypeDump typeInfo,
-  DiverCommunicator creatingCommunicator)
+internal class RemoteObjectRef
 {
+  // Core data - can be populated from ObjectDump or directly
+  private readonly ulong _pinnedAddress;
+  private readonly string _typeName;
+  private readonly DiverCommunicator _communicator;
+  private readonly TypeDump _typeInfo;
+  
+  // Optional - only populated when ObjectDump is available (lazy loaded if needed)
+  private ObjectDump? _objectDump;
+
+  /// <summary>
+  /// Full constructor with ObjectDump (used when /object was called)
+  /// </summary>
+  internal RemoteObjectRef(
+    ObjectDump remoteObjectInfo,
+    TypeDump typeInfo,
+    DiverCommunicator creatingCommunicator)
+  {
+    _objectDump = remoteObjectInfo;
+    _pinnedAddress = remoteObjectInfo.PinnedAddress;
+    _typeName = remoteObjectInfo.Type;
+    _typeInfo = typeInfo;
+    _communicator = creatingCommunicator;
+  }
+
+  /// <summary>
+  /// Lightweight constructor - skips /object call, creates from /get_field response
+  /// </summary>
+  internal RemoteObjectRef(
+    ulong pinnedAddress,
+    string typeName,
+    TypeDump typeInfo,
+    DiverCommunicator creatingCommunicator)
+  {
+    _pinnedAddress = pinnedAddress;
+    _typeName = typeName;
+    _typeInfo = typeInfo;
+    _communicator = creatingCommunicator;
+    _objectDump = null; // Lazy load if needed
+  }
+
   /// <summary>
   /// State flag: 0 = active, 1 = released. Uses Interlocked/Volatile for atomic access.
   /// </summary>
@@ -78,7 +115,7 @@ internal class RemoteObjectRef(
   private static readonly TimeSpan _minDelay = TimeSpan.FromSeconds(1);
   private static readonly TimeSpan _maxDelay = TimeSpan.FromSeconds(5);
 
-  public bool IsValid => Volatile.Read(ref _state) == 0 && creatingCommunicator.IsConnected;
+  public bool IsValid => Volatile.Read(ref _state) == 0 && _communicator.IsConnected;
 
   /// <summary>
   /// Releases hold of the remote object in the remote process and the local proxy.
@@ -89,7 +126,7 @@ internal class RemoteObjectRef(
     if (Volatile.Read(ref _state) != 0) return;
 
     // Guard against disconnected communicator
-    if (creatingCommunicator is null || !creatingCommunicator.IsConnected)
+    if (_communicator is null || !_communicator.IsConnected)
     {
       Volatile.Write(ref _state, 1);
       return;
@@ -112,13 +149,13 @@ internal class RemoteObjectRef(
         Task.Delay(jitteredDelay).ContinueWith(_ =>
         {
           // Unpin the object after the delay
-          creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
+          _communicator.UnpinObject(_pinnedAddress);
         });
       }
       else
       {
         // No delay, unpin immediately
-        creatingCommunicator.UnpinObject(remoteObjectInfo.PinnedAddress);
+        _communicator.UnpinObject(_pinnedAddress);
       }
     }
     catch (NullReferenceException)
@@ -135,11 +172,10 @@ internal class RemoteObjectRef(
     }
   }
 
-  // TODO: I think addresses as token should be reworked
-  public ulong Token => remoteObjectInfo.PinnedAddress;
-  public DiverCommunicator Communicator => creatingCommunicator;
+  public ulong Token => _pinnedAddress;
+  public DiverCommunicator Communicator => _communicator;
 
-  public TypeDump GetTypeDump() => typeInfo;
+  public TypeDump GetTypeDump() => _typeInfo;
 
 
   /// <summary>
@@ -150,19 +186,26 @@ internal class RemoteObjectRef(
   public MemberDump GetFieldDump(string name, bool refresh = false)
   {
     ThrowIfReleased();
-    if (refresh)
-    {
-      remoteObjectInfo = creatingCommunicator
-        .DumpObject(remoteObjectInfo.PinnedAddress, remoteObjectInfo.Type);
-    }
+    EnsureObjectDump(refresh);
 
-    var field = remoteObjectInfo.Fields.Single(fld => fld.Name == name);
+    var field = _objectDump!.Fields.Single(fld => fld.Name == name);
     if (!string.IsNullOrEmpty(field.RetrievalError))
       throw new Exception(
         $"Field of the remote object could not be retrieved. Error: {field.RetrievalError}");
 
     // field has a value. Returning as-is for the user to parse
     return field;
+  }
+
+  /// <summary>
+  /// Ensures ObjectDump is loaded, fetching from Diver if needed (lazy loading).
+  /// </summary>
+  private void EnsureObjectDump(bool refresh = false)
+  {
+    if (_objectDump == null || refresh)
+    {
+      _objectDump = _communicator.DumpObject(_pinnedAddress, _typeName);
+    }
   }
 
   /// <summary>
@@ -173,12 +216,9 @@ internal class RemoteObjectRef(
   public MemberDump GetProperty(string name, bool refresh = false)
   {
     ThrowIfReleased();
-    if (refresh)
-    {
-      throw new NotImplementedException("Refreshing property values not supported yet");
-    }
+    EnsureObjectDump(refresh);
 
-    var property = remoteObjectInfo.Properties.Single(prop => prop.Name == name);
+    var property = _objectDump!.Properties.Single(prop => prop.Name == name);
     if (!string.IsNullOrEmpty(property.RetrievalError))
     {
       throw new Exception(
@@ -195,10 +235,10 @@ internal class RemoteObjectRef(
     ObjectOrRemoteAddress[] args)
   {
     ThrowIfReleased();
-    return creatingCommunicator
+    return _communicator
       .InvokeMethod(
-          remoteObjectInfo.PinnedAddress,
-          remoteObjectInfo.Type,
+          _pinnedAddress,
+          _typeName,
           methodName,
           genericArgsFullTypeNames,
           args);
@@ -209,20 +249,20 @@ internal class RemoteObjectRef(
     ObjectOrRemoteAddress newValue)
   {
     ThrowIfReleased();
-    return creatingCommunicator
+    return _communicator
       .SetField(
-          remoteObjectInfo.PinnedAddress,
-          remoteObjectInfo.Type,
+          _pinnedAddress,
+          _typeName,
           fieldName,
           newValue);
   }
   public InvocationResults GetField(string fieldName)
   {
     ThrowIfReleased();
-    return creatingCommunicator
+    return _communicator
       .GetField(
-          remoteObjectInfo.PinnedAddress,
-          remoteObjectInfo.Type,
+          _pinnedAddress,
+          _typeName,
           fieldName);
   }
 
@@ -231,7 +271,7 @@ internal class RemoteObjectRef(
     DiverCommunicator.LocalEventCallback callbackProxy)
   {
     ThrowIfReleased();
-    creatingCommunicator.EventSubscribe(remoteObjectInfo.PinnedAddress, eventName, callbackProxy);
+    _communicator.EventSubscribe(_pinnedAddress, eventName, callbackProxy);
   }
 
   public void EventUnsubscribe(
@@ -239,17 +279,17 @@ internal class RemoteObjectRef(
     DiverCommunicator.LocalEventCallback callbackProxy)
   {
     ThrowIfReleased();
-    creatingCommunicator.EventUnsubscribe(callbackProxy);
+    _communicator.EventUnsubscribe(callbackProxy);
   }
 
   public override string ToString() =>
     string.Format(
       "RemoteObjectRef. Address: {0}, TypeFullName: {1}",
-      remoteObjectInfo.PinnedAddress,
-      typeInfo.Type);
+      _pinnedAddress,
+      _typeName);
 
   internal ObjectOrRemoteAddress GetItem(ObjectOrRemoteAddress key)
   {
-    return creatingCommunicator.GetItem(Token, key);
+    return _communicator.GetItem(Token, key);
   }
 }
