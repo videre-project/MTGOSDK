@@ -3,11 +3,16 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+using System.Diagnostics;
+
 
 namespace MTGOSDK.Core.Reflection.Serialization;
 
 public static class SerializableBaseExtensions
 {
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
 #if !MTGOSDKCORE
   /// <summary>
   /// Serializes a collection of objects to the specified interface type.
@@ -35,6 +40,10 @@ public static class SerializableBaseExtensions
     IList<string> exclude = default,
     bool strict = false)
   {
+    using var activity = s_activitySource.StartActivity("SerializeAs-Enumerable");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("count", enumerable.Count());
+
     foreach (SerializableBase item in enumerable)
     {
       // Use the instance SerializeAs method directly to preserve enum types
@@ -69,6 +78,14 @@ public static class SerializableBaseExtensions
     [System.Runtime.CompilerServices.EnumeratorCancellation] 
     CancellationToken cancellationToken = default)
   {
+    using var activity = s_activitySource.StartActivity("SerializeAsAsync-Enumerable");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    // Count might not be available for generic IEnumerable without iteration, but usually it is materialized
+    if (enumerable is ICollection collection)
+    {
+       activity?.SetTag("count", collection.Count);
+    }
+    
     foreach (SerializableBase item in enumerable)
     {
       if (cancellationToken.IsCancellationRequested)

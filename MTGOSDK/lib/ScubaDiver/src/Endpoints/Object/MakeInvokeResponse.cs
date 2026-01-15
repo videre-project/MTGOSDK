@@ -104,6 +104,15 @@ public partial class Diver : IDisposable
     bool isDispatcherObject = instance != null && instance is System.Windows.Threading.DispatcherObject;
     bool needsUIThread = request.ForceUIThread && isDispatcherObject;
 
+    // Start sub-activity for the actual reflection invocation
+    using var activity = s_activitySource.StartActivity("MethodInvoke");
+    if (activity != null)
+    {
+      activity.SetTag("method", request.MethodName);
+      activity.SetTag("type", request.TypeFullName);
+      activity.SetTag("addr", request.ObjAddress.ToString("X"));
+    }
+
     object results;
     try
     {
@@ -124,17 +133,20 @@ public partial class Diver : IDisposable
     {
       // Retry on STA/UI thread only for operations that actually need it
       Log.Debug($"[Diver] Retrying Invoke on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
+      activity?.AddEvent(new ActivityEvent("STA_Retry"));
       try
       {
         results = STAThread.Execute(() => method.Invoke(instance, paramsArray));
       }
       catch (Exception retryEx)
       {
+        activity?.SetStatus(ActivityStatusCode.Error, retryEx.Message);
         return QuickError($"Invocation caused exception (after STA retry): {retryEx}");
       }
     }
     catch (Exception e)
     {
+      activity?.SetStatus(ActivityStatusCode.Error, e.Message);
       return QuickError($"Invocation caused exception: {e}");
     }
 

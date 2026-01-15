@@ -4,6 +4,7 @@
 **/
 
 using System.Buffers;
+using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using System.Net.Sockets;
@@ -146,8 +147,31 @@ public class TcpCommunicator : TcpPipelineBase
     byte[] body,
     CancellationToken cancellationToken = default)
   {
-    await SendRequestAsync<object>(endpoint, body, cancellationToken).ConfigureAwait(false);
+    //
+    // Wrap request in TracedRequest for distributed tracing
+    //
+    using var activity = s_activitySource.StartActivity(
+      $"IPC Request: {endpoint}", 
+      ActivityKind.Client);
+    
+    // Tag for flow event visualization
+    activity?.SetTag("ipc.flow", "start");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+
+    var tracedReq = new TracedRequest
+    {
+      TraceParent = activity?.Id ?? Activity.Current?.Id,
+      TraceState = activity?.TraceStateString ?? Activity.Current?.TraceStateString,
+      Body = body ?? Array.Empty<byte>()
+    };
+    
+    // Serialize wrapper manually
+    byte[] wrappedBody = TracedRequest.Serialize(tracedReq);
+
+    await SendRequestAsync<object>(endpoint, wrappedBody, cancellationToken).ConfigureAwait(false);
   }
+
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
 
   /// <summary>
   /// Background reader loop that correlates responses and dispatches callbacks.

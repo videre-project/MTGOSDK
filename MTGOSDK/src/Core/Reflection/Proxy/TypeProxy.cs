@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Diagnostics;
+
 using MTGOSDK.Core.Reflection.Proxy.Builder;
 
 
@@ -13,6 +15,8 @@ public class TypeProxy(Type? @type=null) : TypeProxy<dynamic>(@type)
 
 public class TypeProxy<T>(Type? @type=null) where T : class
 {
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
   //
   // BuilderProxy methods
   //
@@ -26,12 +30,17 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <returns>The proxied object.</returns>
   public static T As(object obj)
   {
+    using var activity = s_activitySource.StartActivity("TypeProxy.As");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("interface", typeof(T).Name);
+    
     obj = TypeProxyBuilder.FixTargetContext(obj, out var tContext);
     var tProxy = DynamicTypeBuilder.BuildType(tContext, typeof(T));
 
     var proxy =  TypeProxyBuilder.InitializeProxy<T>(tProxy, obj);
     if (!TypeProxyBuilder.IsValidRuntimeType(proxy))
     {
+      activity?.SetStatus(ActivityStatusCode.Error, "Invalid proxy type");
       throw new InvalidOperationException(
         $"The proxy type {proxy.GetType()} is not a valid runtime type.");
     }
@@ -50,6 +59,10 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <returns>The proxied object.</returns>
   public static dynamic As(object obj, params Type[] interfaces)
   {
+    using var activity = s_activitySource.StartActivity("TypeProxy.As");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("interfaces", string.Join(",", interfaces.Select(i => i.Name)));
+
     obj = TypeProxyBuilder.FixTargetContext(obj, out var tContext);
     var tProxy = DynamicTypeBuilder.BuildType(
       tContext,
@@ -73,11 +86,16 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <returns>The unbound proxied object.</returns>
   public static dynamic From(dynamic? obj=null)
   {
+    using var activity = s_activitySource.StartActivity("TypeProxy.From");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("type", obj?.GetType().Name);
+
     if (obj is IProxy proxy)
     {
       if (!TypeProxyBuilder.IsValidRuntimeType(proxy))
       {
-        throw new InvalidOperationException(
+         activity?.SetStatus(ActivityStatusCode.Error, "Invalid proxy type");
+         throw new InvalidOperationException(
           $"The proxy type {proxy.GetType()} is not a valid runtime type.");
       }
       return proxy.Original;

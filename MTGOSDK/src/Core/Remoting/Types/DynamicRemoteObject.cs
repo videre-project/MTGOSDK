@@ -659,8 +659,14 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // Otherwise, defer to base for normal dynamic semantics
     return base.TryUnaryOperation(binder, out result);
   }
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
   public override bool TryGetMember(GetMemberBinder binder, out object result)
   {
+    using var activity = s_activitySource.StartActivity("DRO.GetMember");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("member", binder.Name);
+
     try
     {
       object obj = null;
@@ -679,6 +685,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     }
     catch (Exception ex)
     {
+      activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
       throw new Exception($"DynamicObject threw an exception while trying to get member \"{binder.Name}\" from {__type.Name}", innerException: ex);
     }
   }

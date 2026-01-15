@@ -36,6 +36,7 @@
                       GeneratePathProperty="true" />
     <PackageReference Include="System.IO.Pipelines" />
     <PackageReference Include="System.Threading.Channels" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- Source generator for batch serialization -->
     <ProjectReference Include="lib\MTGOSDK.SourceGenerators\MTGOSDK.SourceGenerators.csproj"

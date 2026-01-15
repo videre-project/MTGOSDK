@@ -8,16 +8,18 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 
 using MessagePack;
 
-using MTGOSDK.Core;
+using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Memory.Snapshot;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Resources;
 
 using ScubaDiver.Hooking;
 
@@ -71,8 +73,15 @@ public partial class Diver : IDisposable
     _remoteHooks = new ConcurrentDictionary<int, RegisteredMethodHookInfo>();
   }
 
+  private static readonly ActivitySource s_activitySource = new("ScubaDiver");
+  private TraceExporter _traceExporter;
+
   public void Start(ushort listenPort)
   {
+    _traceExporter = new TraceExporter(
+        Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace", "trace_diver.json"), 
+        "ScubaDiver");
+
     _runtime = new SnapshotRuntime();
 
     _tcpServer = new TcpServer(listenPort, HandleTcpRequest);
@@ -91,17 +100,51 @@ public partial class Diver : IDisposable
   /// </summary>
   private byte[] HandleTcpRequest(string endpoint, byte[] body)
   {
-    // Set the body in thread-local storage so endpoint handlers can use DeserializeRequest
-    _cachedRequestBody.Value = body;
+    // Unwrap the TracedRequest
+    TracedRequest tracedReq;
+    try 
+    {
+      tracedReq = TracedRequest.Deserialize(body);
+    }
+    catch (Exception ex)
+    {
+      // Fallback for legacy/non-traced requests (e.g. ping before tracing enabled)
+      // or if deser fails, we assume it's a raw body
+      Log.Error($"[Diver] Failed to deserialize TracedRequest: {ex.GetType().Name} - {ex.Message}");
+      tracedReq = new TracedRequest { Body = body };
+    }
+
+    ActivityContext parentContext = default;
+    if (!string.IsNullOrEmpty(tracedReq.TraceParent))
+    {
+        ActivityContext.TryParse(tracedReq.TraceParent, tracedReq.TraceState, out parentContext);
+    }
+
+    // Start metadata-rich activity for the request
+    using var activity = s_activitySource.StartActivity(
+        endpoint, 
+        ActivityKind.Server, 
+        parentContext);
+    
+    if (activity != null)
+    {
+        activity.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+        activity.SetTag("endpoint", endpoint);
+        activity.SetTag("ipc.flow", "end"); // Tag for flow event visualization
+    }
+
+    // Set the actual request body in thread-local storage
+    _cachedRequestBody.Value = tracedReq.Body;
 
     if (_tcpHandlers.TryGetValue(endpoint, out var handler))
     {
       try
       {
-        return handler(body);
+        return handler(tracedReq.Body);
       }
       catch (Exception ex)
       {
+        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
         return QuickError(ex.Message, ex.StackTrace);
       }
     }

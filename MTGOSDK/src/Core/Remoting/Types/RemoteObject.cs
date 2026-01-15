@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Diagnostics;
 using System.Collections.Concurrent;
 
 using MTGOSDK.Core.Memory;
@@ -15,6 +16,8 @@ namespace MTGOSDK.Core.Remoting.Types;
 
 public class RemoteObject : IObjectReference
 {
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
   public void AddReference() => _ref?.AddReference();
 
   public void ReleaseReference(bool useJitter = false)
@@ -88,6 +91,10 @@ public class RemoteObject : IObjectReference
     string[] genericArgsFullTypeNames,
     params ObjectOrRemoteAddress[] args)
   {
+    using var activity = s_activitySource.StartActivity("RO.InvokeMethod");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("method", methodName);
+
     InvocationResults? invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
     if (invokeRes is null)
     {

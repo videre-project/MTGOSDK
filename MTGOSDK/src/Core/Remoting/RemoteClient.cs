@@ -10,6 +10,7 @@ using System.Reflection;
 
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Structs;
 using MTGOSDK.Core.Remoting.Types;
@@ -40,6 +41,8 @@ public sealed class RemoteClient : DLRWrapper
 
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
+  
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
 
   /// <summary>
   /// Whether the RemoteClient singleton has been initialized.
@@ -65,10 +68,30 @@ public sealed class RemoteClient : DLRWrapper
   /// <summary>
   /// The port to manage the connection to the MTGO client process.
   /// </summary>
+  /// <summary>
+  /// The port to manage the connection to the MTGO client process.
+  /// </summary>
   public static ushort? Port = null;
+
+  private TraceExporter _traceExporter;
+  private static string _traceDir;
 
   private RemoteClient()
   {
+    // Initialize trace exporter
+    try 
+    {
+      // Cache trace directory path before Bootstrapper.ExtractDir is modified
+      _traceDir = Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace");
+      string tracePath = Path.Combine(_traceDir, "trace_sdk.json");
+      Log.Debug($"[RemoteClient] Initializing trace exporter at: {tracePath}");
+      _traceExporter = new TraceExporter(tracePath, "MTGOSDK");
+    }
+    catch (Exception ex)
+    {
+       Log.Warning($"[RemoteClient] Failed to initialize trace exporter: {ex.Message}");
+    }
+
     // A new instance implies the previous one (if any) is either not created
     // or has been fully disposed. Reset disposal state here.
     _isDisposed = false;
@@ -229,6 +252,9 @@ public sealed class RemoteClient : DLRWrapper
   /// </exception>
   public static async Task StartProcess()
   {
+    using var activity = s_activitySource.StartActivity("RemoteClient.StartProcess");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    
     // Check if there are any updates first before starting MTGO.
     await InstallOrUpdate();
 
@@ -358,6 +384,9 @@ public sealed class RemoteClient : DLRWrapper
   /// <returns>A RemoteNET client handle.</returns>
   private RemoteHandle GetClientHandle()
   {
+    using var activity = s_activitySource.StartActivity("RemoteClient.GetClientHandle");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+
     bool _processHandleOverride = true;
     void RefreshClientProcess(bool throwOnFailure = false)
     {
@@ -470,6 +499,18 @@ public sealed class RemoteClient : DLRWrapper
     });
 
     // Best-effort cleanup; swallow any individual errors.
+    Try(() => @this._traceExporter?.Dispose()); // Flush SDK trace file
+    
+    // Merge SDK + Diver trace files into a single combined trace
+    try 
+    { 
+      MergeTraceFiles(); 
+    }
+    catch (Exception ex) 
+    { 
+      Log.Error($"[MergeTraceFiles] Exception: {ex}"); 
+    }
+    
     Try(@client.Dispose);
 
     if (CloseOnExit)
@@ -495,6 +536,97 @@ public sealed class RemoteClient : DLRWrapper
     // Prepare a fresh lazy for future initialization attempts.
     s_instance = new Lazy<RemoteClient>(() => new RemoteClient());
     Log.Trace("RemoteClient disposed.");
+  }
+
+  /// <summary>
+  /// Merges SDK and Diver trace files into a single combined trace file.
+  /// </summary>
+  private static void MergeTraceFiles()
+  {
+    Log.Debug("[MergeTraceFiles] Starting merge...");
+    
+    // Use cached trace directory (set at initialization before Bootstrapper.ExtractDir is modified)
+    if (string.IsNullOrEmpty(_traceDir))
+    {
+      Log.Warning("[MergeTraceFiles] Trace directory not initialized, skipping merge.");
+      return;
+    }
+    
+    string sdkPath = Path.Combine(_traceDir, "trace_sdk.json");
+    string diverPath = Path.Combine(_traceDir, "trace_diver.json");
+    string combinedPath = Path.Combine(_traceDir, "trace_combined.json");
+
+    Log.Debug($"[MergeTraceFiles] Looking for: {sdkPath}");
+    Log.Debug($"[MergeTraceFiles] SDK exists: {File.Exists(sdkPath)}, Diver exists: {File.Exists(diverPath)}");
+
+    var allEventJson = new List<string>();
+
+    // Read SDK trace events as raw JSON
+    if (File.Exists(sdkPath))
+    {
+      try
+      {
+        var json = File.ReadAllText(sdkPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty("traceEvents", out var events))
+        {
+          foreach (var evt in events.EnumerateArray())
+          {
+            allEventJson.Add(evt.GetRawText());
+          }
+        }
+        Log.Debug($"[MergeTraceFiles] Read {allEventJson.Count} events from SDK trace");
+      }
+      catch (Exception ex)
+      {
+        Log.Warning($"[MergeTraceFiles] Failed to read SDK trace: {ex.Message}");
+      }
+    }
+
+    int sdkCount = allEventJson.Count;
+
+    // Read Diver trace events as raw JSON
+    if (File.Exists(diverPath))
+    {
+      try
+      {
+        var json = File.ReadAllText(diverPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty("traceEvents", out var events))
+        {
+          foreach (var evt in events.EnumerateArray())
+          {
+            allEventJson.Add(evt.GetRawText());
+          }
+        }
+        Log.Debug($"[MergeTraceFiles] Read {allEventJson.Count - sdkCount} events from Diver trace");
+      }
+      catch (Exception ex)
+      {
+        Log.Warning($"[MergeTraceFiles] Failed to read Diver trace: {ex.Message}");
+      }
+    }
+
+    Log.Debug($"[MergeTraceFiles] Total events: {allEventJson.Count}");
+
+    if (allEventJson.Count == 0)
+    {
+      Log.Debug("[MergeTraceFiles] No events to merge, skipping.");
+      return;
+    }
+
+    // Write combined trace by assembling raw JSON
+    try
+    {
+      var eventsArray = "[" + string.Join(",", allEventJson) + "]";
+      var combinedJson = $"{{\"traceEvents\":{eventsArray},\"displayTimeUnit\":\"ms\"}}";
+      File.WriteAllText(combinedPath, combinedJson);
+      Log.Information($"[MergeTraceFiles] Combined trace written to: {combinedPath}");
+    }
+    catch (Exception ex)
+    {
+      Log.Warning($"[MergeTraceFiles] Failed to write combined trace: {ex.Message}");
+    }
   }
 
   /// <summary>

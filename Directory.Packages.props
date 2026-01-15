@@ -23,6 +23,8 @@
 
   <ItemGroup Label="PackageVersions">
     <!-- MTGOSDK -->
+    <PackageVersion Include="System.Diagnostics.DiagnosticSource"
+                    Version="10.0.1" />
     <PackageVersion Include="System.Threading.Channels"
                     Version="10.0.1" />
 		<PackageVersion Include="Microsoft.CSharp"

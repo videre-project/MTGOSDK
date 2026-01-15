@@ -28,6 +28,8 @@ namespace MTGOSDK.Core.Reflection;
 /// </remarks>
 public abstract class DLRWrapper : SerializableBase
 {
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
   /// <summary>
   /// Internal unwrapped reference to any captured dynamic objects.
   /// </summary>
@@ -577,7 +579,7 @@ public abstract class DLRWrapper : SerializableBase
         var itemTypeName = response.ItemTypeName;
 
         // Create a RemoteObject for this item from its token, then Dynamify to get DRO
-        var remoteObject = RemoteClient.@client.GetRemoteObject(itemToken, itemTypeName);
+        var remoteObject = RemoteClient.@client.GetRemoteObjectFromField(itemToken, itemTypeName);
         var itemDro = remoteObject.Dynamify() as Remoting.Types.DynamicRemoteObject;
 
         // Create the wrapper instance (e.g., Tournament)
@@ -782,12 +784,25 @@ public abstract class DLRWrapper : SerializableBase
     int retries = 20,
     CancellationToken ct = default)
   {
+    using var activity = s_activitySource.StartActivity("WaitUntil");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("delay.ms", delay.ToString());
+    activity?.SetTag("max.retries", retries.ToString());
+
+    int attempt = 0;
     for (; retries > 0; retries--)
     {
-      if (ct.IsCancellationRequested) return false;
-      try { if (lambda()) return true; } catch { }
+      attempt++;
+      if (ct.IsCancellationRequested)
+      {
+        activity?.SetTag("cancelled", "true");
+        return false;
+      }
+      try { if (lambda()) { activity?.SetTag("attempts", attempt.ToString()); return true; } } catch { }
       await Task.Delay(delay).ConfigureAwait(false);
     }
+    activity?.SetTag("attempts", attempt.ToString());
+    activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
     return false;
   }
 
@@ -855,15 +870,24 @@ public abstract class DLRWrapper : SerializableBase
     int retries = 3,
     bool raise = false)
   {
+    using var activity = s_activitySource.StartActivity("Retry");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("delay.ms", delay.ToString());
+    activity?.SetTag("max.retries", retries.ToString());
+
+    int attempt = 0;
+    int maxRetries = retries;
     while (true)
     {
-      try { return lambda(); }
+      attempt++;
+      try { var result = lambda(); activity?.SetTag("attempts", attempt.ToString()); return result; }
       catch
       {
         retries--;
         if (retries <= 0)
         {
-          if (raise) throw;
+          activity?.SetTag("attempts", attempt.ToString());
+          if (raise) { activity?.SetStatus(ActivityStatusCode.Error, "Failed"); throw; }
           return @default;
         }
         // This will block the caller's thread for the duration of the delay.
