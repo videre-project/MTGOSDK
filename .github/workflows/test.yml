@@ -66,7 +66,7 @@ jobs:
       # leaking in from the main solution restore.
       #
       - name: Run tests
-        run: dotnet test --project MTGOSDK.Tests/MTGOSDK.Tests.csproj -p:UseLocalFeed=True
+        run: dotnet test --project MTGOSDK.Tests -p:UseLocalFeed=True
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
 
