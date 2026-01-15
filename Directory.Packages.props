@@ -76,8 +76,6 @@
     <!-- MTGOSDK.Tests -->
     <PackageVersion Include="coverlet.msbuild"
                     Version="6.0.4" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk"
-                    Version="18.0.0" />
     <PackageVersion Include="NUnit"
                     Version="4.4.0" />
     <PackageVersion Include="NUnit.Analyzers"
