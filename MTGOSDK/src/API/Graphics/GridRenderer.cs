@@ -246,7 +246,6 @@ public static class GridRenderer
       0.0, 0.0, actualWidth, actualHeight);
 
     s_cachedSelector.Arrange(arrangeRect);
-    s_cachedSelector.UpdateLayout();
 
     // Create RenderTargetBitmap with actual dimensions
     dynamic renderTarget = RemoteClient.CreateInstance<RenderTargetBitmap>(
