@@ -7,24 +7,23 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Threading;
 
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Reflection;
-using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Core.Remoting.Structs;
+using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Resources;
-
 using MTGOSDK.Win32.API;
-using MTGOSDK.Win32.Utilities;
 using MTGOSDK.Win32.Deployment;
-
+using MTGOSDK.Win32.Extensions;
+using MTGOSDK.Win32.Utilities;
 
 namespace MTGOSDK.Core.Remoting;
-using static MTGOSDK.Win32.Constants;
+
 using static MTGOSDK.Resources.EmbeddedResources;
+using static MTGOSDK.Win32.Constants;
 
 /// <summary>
 /// A singleton class that manages the connection to the MTGO client process.
@@ -42,7 +41,8 @@ public sealed class RemoteClient : DLRWrapper
 
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
-  public static Process @process => @this._clientProcess;
+  
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
 
   /// <summary>
   /// Whether the RemoteClient singleton has been initialized.
@@ -61,12 +61,37 @@ public sealed class RemoteClient : DLRWrapper
   public static bool CloseOnExit = false;
 
   /// <summary>
+  /// The native process handle to the MTGO client.
+  /// </summary>
+  public static Process ClientProcess = null!;
+
+  /// <summary>
+  /// The port to manage the connection to the MTGO client process.
+  /// </summary>
+  /// <summary>
   /// The port to manage the connection to the MTGO client process.
   /// </summary>
   public static ushort? Port = null;
 
+  private TraceExporter _traceExporter;
+  private static string _traceDir;
+
   private RemoteClient()
   {
+    // Initialize trace exporter
+    try 
+    {
+      // Cache trace directory path before Bootstrapper.ExtractDir is modified
+      _traceDir = Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace");
+      string tracePath = Path.Combine(_traceDir, "trace_sdk.json");
+      Log.Debug($"[RemoteClient] Initializing trace exporter at: {tracePath}");
+      _traceExporter = new TraceExporter(tracePath, "MTGOSDK");
+    }
+    catch (Exception ex)
+    {
+       Log.Warning($"[RemoteClient] Failed to initialize trace exporter: {ex.Message}");
+    }
+
     // A new instance implies the previous one (if any) is either not created
     // or has been fully disposed. Reset disposal state here.
     _isDisposed = false;
@@ -92,13 +117,48 @@ public sealed class RemoteClient : DLRWrapper
   /// <summary>
   /// Fetches the MTGO client process.
   /// </summary>
-  public static Process? MTGOProcess() =>
-    Try(() =>
-          Process.GetProcessesByName("MTGO")
-            .Where(x => x.Threads.Count > 1)
-            .OrderBy(x => x.StartTime)
-            .First(),
-        fallback: null);
+  /// <param name="throwOnFailure">Whether to throw an exception if the process is not found.</param>
+  /// <returns>The MTGO client process, or null if not found.</returns>
+  /// <exception cref="ExternalErrorException">Thrown if no processes can be queried by the OS and throwOnFailure is true.</exception>
+  /// <exception cref="NullReferenceException">Thrown if the current MTGO process cannot be found and throwOnFailure is true.</exception>
+  public static Process? MTGOProcess(bool throwOnFailure = false)
+  {
+    // If we already have a ClientProcess defined, return it.
+    if (!(_isDisposing || _isDisposed) && ClientProcess != null)
+      return ClientProcess;
+
+    //
+    // Use the Restart Manager API to retrieve a list of processes that have or
+    // were locking the MTGO executable path. This includes the MTGO process
+    // itself, as well as any other previous instances that may have been
+    // terminated abruptly.
+    //
+    // MTGOAppDirectory will always point to the most recent launch directory,
+    // as it sorts all ClickOnce application directories by their creation time.
+    //
+    string executablePath = Path.Combine(MTGOAppDirectory, "MTGO.exe");
+    var processList = new FileInfo(executablePath).GetLockingProcesses();
+
+    // If no processes were found, we want to indicate that our syscalls failed.
+    if (processList.Count == 0 && throwOnFailure)
+      throw new ExternalErrorException("Unable to retrieve MTGO process.");
+
+    var process = Try(() =>
+      processList
+        // Filter out processes without a valid thread count or start time.
+        .Where(p =>
+          Try<bool>(() =>
+            p.Threads.Count > 0 &&
+            p.StartTime != DateTime.MinValue))
+        .OrderByDescending(p => p.StartTime)
+        .FirstOrDefault(),
+      fallback: null);
+
+    if (process == null && throwOnFailure)
+      throw new NullReferenceException("MTGO client process not found.");
+
+    return process;
+  }
 
   /// <summary>
   /// Whether the MTGO client process has started.
@@ -192,6 +252,9 @@ public sealed class RemoteClient : DLRWrapper
   /// </exception>
   public static async Task StartProcess()
   {
+    using var activity = s_activitySource.StartActivity("RemoteClient.StartProcess");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    
     // Check if there are any updates first before starting MTGO.
     await InstallOrUpdate();
 
@@ -316,37 +379,60 @@ public sealed class RemoteClient : DLRWrapper
   private CancellationTokenSource _cts = new();
 
   /// <summary>
-  /// The native process handle to the MTGO client.
-  /// </summary>
-  private readonly Process _clientProcess =
-    MTGOProcess()
-      ?? throw new NullReferenceException("MTGO client process not found.");
-
-  /// <summary>
   /// Connects to the target process and returns a RemoteNET client handle.
   /// </summary>
   /// <returns>A RemoteNET client handle.</returns>
   private RemoteHandle GetClientHandle()
   {
-    // Connect to the MTGO process
-    ushort port = Port ??= Cast<ushort>(_clientProcess.Id);
-    Log.Trace("Connecting to MTGO process on port {Port}", port);
+    using var activity = s_activitySource.StartActivity("RemoteClient.GetClientHandle");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+
+    bool _processHandleOverride = true;
+    void RefreshClientProcess(bool throwOnFailure = false)
+    {
+      ClientProcess = Retry(() => MTGOProcess(true),
+                            delay: 500, retries: 10, raise: throwOnFailure);
+      _processHandleOverride = false;
+    }
+
+    if (ClientProcess is null) RefreshClientProcess(throwOnFailure: true);
+
+    // Connect to the MTGO process using the specified or default port
+    if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id);
+    Log.Trace("Connecting to MTGO process on port {Port}", Port.Value);
 
     // Suppress expected transient timeouts / connection failures while the
     // remote process is still spinning up under heavy CPU load.
     RemoteHandle handle;
     using (Log.Suppress())
     {
-      handle = Retry(() => RemoteHandle.Connect(_clientProcess, port, _cts),
-                    // Retry connecting to avoid creating a race condition
-                    delay: 500, retries: 3, raise: true);
+    handle = Retry(delegate
+    {
+      try
+      {
+        return RemoteHandle.Connect(ClientProcess, Port.Value, _cts);
+      }
+      //
+      // This means we couldn't access the process's handle, so we need to
+      // retry getting the MTGO process again unless the user has provided
+      // an invalid process handle manually.
+      //
+      catch (InvalidOperationException) when (!_processHandleOverride)
+      {
+        RefreshClientProcess(throwOnFailure: true);
+        _processHandleOverride = true;
+        throw;
+      }
+    },
+    // Retry connecting to avoid creating a race condition
+    delay: 500, retries: 10, raise: true); // 5s
     }
 
     // When the MTGO process exists, trigger the ProcessExited event
-    _clientProcess.EnableRaisingEvents = true;
-    _clientProcess.Exited += (s, e) =>
+    ClientProcess.EnableRaisingEvents = true;
+    ClientProcess.Exited += (s, e) =>
     {
-      Log.Debug("MTGO process exited with code {ExitCode}.", _clientProcess.ExitCode);
+      Log.Debug("MTGO process exited with code {ExitCode}.", ((Process) s).ExitCode);
       Dispose();
       ProcessExited?.Invoke(null, EventArgs.Empty);
     };
@@ -394,10 +480,6 @@ public sealed class RemoteClient : DLRWrapper
 
     Log.Debug("Disposing RemoteClient.");
 
-    // Best-effort cleanup; swallow any individual errors.
-    Try(@client.Dispose);
-    Port = null;
-
     //
     // Replace the current CancellationTokenSource with a fresh one so any late
     // callbacks that still hold a reference to the old CTS can safely cancel
@@ -416,11 +498,28 @@ public sealed class RemoteClient : DLRWrapper
       }
     });
 
+    // Best-effort cleanup; swallow any individual errors.
+    Try(() => @this._traceExporter?.Dispose()); // Flush SDK trace file
+    
+    // Merge SDK + Diver trace files into a single combined trace
+    try 
+    { 
+      MergeTraceFiles(); 
+    }
+    catch (Exception ex) 
+    { 
+      Log.Error($"[MergeTraceFiles] Exception: {ex}"); 
+    }
+    
+    Try(@client.Dispose);
+
     if (CloseOnExit)
     {
-      Try(@process.Kill);
+      Try(ClientProcess.Kill);
       CloseOnExit = false;
     }
+    ClientProcess = null!;
+    Port = null;
 
     // Mark disposed before raising events so late subscribers can observe state.
     _isDisposed = true;
@@ -437,6 +536,97 @@ public sealed class RemoteClient : DLRWrapper
     // Prepare a fresh lazy for future initialization attempts.
     s_instance = new Lazy<RemoteClient>(() => new RemoteClient());
     Log.Trace("RemoteClient disposed.");
+  }
+
+  /// <summary>
+  /// Merges SDK and Diver trace files into a single combined trace file.
+  /// </summary>
+  private static void MergeTraceFiles()
+  {
+    Log.Debug("[MergeTraceFiles] Starting merge...");
+    
+    // Use cached trace directory (set at initialization before Bootstrapper.ExtractDir is modified)
+    if (string.IsNullOrEmpty(_traceDir))
+    {
+      Log.Warning("[MergeTraceFiles] Trace directory not initialized, skipping merge.");
+      return;
+    }
+    
+    string sdkPath = Path.Combine(_traceDir, "trace_sdk.json");
+    string diverPath = Path.Combine(_traceDir, "trace_diver.json");
+    string combinedPath = Path.Combine(_traceDir, "trace_combined.json");
+
+    Log.Debug($"[MergeTraceFiles] Looking for: {sdkPath}");
+    Log.Debug($"[MergeTraceFiles] SDK exists: {File.Exists(sdkPath)}, Diver exists: {File.Exists(diverPath)}");
+
+    var allEventJson = new List<string>();
+
+    // Read SDK trace events as raw JSON
+    if (File.Exists(sdkPath))
+    {
+      try
+      {
+        var json = File.ReadAllText(sdkPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty("traceEvents", out var events))
+        {
+          foreach (var evt in events.EnumerateArray())
+          {
+            allEventJson.Add(evt.GetRawText());
+          }
+        }
+        Log.Debug($"[MergeTraceFiles] Read {allEventJson.Count} events from SDK trace");
+      }
+      catch (Exception ex)
+      {
+        Log.Warning($"[MergeTraceFiles] Failed to read SDK trace: {ex.Message}");
+      }
+    }
+
+    int sdkCount = allEventJson.Count;
+
+    // Read Diver trace events as raw JSON
+    if (File.Exists(diverPath))
+    {
+      try
+      {
+        var json = File.ReadAllText(diverPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty("traceEvents", out var events))
+        {
+          foreach (var evt in events.EnumerateArray())
+          {
+            allEventJson.Add(evt.GetRawText());
+          }
+        }
+        Log.Debug($"[MergeTraceFiles] Read {allEventJson.Count - sdkCount} events from Diver trace");
+      }
+      catch (Exception ex)
+      {
+        Log.Warning($"[MergeTraceFiles] Failed to read Diver trace: {ex.Message}");
+      }
+    }
+
+    Log.Debug($"[MergeTraceFiles] Total events: {allEventJson.Count}");
+
+    if (allEventJson.Count == 0)
+    {
+      Log.Debug("[MergeTraceFiles] No events to merge, skipping.");
+      return;
+    }
+
+    // Write combined trace by assembling raw JSON
+    try
+    {
+      var eventsArray = "[" + string.Join(",", allEventJson) + "]";
+      var combinedJson = $"{{\"traceEvents\":{eventsArray},\"displayTimeUnit\":\"ms\"}}";
+      File.WriteAllText(combinedPath, combinedJson);
+      Log.Information($"[MergeTraceFiles] Combined trace written to: {combinedPath}");
+    }
+    catch (Exception ex)
+    {
+      Log.Warning($"[MergeTraceFiles] Failed to write combined trace: {ex.Message}");
+    }
   }
 
   /// <summary>
@@ -549,7 +739,7 @@ public sealed class RemoteClient : DLRWrapper
   {
     var queryRefs = GetInstanceTypes(queryPath).ToList();
     if (queryRefs.Count == 0)
-      throw new  InvalidOperationException($"Type '{queryPath}' not found.");
+      throw new InvalidOperationException($"Type '{queryPath}' not found.");
 
     if (queryRefs.Count > 1)
       throw new AmbiguousMatchException(
@@ -565,16 +755,19 @@ public sealed class RemoteClient : DLRWrapper
   /// <returns>A collection of dynamic wrappers around the remote types.</returns>
   public static IEnumerable<Type> GetInstanceTypes(string queryPath)
   {
-    IEnumerable<CandidateType> queryRefs = @client.QueryTypes(queryPath);
-    foreach (var candidate in queryRefs)
+    // Directly get the type without searching through all assemblies
+    // GetRemoteType will dump the type on-demand from the communicator
+    Type remoteType;
+    try
     {
-      var queryObject = @client.GetRemoteType(candidate);
-      yield return queryObject;
+      remoteType = @client.GetRemoteType(queryPath, assembly: null);
+    }
+    catch (Exception)
+    {
+      throw new InvalidOperationException($"Type '{queryPath}' not found.");
     }
 
-    // If no types were found, throw an exception
-    if (!queryRefs.Any())
-      throw new InvalidOperationException($"Type '{queryPath}' not found.");
+    yield return remoteType;
   }
 
   /// <summary>
@@ -610,7 +803,7 @@ public sealed class RemoteClient : DLRWrapper
     string methodName)
   {
     Type type = GetInstanceType(queryPath);
-    var methods = type.GetMethods((BindingFlags)0xffff)
+    var methods = type.GetMethods((BindingFlags) 0xffff)
       .Where(mInfo => mInfo.Name == methodName);
 
     if (!methods.Any())
@@ -639,6 +832,18 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   /// <summary>
+  /// Creates a new instance of a remote object of type T.
+  /// </summary>
+  /// <typeparam name="T">The type of the remote object to create.</typeparam>
+  /// <param name="parameters">The parameters to pass to the remote object's constructor.</param>
+  /// <returns>A dynamic wrapper around the remote object.</returns>
+  public static dynamic CreateInstance<T>(
+    params object[] parameters)
+  {
+    return CreateInstance(typeof(T).FullName!, parameters);
+  }
+
+  /// <summary>
   /// Creates a new instance of a remote enum object from the given query path.
   /// </summary>
   /// <param name="queryPath">The query path to the remote enum object.</param>
@@ -656,6 +861,22 @@ public sealed class RemoteClient : DLRWrapper
     return enumValue;
   }
 
+  public static dynamic CreateEnum<T>(string valueName) =>
+    CreateEnum(typeof(T).FullName!, valueName);
+
+  public static void SetProperty(
+    DynamicRemoteObject dro,
+    string propertyName,
+    object value)
+  {
+    var propInfo = dro.GetType().GetProperty(propertyName);
+    if (propInfo is null)
+      throw new MissingMemberException(
+          $"Property '{propertyName}' not found on remote object.");
+
+    propInfo.SetValue(dro, value);
+  }
+
   //
   // Reflection wrapper methods
   //
@@ -670,7 +891,7 @@ public sealed class RemoteClient : DLRWrapper
   public static MethodInfo? GetMethod(
     string queryPath,
     string methodName,
-    Type[]? genericTypes=null)
+    Type[]? genericTypes = null)
   {
     try
     {
@@ -701,7 +922,7 @@ public sealed class RemoteClient : DLRWrapper
   public static dynamic InvokeMethod(
     string queryPath,
     string methodName,
-    Type[]? genericTypes=null,
+    Type[]? genericTypes = null,
     params object[]? args)
   {
     var remoteMethod = GetMethod(queryPath, methodName, genericTypes);

@@ -5,13 +5,6 @@
 **/
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net;
-
-using Newtonsoft.Json;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -24,85 +17,89 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeCreateObjectResponse(HttpListenerRequest arg)
+  private byte[] MakeCreateObjectResponse()
   {
     Log.Debug("[Diver] Got /create_object request!");
-    string body = null;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
 
-    if (string.IsNullOrEmpty(body))
-    {
-      return QuickError("Missing body");
-    }
-
-    var request = JsonConvert.DeserializeObject<CtorInvocationRequest>(body);
+    var request = DeserializeRequest<CtorInvocationRequest>();
     if (request == null)
-    {
-      return QuickError("Failed to deserialize body");
-    }
-
+      return QuickError("Missing or invalid request body");
 
     Type t = _runtime.ResolveType(request.TypeFullName);
     if (t == null)
-    {
       return QuickError("Failed to resolve type");
+
+    int paramCount = request.Parameters?.Count ?? 0;
+    object[] paramsArray = new object[paramCount];
+
+    for (int i = 0; i < paramCount; i++)
+    {
+      paramsArray[i] = _runtime.ParseParameterObject(request.Parameters[i]);
     }
 
-    List<object> paramsList = new();
-    if (request.Parameters.Any())
-    {
-      Log.Debug($"[Diver] Ctor'ing with parameters. Count: {request.Parameters.Count}");
-      paramsList = request.Parameters.Select(_runtime.ParseParameterObject).ToList();
-    }
-    else
-    {
-      // No parameters.
-      Log.Debug("[Diver] Ctor'ing without parameters");
-    }
+    Log.Debug($"[Diver] Ctor'ing with {paramCount} parameters (ForceUIThread={request.ForceUIThread})");
 
-    object createdObject = null;
+    // Check if this type requires UI thread affinity (DispatcherObject-derived types)
+    // These MUST be created on UI thread because they have thread affinity - 
+    // creating on worker thread then retrying operations on UI thread doesn't work.
+    bool isDispatcherObject = typeof(System.Windows.Threading.DispatcherObject).IsAssignableFrom(t);
+    bool needsUIThread = request.ForceUIThread && isDispatcherObject;
+
+    object createdObject;
     try
     {
-      object[] paramsArray = paramsList.ToArray();
-      createdObject = Activator.CreateInstance(t, paramsArray);
+      if (needsUIThread && !STAThread.IsDispatcherThread)
+      {
+        // For DispatcherObject types with ForceUIThread, create on UI thread proactively
+        Log.Debug($"[Diver] Creating DispatcherObject {t.Name} on UI thread (thread affinity required)");
+        createdObject = STAThread.Execute(() => Activator.CreateInstance(t, paramsArray));
+      }
+      else
+      {
+        // Try creating the object on the current thread first - most don't need UI thread
+        createdObject = Activator.CreateInstance(t, paramsArray);
+      }
     }
-    catch
+    catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
+                               (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
     {
-      Debugger.Launch();
-      return QuickError("Activator.CreateInstance threw an exception");
+      // Retry on STA/UI thread for types that throw on worker thread
+      Log.Debug($"[Diver] Retrying CreateInstance on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
+      try
+      {
+        createdObject = STAThread.Execute(() => Activator.CreateInstance(t, paramsArray));
+      }
+      catch (Exception retryEx)
+      {
+        return QuickError(retryEx.Message, retryEx.ToString());
+      }
+    }
+    catch (Exception ex)
+    {
+      return QuickError(ex.Message, ex.ToString());
     }
 
     if (createdObject == null)
-    {
       return QuickError("Activator.CreateInstance returned null");
-    }
 
-    // Need to return the results. If it's primitive we'll encode it
-    // If it's non-primitive we pin it and send the address.
     ObjectOrRemoteAddress res;
-    ulong pinAddr;
     if (createdObject.GetType().IsPrimitiveEtc())
     {
-      // TODO: Something else?
-      pinAddr = 0xeeffeeff;
       res = ObjectOrRemoteAddress.FromObj(createdObject);
     }
     else
     {
-      // Pinning results
-      pinAddr = _runtime.PinObject(createdObject);
-      res = ObjectOrRemoteAddress.FromToken(pinAddr, createdObject.GetType().FullName);
+      ulong pinAddr = _runtime.PinObject(createdObject);
+      int hashCode = createdObject.GetHashCode();
+      res = ObjectOrRemoteAddress.FromToken(pinAddr, createdObject.GetType().FullName, hashCode);
     }
 
-    InvocationResults invoRes = new()
+    var invoRes = new InvocationResults
     {
       ReturnedObjectOrAddress = res,
       VoidReturnType = false
     };
 
-    return JsonConvert.SerializeObject(invoRes);
+    return WrapSuccess(invoRes);
   }
 }

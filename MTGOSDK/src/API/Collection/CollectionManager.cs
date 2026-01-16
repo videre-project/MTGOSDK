@@ -4,16 +4,16 @@
 **/
 
 using System.Collections;
-using System.Collections.Concurrent;
-
-using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
 
+using MTGOSDK.Core.Reflection.Extensions;
+using MTGOSDK.Core.Remoting.Types;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
+
 
 namespace MTGOSDK.API.Collection;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 public static class CollectionManager
 {
@@ -31,33 +31,37 @@ public static class CollectionManager
   // ICardDefinition wrapper methods
   //
 
-  /// <summary>
-  /// A dictionary of cached Card objects.
-  /// </summary>
-  public static ConcurrentDictionary<int, Card> Cards { get; } = new();
+  private static dynamic s_cardIdToDefinitions =>
+    field ??= Unbind(s_cardDataManager).DigitalObjectsByCatId;
+
+  private static dynamic s_cardNameToDefinitions =>
+    field ??= Unbind(s_cardDataManager).NameToCardDefinitions;
 
   /// <summary>
   /// Returns a list of catalog ids for the given card name.
   /// </summary>
   /// <param name="cardName">The name of the card to query.</param>
-  /// <param name="excludeGoldBorders">
-  /// Whether to exclude gold-bordered cards (non-tournament legal).
-  /// </param>
-  /// <param name="excludeNonMtgoCards">
-  /// Whether to exclude cards that are not available on MTGO.
-  /// </param>
   /// <returns>A list of catalog ids.</returns>
-  public static IList<int> GetCardIds(
-    string cardName,
-    bool excludeGoldBorders = true,
-    bool excludeNonMtgoCards = false
-  ) =>
+  public static IList<int> GetCardIds(string cardName) =>
     Map<IList, int>(
-      s_cardDataManager.GetCatalogIdsForNameInPreferentialOrder(
-        cardName,
-        excludeGoldBorders,
-        excludeNonMtgoCards
-      ));
+      Try(() => s_cardNameToDefinitions[cardName.ToLower()])
+        ?? throw new KeyNotFoundException(
+          $"No card found with name \"{cardName}\"."),
+      Lambda<int>(c => c.Id)
+    );
+
+  /// <summary>
+  /// Returns a list of card objects for the given card name.
+  /// </summary>
+  /// <param name="cardName">The name of the card to query.</param>
+  /// <returns>A list of card objects.</returns>
+  public static IList<Card> GetCardPrintings(string cardName) =>
+    Map<IList, Card>(
+      Try(() => s_cardNameToDefinitions[cardName.ToLower()])
+        ?? throw new KeyNotFoundException(
+          $"No card found with name \"{cardName}\"."),
+      proxy: true
+    );
 
   /// <summary>
   /// Returns a card object by the given catalog id.
@@ -67,21 +71,9 @@ public static class CollectionManager
   /// <exception cref="KeyNotFoundException">
   /// Thrown if no card is found with the given catalog id.
   /// </exception>
-  public static Card GetCard(int id)
-  {
-    if (!Cards.TryGetValue(id, out var card))
-    {
-      Cards[id] = card = new Card(
-        s_cardDataManager.GetCardDefinitionForCatId(id)
-        ?? throw new KeyNotFoundException(
-            $"No card found with catalog id #{id}.")
-      );
-      // Set callback to remove user from cache when the client is disposed.
-      RemoteClient.Disposed += (s, e) => Cards.TryRemove(id, out _);
-    }
-
-    return card;
-  }
+  public static Card GetCard(int id) =>
+    new(Try(() => s_cardIdToDefinitions[id])
+      ?? throw new KeyNotFoundException($"No card found with catalog id #{id}."));
 
   /// <summary>
   /// Returns a card object by the given card name.
@@ -91,12 +83,7 @@ public static class CollectionManager
   /// <exception cref="KeyNotFoundException">
   /// Thrown if no card is found with the given name.
   /// </exception>
-  public static Card GetCard(string cardName) =>
-    GetCard(
-      (int?)GetCardIds(cardName).FirstOrDefault()
-        ?? throw new KeyNotFoundException(
-            $"No card found with name \"{cardName}\".")
-    );
+  public static Card GetCard(string cardName) => GetCardPrintings(cardName)[0];
 
   /// <summary>
   /// Returns a list of card objects by the given card name.
@@ -202,19 +189,31 @@ public static class CollectionManager
   /// Returns all decks in the user's collection.
   /// </summary>
   public static IEnumerable<Deck> Decks =>
-    s_collectionGroupingManager.Folders
-      .SelectMany(folder =>
-        folder.Contents
-          .Where(grouping => grouping is ICardGrouping)
-          .Select(grouping => new Deck(Unbind(grouping)))
-      );
+    Map<Deck>(
+      ((DynamicRemoteObject)
+        Unbind(s_collectionGroupingManager).m_groupingsById.Values)
+          .Filter<ICardGrouping>(e => e.Format != null)
+    );
 
   /// <summary>
   /// Returns a deck object by the given deck id.
   /// </summary>
   /// <param name="id">The id of the deck to return.</param>
   /// <returns>A new deck object.</returns>
-  public static Deck GetDeck(int id) => new(Unbind(GetCollectionItem(id)));
+  public static Deck GetDeck(int id) =>
+    new(Unbind(s_collectionGroupingManager).m_groupingsById[id]);
+
+  /// <summary>
+  /// Returns a deck object by the given deck name.
+  /// </summary>
+  /// <param name="name">The name of the deck to return.</param>
+  /// <returns>A new deck object.</returns>
+  public static Deck GetDeck(string name) =>
+    new(
+      ((DynamicRemoteObject)
+       Unbind(s_collectionGroupingManager).m_groupingsById.Values)
+        .Filter<ICardGrouping>(e => e.Name == name)[0]
+    );
 
   // IDeck ImportTextDeck(FileInfo textFileToImport, string name, IPlayFormat format, IVisualResource deckBoxImage, IDeckFolder location);
   // IDeck CreateNewDeck(string name, IPlayFormat format, IVisualResource deckBoxImage = null, IDeckFolder location = null, IEnumerable<ICardDefinition> initialCards = null);

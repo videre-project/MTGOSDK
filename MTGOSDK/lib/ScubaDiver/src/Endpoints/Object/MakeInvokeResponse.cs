@@ -5,14 +5,9 @@
 **/
 
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net;
-
-using Microsoft.Diagnostics.Runtime;
-using Newtonsoft.Json;
+using System.Reflection;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -25,181 +20,163 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeInvokeResponse(HttpListenerRequest arg)
+  private static readonly TypeStub s_typeStub = new();
+
+  // Endpoint-level method cache: uses string keys for safety
+  // Key: (typeFullName, methodName, paramCount, paramTypeHash)
+  private static readonly ConcurrentDictionary<(string, string, int, int), MethodInfo> 
+    s_methodCache = new();
+
+  private static int ComputeTypeHash(Type[] types)
   {
-    Log.Debug("[Diver] Got /Invoke request!");
-    string body = null;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
+    if (types == null) return 0;
+    int hash = 17;
+    foreach (var t in types)
+      hash = hash * 31 + (t?.FullName?.GetHashCode() ?? 0);
+    return hash;
+  }
 
-    if (string.IsNullOrEmpty(body))
-    {
-      return QuickError("Missing body");
-    }
-
-    TextReader textReader = new StringReader(body);
-    var request = JsonConvert.DeserializeObject<InvocationRequest>(body);
+  private byte[] MakeInvokeResponse()
+  {
+    var request = DeserializeRequest<InvocationRequest>();
     if (request == null)
-    {
-      return QuickError("Failed to deserialize body");
-    }
+      return QuickError("Missing or invalid request body");
 
-    // Need to figure target instance and the target type.
-    // In case of a static call the target instance stays null.
+    Log.Debug($"[Diver] Got /Invoke request: method={request.MethodName}, type={request.TypeFullName}, addr={request.ObjAddress:X}");
+
     object instance = null;
     Type dumpedObjType;
     if (request.ObjAddress == 0)
     {
-      //
-      // Null target - static call
-      //
-
       dumpedObjType = _runtime.ResolveType(request.TypeFullName);
     }
     else
     {
-      //
-      // Non-null target object address. Non-static call
-      //
+      if (!_runtime.TryGetPinnedObject(request.ObjAddress, out instance))
+        return QuickError("Couldn't find object in pinned pool");
 
-      // Check if we have this objects in our pinned pool
-      if (_runtime.TryGetPinnedObject(request.ObjAddress, out instance))
+      dumpedObjType = instance.GetType();
+    }
+
+    int paramCount = request.Parameters?.Count ?? 0;
+    object[] paramsArray = new object[paramCount];
+    Type[] argumentTypes = new Type[paramCount];
+
+    for (int i = 0; i < paramCount; i++)
+    {
+      paramsArray[i] = _runtime.ParseParameterObject(request.Parameters[i]);
+      argumentTypes[i] = paramsArray[i]?.GetType() ?? typeof(object);
+    }
+
+    // Create cache key
+    var cacheKey = (dumpedObjType.FullName, request.MethodName, paramCount, ComputeTypeHash(argumentTypes));
+
+    // Try cache first
+    if (!s_methodCache.TryGetValue(cacheKey, out var method))
+    {
+      // Use existing reflection helper
+      method = dumpedObjType.GetMethodRecursive(
+        request.MethodName,
+        argumentTypes
+      );
+
+      if (method != null)
+        s_methodCache[cacheKey] = method;
+    }
+
+    if (method == null)
+      return QuickError($"Couldn't find method '{request.MethodName}' on type '{dumpedObjType.FullName}'");
+
+    // Handle generics
+    if (request.GenericArgsTypeFullNames?.Length > 0)
+    {
+      Type[] genericArgs = new Type[request.GenericArgsTypeFullNames.Length];
+      for (int i = 0; i < request.GenericArgsTypeFullNames.Length; i++)
       {
-        // Found pinned object!
-        dumpedObjType = instance.GetType();
+        genericArgs[i] = _runtime.ResolveType(request.GenericArgsTypeFullNames[i]);
+        if (genericArgs[i] == null)
+          return QuickError($"Failed to resolve generic type: {request.GenericArgsTypeFullNames[i]}");
+      }
+      method = method.MakeGenericMethod(genericArgs);
+    }
+    // Check if this invocation requires UI thread affinity
+    // DispatcherObject instances must be accessed on their owning thread
+    bool isDispatcherObject = instance != null && instance is System.Windows.Threading.DispatcherObject;
+    bool needsUIThread = request.ForceUIThread && isDispatcherObject;
+
+    // Start sub-activity for the actual reflection invocation
+    using var activity = s_activitySource.StartActivity("MethodInvoke");
+    if (activity != null)
+    {
+      activity.SetTag("method", request.MethodName);
+      activity.SetTag("type", request.TypeFullName);
+      activity.SetTag("addr", request.ObjAddress.ToString("X"));
+    }
+
+    object results;
+    try
+    {
+      if (needsUIThread && !STAThread.IsDispatcherThread)
+      {
+        // For DispatcherObject instances with ForceUIThread, invoke on UI thread proactively
+        Log.Debug($"[Diver] Invoking {request.MethodName} on UI thread (DispatcherObject target)");
+        results = STAThread.Execute(() => method.Invoke(instance, paramsArray));
       }
       else
       {
-        // Object not pinned, try get it the hard way
-        ClrObject clrObj = default;
-        lock (_runtime.clrLock)
-        {
-          clrObj = _runtime.GetClrObject(request.ObjAddress);
-          if (clrObj.Type == null)
-          {
-            return QuickError("'address' points at an invalid address");
-          }
-
-          // Make sure it's still in place
-          _runtime.RefreshRuntime();
-          clrObj = _runtime.GetClrObject(request.ObjAddress);
-        }
-        if (clrObj.Type == null)
-        {
-          return
-            QuickError("Object moved since last refresh. 'address' now points at an invalid address.");
-        }
-
-        ulong mt = clrObj.Type.MethodTable;
-        dumpedObjType = _runtime.ResolveType(clrObj.Type.Name);
-        try
-        {
-          instance = _runtime.Compile(clrObj.Address, mt);
-        }
-        catch (Exception)
-        {
-          return
-            QuickError("Couldn't get handle to requested object. It could be because the Method Table mismatched or a GC collection happened.");
-        }
+        // Try direct execution first - most operations don't need UI thread
+        results = method.Invoke(instance, paramsArray);
       }
     }
-
-    //
-    // We have our target and it's type. No look for a matching overload for the
-    // function to invoke.
-    //
-    List<object> paramsList = new();
-    if (request.Parameters.Any())
+    catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
+                               (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
     {
-      Log.Debug($"[Diver] Invoking with parameters. Count: {request.Parameters.Count}");
-      paramsList = request.Parameters.Select(_runtime.ParseParameterObject).ToList();
-    }
-    else
-    {
-      // No parameters.
-      Log.Debug("[Diver] Invoking without parameters");
-    }
-
-    // Infer parameter types from received parameters.
-    // Note that for 'null' arguments we don't know the type so we use a "Wild Card" type
-    Type[] argumentTypes = paramsList.Select(p => p?.GetType() ?? new TypeStub()).ToArray();
-
-    // Get types of generic arguments <T1,T2, ...>
-    Type[] genericArgumentTypes = request.GenericArgsTypeFullNames.Select(typeFullName => _runtime.ResolveType(typeFullName)).ToArray();
-
-    // Search the method with the matching signature
-    var method = dumpedObjType.GetMethodRecursive(request.MethodName, genericArgumentTypes, argumentTypes);
-    if (method == null)
-    {
-      Debugger.Launch();
-      Log.Debug($"[Diver] Failed to Resolved method :/");
-      return QuickError("Couldn't find method in type.");
-    }
-
-    string argsSummary = string.Join(", ", argumentTypes.Select(arg => arg.Name));
-    Log.Debug($"[Diver] Resolved method: {method.Name}({argsSummary}), Containing Type: {method.DeclaringType}");
-
-    object results = null;
-    string[] suppressTypes = ["SecureString"];
-    try
-    {
-      argsSummary = string.Join(", ", paramsList.Select(param => param?.ToString() ?? "null"));
-      if (string.IsNullOrEmpty(argsSummary))
-        argsSummary = "No Arguments";
-      else if (suppressTypes.Contains(method.DeclaringType.Name))
-        argsSummary = "*";
-
-      Log.Debug($"[Diver] Invoking {method.Name} with those args (Count: {paramsList.Count}): `{argsSummary}`");
-      results = method.Invoke(instance, paramsList.ToArray());
+      // Retry on STA/UI thread only for operations that actually need it
+      Log.Debug($"[Diver] Retrying Invoke on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
+      activity?.AddEvent(new ActivityEvent("STA_Retry"));
+      try
+      {
+        results = STAThread.Execute(() => method.Invoke(instance, paramsArray));
+      }
+      catch (Exception retryEx)
+      {
+        activity?.SetStatus(ActivityStatusCode.Error, retryEx.Message);
+        return QuickError($"Invocation caused exception (after STA retry): {retryEx}");
+      }
     }
     catch (Exception e)
     {
+      activity?.SetStatus(ActivityStatusCode.Error, e.Message);
       return QuickError($"Invocation caused exception: {e}");
     }
 
-    InvocationResults invocResults;
+    ObjectOrRemoteAddress returnValue;
     if (method.ReturnType == typeof(void))
     {
-      // Not expecting results.
-      invocResults = new InvocationResults() { VoidReturnType = true };
+      returnValue = ObjectOrRemoteAddress.Null;
+    }
+    else if (results == null)
+    {
+      returnValue = ObjectOrRemoteAddress.Null;
+    }
+    else if (results.GetType().IsPrimitiveEtc())
+    {
+      returnValue = ObjectOrRemoteAddress.FromObj(results);
     }
     else
     {
-      if (results == null)
-      {
-        // Got back a null...
-        invocResults = new InvocationResults()
-        {
-          VoidReturnType = false,
-          ReturnedObjectOrAddress = ObjectOrRemoteAddress.Null
-        };
-      }
-      else
-      {
-        // Need to return the results. If it's primitive we'll encode it
-        // If it's non-primitive we pin it and send the address.
-        ObjectOrRemoteAddress returnValue;
-        if (results.GetType().IsPrimitiveEtc())
-        {
-          returnValue = ObjectOrRemoteAddress.FromObj(results);
-        }
-        else
-        {
-          // Pinning results
-          ulong resultsAddress = _runtime.PinObject(results);
-          Type resultsType = results.GetType();
-          returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name);
-        }
-
-        invocResults = new InvocationResults()
-        {
-          VoidReturnType = false,
-          ReturnedObjectOrAddress = returnValue
-        };
-      }
+      ulong resultsAddress = _runtime.PinObject(results);
+      Type resultsType = results.GetType();
+      int hashCode = results.GetHashCode();
+      returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.FullName ?? resultsType.Name, hashCode);
     }
-    return JsonConvert.SerializeObject(invocResults);
+
+    var invocResults = new InvocationResults
+    {
+      VoidReturnType = method.ReturnType == typeof(void),
+      ReturnedObjectOrAddress = returnValue
+    };
+
+    return WrapSuccess(invocResults);
   }
 }

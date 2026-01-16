@@ -1,0 +1,457 @@
+/** @file
+  Copyright (c) 2025, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+using WotC.MtGO.Client.Model.ResourceManagement;
+
+using MTGOSDK.API.Collection;
+using MTGOSDK.API.Interface.ViewModels;
+using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Win32.API;
+
+using static MTGOSDK.Core.Reflection.DLRWrapper;
+
+
+namespace MTGOSDK.API.Graphics;
+
+public static class CardRenderer
+{
+  private const double ExportWidth = 576.0;
+  private const double ExportHeight = 790.0;
+
+  // Cached remote objects for reuse across renders
+  private static dynamic? s_cachedTemplate;
+  private static dynamic? s_cachedPresenter;
+  private static dynamic? s_cachedSize;
+  private static dynamic? s_cachedRect;
+  private static dynamic? s_cachedPixelFormat;
+  private static dynamic? s_cachedRenderTarget;
+
+  private static bool s_isInitialized = false;
+
+  /// <summary>
+  /// Load the resource dictionary containing card templates.
+  /// </summary>
+  private static dynamic LoadCardResourceDictionary()
+  {
+    //
+    // The MTGO client already has the card UI resources loaded via
+    // Application.Current.Resources (including merged dictionaries).
+    //
+    // Here we have to ensure it's loaded within the remote process context
+    // (e.g. a STA thread with a Dispatcher) so WPF resources are accessible.
+    //
+    var appType = RemoteClient.GetInstanceType(typeof(Application).FullName!);
+    var currentProp = appType.GetProperty("Current");
+    if (currentProp is null)
+      throw new MissingMemberException("System.Windows.Application.Current was not found in the remote process.");
+
+    dynamic app = currentProp.GetValue(null);
+    if (app is null)
+      throw new InvalidOperationException("Application.Current is null in the remote process.");
+
+    dynamic resources = app.Resources;
+    if (resources is null)
+      throw new InvalidOperationException("Application.Current.Resources is null in the remote process.");
+
+    return resources;
+  }
+
+  /// <summary>
+  /// Initializes or retrieves cached remote objects for rendering.
+  /// Must be called within a UI thread scope.
+  /// </summary>
+  private static void EnsureRenderingInfrastructure()
+  {
+    if (s_isInitialized) return;
+
+    if (!RemoteClient.IsInitialized)
+    {
+      throw new InvalidOperationException("RemoteClient is not initialized.");
+    }
+
+    if (s_cachedTemplate is null)
+    {
+      var resourceDict = LoadCardResourceDictionary();
+      s_cachedTemplate = resourceDict["baseCardViewExport"];
+      RemoteClient.Disposed += (_, _) => ClearCache();
+    }
+
+    if (s_cachedPresenter is null)
+    {
+      s_cachedPresenter = RemoteClient.CreateInstance<ContentPresenter>();
+      s_cachedPresenter.ContentTemplate = s_cachedTemplate;
+      s_cachedPresenter.Width = ExportWidth;
+      s_cachedPresenter.Height = ExportHeight;
+    }
+
+    if (s_cachedSize is null)
+    {
+      s_cachedSize = RemoteClient.CreateInstance<Size>(ExportWidth, ExportHeight);
+    }
+
+    if (s_cachedRect is null)
+    {
+      s_cachedRect = RemoteClient.CreateInstance<Rect>(0.0, 0.0, ExportWidth, ExportHeight);
+    }
+
+    if (s_cachedPixelFormat is null)
+    {
+      var pixelFormatsType = RemoteClient.GetInstanceType(typeof(PixelFormats).FullName!);
+      var pbgra32Prop = pixelFormatsType.GetProperty("Pbgra32");
+      s_cachedPixelFormat = pbgra32Prop!.GetValue(null);
+    }
+
+    if (s_cachedRenderTarget is null)
+    {
+      s_cachedRenderTarget = RemoteClient.CreateInstance<RenderTargetBitmap>(
+        (int) ExportWidth,
+        (int) ExportHeight,
+        96.0,
+        96.0,
+        s_cachedPixelFormat
+      );
+    }
+
+    s_isInitialized = true;
+  }
+
+  /// <summary>
+  /// Gets the InstantRender property from ArtInFrameToBrushConverter.
+  /// Fetched fresh each time to avoid stale reflection cache issues.
+  /// </summary>
+  private static System.Reflection.PropertyInfo? GetInstantRenderProperty()
+  {
+    var converterType = RemoteClient.GetInstanceType(
+      "Shiny.Card.Converters.ArtInFrameToBrushConverter");
+    return converterType?.GetProperty("InstantRender");
+  }
+
+  /// <summary>
+  /// Enables synchronous card art loading and returns the previous value.
+  /// </summary>
+  private static bool EnableInstantRender()
+  {
+    var prop = GetInstantRenderProperty();
+    if (prop is null) return false;
+
+    bool originalValue = (bool) prop.GetValue(null)!;
+    prop.SetValue(null, true);
+    return originalValue;
+  }
+
+  /// <summary>
+  /// Restores the InstantRender property to a previous value.
+  /// </summary>
+  private static void RestoreInstantRender(bool originalValue)
+  {
+    var prop = GetInstantRenderProperty();
+    prop?.SetValue(null, originalValue);
+  }
+
+  /// <summary>
+  /// Renders a card and returns the raw pixel data from process memory.
+  /// </summary>
+  /// <param name="viewModel">The DetailsViewModel for the card.</param>
+  /// <returns>Raw BGRA pixel data for the rendered card.</returns>
+  /// <remarks>
+  /// Assumes caller is already within a UI thread scope.
+  /// </remarks>
+  private static byte[] RenderCardToPixelsCore(dynamic viewModel)
+  {
+    // Update the presenter's content (reusing the presenter)
+    s_cachedPresenter!.Content = viewModel;
+
+    // Force the visual tree to be created and laid out
+    s_cachedPresenter.Measure(s_cachedSize);
+    s_cachedPresenter.Arrange(s_cachedRect);
+    s_cachedPresenter.ApplyTemplate();
+    s_cachedPresenter.UpdateLayout();
+
+    // Clear and re-render using the cached RenderTargetBitmap
+    s_cachedRenderTarget!.Clear();
+    s_cachedRenderTarget.Render(s_cachedPresenter);
+
+    // Create a WriteableBitmap from the RenderTargetBitmap to copy pixel data
+    var writeableBitmap = RemoteClient.CreateInstance<WriteableBitmap>(
+      s_cachedRenderTarget
+    );
+
+    //
+    // Get the back buffer pointer and stride from the remote WriteableBitmap.
+    //
+    // Note that we access the BackBuffer property directly without using WPF's
+    // Lock/Unlock methods, as the object is already pinned in process memory by
+    // the Diver's ObjectPinner in the remote process.
+    //
+    IntPtr backBuffer = Cast<IntPtr>(writeableBitmap.BackBuffer);
+    int stride = writeableBitmap.BackBufferStride;
+    int bufferSize = stride * (int) ExportHeight;
+
+    // Read the pixel data directly from the remote process memory
+    byte[] pixels = new byte[bufferSize];
+    bool success = Kernel32.ReadProcessMemory(
+      RemoteClient.ClientProcess.Handle,
+      backBuffer,
+      pixels,
+      (nuint) bufferSize,
+      out nuint _
+    );
+
+    if (!success)
+      throw new InvalidOperationException("Failed to read bitmap pixels from remote process memory.");
+
+    return pixels;
+  }
+
+  /// <summary>
+  /// Ensures the card's visual resources are loaded before rendering.
+  /// This downloads the card art if not already cached locally.
+  /// </summary>
+  /// <param name="card">The card to load resources for.</param>
+  private static async Task EnsureResourcesLoaded(Card card)
+  {
+    dynamic resource = Unbind(card).Resource;
+    if (resource == null) return;
+
+    // Check if already loaded
+    var loadState = Cast<VisualResourceLoadState>(resource.LoadState);
+    if (loadState != VisualResourceLoadState.Loaded)
+    {
+      // Trigger the async download and wait for it to complete
+      var downloadTask = resource.DownloadResourceAsync();
+      await downloadTask;
+    }
+  }
+
+  /// <summary>
+  /// Renders a single card. Opens a UI thread scope for each card.
+  /// </summary>
+  private static async Task<byte[]> RenderCardToPixelsAsync(Card cardDefinition)
+  {
+    // Pre-load card resources (art, etc.) before rendering
+    await EnsureResourcesLoaded(cardDefinition);
+
+    // All WPF operations must be on the same UI thread
+    using (DiverCommunicator.BeginUIThreadScope())
+    {
+      // Ensure all rendering infrastructure is initialized
+      EnsureRenderingInfrastructure();
+
+      // Enable synchronous art loading for faster render
+      bool originalInstantRender = EnableInstantRender();
+      try
+      {
+        // Create the ViewModel that the template binds to
+        var detailsViewModel = new DetailsViewModel(cardDefinition);
+        return RenderCardToPixelsCore(detailsViewModel);
+      }
+      finally
+      {
+        RestoreInstantRender(originalInstantRender);
+      }
+    }
+  }
+
+  /// <summary>
+  /// Renders a single card synchronously.
+  /// </summary>
+  private static byte[] RenderCardToPixels(Card cardDefinition)
+  {
+    return RenderCardToPixelsAsync(cardDefinition).GetAwaiter().GetResult();
+  }
+
+  /// <summary>
+  /// Renders cards to raw BGRA pixel data.
+  /// </summary>
+  /// <param name="cards">The cards to render.</param>
+  /// <returns>Raw BGRA pixel data for each card.</returns>
+  public static IEnumerable<byte[]> RenderCards(IEnumerable<Card> cards)
+  {
+    foreach (var card in cards)
+    {
+      yield return RenderCardToPixels(card);
+    }
+  }
+
+  /// <summary>
+  /// Renders all cards in a single batch within one UI thread scope.
+  /// Yields each bitmap as soon as it's rendered.
+  /// </summary>
+  /// <param name="cards">The cards to render.</param>
+  /// <returns>Raw BGRA pixel data for each card, yielded as rendered.</returns>
+  public static IEnumerable<byte[]> RenderCardsBatch(IEnumerable<Card> cards)
+  {
+    // Render all cards on UI thread (must be sequential)
+    using (DiverCommunicator.BeginUIThreadScope())
+    {
+      // Ensure all rendering infrastructure is initialized
+      EnsureRenderingInfrastructure();
+
+      // Enable synchronous art loading for faster first render
+      bool originalInstantRender = EnableInstantRender();
+      try
+      {
+        foreach (var card in cards)
+        {
+          var viewModel = new DetailsViewModel(card);
+          yield return RenderCardToPixelsCore(viewModel);
+        }
+      }
+      finally
+      {
+        // Restore original InstantRender value
+        RestoreInstantRender(originalInstantRender);
+      }
+    }
+  }
+
+  public static void Initialize()
+  {
+    using (DiverCommunicator.BeginUIThreadScope())
+    {
+      EnsureRenderingInfrastructure();
+    }
+  }
+
+  /// <summary>
+  /// Asynchronously renders cards and yields BGRA pixel data as an async stream.
+  /// </summary>
+  /// <param name="cards">The cards to render.</param>
+  /// <param name="cancellationToken">A cancellation token.</param>
+  /// <returns>An async stream of raw BGRA pixel data for each card.</returns>
+  /// <remarks>
+  /// Rendering must occur on a single UI thread. This is intentionally
+  /// sequential to avoid threading issues with WPF.
+  /// </remarks>
+  public static async IAsyncEnumerable<byte[]> RenderCardsAsync(
+    IEnumerable<Card> cards,
+    [EnumeratorCancellation] CancellationToken cancellationToken = default)
+  {
+    foreach (var card in cards)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      // Offload the work so callers don't block, but keep rendering sequential.
+      yield return await Task.Run(() => RenderCardToPixels(card),
+                                  cancellationToken).ConfigureAwait(false);
+    }
+  }
+
+  /// <summary>
+  /// Clears the cached rendering infrastructure.
+  /// Call this if you need to free remote resources.
+  /// </summary>
+  public static void ClearCache()
+  {
+    s_cachedTemplate = null;
+    s_cachedPresenter = null;
+    s_cachedSize = null;
+    s_cachedRect = null;
+    s_cachedPixelFormat = null;
+    s_cachedRenderTarget = null;
+    s_isInitialized = false;
+  }
+
+  public static void SaveCardAsPng(byte[] pixelData, string filePath)
+  {
+    int width = (int) ExportWidth;
+    int height = (int) ExportHeight;
+    int stride = width * 4; // BGRA32
+
+    var bitmap = new WriteableBitmap(
+      width,
+      height,
+      96.0,
+      96.0,
+      PixelFormats.Bgra32,
+      null
+    );
+
+    bitmap.Lock();
+    try
+    {
+      Marshal.Copy(pixelData, 0, bitmap.BackBuffer, pixelData.Length);
+      bitmap.AddDirtyRect(new Int32Rect(0, 0, width, height));
+    }
+    finally
+    {
+      bitmap.Unlock();
+    }
+
+    using (var fileStream = new FileStream(filePath, FileMode.Create))
+    {
+      var encoder = new PngBitmapEncoder();
+      encoder.Frames.Add(BitmapFrame.Create(bitmap));
+      encoder.Save(fileStream);
+    }
+  }
+
+  //
+  // Card Art Export Methods
+  //
+
+  /// <summary>
+  /// Ensures the card's visual resource is loaded, blocking until complete.
+  /// </summary>
+  /// <param name="card">The card to load the resource for.</param>
+  /// <returns>The local file path to the card art, or null if unavailable.</returns>
+  private static async Task<string?> EnsureCardArtLoaded(Card card)
+  {
+    // Access the ICardDefinition's Resource property via dynamic
+    dynamic cardDef = Unbind(card);
+    dynamic resource = cardDef.Resource;
+    if (resource == null) return null;
+
+    // Check if already loaded
+    var loadState = Cast<VisualResourceLoadState>(resource.LoadState);
+    if (loadState != VisualResourceLoadState.Loaded)
+    {
+      // Force synchronous download by blocking on the async task
+      var downloadTask = resource.DownloadResourceAsync();
+      await downloadTask;
+    }
+
+    // Get the View URI which should now point to the local file
+    var viewUri = resource.View;
+    if (viewUri == null || viewUri.OriginalString == ".") return null;
+
+    // Return the local file path
+    return viewUri.IsFile ? viewUri.LocalPath : null;
+  }
+
+  /// <summary>
+  /// Gets the raw bytes of a card's art image.
+  /// </summary>
+  /// <param name="card">The card to get art for.</param>
+  /// <returns>The raw image file bytes, or null if unavailable.</returns>
+  public static async Task<string?> GetCardArtPath(Card card)
+  {
+    var localPath = await EnsureCardArtLoaded(card);
+    if (localPath == null || !File.Exists(localPath)) return null;
+
+    return localPath;
+  }
+
+  /// <summary>
+  /// Gets the file path to a card's art image.
+  /// </summary>
+  /// <param name="card">The card to get art for.</param>
+  /// <returns>The local file path to the art image, or null if unavailable.</returns>
+  public static async Task<byte[]?> GetCardArtBytes(Card card)
+  {
+    var path = await GetCardArtPath(card);
+    if (path == null) return null;
+
+    return await File.ReadAllBytesAsync(path);
+  }
+}

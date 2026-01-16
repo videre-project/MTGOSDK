@@ -59,8 +59,7 @@ public static class SettingsService
   {
     try
     {
-      return RemoteClient.CreateEnum(
-        "WotC.MtGO.Client.Model.Settings.SettingName",
+      return RemoteClient.CreateEnum<SettingName>(
         Enum.GetName(typeof(Setting), key));
     }
     catch

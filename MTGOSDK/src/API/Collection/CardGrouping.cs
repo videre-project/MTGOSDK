@@ -10,6 +10,7 @@ using RegexMatch = System.Text.RegularExpressions.Match;
 using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
 
+using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
 
 
@@ -120,4 +121,27 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
     Map<IList, CardQuantityPair>(
       ParseItems(@base.DebugData()),
       Lambda(item => new CardQuantityPair(item.Item1, item.Item2, item.Item3)));
+
+  //
+  // Batch serialization methods
+  //
+
+  /// <summary>
+  /// Serializes all items in this grouping to the specified interface type using
+  /// cross-card batch fetching for optimal performance.
+  /// </summary>
+  /// <typeparam name="TInterface">The interface type to serialize items as.</typeparam>
+  /// <param name="maxItems">Maximum number of items to serialize (0 = no limit).</param>
+  /// <returns>Enumerable of serialized items implementing TInterface.</returns>
+  /// <remarks>
+  /// This method uses a single IPC call to fetch all items' properties, avoiding
+  /// per-item overhead. For large collections, this can be 5-10x faster than
+  /// iterating and calling SerializeAs on each item individually.
+  /// </remarks>
+  public IEnumerable<TInterface> SerializeItemsAs<TInterface>(int maxItems = 0)
+    where TInterface : class
+    => SerializeCollectionAs<TInterface, Card>(
+        nameof(ICardGrouping.Items),
+        nameof(ICardQuantityPair.CardDefinition),
+        maxItems);
 }

@@ -4,9 +4,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Reflection;
-using System.Linq;
-
 
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
@@ -21,7 +20,7 @@ public class RemoteHarmony
 {
   private readonly RemoteHandle _app;
 
-  private readonly Dictionary<MethodBase, MethodHooks> _callbacksToProxies;
+  private readonly ConcurrentDictionary<MethodBase, MethodHooks> _callbacksToProxies;
 
   /// <summary>
   /// A LocalHookCallback in a specific patching position
@@ -39,49 +38,53 @@ public class RemoteHarmony
     }
   }
 
-  private class MethodHooks : Dictionary<HookAction, PositionedLocalHook> {
+  private class MethodHooks : ConcurrentDictionary<HookAction, PositionedLocalHook>
+  {
   }
 
   internal RemoteHarmony(RemoteHandle app)
   {
     _app = app;
-    _callbacksToProxies = new Dictionary<MethodBase, MethodHooks>();
+    _callbacksToProxies = new ConcurrentDictionary<MethodBase, MethodHooks>();
   }
 
   /// <returns>True on success, false otherwise</returns>
 
   public bool HookMethod(MethodBase methodToHook, HarmonyPatchPosition pos, HookAction hookAction)
   {
-    // Look for MethodHooks object for the given REMOTE OBJECT
-    bool hasHooks = _callbacksToProxies.ContainsKey(methodToHook);
-    MethodHooks methodHooks = hasHooks ? _callbacksToProxies[methodToHook] : new();
+    // Get or create MethodHooks object for the given method
+    MethodHooks methodHooks = _callbacksToProxies.GetOrAdd(methodToHook, _ => new MethodHooks());
+    bool hasHooks = methodHooks.Count > 0;
 
     // Handle multiple hooks on the same method
     LocalHookCallback wrappedHook = null!;
     if (hasHooks)
     {
       // Enumerate all method hooks registered to find any matches based on position
-      var existingHook = methodHooks.Values.First(hook => hook.Position == pos);
-      // Merge the HookedAction delegate and re-wrap it
-      HookAction mergedHook = Delegate.Combine(existingHook.HookAction, hookAction) as HookAction;
-      wrappedHook = WrapCallback(mergedHook);
+      var existingHook = methodHooks.Values.FirstOrDefault(hook => hook.Position == pos);
+      if (existingHook != null)
+      {
+        // Merge the HookedAction delegate and re-wrap it
+        HookAction mergedHook = Delegate.Combine(existingHook.HookAction, hookAction) as HookAction;
+        wrappedHook = WrapCallback(mergedHook);
 
-      // Update the existing entry
-      existingHook.HookAction = mergedHook;
-      existingHook.WrappedHookAction = wrappedHook;
+        // Update the existing entry
+        existingHook.HookAction = mergedHook;
+        existingHook.WrappedHookAction = wrappedHook;
 
-      // Create a new entry that references the existing one
-      methodHooks.Add(hookAction, existingHook);
+        // Create a new entry that references the existing one
+        methodHooks.TryAdd(hookAction, existingHook);
 
-      return true;
+        return true;
+      }
     }
 
     // Wrapping the callback which uses `dynamic`s in a callback that handles `ObjectOrRemoteAddresses`
     // and converts them to DROs
-    if(!methodHooks.ContainsKey(hookAction))
+    if (!methodHooks.ContainsKey(hookAction))
     {
       wrappedHook = WrapCallback(hookAction);
-      methodHooks.Add(hookAction, new PositionedLocalHook(hookAction, wrappedHook, pos));
+      methodHooks.TryAdd(hookAction, new PositionedLocalHook(hookAction, wrappedHook, pos));
     }
     else
     {
@@ -112,7 +115,7 @@ public class RemoteHarmony
       }
       else
       {
-        RemoteObject roInstance = this._app.GetRemoteObject(instance.RemoteAddress, instance.Type);
+        RemoteObject roInstance = this._app.GetRemoteObjectFromField(instance.RemoteAddress, instance.Type);
         droInstance = roInstance.Dynamify();
         droInstance.__timestamp = context.Timestamp; // Preserve oora timestamp
       }
@@ -124,7 +127,7 @@ public class RemoteHarmony
       }
       // We are expecting a single arg which is a REMOTE array of objects (object[]) and we need to flatten it
       // into several (Dynamic) Remote Objects in a LOCAL array of objects.
-      RemoteObject ro = _app.GetRemoteObject(args[0].RemoteAddress, args[0].Type);
+      RemoteObject ro = _app.GetRemoteObjectFromField(args[0].RemoteAddress, args[0].Type);
       dynamic dro = ro.Dynamify();
       if (!ro.GetType().IsArray)
       {
@@ -132,7 +135,7 @@ public class RemoteHarmony
       }
 
       int len = 0;
-      try { len = (int)dro.Length; }
+      try { len = (int) dro.Length; }
       catch { }
 
       object[] decodedParameters = new object[len];
@@ -160,20 +163,20 @@ public class RemoteHarmony
     HookAction postfix = null,
     HookAction finalizer = null)
   {
-    if(prefix == null && postfix == null && finalizer == null)
+    if (prefix == null && postfix == null && finalizer == null)
     {
       throw new ArgumentException("No hooks defined.");
     }
 
-    if(prefix != null)
+    if (prefix != null)
     {
       HookMethod(original, HarmonyPatchPosition.Prefix, prefix);
     }
-    if(postfix != null)
+    if (postfix != null)
     {
       HookMethod(original, HarmonyPatchPosition.Postfix, postfix);
     }
-    if(finalizer != null)
+    if (finalizer != null)
     {
       HookMethod(original, HarmonyPatchPosition.Finalizer, finalizer);
     }
@@ -204,11 +207,11 @@ public class RemoteHarmony
       _app.Communicator.UnhookMethod(positionedHookWrapper.WrappedHookAction);
     }
 
-    hooks.Remove(callback);
+    hooks.TryRemove(callback, out _);
     if (hooks.Count == 0)
     {
       // It was the last hook for this method, need to remove the inner dict
-      _callbacksToProxies.Remove(methodToHook);
+      _callbacksToProxies.TryRemove(methodToHook, out _);
     }
     return true;
   }

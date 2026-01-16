@@ -30,7 +30,7 @@ public class RemoteFieldInfo(
   { }
 
   public RemoteFieldInfo(RemoteType declaringType, FieldInfo fi)
-      : this(declaringType, new Lazy<Type>(()=> fi.FieldType), fi.Name)
+      : this(declaringType, new Lazy<Type>(() => fi.FieldType), fi.Name)
   { }
 
   public override object GetValue(object obj)
@@ -76,7 +76,7 @@ public class RemoteFieldInfo(
     {
       if (oora.IsRemoteAddress)
       {
-        var remoteObject = App.GetRemoteObject(oora.RemoteAddress, oora.Type);
+        var remoteObject = App.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
         dynamic dro = remoteObject.Dynamify();
         dro.__timestamp = oora.Timestamp;
 

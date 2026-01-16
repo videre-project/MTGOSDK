@@ -4,6 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
 using System.Reflection;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -17,6 +18,9 @@ namespace MTGOSDK.Core.Memory.Snapshot;
 public class UnifiedAppDomain
 {
   private readonly AppDomain[] _domains = [AppDomain.CurrentDomain];
+  
+  // Type resolution cache to avoid iterating all assemblies on every call
+  private readonly ConcurrentDictionary<string, Type> _typeCache = new();
 
   public UnifiedAppDomain(SnapshotRuntime snapshot = null)
   {
@@ -57,29 +61,50 @@ public class UnifiedAppDomain
 
   public Type ResolveType(string typeFullName, string assemblyName = null)
   {
+    // Check cache first (lock-free fast path)
+    if (_typeCache.TryGetValue(typeFullName, out var cached))
+      return cached;
+    
+    // Skip invalid type requests (like TInterface`1, Task`1 without namespace)
+    // Don't cache these fallbacks - they may get fixed later with proper names
+    // Check if this is a short name without namespace (no dots before any backtick)
+    bool isShortName = !typeFullName.Contains('.') ||
+                       (typeFullName.Contains('`') &&
+                        !typeFullName.Substring(0, typeFullName.IndexOf('`')).Contains('.'));
+
+    // Short names without namespace cannot be reliably resolved - return fallback
+    if (isShortName)
+      return typeof(object);
+
     // TODO: Nullable gets a special case but in general we should switch to a
     //       recursive type-resolution to account for types like:
     //           Dictionary<FirstAssembly.FirstType, SecondAssembly.SecondType>
     if (typeFullName.StartsWith("System.Nullable`1[["))
     {
-      return ResolveNullableType(typeFullName, assemblyName);
+      var result = ResolveNullableType(typeFullName, assemblyName);
+      if (result != null)
+        _typeCache[typeFullName] = result;
+      return result;
     }
 
-    if (typeFullName.Contains('<') && typeFullName.EndsWith(">"))
+    var lookupName = typeFullName;
+    if (lookupName.Contains('<') && lookupName.EndsWith(">"))
     {
-      string genericParams = typeFullName.Substring(typeFullName.LastIndexOf('<'));
+      string genericParams = lookupName.Substring(lookupName.LastIndexOf('<'));
       int numOfParams = genericParams.Split(',').Length;
 
-      string nonGenericPart = typeFullName.Substring(0,typeFullName.LastIndexOf('<'));
-      // TODO: Does this event work? it turns List<int> and List<string> both to List`1?
-      typeFullName = $"{nonGenericPart}`{numOfParams}";
+      string nonGenericPart = lookupName.Substring(0, lookupName.LastIndexOf('<'));
+      lookupName = $"{nonGenericPart}`{numOfParams}";
     }
 
     foreach (Assembly asm in _domains.SelectMany(d => d.GetAssemblies()))
     {
-      Type t = asm.GetType(typeFullName, throwOnError: false);
+      Type t = asm.GetType(lookupName, throwOnError: false);
       if (t != null)
+      {
+        _typeCache[typeFullName] = t;
         return t;
+      }
     }
 
     throw new Exception(
@@ -115,8 +140,7 @@ public class UnifiedAppDomain
     innerTypeName = innerTypeName.Substring(0, innerTypeName.IndexOf(',')).Trim();
 
     Type innerType = ResolveType(innerTypeName);
-    if(innerType == null)
-      return null;
+    if (innerType == null) return null;
 
     Type nullable = typeof(Nullable<>);
     return nullable.MakeGenericType(innerType);

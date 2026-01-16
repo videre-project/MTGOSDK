@@ -8,9 +8,10 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Dynamic;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Linq.Expressions;
+using System.Threading.Tasks;
 
 using Microsoft.CSharp.RuntimeBinder;
 using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
@@ -18,6 +19,7 @@ using Binder = Microsoft.CSharp.RuntimeBinder.Binder;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
@@ -41,25 +43,29 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   private static readonly ConcurrentDictionary<Type, PropertyInfo?> s_binderTypeArgsProp = new();
   private static readonly ConcurrentDictionary<(Type ObjType, string MemberName), CallSite<Func<CallSite, object, object>>> s_getMemberCallSites = new();
 
+  // Static cache for DynamicRemoteMethod to avoid recreating on repeated calls
+  // Keyed by (typeFullName, methodName) - using FullName string to avoid RemoteType.GetHashCode issues
+  private static readonly ConcurrentDictionary<(string, string), DynamicRemoteMethod> s_methodProxyCache = new();
+
   public class DynamicRemoteMethod : DynamicObject
   {
     private readonly string _name;
     private readonly List<RemoteMethodInfo> _methods;
-    private readonly DynamicRemoteObject _parent;
     private readonly Type[] _genericArguments;
     // Pre-group overloads by arity to avoid repeated filtering.
     private readonly Dictionary<int, List<RemoteMethodInfo>> _overloadsByArity;
 
+    // Parent is now passed at invoke time instead of being stored
+    // This enables static caching across all instances of the same type
+
     public DynamicRemoteMethod(
       string name,
-      DynamicRemoteObject parent,
       List<RemoteMethodInfo> methods,
       Type[] genericArguments = null)
     {
       genericArguments ??= Array.Empty<Type>();
 
       _name = name;
-      _parent = parent;
       _methods = methods;
 
       _genericArguments = genericArguments;
@@ -78,13 +84,10 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       }
     }
 
-    public override bool TryInvoke(
-      InvokeBinder binder,
-      object[] args,
-      out object result)
-    => TryInvoke(args, out result);
+    // Note: TryInvoke from DynamicObject base class cannot be overridden to add parameters
+    // So we provide a public method that takes the parent
 
-    public bool TryInvoke(object[] args, out object result)
+    public bool TryInvoke(DynamicRemoteObject parent, object[] args, out object result)
     {
       // Start from pre-grouped arity bucket to reduce work.
       List<RemoteMethodInfo> overloads = _overloadsByArity.TryGetValue(args?.Length ?? 0, out var byArity)
@@ -97,7 +100,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       // Note: __type.Methods is expected to include all overloads for this type
       if (overloads.Count != 1)
       {
-        var extras = this._parent.__type.Methods.Where(m => m.Name == _name && m.GetParameters().Length == (args?.Length ?? 0));
+        var extras = parent.__type.Methods.Where(m => m.Name == _name && m.GetParameters().Length == (args?.Length ?? 0));
         if (extras.Any())
         {
           overloads = overloads
@@ -126,7 +129,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           // OK, invoking with generic arguments
           result = overload
             .MakeGenericMethod(_genericArguments)
-            .Invoke(_parent.__ro, args);
+            .Invoke(parent.__ro, args);
         }
         else
         {
@@ -136,7 +139,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           }
           // OK, invoking without generic arguments
           result = overloads.Single()
-            .Invoke(_parent.__ro, args);
+            .Invoke(parent.__ro, args);
         }
       }
       else if (overloads.Count > 1)
@@ -154,16 +157,32 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
             // If the argument provided is null, we cannot deduce a type match.
             if (args[i] == null) continue;
 
-            Type? argType   = args[i]?.GetType();
+            Type? argType = args[i]?.GetType();
             Type? paramType = parameters[i]?.ParameterType;
 
-            // Check assignment if local types, otherwise compare by FullName.
-            bool bothLocal = argType.GetType().FullName   == "System.RuntimeType"
+            // Check assignment if local types, otherwise check inheritance for remote types.
+            bool bothLocal = argType.GetType().FullName == "System.RuntimeType"
                           && paramType.GetType().FullName == "System.RuntimeType";
 
-            bool valid = bothLocal
-              ? paramType.IsAssignableFrom(argType)
-              : argType.FullName == paramType.FullName;
+            bool valid;
+            if (bothLocal)
+            {
+              valid = paramType.IsAssignableFrom(argType);
+            }
+            else
+            {
+              // For remote types, check exact match first
+              if (argType.FullName == paramType.FullName)
+              {
+                valid = true;
+              }
+              else
+              {
+                // Check if argType implements paramType (interface inheritance)
+                // Walk the interface list and base types of argType
+                valid = IsRemoteTypeAssignableTo(argType, paramType);
+              }
+            }
 
             if (!valid)
             {
@@ -179,7 +198,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         if (matchingOverloads.Count == 1)
         {
           // We found a single matching overload, so we can invoke it.
-          result = matchingOverloads.Single().Invoke(_parent.__ro, args);
+          result = matchingOverloads.Single().Invoke(parent.__ro, args);
         }
         else
         {
@@ -199,11 +218,58 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       return true;
     }
 
+    /// <summary>
+    /// Checks if a remote type is assignable to another remote type by walking
+    /// the interface list and base type hierarchy.
+    /// </summary>
+    private static bool IsRemoteTypeAssignableTo(Type argType, Type paramType)
+    {
+      if (argType == null || paramType == null)
+        return false;
+
+      string targetFullName = paramType.FullName;
+
+      // Check implemented interfaces
+      try
+      {
+        var interfaces = argType.GetInterfaces();
+        foreach (var iface in interfaces)
+        {
+          if (iface.FullName == targetFullName)
+            return true;
+        }
+      }
+      catch { /* Ignore if GetInterfaces fails */ }
+
+      // Walk base type hierarchy
+      Type? currentType = argType.BaseType;
+      while (currentType != null && currentType != typeof(object))
+      {
+        if (currentType.FullName == targetFullName)
+          return true;
+
+        // Also check interfaces of base types
+        try
+        {
+          var baseInterfaces = currentType.GetInterfaces();
+          foreach (var iface in baseInterfaces)
+          {
+            if (iface.FullName == targetFullName)
+              return true;
+          }
+        }
+        catch { /* Ignore if GetInterfaces fails */ }
+
+        currentType = currentType.BaseType;
+      }
+
+      return false;
+    }
+
     public override bool Equals(object obj)
     {
       return obj is DynamicRemoteMethod method &&
           _name == method._name &&
-          EqualityComparer<DynamicRemoteObject>.Default.Equals(_parent, method._parent) &&
           EqualityComparer<Type[]>.Default.Equals(_genericArguments, method._genericArguments);
     }
 
@@ -211,7 +277,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     {
       int hashCode = -734779080;
       hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(_name);
-      hashCode = hashCode * -1521134295 + EqualityComparer<DynamicRemoteObject>.Default.GetHashCode(_parent);
       hashCode = hashCode * -1521134295 + EqualityComparer<Type[]>.Default.GetHashCode(_genericArguments);
       return hashCode;
     }
@@ -233,7 +298,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // MyOtherFunc[t,p,q]
 
     public DynamicRemoteMethod this[Type t] =>
-      new DynamicRemoteMethod(_name, _parent, _methods,
+      new DynamicRemoteMethod(_name, _methods,
           _genericArguments.Concat(new Type[] { t }).ToArray());
 
     public DynamicRemoteMethod this[Type t1, Type t2] =>
@@ -261,6 +326,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
   private List<MemberInfo> __membersInner = null;
+  private readonly object __membersLock = new();
   public IEnumerable<MemberInfo> __members => GetMembers();
 
   public DynamicRemoteObject(RemoteHandle ra, RemoteObject ro)
@@ -296,6 +362,44 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   /// Gets the type of the proxied remote object, in the remote app.
   /// </summary>
   public new Type GetType() => __type;
+
+  /// <summary>
+  /// Processes the result from a direct Communicator invocation.
+  /// Handles void returns, null, primitives, and remote objects.
+  /// </summary>
+  private object ProcessInvocationResult(InvocationResults invokeRes)
+  {
+    if (invokeRes == null || invokeRes.VoidReturnType)
+      return null;
+
+    var oora = invokeRes.ReturnedObjectOrAddress;
+    if (oora == null || oora.IsNull)
+      return null;
+
+    if (!oora.IsRemoteAddress)
+      return PrimitivesEncoder.Decode(oora);
+
+    // Remote object - wrap in DynamicRemoteObject using lightweight path
+    // /get_field already pinned the object, so we skip /object call
+    RemoteObject ro = __ra.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
+    dynamic dro = ro.Dynamify();
+    dro.__timestamp = oora.Timestamp;
+    return dro;
+  }
+
+  /// <summary>
+  /// Encodes parameters for direct Communicator invocation.
+  /// </summary>
+  private ObjectOrRemoteAddress[] EncodeParameters(object[] args)
+  {
+    if (args == null || args.Length == 0)
+      return Array.Empty<ObjectOrRemoteAddress>();
+
+    var result = new ObjectOrRemoteAddress[args.Length];
+    for (int i = 0; i < args.Length; i++)
+      result[i] = RemoteFunctionsInvokeHelper.CreateRemoteParameter(args[i]);
+    return result;
+  }
 
   /// <summary>
   /// Indicates whether this proxy should be treated as "nullish" for boolean checks.
@@ -337,7 +441,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     {
       if (nextType == null)
         yield break;
-      var members = nextType.GetMembers((BindingFlags)0xffff);
+      var members = nextType.GetMembers((BindingFlags) 0xffff);
       foreach (MemberInfo member in members)
       {
         if (member is MethodBase newMethods)
@@ -361,13 +465,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       lastType = nextType;
       nextType = nextType.BaseType;
     }
-  while (nextType != null && lastType != typeof(object));
+    while (nextType != null && lastType != typeof(object));
   }
 
   // Cached per-type reflection helpers
   private static MemberInfo[] GetCachedMembers(Type t)
   {
-    return s_membersByType.GetOrAdd(t, static type => type.GetMembers((BindingFlags)0xffff));
+    return s_membersByType.GetOrAdd(t, static type => type.GetMembers((BindingFlags) 0xffff));
   }
 
   private static Dictionary<string, List<MemberInfo>> GetCachedMembersByNameMap(Type t)
@@ -401,42 +505,137 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   private IEnumerable<MemberInfo> GetMembers()
   {
+    // Fast path: if enumeration is complete, return the cached list directly
+    // (no lock needed for reads once __ongoingMembersDumper is null)
     if (__membersInner != null && __ongoingMembersDumper == null)
     {
       return __membersInner;
     }
-    // Defining a new method so we can use "yield return" (Outer function
-    // already returned a "real" IEnumerable in the above case) so using
-    // "yield return" as well is forbidden.
-    IEnumerable<MemberInfo> Aggregator()
+
+    // Thread-safe path: complete enumeration under lock and return snapshot
+    lock (__membersLock)
     {
+      // Double-check after acquiring lock
+      if (__membersInner != null && __ongoingMembersDumper == null)
+      {
+        return __membersInner;
+      }
+
+      // Initialize if needed
       __membersInner ??= new List<MemberInfo>();
       __ongoingMembersDumper ??= GetAllMembersRecursive();
       __ongoingMembersDumperEnumerator ??= __ongoingMembersDumper.GetEnumerator();
-      foreach (var member in __membersInner)
-      {
-        yield return member;
-      }
-      while(__ongoingMembersDumperEnumerator.MoveNext())
+
+      // Complete the entire enumeration under lock
+      while (__ongoingMembersDumperEnumerator.MoveNext())
       {
         var member = __ongoingMembersDumperEnumerator.Current;
         __membersInner.Add(member);
-        yield return member;
       }
+
+      // Mark enumeration as complete
       __ongoingMembersDumper = null;
       __ongoingMembersDumperEnumerator = null;
 
-    };
-    return Aggregator();
+      return __membersInner;
+    }
   }
 
   public T InvokeMethod<T>(string name, params object[] args)
   {
     var matchingMethods = from member in __members
-        where member.Name == name
-        where ((MethodInfo)member).GetParameters().Length == args.Length
-        select member;
-    return (T)(matchingMethods.Single() as MethodInfo).Invoke(__ro, args);
+                          where member.Name == name
+                          where ((MethodInfo) member).GetParameters().Length == args.Length
+                          select member;
+    return (T) (matchingMethods.Single() as MethodInfo).Invoke(__ro, args);
+  }
+
+  /// <summary>
+  /// Enabling 'await' support for DynamicRemoteObjects that wrap System.Threading.Tasks.Task.
+  /// </summary>
+  public TaskAwaiter<object?> GetAwaiter()
+  {
+    if (!IsTaskType(__type))
+    {
+       throw new InvalidOperationException($"Remote object of type {__type?.FullName ?? "null"} is not a Task and cannot be awaited directly.");
+    }
+
+    return WaitRemoteTaskAsync().GetAwaiter();
+  }
+
+  private bool IsTaskType(Type t)
+  {
+     if (t == null) return false;
+     // Check base types
+     Type curr = t;
+     while (curr != null) {
+        if (curr.FullName != null && curr.FullName.StartsWith("System.Threading.Tasks.Task")) return true;
+        curr = curr.BaseType;
+     }
+     return false;
+  }
+
+  private async Task<object?> WaitRemoteTaskAsync()
+  {
+    // Poll IsCompleted
+    int delay = 5;
+    while(true)
+    {
+      var invokeResult = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        "get_IsCompleted",
+        Array.Empty<string>(), 
+        Array.Empty<ObjectOrRemoteAddress>()); 
+      
+      bool isCompleted = (bool)ProcessInvocationResult(invokeResult);
+      
+      if (isCompleted) break;
+      
+      await Task.Delay(delay);
+      if (delay < 50) delay += 5;
+    }
+
+    // Check IsFaulted
+    var faultedRes = __ra.Communicator.InvokeMethod(
+      __ro.RemoteToken,
+      __type.FullName,
+      "get_IsFaulted",
+      Array.Empty<string>(),
+      Array.Empty<ObjectOrRemoteAddress>());
+    bool isFaulted = (bool)ProcessInvocationResult(faultedRes);
+
+    if (isFaulted)
+    {
+      // Get Exception
+      var exRes = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        "get_Exception",
+        Array.Empty<string>(),
+        Array.Empty<ObjectOrRemoteAddress>());
+      
+      dynamic remoteEx = ProcessInvocationResult(exRes);
+      // Try to get message from exception
+      string exMsg = "Unknown Remote Exception";
+      try { exMsg = remoteEx.ToString(); } catch {}
+      
+      throw new Exception($"Remote Task Faulted: {exMsg}");
+    }
+    
+    // Check for Result property (if Task<T>)
+    if (HasMember("Result"))
+    {
+      var resultRes = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        "get_Result",
+        Array.Empty<string>(),
+        Array.Empty<ObjectOrRemoteAddress>());
+      return ProcessInvocationResult(resultRes);
+    }
+    
+    return null;
   }
 
   #region Dynamic Object API
@@ -460,8 +659,14 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // Otherwise, defer to base for normal dynamic semantics
     return base.TryUnaryOperation(binder, out result);
   }
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
   public override bool TryGetMember(GetMemberBinder binder, out object result)
   {
+    using var activity = s_activitySource.StartActivity("DRO.GetMember");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("member", binder.Name);
+
     try
     {
       object obj = null;
@@ -480,6 +685,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     }
     catch (Exception ex)
     {
+      activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
       throw new Exception($"DynamicObject threw an exception while trying to get member \"{binder.Name}\" from {__type.Name}", innerException: ex);
     }
   }
@@ -491,8 +697,10 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     {
       return false;
     }
+
     // Use cached member list per type and pre-bucketed name map
     var byName = GetCachedMembersByNameMap(t);
+
     List<MemberInfo> matches = byName.TryGetValue(name, out var list)
       ? list
       : new List<MemberInfo>(0);
@@ -513,8 +721,12 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       case MemberTypes.Field:
         try
         {
-          result = Retry(() => ((FieldInfo)firstMember).GetValue(__ro),
-                         delay: 10, raise: true);
+          // Fast path: call Communicator directly, bypassing RemoteFieldInfo indirection
+          var fieldResult = __ra.Communicator.GetField(
+            __ro.RemoteToken,
+            t.FullName,
+            name);
+          result = ProcessInvocationResult(fieldResult);
         }
         catch (Exception ex)
         {
@@ -524,8 +736,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       case MemberTypes.Property:
         try
         {
-          result = Retry(() => ((PropertyInfo)firstMember).GetValue(__ro),
-                         delay: 10, raise: true);
+          // Fast path: call Communicator directly, bypassing RemotePropertyInfo/RemoteMethodInfo indirection
+          var propResult = __ra.Communicator.InvokeMethod(
+            __ro.RemoteToken,
+            t.FullName,
+            $"get_{name}",
+            Array.Empty<string>());
+          result = ProcessInvocationResult(propResult);
         }
         catch (Exception ex)
         {
@@ -552,7 +769,14 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   private DynamicRemoteMethod GetMethodProxy(string name)
   {
-  var methods = __members.Where(member => member.Name == name).ToArray();
+    // Check static cache first - keyed by (typeFullName, methodName)
+    // Skip cache if __type is null (can happen with parameterless constructor)
+    var typeFullName = __type?.FullName;
+    var cacheKey = typeFullName != null ? (typeFullName, name) : default;
+    if (typeFullName != null && s_methodProxyCache.TryGetValue(cacheKey, out var cached))
+      return cached;
+
+    var methods = __members.Where(member => member.Name == name).ToArray();
     if (methods.Length == 0)
     {
       throw new Exception($"Method \"{name}\" wasn't found in the members of type {__type.Name}.");
@@ -571,11 +795,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     methodGroup.AddRange(methods.Cast<RemoteMethodInfo>());
     try
     {
-      return new DynamicRemoteMethod(name, this, methodGroup);
+      var result = new DynamicRemoteMethod(name, methodGroup);
+      if (typeFullName != null)
+        s_methodProxyCache[cacheKey] = result;
+      return result;
     }
     catch (Exception ex)
     {
-
       throw new Exception($"Constructing {nameof(DynamicRemoteMethod)} of \"{name}\" threw an exception", innerException: ex);
     }
   }
@@ -585,44 +811,30 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     object[] args,
     out object result)
   {
-    // If "TryInvokeMember" was called first (instead of "TryGetMember")
-    // it means that the user specified generic args (if any are even requied)
-    // within '<' and '>' signs or there aren't any generic args. We can just
-    // do the call here instead of letting the dynamic runtime resort to
-    // calling 'TryGetMember'
-
-    DynamicRemoteMethod drm = GetMethodProxy(binder.Name);
-    Type binderType = binder.GetType();
-    PropertyInfo TypeArgumentsPropInfo = s_binderTypeArgsProp.GetOrAdd(binderType, static bt => bt.GetProperty("TypeArguments"));
-    if (TypeArgumentsPropInfo != null)
-    {
-      // We got ourself a binder which implemented .NET's internal
-      // "ICSharpInvokeOrInvokeMemberBinder" Interface:
-      // https://github.com/microsoft/referencesource/blob/master/Microsoft.CSharp/Microsoft/CSharp/ICSharpInvokeOrInvokeMemberBinder.cs
-      //
-      // We can now see if the invoked for the function specified generic types
-      // In that case, we can hijack and do the call here
-      // Otherwise - Just let TryGetMember return a proxy
-      if (TypeArgumentsPropInfo.GetValue(binder) is IList<Type> genArgs)
-      {
-        foreach (Type t in genArgs)
-        {
-          // Aggregate the generic types into the dynamic remote method
-          // Example:
-          //  * Invoke method is Insert<,>
-          //  * Given types are ['T', 'S']
-          //  * First loop iteration: Inert<,> --> Insert<T,>
-          //  * Second loop iteration: Inert<T,> --> Insert<T,S>
-          drm = drm[t];
-        }
-      }
-    }
-
-    object obj = null;
-    bool success;
     try
     {
-      success = Retry(() => drm.TryInvoke(args, out obj), raise: true);
+      // Extract generic type arguments from binder if present
+      string[] genericArgsFullNames = Array.Empty<string>();
+      Type binderType = binder.GetType();
+      PropertyInfo TypeArgumentsPropInfo = s_binderTypeArgsProp.GetOrAdd(binderType, static bt => bt.GetProperty("TypeArguments"));
+      if (TypeArgumentsPropInfo != null)
+      {
+        if (TypeArgumentsPropInfo.GetValue(binder) is IList<Type> genArgs && genArgs.Count > 0)
+        {
+          genericArgsFullNames = genArgs.Select(t => t.FullName).ToArray();
+        }
+      }
+
+      // Fast path: call Communicator directly, bypassing DynamicRemoteMethod/RemoteMethodInfo
+      var encodedArgs = EncodeParameters(args);
+      var invokeResult = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        binder.Name,
+        genericArgsFullNames,
+        encodedArgs);
+      result = ProcessInvocationResult(invokeResult);
+      return true;
     }
     catch (NullReferenceException ex)
     {
@@ -637,8 +849,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         $"DynamicObject threw an exception while trying to invoke member \"{binder.Name}\"",
         ex);
     }
-    result = obj;
-    return success;
   }
 
   public bool HasMember(string name) =>
@@ -680,7 +890,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         // }
         try
         {
-          ((FieldInfo)firstMember).SetValue(__ro, value);
+          ((FieldInfo) firstMember).SetValue(__ro, value);
         }
         catch (Exception ex)
         {
@@ -694,7 +904,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         // }
         try
         {
-          ((PropertyInfo)firstMember).SetValue(__ro, value);
+          ((PropertyInfo) firstMember).SetValue(__ro, value);
         }
         catch (Exception ex)
         {
@@ -770,18 +980,18 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   {
     get
     {
-      ObjectOrRemoteAddress ooraKey = RemoteFunctionsInvokeHelper.CreateRemoteParameter(key);
-      ObjectOrRemoteAddress item = __ro.GetItem(ooraKey);
+      // Fast path: call Communicator directly
+      var ooraKey = RemoteFunctionsInvokeHelper.CreateRemoteParameter(key);
+      var item = __ra.Communicator.GetItem(__ro.RemoteToken, ooraKey);
       if (item.IsNull)
       {
         return null;
       }
       else if (item.IsRemoteAddress)
       {
-        var remoteObject = this.__ra.GetRemoteObject(item.RemoteAddress, item.Type);
+        var remoteObject = __ra.GetRemoteObjectFromField(item.RemoteAddress, item.Type);
         dynamic dro = remoteObject.Dynamify();
         dro.__timestamp = item.Timestamp;
-
         return dro;
       }
       else
@@ -799,7 +1009,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
     try
     {
-      dynamic enumeratorDro = Retry(() => InvokeMethod<object>(nameof(GetEnumerator)), raise: true);
+      // Fast path: call Communicator directly
+      var invokeResult = __ra.Communicator.InvokeMethod(
+        __ro.RemoteToken,
+        __type.FullName,
+        nameof(GetEnumerator),
+        Array.Empty<string>());
+      dynamic enumeratorDro = ProcessInvocationResult(invokeResult);
       return new DynamicRemoteEnumerator(enumeratorDro);
     }
     catch (NullReferenceException ex)

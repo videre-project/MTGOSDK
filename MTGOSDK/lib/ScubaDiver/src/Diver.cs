@@ -9,19 +9,17 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using MessagePack;
 
-using MTGOSDK.Core;
-using MTGOSDK.Core.Memory.Snapshot;
+using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Memory.Snapshot;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Resources;
 
 using ScubaDiver.Hooking;
 
@@ -30,13 +28,12 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  // Runtime analysis and exploration fields
   private SnapshotRuntime _runtime;
+  private TcpServer _tcpServer;
 
-  // HTTP Responses fields
-  private readonly Dictionary<string, Func<HttpListenerRequest, string>> _responseBodyCreators;
+  private static readonly AsyncLocal<byte[]> _cachedRequestBody = new();
 
-  // Callbacks Endpoint of the Controller process
+  private readonly Dictionary<string, Func<byte[], byte[]>> _tcpHandlers;
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
   private readonly ConcurrentDictionary<int, RegisteredMethodHookInfo> _remoteHooks;
 
@@ -47,56 +44,50 @@ public partial class Diver : IDisposable
 
   public Diver()
   {
-    _responseBodyCreators = new Dictionary<string, Func<HttpListenerRequest, string>>()
+    // TCP handlers for request dispatch
+    _tcpHandlers = new Dictionary<string, Func<byte[], byte[]>>()
     {
-      // Diver maintenance
-      {"/ping", MakePingResponse},
-      {"/register_client", MakeRegisterClientResponse},
-      {"/unregister_client", MakeUnregisterClientResponse},
-      // Dumping
-      {"/domains", MakeDomainsResponse},
-      {"/heap", MakeHeapResponse},
-      {"/types", MakeTypesResponse},
-      {"/type", MakeTypeResponse},
-      // Remote Object API
-      {"/object", MakeObjectResponse},
-      {"/create_object", MakeCreateObjectResponse},
-      {"/invoke", MakeInvokeResponse},
-      {"/get_field", MakeGetFieldResponse},
-      {"/set_field", MakeSetFieldResponse},
-      {"/unpin", MakeUnpinResponse},
-      {"/get_item", MakeArrayItemResponse},
-      // Callbacks
-      {"/event_subscribe", MakeEventSubscribeResponse},
-      {"/event_unsubscribe", MakeEventUnsubscribeResponse},
-      // Harmony
-      {"/hook_method", MakeHookMethodResponse},
-      {"/unhook_method", MakeUnhookMethodResponse},
+      {"/ping", _ => WrapSuccess("pong")},
+      {"/register_client", _ => MakeRegisterClientResponse()},
+      {"/unregister_client", _ => MakeUnregisterClientResponse()},
+      {"/domains", _ => MakeDomainsResponse()},
+      {"/heap", _ => MakeHeapResponse()},
+      {"/types", _ => MakeTypesResponse()},
+      {"/type", _ => MakeTypeResponse()},
+      {"/object", _ => MakeObjectResponse()},
+      {"/create_object", _ => MakeCreateObjectResponse()},
+      {"/invoke", _ => MakeInvokeResponse()},
+      {"/get_field", _ => MakeGetFieldResponse()},
+      {"/set_field", _ => MakeSetFieldResponse()},
+      {"/unpin", _ => MakeUnpinResponse()},
+      {"/get_item", _ => MakeArrayItemResponse()},
+      {"/batch_members", _ => MakeBatchMembersResponse()},
+      {"/batch_collection", _ => MakeBatchCollectionResponse()},
+      {"/event_subscribe", _ => MakeEventSubscribeResponse()},
+      {"/event_unsubscribe", _ => MakeEventUnsubscribeResponse()},
+      {"/hook_method", _ => MakeHookMethodResponse()},
+      {"/unhook_method", _ => MakeUnhookMethodResponse()},
     };
+
     _remoteEventHandler = new ConcurrentDictionary<int, RegisteredEventHandlerInfo>();
     _remoteHooks = new ConcurrentDictionary<int, RegisteredMethodHookInfo>();
   }
 
+  private static readonly ActivitySource s_activitySource = new("ScubaDiver");
+  private TraceExporter _traceExporter;
+
   public void Start(ushort listenPort)
   {
-    // Start the ClrMD runtime
+    _traceExporter = new TraceExporter(
+        Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace", "trace_diver.json"), 
+        "ScubaDiver");
+
     _runtime = new SnapshotRuntime();
 
-    // Start session
-    HttpListener listener = new();
-    string listeningUrl = $"http://127.0.0.1:{listenPort}/";
-    listener.Prefixes.Add(listeningUrl);
-
-    // Set timeout
-    var manager = listener.TimeoutManager;
-    manager.IdleConnection = TimeSpan.FromSeconds(5);
-    listener.Start();
-    Log.Debug($"[Diver] Listening on {listeningUrl}...");
-    DispatcherAsync(listener, _cts.Token).GetAwaiter().GetResult();
-
-    Log.Debug("[Diver] Closing listener");
-    listener.Stop();
-    listener.Close();
+    _tcpServer = new TcpServer(listenPort, HandleTcpRequest);
+    Log.Debug($"[Diver] Listening on TCP port {listenPort}...");
+    
+    _tcpServer.StartAsync(_cts.Token).GetAwaiter().GetResult();
 
     Log.Debug("[Diver] Closing ClrMD runtime and snapshot");
     this.Dispose();
@@ -104,59 +95,107 @@ public partial class Diver : IDisposable
     Log.Debug("[Diver] Exiting");
   }
 
-  public string QuickError(string error, string stackTrace = null)
+  /// <summary>
+  /// Routes TCP requests to the appropriate handler.
+  /// </summary>
+  private byte[] HandleTcpRequest(string endpoint, byte[] body)
   {
-    if (stackTrace == null)
+    // Unwrap the TracedRequest
+    TracedRequest tracedReq;
+    try 
     {
-      stackTrace = (new StackTrace(true)).ToString();
+      tracedReq = TracedRequest.Deserialize(body);
     }
-    DiverError errResults = new(error, stackTrace);
-    return JsonConvert.SerializeObject(errResults);
-  }
-
-  #region HTTP Dispatching
-  public async Task DispatcherAsync(
-    HttpListener listener,
-    CancellationToken cancellationToken)
-  {
-    while (!cancellationToken.IsCancellationRequested)
+    catch (Exception ex)
     {
-      HttpListenerContext context = null;
+      // Fallback for legacy/non-traced requests (e.g. ping before tracing enabled)
+      // or if deser fails, we assume it's a raw body
+      Log.Error($"[Diver] Failed to deserialize TracedRequest: {ex.GetType().Name} - {ex.Message}");
+      tracedReq = new TracedRequest { Body = body };
+    }
+
+    ActivityContext parentContext = default;
+    if (!string.IsNullOrEmpty(tracedReq.TraceParent))
+    {
+        ActivityContext.TryParse(tracedReq.TraceParent, tracedReq.TraceState, out parentContext);
+    }
+
+    // Start metadata-rich activity for the request
+    using var activity = s_activitySource.StartActivity(
+        endpoint, 
+        ActivityKind.Server, 
+        parentContext);
+    
+    if (activity != null)
+    {
+        activity.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+        activity.SetTag("endpoint", endpoint);
+        activity.SetTag("ipc.flow", "end"); // Tag for flow event visualization
+    }
+
+    // Set the actual request body in thread-local storage
+    _cachedRequestBody.Value = tracedReq.Body;
+
+    if (_tcpHandlers.TryGetValue(endpoint, out var handler))
+    {
       try
       {
-        context = await listener.GetContextAsync();
-      }
-      catch (ObjectDisposedException)
-      {
-        Log.Debug("[Diver][Dispatcher] Listener was disposed. Exiting.");
-        break;
-      }
-      catch (HttpListenerException e)
-      {
-        if (e.Message.StartsWith("The I/O operation has been aborted"))
-        {
-          Log.Debug($"[Diver][Dispatcher] Listener was aborted. Exiting.");
-          break;
-        }
-        Log.Error("[Diver][Dispatcher] HttpListenerException", e);
-        continue;
+        return handler(tracedReq.Body);
       }
       catch (Exception ex)
       {
-        Log.Error("[Diver][Dispatcher] Error in dispatcher loop", ex);
-        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-        continue;
+        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+        return QuickError(ex.Message, ex.StackTrace);
       }
-
-      // Use SyncThread to control concurrency and backpressure, with a 30s timeout
-      _ = SyncThread.EnqueueAsync(() =>
-        HandleDispatchedRequestAsync(context, cancellationToken),
-            timeout: TimeSpan.FromSeconds(30));
     }
+    return QuickError($"Unknown endpoint: {endpoint}");
+  }
 
-    Log.Debug("[Diver] HTTP Loop ended. Cleaning up");
+  /// <summary>
+  /// Sends a callback to the connected SDK client over TCP.
+  /// </summary>
+  public void SendTcpCallback(CallbackInvocationRequest callback)
+  {
+    _tcpServer?.SendCallback(callback);
+  }
 
-    Log.Debug("[Diver] Removing all event subscriptions and hooks");
+  public byte[] QuickError(string error, string stackTrace = null)
+  {
+    stackTrace ??= new StackTrace(true).ToString();
+    var errResponse = new DiverResponse<object>
+    {
+      IsError = true,
+      ErrorMessage = error,
+      ErrorStackTrace = stackTrace
+    };
+    return MessagePackSerializer.Serialize(errResponse);
+  }
+
+  public static byte[] WrapSuccess<T>(T data) =>
+    MessagePackSerializer.Serialize(DiverResponse<T>.Success(data));
+
+  /// <summary>
+  /// Get the cached request body for the current request.
+  /// </summary>
+  public static byte[] ReadRequestBody() =>
+    _cachedRequestBody.Value ?? Array.Empty<byte>();
+
+  /// <summary>
+  /// Deserialize the cached request body.
+  /// </summary>
+  public static T DeserializeRequest<T>() =>
+    MessagePackSerializer.Deserialize<T>(_cachedRequestBody.Value);
+
+  public void Dispose()
+  {
+    _cts.Cancel();
+    _cts.Dispose();
+    _tcpServer?.Dispose();
+    _runtime?.Dispose();
+    _clientCallbacks.Clear();
+    STAThread.Stop();
+
+    // Clean up event subscriptions and hooks
     foreach (RegisteredEventHandlerInfo rehi in _remoteEventHandler.Values)
     {
       rehi.EventInfo.RemoveEventHandler(rehi.Target, rehi.RegisteredProxy);
@@ -167,63 +206,5 @@ public partial class Diver : IDisposable
     }
     _remoteEventHandler.Clear();
     _remoteHooks.Clear();
-    Log.Debug("[Diver] Removed all event subscriptions and hooks");
-  }
-
-  private async Task HandleDispatchedRequestAsync(
-    HttpListenerContext requestContext,
-    CancellationToken cancellationToken)
-  {
-    HttpListenerRequest request = requestContext.Request;
-    var response = requestContext.Response;
-
-    string body;
-    if (_responseBodyCreators.TryGetValue(
-      request.Url.AbsolutePath,
-      out var respBodyGenerator))
-    {
-      try
-      {
-        body = respBodyGenerator(request);
-      }
-      catch (Exception ex)
-      {
-        Log.Error("[Diver] Exception occurred in handler.", ex);
-        Log.Debug("[Diver] Stack trace: " + ex.Message + "\n" + ex.StackTrace);
-        body = QuickError(ex.Message, ex.StackTrace);
-      }
-    }
-    else
-    {
-      body = QuickError("Unknown Command");
-    }
-
-    byte[] buffer = Encoding.UTF8.GetBytes(body);
-    response.ContentLength64 = buffer.Length;
-    response.ContentType = "application/json";
-
-    try
-    {
-      await response.OutputStream.WriteAsync(buffer, 0, buffer.Length, cancellationToken);
-    }
-    catch (Exception ex)
-    {
-      Log.Error("[Diver] Failed to write response", ex);
-    }
-    finally
-    {
-      response.OutputStream.Close();
-    }
-  }
-  #endregion
-
-  // IDisposable
-  public void Dispose()
-  {
-    _cts.Cancel();
-    _cts.Dispose();
-    _runtime?.Dispose();
-    _clientCallbacks.Clear();
-    ReverseCommunicator.Dispose(); // Cleanup the shared HttpClient instance.
   }
 }

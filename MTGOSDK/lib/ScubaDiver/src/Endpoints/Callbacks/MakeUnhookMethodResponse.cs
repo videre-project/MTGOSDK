@@ -4,9 +4,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-
 using System;
-using System.Net;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -18,13 +16,14 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeUnhookMethodResponse(HttpListenerRequest arg)
+  private byte[] MakeUnhookMethodResponse()
   {
-    string tokenStr = arg.QueryString.Get("token");
-    if (tokenStr == null || !int.TryParse(tokenStr, out int token))
-    {
-      return QuickError("Missing parameter 'address'");
-    }
+    var request = DeserializeRequest<HookUnsubscriptionRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
+
+    int token = request.Token;
+
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Called! Token: {token}");
 
     if (_remoteHooks.TryRemove(token, out RegisteredMethodHookInfo rmhi))
@@ -35,8 +34,7 @@ public partial class Diver : IDisposable
         tokenSource.Dispose();
       }
       HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
-
-      return "{\"status\":\"OK\"}";
+      return s_okResponse;
     }
 
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Unknown token for event callback subscription. Token: {token}");

@@ -5,52 +5,41 @@
 **/
 
 using System;
-using System.Net;
-using System.Threading;
 
-using Newtonsoft.Json;
-
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
 
 namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeObjectResponse(HttpListenerRequest arg)
+  private byte[] MakeObjectResponse()
   {
-    string objAddrStr = arg.QueryString.Get("address");
-    string typeName = arg.QueryString.Get("type_name");
-    bool pinningRequested = arg.QueryString.Get("pinRequest").ToUpper() == "TRUE";
-    bool hashCodeFallback = arg.QueryString.Get("hashcode_fallback").ToUpper() == "TRUE";
-    string hashCodeStr = arg.QueryString.Get("hashcode");
-    int userHashcode = 0;
-    if (objAddrStr == null)
-    {
-      return QuickError("Missing parameter 'address'");
-    }
-    if (!ulong.TryParse(objAddrStr, out var objAddr))
-    {
-      return QuickError("Parameter 'address' could not be parsed as ulong");
-    }
-    if (hashCodeFallback)
-    {
-      if (!int.TryParse(hashCodeStr, out userHashcode))
-      {
-        return QuickError("Parameter 'hashcode_fallback' was 'true' but the hashcode argument was missing or not an int");
-      }
-    }
+    var request = DeserializeRequest<ObjectDumpRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
 
-    // Attempt to dump the object and remote type
-    ObjectDump od = null!;
+    ulong objAddr = request.Address;
+    string typeName = request.TypeName;
+    bool pinningRequested = request.PinRequest;
+    bool hashCodeFallback = request.HashcodeFallback;
+    int? userHashcode = request.Hashcode;
+
+    Log.Debug($"[Diver] Got /object request: addr={objAddr:X16}, type={typeName}, pinRequest={pinningRequested}");
+
+    ObjectDump od;
     try
     {
+      Log.Debug($"[Diver] Calling GetHeapObject for {objAddr:X16}...");
       (object instance, ulong pinnedAddress) = _runtime.GetHeapObject(
         objAddr,
         pinningRequested,
         typeName,
         hashCodeFallback ? userHashcode : null
       );
+
       od = ObjectDumpFactory.Create(instance, objAddr, pinnedAddress);
     }
     catch (Exception e)
@@ -58,6 +47,6 @@ public partial class Diver : IDisposable
       return QuickError("Failed to retrieve the remote object. Error: " + e.Message);
     }
 
-    return JsonConvert.SerializeObject(od);
+    return WrapSuccess(od);
   }
 }

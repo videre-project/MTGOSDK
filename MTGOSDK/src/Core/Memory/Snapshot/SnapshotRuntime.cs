@@ -5,18 +5,20 @@
 **/
 #pragma warning disable CS8500
 
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 using Microsoft.Diagnostics.Runtime;
 
-using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Compiler;
+using MTGOSDK.Core.Exceptions;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
-
 using MTGOSDK.Win32.API;
 
 
@@ -47,9 +49,21 @@ public class SnapshotRuntime : IDisposable
   private readonly Converter<object> _converter = new();
 
   /// <summary>
-  /// The collection of frozen (pinned) objects.
+  /// Token counter for generating unique object identifiers.
   /// </summary>
-  private readonly ObjectPinner _pinner = new();
+  private static long _nextToken = 0;
+
+  /// <summary>
+  /// Maps tokens to pinned objects (logical pinning - strong references keep objects alive).
+  /// </summary>
+  private readonly ConcurrentDictionary<ulong, object> _pinnedObjects = new();
+
+  /// <summary>
+  /// Reverse lookup from object to its token.
+  /// </summary>
+  private readonly ConditionalWeakTable<object, BoxedToken> _objectToToken = new();
+
+  private record BoxedToken(ulong Token);
 
   public SnapshotRuntime(bool useDomainSearch = false)
   {
@@ -76,15 +90,10 @@ public class SnapshotRuntime : IDisposable
 
   public Type ResolveType(string typeFullName, string assemblyName = null)
   {
-    _lock.EnterReadLock();
-    try
-    {
-      return _unifiedAppDomain.ResolveType(typeFullName, assemblyName);
-    }
-    finally
-    {
-      _lock.ExitReadLock();
-    }
+    // UnifiedAppDomain.ResolveType uses a ConcurrentDictionary cache internally,
+    // so we don't need the read lock for the common cached path.
+    // Assembly enumeration is thread-safe and the cache handles concurrent access.
+    return _unifiedAppDomain.ResolveType(typeFullName, assemblyName);
   }
 
   public TypesDump ResolveTypes(string assemblyName)
@@ -128,35 +137,52 @@ public class SnapshotRuntime : IDisposable
   }
 
   //
-  // PinnedObjectCollection wrapper methods
+  // Token-based object tracking (logical pinning)
   //
 
-  public bool TryGetPinnedObject(ulong objAddress, out object instance) =>
-    _pinner.TryGetPinnedObject((IntPtr)objAddress, out instance);
+  public bool TryGetPinnedObject(ulong token, out object instance)
+  {
+    bool found = _pinnedObjects.TryGetValue(token, out instance);
+    Log.Debug($"[SnapshotRuntime] TryGetPinnedObject(token={token}) => found={found}, poolSize={_pinnedObjects.Count}");
+    return found;
+  }
 
   public ulong PinObject(object instance)
   {
-    // Check if the object was pinned, otherwise ignore.
-    if (!_pinner.TryGetPinningAddress(instance, out IntPtr objAddress))
+    // ConditionalWeakTable.GetValue is thread-safe and guarantees the factory
+    // is called exactly once per key, making this lock-free and correct.
+    var boxedToken = _objectToToken.GetValue(instance, obj =>
     {
-      // Pin and mark for unpinning later
-      objAddress = _pinner.Pin(instance);
-    }
-
-    return (ulong)objAddress;
+      var token = (ulong) Interlocked.Increment(ref _nextToken);
+      _pinnedObjects[token] = obj;
+      Log.Debug($"[SnapshotRuntime] PinObject: NEW token={token} for type={obj?.GetType().Name}, poolSize={_pinnedObjects.Count}");
+      return new BoxedToken(token);
+    });
+    Log.Debug($"[SnapshotRuntime] PinObject: returning token={boxedToken.Token}");
+    return boxedToken.Token;
   }
 
-  public bool UnpinObject(ulong objAddress)
+  public bool UnpinObject(ulong token)
   {
-    // Ignore if the object is not found in the pinned object pool.
-    if (!_pinner.TryGetPinnedObject((IntPtr)objAddress, out object obj))
+    Log.Debug($"[SnapshotRuntime] UnpinObject(token={token})");
+    if (!_pinnedObjects.TryRemove(token, out var obj))
+    {
+      Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} NOT FOUND in pool");
       return false;
+    }
 
-    _pinner.Unpin(obj);
+    _objectToToken.Remove(obj);
+    Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} REMOVED, poolSize={_pinnedObjects.Count}");
     return true;
   }
 
-  public void UnpinAllObjects() => _pinner.UnpinAllObjects();
+  /// <summary>
+  /// Queue a non-blocking unpin request by token. With dictionary-based tracking,
+  /// this is equivalent to immediate unpinning.
+  /// </summary>
+  public void QueueUnpinObject(ulong token) => UnpinObject(token);
+
+  public void UnpinAllObjects() => _pinnedObjects.Clear();
 
   //
   // IL.Emit runtime converter methods
@@ -246,7 +272,7 @@ public class SnapshotRuntime : IDisposable
             try
             {
               // Get the snapshot process handle
-              var _snapshotHandle = (IntPtr)dr.GetType()
+              var _snapshotHandle = (IntPtr) dr.GetType()
                 .GetField("_snapshotHandle",
                     BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(dr);
@@ -264,7 +290,7 @@ public class SnapshotRuntime : IDisposable
           }
 
           // Close the native process handle
-          var nativeHandle = (IntPtr)dr.GetType()
+          var nativeHandle = (IntPtr) dr.GetType()
             .GetField("_process",
                 BindingFlags.NonPublic | BindingFlags.Instance)
             .GetValue(dr);
@@ -321,12 +347,10 @@ public class SnapshotRuntime : IDisposable
   public void Dispose()
   {
     DisposeRuntime();
-    _pinner.Dispose();
+    _pinnedObjects.Clear();
 
-    if (_lock != null)
-    {
-      _lock.Dispose();
-    }
+    // NOTE: _lock is static and shared across all instances, so we do NOT dispose it.
+    // Disposing a static lock would break subsequent SnapshotRuntime instances.
   }
 
   //
@@ -341,9 +365,9 @@ public class SnapshotRuntime : IDisposable
       unsafe
       {
         TypedReference tr = __makeref(obj);
-        IntPtr ptr = *(IntPtr*)(&tr);
+        IntPtr ptr = *(IntPtr*) (&tr);
 
-        return (ulong)ptr.ToInt64();
+        return (ulong) ptr.ToInt64();
       }
     }
     finally
@@ -409,8 +433,10 @@ public class SnapshotRuntime : IDisposable
     // Check if we have this object in our pinned pool
     if (TryGetPinnedObject(objAddr, out object pinnedObj))
     {
+      Log.Debug($"[SnapshotRuntime] Object 0x{objAddr:X} found in pinned pool");
       return (pinnedObj, objAddr);
     }
+    Log.Debug($"[SnapshotRuntime] Object 0x{objAddr:X} NOT in pinned pool, falling back to ClrMD lookup");
 
     //
     // The object is not pinned, so falling back to the last dumped runtime can
@@ -422,9 +448,16 @@ public class SnapshotRuntime : IDisposable
       throw new Exception("No object in this address.");
     }
 
-    // Make sure it's still in place by refreshing the runtime
-    RefreshRuntime();
-    ClrObject clrObj = GetClrObject(objAddr);
+    ClrObject clrObj = lastKnownClrObj;
+    if (clrObj.Type?.Name != typeName)
+    {
+      Log.Debug($"[SnapshotRuntime] RefreshRuntime() starting for object 0x{objAddr:X}...");
+      var sw = Stopwatch.StartNew();
+      RefreshRuntime();
+      Log.Debug($"[SnapshotRuntime] RefreshRuntime() completed in {sw.ElapsedMilliseconds}ms");
+
+      clrObj = GetClrObject(objAddr);
+    }
 
     //
     // Figuring out the Method Table value and the actual Object's address
@@ -442,6 +475,14 @@ public class SnapshotRuntime : IDisposable
         throw new RemoteObjectMovedException(objAddr,
           $"Object moved since last refresh. Object 0x{objAddr:X} " +
           "could not be found in the heap.");
+      }
+
+      // Ensure we have type information before searching
+      if (lastKnownClrObj.Type == null)
+      {
+        throw new RemoteObjectMovedException(objAddr,
+          $"Object 0x{objAddr:X} has no type information. " +
+          "This may indicate the object has been garbage collected or is corrupted.");
       }
 
       // Directly search the heap for the moved object by type and hashcode

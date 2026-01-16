@@ -50,9 +50,12 @@ public class Collection : CollectionValidationFixture
   {
     var card = CollectionManager.GetCard(65378);
     ValidateCard(card);
+    Assert.That(card.Name, Is.EqualTo("Colossal Dreadmaw"));
     ValidateCard(CollectionManager.GetCard("Colossal Dreadmaw"));
 
-    Assert.That(card.Name, Is.EqualTo("Colossal Dreadmaw"));
+    Assert.That(
+      CollectionManager.GetCardIds("Colossal Dreadmaw"),
+      Is.Not.Empty);
     Assert.That(
       CollectionManager.GetCards("Colossal Dreadmaw").Any(e => e.Id == 65378),
       Is.True);
@@ -177,10 +180,10 @@ public abstract class CollectionValidationFixture : BaseFixture
 
     // IDeck properties
     Assert.That(deck.Regions, Is.Not.Empty);
-    // Assert.That(deck.DeckId,
-    //   deck.Name == "New Account Starter Kit Contents"
-    //     ? Is.EqualTo(0)
-    //     : Is.GreaterThan(0));
+    Assert.That(deck.DeckId,
+      deck.Name == "New Account Starter Kit Contents"
+        ? Is.EqualTo(0)
+        : Is.GreaterThan(0));
     Assert.That((bool?)deck.IsLegal, Is.Not.Null);
 
     // IDeck methods

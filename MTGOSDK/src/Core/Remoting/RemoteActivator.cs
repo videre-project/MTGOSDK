@@ -52,7 +52,7 @@ public class RemoteActivator(DiverCommunicator communicator, RemoteHandle app)
       .CreateObject(typeFullName, remoteParams);
 
     // Get proxy object
-    var remoteObject = app.GetRemoteObject(
+    var remoteObject = app.GetRemoteObjectFromField(
         invoRes.ReturnedObjectOrAddress.RemoteAddress,
         invoRes.ReturnedObjectOrAddress.Type);
 

@@ -6,11 +6,6 @@
 
 using System;
 using System.Collections;
-using System.IO;
-using System.Linq;
-using System.Net;
-
-using Newtonsoft.Json;
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
@@ -23,60 +18,39 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeArrayItemResponse(HttpListenerRequest arg)
+  private byte[] MakeArrayItemResponse()
   {
-    string body = null;
-    using (StreamReader sr = new(arg.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
-
-    if (string.IsNullOrEmpty(body))
-      return QuickError("Missing body");
-
-    var request = JsonConvert.DeserializeObject<IndexedItemAccessRequest>(body);
+    var request = DeserializeRequest<IndexedItemAccessRequest>();
     if (request == null)
-      return QuickError("Failed to deserialize body");
+      return QuickError("Missing or invalid request body");
 
     ulong objAddr = request.CollectionAddress;
     object index = _runtime.ParseParameterObject(request.Index);
-    bool pinningRequested = request.PinRequest;
 
-    // Check if we have this objects in our pinned pool
     if (!_runtime.TryGetPinnedObject(objAddr, out object pinnedObj))
-    {
-      // Object not pinned, try get it the hard way
       return QuickError("Object at given address wasn't pinned (context: ArrayItemAccess)");
-    }
 
     object item = null;
     if (pinnedObj.GetType().IsArray)
     {
-      Array asArray = (Array)pinnedObj;
+      Array asArray = (Array) pinnedObj;
       if (index is not int intIndex)
         return QuickError("Tried to access an Array with a non-int index");
 
-      int length = asArray.Length;
-      if (intIndex >= length)
+      if (intIndex >= asArray.Length)
         return QuickError("Index out of range");
 
       item = asArray.GetValue(intIndex);
     }
     else if (pinnedObj is IList asList)
     {
-      object[] asArray = asList?.Cast<object>().ToArray();
-      if (asArray == null)
-        return QuickError("Object at given address seemed to be an IList but failed to convert to array");
-
       if (index is not int intIndex)
         return QuickError("Tried to access an IList with a non-int index");
 
-      int length = asArray.Length;
-      if (intIndex >= length)
+      if (intIndex >= asList.Count)
         return QuickError("Index out of range");
 
-      // Get the item
-      item = asArray[intIndex];
+      item = asList[intIndex];
     }
     else if (pinnedObj is IDictionary dict)
     {
@@ -85,21 +59,25 @@ public partial class Diver : IDisposable
     }
     else if (pinnedObj is IEnumerable enumerable)
     {
-      // Last result - generic IEnumerables can be enumerated into arrays.
-      // BEWARE: This could lead to "ruining" of the IEnumerable if it's a not "resetable"
-      object[] asArray = enumerable?.Cast<object>().ToArray();
-      if (asArray == null)
-        return QuickError("Object at given address seemed to be an IEnumerable but failed to convert to array");
-
       if (index is not int intIndex)
-        return QuickError("Tried to access an IEnumerable (which isn't an Array, IList or IDictionary) with a non-int index");
+        return QuickError("Tried to access an IEnumerable with a non-int index");
 
-      int length = asArray.Length;
-      if (intIndex >= length)
+      // Use early-exit enumeration instead of allocating full array
+      int i = 0;
+      bool found = false;
+      foreach (var obj in enumerable)
+      {
+        if (i == intIndex)
+        {
+          item = obj;
+          found = true;
+          break;
+        }
+        i++;
+      }
+      
+      if (!found)
         return QuickError("Index out of range");
-
-      // Get the item
-      item = asArray[intIndex];
     }
     else
     {
@@ -114,24 +92,21 @@ public partial class Diver : IDisposable
     }
     else if (item.GetType().IsPrimitiveEtc())
     {
-      // TODO: Something else?
       res = ObjectOrRemoteAddress.FromObj(item);
     }
     else
     {
-      // Non-primitive results must be pinned before returning their remote address
-      // TODO: If a RemoteObject is not created for this object later and the item is not automatically unfreezed it might leak.
       ulong addr = _runtime.PinObject(item);
-
-      res = ObjectOrRemoteAddress.FromToken(addr, item.GetType().FullName);
+      int hashCode = item.GetHashCode();
+      res = ObjectOrRemoteAddress.FromToken(addr, item.GetType().FullName, hashCode);
     }
 
-    InvocationResults invokeRes = new()
+    var invokeRes = new InvocationResults
     {
       VoidReturnType = false,
       ReturnedObjectOrAddress = res
     };
 
-    return JsonConvert.SerializeObject(invokeRes);
+    return WrapSuccess(invokeRes);
   }
 }

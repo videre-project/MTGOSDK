@@ -21,6 +21,7 @@
       Instead, consumers of the SDK will generate their own reference assemblies
       using transitive build targets provided by the `MTGOSDK.MSBuild` project.
     -->
+    <Reference Include="CardManager"                      Private="$(UseRef)" />
     <Reference Include="Core"                             Private="$(UseRef)" />
     <Reference Include="DuelScene"                        Private="$(UseRef)" />
     <Reference Include="FlsClient"                        Private="$(UseRef)" />

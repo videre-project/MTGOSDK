@@ -120,6 +120,11 @@ public sealed class Card(dynamic card)
   /// </summary>
   public bool IsToken => @base.IsToken;
 
+  /// <summary>
+  /// The card's rarity (e.g. "Common", "Uncommon", "Rare", "Mythic").
+  /// </summary>
+  public string Rarity => @base.Rarity.Name;
+
   //
   // ICardDefinition wrapper methods
   //

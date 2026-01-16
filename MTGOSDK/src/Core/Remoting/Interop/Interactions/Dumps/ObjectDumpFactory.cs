@@ -4,8 +4,11 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reflection;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
 
 
@@ -16,6 +19,62 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 /// </summary>
 public static class ObjectDumpFactory
 {
+  /// <summary>
+  /// Cached type metadata to avoid repeated reflection calls.
+  /// </summary>
+  private static readonly ConcurrentDictionary<Type, CachedTypeMetadata> s_typeCache = new();
+
+  /// <summary>
+  /// Cached metadata for a type.
+  /// </summary>
+  private class CachedTypeMetadata
+  {
+    public List<MemberDump> Fields { get; set; }
+    public List<MemberDump> Properties { get; set; }
+  }
+
+  /// <summary>
+  /// Gets or creates cached metadata for a type.
+  /// </summary>
+  private static CachedTypeMetadata GetCachedMetadata(Type type)
+  {
+    return s_typeCache.GetOrAdd(type, t =>
+    {
+      var sw = Stopwatch.StartNew();
+
+      // Get events for filtering
+      var eventInfos = t.GetEvents(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+      var eventNames = new HashSet<string>(eventInfos.Length);
+      foreach (var eventInfo in eventInfos)
+      {
+        eventNames.Add(eventInfo.Name);
+      }
+      Log.Debug($"[ObjectDumpFactory:Cache] GetEvents: {sw.ElapsedMilliseconds}ms for {t.Name}");
+
+      sw.Restart();
+      var allFields = t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+      var fields = new List<MemberDump>(allFields.Length);
+      foreach (var fieldInfo in allFields)
+      {
+        if (!eventNames.Contains(fieldInfo.Name))
+          fields.Add(new MemberDump { Name = fieldInfo.Name });
+      }
+      Log.Debug($"[ObjectDumpFactory:Cache] GetFields: {sw.ElapsedMilliseconds}ms, count={fields.Count} for {t.Name}");
+
+      sw.Restart();
+      var allProps = t.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+      var props = new List<MemberDump>(allProps.Length);
+      foreach (var propInfo in allProps)
+      {
+        if (propInfo.GetMethod != null)
+          props.Add(new MemberDump { Name = propInfo.Name });
+      }
+      Log.Debug($"[ObjectDumpFactory:Cache] GetProperties: {sw.ElapsedMilliseconds}ms, count={props.Count} for {t.Name}");
+
+      return new CachedTypeMetadata { Fields = fields, Properties = props };
+    });
+  }
+
   /// <summary>
   /// Creates an ObjectDump from an object instance.
   /// </summary>
@@ -28,7 +87,10 @@ public static class ObjectDumpFactory
     ulong retrievalAddr,
     ulong pinAddr)
   {
+    var sw = Stopwatch.StartNew();
     Type dumpedObjType = instance.GetType();
+    Log.Debug($"[ObjectDumpFactory] GetType: {sw.ElapsedMilliseconds}ms, type={dumpedObjType.Name}");
+
     ObjectDump od;
     if (dumpedObjType.IsPrimitiveEtc())
     {
@@ -84,96 +146,30 @@ public static class ObjectDumpFactory
     else
     {
       // General non-array or primitive object
+      sw.Restart();
+      var hashCode = instance.GetHashCode();
+      Log.Debug($"[ObjectDumpFactory] GetHashCode: {sw.ElapsedMilliseconds}ms");
+
       od = new ObjectDump()
       {
         ObjectType = ObjectType.NonPrimitive,
         RetrievalAddress = retrievalAddr,
         PinnedAddress = pinAddr,
         Type = dumpedObjType.FullName,
-        HashCode = instance.GetHashCode()
+        HashCode = hashCode
       };
     }
 
-    List<MemberDump> fields = new();
-    var eventNames = dumpedObjType
-      .GetEvents((BindingFlags)0xffff)
-      .Select(eventInfo => eventInfo.Name);
-    foreach (var fieldInfo in dumpedObjType
-        .GetFields((BindingFlags)0xffff)
-        .Where(fieldInfo => !eventNames.Contains(fieldInfo.Name)))
-    {
-      try
-      {
-        var fieldValue = fieldInfo.GetValue(instance);
-        bool hasEncValue = false;
-        string encValue = null;
-        if (fieldValue != null)
-        {
-          hasEncValue = PrimitivesEncoder.TryEncode(fieldValue, out encValue);
-        }
+    // Use cached metadata instead of repeated reflection
+    sw.Restart();
+    var metadata = GetCachedMetadata(dumpedObjType);
+    Log.Debug($"[ObjectDumpFactory] GetCachedMetadata: {sw.ElapsedMilliseconds}ms (cache hit if 0ms)");
 
-        fields.Add(new MemberDump()
-        {
-          Name = fieldInfo.Name,
-          HasEncodedValue = hasEncValue,
-          EncodedValue = encValue
-        });
-      }
-      catch (Exception e)
-      {
-        fields.Add(new MemberDump()
-        {
-          Name = fieldInfo.Name,
-          HasEncodedValue = false,
-          RetrievalError = $"Failed to read. Exception: {e}"
-        });
-      }
-    }
-
-    List<MemberDump> props = new();
-    foreach (var propInfo in dumpedObjType.GetProperties((BindingFlags)0xffff))
-    {
-      // Skip properties that don't have a getter
-      if (propInfo.GetMethod == null)
-        continue;
-
-      try
-      {
-        //
-        // Property dumping is disabled. It should be accessed using the 'get_' function.
-        //
-
-        //var propValue = propInfo.GetValue(instance);
-        //bool hasEncValue = false;
-        //string encValue = null;
-        //if (propValue.GetType().IsPrimitiveEtc() || propValue is IEnumerable)
-        //{
-        //    hasEncValue = true;
-        //    encValue = PrimitivesEncoder.Encode(propValue);
-        //}
-
-        props.Add(new MemberDump()
-        {
-          Name = propInfo.Name,
-          HasEncodedValue = false,
-          EncodedValue = null,
-        });
-      }
-      catch (Exception e)
-      {
-        props.Add(new MemberDump()
-        {
-          Name = propInfo.Name,
-          HasEncodedValue = false,
-          RetrievalError = $"Failed to read. Exception: {e}"
-        });
-      }
-    }
-
-    // Populate fields and properties
-    od.Fields = fields;
-    od.Properties = props;
+    // Populate fields and properties from cache
+    od.Fields = metadata.Fields;
+    od.Properties = metadata.Properties;
 
     return od;
   }
 }
+

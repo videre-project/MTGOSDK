@@ -20,7 +20,7 @@ public static class RemoteFunctionsInvokeHelper
 {
   public static ObjectOrRemoteAddress CreateRemoteParameter(object parameter)
   {
-    if(parameter == null)
+    if (parameter == null)
     {
       return ObjectOrRemoteAddress.Null;
     }
@@ -71,13 +71,12 @@ public static class RemoteFunctionsInvokeHelper
     Type[] genericArgs,
     object[] parameters)
   {
-    return Invoke(
-      app,
-      declaringType,
-      funcName,
-      obj,
-      genericArgs.Select(arg => arg.FullName).ToArray(),
-      parameters);
+    string[] genericArgsFullNames = new string[genericArgs.Length];
+    for (int i = 0; i < genericArgs.Length; i++)
+    {
+      genericArgsFullNames[i] = genericArgs[i].FullName;
+    }
+    return Invoke(app, declaringType, funcName, obj, genericArgsFullNames, parameters);
   }
 
   public static object Invoke(
@@ -91,24 +90,26 @@ public static class RemoteFunctionsInvokeHelper
     // invokeAttr, binder and culture currently ignored
     // TODO: Actually validate parameters and expected parameters.
 
-    object[] paramsNoEnums = parameters.ToArray();
-    for (int i = 0; i < paramsNoEnums.Length; i++)
+    int paramCount = parameters.Length;
+    object[] paramsNoEnums = new object[paramCount];
+    Array.Copy(parameters, paramsNoEnums, paramCount);
+
+    for (int i = 0; i < paramCount; i++)
     {
       var val = paramsNoEnums[i];
       if (val != null && val.GetType().IsEnum)
       {
         var enumClass = app.GetRemoteEnum(val.GetType().FullName);
-        // TODO: This will break on the first enum value which represents 2 or more flags
         object enumVal = enumClass.GetValue(val.ToString());
-        // NOTE: Object stays in place in the remote app as long as we have it's reference
-        // in the paramsNoEnums array (so untill end of this method)
         paramsNoEnums[i] = enumVal;
       }
     }
 
-    ObjectOrRemoteAddress[] remoteParams = paramsNoEnums
-      .Select(CreateRemoteParameter)
-      .ToArray();
+    ObjectOrRemoteAddress[] remoteParams = new ObjectOrRemoteAddress[paramCount];
+    for (int i = 0; i < paramCount; i++)
+    {
+      remoteParams[i] = CreateRemoteParameter(paramsNoEnums[i]);
+    }
 
     bool hasResults;
     ObjectOrRemoteAddress oora;
@@ -130,6 +131,13 @@ public static class RemoteFunctionsInvokeHelper
         genericArgsFullNames,
         remoteParams
       );
+
+      if (invokeRes is null)
+      {
+        throw new InvalidOperationException(
+          $"Static remote invocation '{declaringType.FullName}.{funcName}' returned no result (null). " +
+          "This usually indicates a diver/transport failure or an unexpected response format.");
+      }
 
       if (invokeRes.VoidReturnType)
       {
@@ -176,7 +184,7 @@ public static class RemoteFunctionsInvokeHelper
     }
     else
     {
-      RemoteObject ro = app.GetRemoteObject(oora.RemoteAddress, oora.Type);
+      RemoteObject ro = app.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
       dynamic dro = ro.Dynamify();
       dro.__timestamp = oora.Timestamp;
 

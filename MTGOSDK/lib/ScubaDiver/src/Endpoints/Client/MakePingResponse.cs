@@ -5,19 +5,23 @@
 **/
 
 using System;
-using System.Net;
+
+using MessagePack;
 
 
 namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  #region Ping Handler
+  private static readonly byte[] s_pongResponse =
+    WrapSuccess(new StatusResponse { Status = "pong" });
 
-  private string MakePingResponse(HttpListenerRequest arg)
-  {
-    return "{\"status\":\"pong\"}";
-  }
+  private byte[] MakePingResponse() => s_pongResponse;
+}
 
-  #endregion
+[MessagePackObject]
+public class StatusResponse
+{
+  [Key(0)]
+  public string Status { get; set; }
 }

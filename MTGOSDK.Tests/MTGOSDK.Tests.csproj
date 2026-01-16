@@ -9,11 +9,10 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- Enable the NUnit runner  -->
+    <!-- Enable the NUnit runner (MTP) -->
     <EnableNUnitRunner>true</EnableNUnitRunner>
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     <TestingPlatformCommandLineArguments>--minimum-expected-tests 1</TestingPlatformCommandLineArguments>
-    <!-- Displays error on console in addition to the log file. -->
     <TestingPlatformShowTestsFailure>true</TestingPlatformShowTestsFailure>
   </PropertyGroup>
 
@@ -30,7 +29,6 @@
     <PackageReference Include="NUnit.Analyzers"
                       PrivateAssets="All" />
     <PackageReference Include="NUnit3TestAdapter" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <!-- MTGOSDK Logging -->
     <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>

@@ -4,6 +4,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Concurrent;
+using System.Reflection;
+
 using MTGOSDK.Core.Reflection.Extensions;
 
 
@@ -11,6 +14,10 @@ namespace MTGOSDK.Core.Remoting.Interop;
 
 public static class PrimitivesEncoder
 {
+  // Cache for Parse methods to avoid reflection per-call
+  private static readonly ConcurrentDictionary<RuntimeTypeHandle, MethodInfo> 
+    s_parseMethodCache = new();
+
   /// <summary>
   /// Encodes a primitive or array of primitives
   /// </summary>
@@ -30,11 +37,15 @@ public static class PrimitivesEncoder
     // Use a higher precision format to encode date objects
     if (t == typeof(DateTime))
     {
-      return ((DateTime)toEncode).ToString("O");
+      return ((DateTime) toEncode).ToString("O");
     }
 
     if (t.IsPrimitiveEtc() || t.IsStringCoercible() || t.IsEnum)
     {
+      if (t == typeof(IntPtr))
+      {
+        return ((long)(IntPtr)toEncode).ToString();
+      }
       // These types can just be ".Parse()"-ed back
       return toEncode.ToString();
     }
@@ -52,22 +63,19 @@ public static class PrimitivesEncoder
     }
 
     // Otherwise - this is an array of primitives.
-    string output = string.Empty;
-    object[] objectsEnumerable = enumerable.Cast<object>().ToArray();
-    foreach (object o in objectsEnumerable)
+    var sb = new System.Text.StringBuilder();
+    int length = enumerable.Length;
+    for (int i = 0; i < length; i++)
     {
+      object o = enumerable.GetValue(i);
       string currObjectValue = Encode(o);
-      // Escape commas
       currObjectValue = currObjectValue.Replace(",", "\\,");
-      if (output != string.Empty)
-      {
-        output += ",";
-      }
-
-      output += $"\"{currObjectValue}\"";
+      if (sb.Length > 0)
+        sb.Append(',');
+      sb.Append('"').Append(currObjectValue).Append('"');
     }
 
-    return output;
+    return sb.ToString();
   }
 
   public static bool TryEncode(object toEncode, out string res)
@@ -109,11 +117,23 @@ public static class PrimitivesEncoder
         throw new Exception("Missing quotes on encoded string");
     }
 
+    // Explicitly handle IntPtr
+    if (resultType == typeof(IntPtr))
+    {
+      if (long.TryParse(toDecode, out long ptrVal))
+      {
+        return new IntPtr(ptrVal);
+      }
+      throw new Exception($"Failed to decode IntPtr from value: {toDecode}");
+    }
+
     // If the type is a primitive or string coercible, we can parse it
-    // directly from the string using the type's Parse method.
+    // directly from the string using the type's cached Parse method.
     if (resultType.IsPrimitiveEtc() || resultType.IsStringCoercible())
     {
-      var parseMethod = resultType.GetMethod("Parse", [typeof(string)]);
+      var parseMethod = s_parseMethodCache.GetOrAdd(
+        resultType.TypeHandle,
+        _ => resultType.GetMethod("Parse", [typeof(string)]));
       return parseMethod.Invoke(null, new object[] { toDecode });
     }
 
@@ -177,7 +197,7 @@ public static class PrimitivesEncoder
     }
 
     throw new ArgumentException(
-      $"Result type was not a primitive or an array. TypeFullName: {resultType}");
+      $"Result type was not a primitive or an array. TypeFullName: {resultType} Value: {toDecode}");
   }
 
   public static object Decode(string toDecode, string fullTypeName)

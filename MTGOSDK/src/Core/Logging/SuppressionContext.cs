@@ -3,72 +3,60 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-
-
-using MTGOSDK.Core.Compiler.Extensions;
 
 
 namespace MTGOSDK.Core.Logging;
 
 /// <summary>
-/// A class that suppresses logging for a specific caller type.
+/// A class that suppresses logging within the current async context.
 /// </summary>
 /// <remarks>
-/// This class creates a context that suppresses all logging invoked from the
-/// caller type (and all functions called by the caller type) until the context
-/// is disposed. This is useful for suppressing logging for a specific caller
-/// type without having to modify the logging configuration or log level.
+/// This class creates a context that suppresses all logging until the context
+/// is disposed. Uses AsyncLocal to properly flow suppression across async
+/// boundaries, unlike stack-trace scanning which breaks across async calls.
 /// </remarks>
 public class SuppressionContext : IDisposable
 {
-  private static Type baseType;
+  /// <summary>
+  /// AsyncLocal to track suppression state across async boundaries.
+  /// When set, all logging at or below the specified level is suppressed.
+  /// </summary>
+  private static readonly AsyncLocal<LogLevel?> s_suppressionLevel = new();
 
   /// <summary>
-  /// A concurrent bag of caller types that have been suppressed from logging.
+  /// Track previous suppression level to restore on dispose (for nesting).
   /// </summary>
-  private static readonly ConcurrentDictionary<Type, LogLevel> s_suppressedCallerTypes = new();
+  private readonly LogLevel? _previousLevel;
 
   public SuppressionContext(LogLevel logLevel = LogLevel.None)
   {
-    // Get the type of the original caller creating the suppression context.
-    Type callerType;
-    int depth = 3;
-    do { callerType = GetCallerType(depth); depth++; }
-    while (callerType.FullName.StartsWith("System.") ||
-          callerType.FullName.StartsWith("MTGOSDK.Core.Logging."));
-
-    baseType = callerType.GetBaseType();
-    s_suppressedCallerTypes.TryAdd(baseType, logLevel);
-    Log.Debug("Suppressed logging for {type} below loglevel {level}", baseType, logLevel);
+    // Store previous level for proper nesting support
+    _previousLevel = s_suppressionLevel.Value;
+    s_suppressionLevel.Value = logLevel;
   }
 
-  public static bool IsSuppressedCallerType()
+  /// <summary>
+  /// Checks if logging is currently suppressed in this async context.
+  /// </summary>
+  /// <returns>True if logging is suppressed.</returns>
+  public static bool IsSuppressed() => s_suppressionLevel.Value != null;
+
+  /// <summary>
+  /// Checks if a specific log level is suppressed in this async context.
+  /// </summary>
+  /// <param name="level">The log level to check.</param>
+  /// <returns>True if the level is suppressed.</returns>
+  public static bool IsSuppressed(LogLevel level)
   {
-    // If there are no suppressed caller types, return false.
-    if (s_suppressedCallerTypes.Count == 0)
-      return false;
-
-    // Search the entire call stack for a suppressed caller type.
-    try
-    {
-      int depth = 3; // Default stack depth to begin searching.
-      for (int i = depth; i < 50; i++)
-      {
-        Type callerType = GetCallerType(i);
-        Type baseType = callerType.GetBaseType();
-        if (s_suppressedCallerTypes.ContainsKey(callerType))
-          return true;
-      }
-    }
-    catch { /* Have fetched past the current depth of the call stack. */ }
-
-    return false;
+    var suppressionLevel = s_suppressionLevel.Value;
+    // If suppression is enabled and the log level is at or below the threshold
+    return suppressionLevel.HasValue && level <= suppressionLevel.Value;
   }
 
   public void Dispose()
   {
-    s_suppressedCallerTypes.TryRemove(baseType, out _);
+    // Restore previous suppression level (supports nesting)
+    s_suppressionLevel.Value = _previousLevel;
   }
 }

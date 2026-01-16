@@ -5,11 +5,13 @@
 
 using System.Collections;
 using System.Diagnostics;
+using System.Dynamic;
 using System.Reflection;
 
 using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Reflection.Serialization;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Reflection;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -26,12 +28,14 @@ namespace MTGOSDK.Core.Reflection;
 /// </remarks>
 public abstract class DLRWrapper : SerializableBase
 {
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
   /// <summary>
   /// Internal unwrapped reference to any captured dynamic objects.
   /// </summary>
   internal virtual dynamic @base { get; }
 
-  protected dynamic @base_unbound { get; private set; } = null!;
+  protected dynamic @base_unbound { get; set; } = null!;
 
   /// <summary>
   /// Internal reference to the remote object handle.
@@ -79,6 +83,24 @@ public abstract class DLRWrapper : SerializableBase
   /// </remarks>
   public static dynamic Unbind(DLRWrapper dro)
   {
+    // Check if we have a cached proxy from batch hydration
+    // This allows Unbind(this).Property to use cached values for hydrated properties
+    // We need reflection since DLRWrapper<T> is generic and we can't cast to a specific T
+    var proxyField = dro.GetType().GetField("_interfaceProxies",
+      System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+    if (proxyField != null)
+    {
+      var proxies = proxyField.GetValue(dro) as System.Collections.IDictionary;
+      if (proxies != null && proxies.Count > 0)
+      {
+        // Return the first available cached proxy for property access
+        foreach (var proxy in proxies.Values)
+        {
+          if (proxy != null) return proxy;
+        }
+      }
+    }
+
     dynamic unbound_obj = dro.@base_unbound;
 
     if (unbound_obj == null)
@@ -105,11 +127,30 @@ public abstract class DLRWrapper : SerializableBase
   {
     // Return the object if it is not a proxy type.
     if (!TypeProxy<dynamic>.IsProxy(obj))
+    {
+      // Check if it's a raw LazyRemoteObject (not wrapped in a proxy)
+      if (obj is LazyRemoteObject lazyObj)
+      {
+        var resolved = lazyObj.GetResolvedInstance();
+        if (resolved == null)
+          throw new InvalidOperationException("LazyRemoteObject failed to resolve.");
+        return resolved;
+      }
       return obj;
+    }
 
     var unbound_obj = TypeProxy<dynamic>.From(obj)
       ?? throw new InvalidOperationException(
           $"Unable to unbind types from {obj.GetType().Name}.");
+
+    // Check if the unbound object is a LazyRemoteObject
+    if (unbound_obj is LazyRemoteObject lazyUnbound)
+    {
+      var resolved = lazyUnbound.GetResolvedInstance();
+      if (resolved == null)
+        throw new InvalidOperationException("LazyRemoteObject failed to resolve.");
+      return resolved;
+    }
 
     // Recursively unbind any nested interface types.
     if (TypeProxy<dynamic>.IsProxy(unbound_obj))
@@ -420,6 +461,267 @@ public abstract class DLRWrapper : SerializableBase
   }
 
   //
+  // Static batch serialization methods
+  //
+
+  /// <summary>
+  /// Serializes a DynamicRemoteObject collection using batch fetching.
+  /// </summary>
+  /// <typeparam name="TInterface">The interface type to serialize items as.</typeparam>
+  /// <typeparam name="TPathSource">The source type for path analysis.</typeparam>
+  /// <param name="collection">The DRO collection to serialize.</param>
+  /// <param name="pathPrefix">Optional prefix for nested object access (e.g., "PlayerEvent" for FilterablePlayerEvent).</param>
+  /// <param name="maxItems">Maximum number of items to serialize (0 = no limit).</param>
+  /// <returns>Enumerable of serialized items implementing TInterface.</returns>
+  public static IEnumerable<TInterface> SerializeDroAs<TInterface, TPathSource>(
+    dynamic collection,
+    string? pathPrefix = null,
+    int maxItems = 0)
+    where TInterface : class
+    where TPathSource : class
+  {
+    var dro = collection as Remoting.Types.DynamicRemoteObject;
+    if (dro == null)
+    {
+      yield break;
+    }
+
+    var interfaceType = typeof(TInterface);
+    
+    // Get batchable paths from the source type
+    var sourcePaths = Serialization.AccessPathAnalyzer
+      .GetBatchablePathsForInterface(typeof(TPathSource), interfaceType)
+      .ToList();
+
+    // Get reverse mapping: remote path -> interface property name
+    var reversePathMap = Serialization.AccessPathAnalyzer
+      .GetReversePathMap(typeof(TPathSource), interfaceType);
+
+    // Track which interface properties are covered by the source type paths
+    var coveredProperties = new HashSet<string>();
+    foreach (var path in sourcePaths)
+    {
+      // Find which interface property this path maps to
+      if (reversePathMap.TryGetValue(path, out var propName))
+      {
+        coveredProperties.Add(propName);
+      }
+      else
+      {
+        // Path matches property name directly
+        coveredProperties.Add(path.Split('.')[0]);
+      }
+    }
+
+    // Build full paths list - apply prefix to source type paths
+    var allPaths = new List<string>();
+    foreach (var path in sourcePaths)
+    {
+      allPaths.Add(string.IsNullOrEmpty(pathPrefix) ? path : $"{pathPrefix}.{path}");
+    }
+
+    // Properties NOT in the registry are not batch-fetched
+    // They will fall through to DRO access via CachingRemoteProxy when accessed
+
+    if (allPaths.Count == 0)
+    {
+      yield break;
+    }
+
+    // Single IPC call to fetch all items' primitive properties + item tokens
+    var response = RemoteClient.@client.Communicator
+      .GetBatchCollectionMembers(
+        dro.__ro.RemoteToken,
+        dro.__type?.FullName ?? "Unknown",
+        string.Join("|", allPaths),
+        maxItems
+      );
+
+    if (response?.Items == null)
+    {
+      yield break;
+    }
+
+    // Check if we have item tokens for hybrid mode (create wrappers with DRO fallback)
+    bool hasTokens = response.ItemTokens != null && response.ItemTokens.Count == response.Items.Count;
+
+    // Build TInterface objects from response data
+    for (int i = 0; i < response.Items.Count; i++)
+    {
+      var itemData = response.Items[i];
+      var propertyValues = new Dictionary<string, object?>();
+      
+      foreach (var kvp in itemData)
+      {
+        // Decode the value
+        object? value = null;
+        if (kvp.Value != null)
+        {
+          var typeName = response.Types?.TryGetValue(kvp.Key, out var t) == true ? t : null;
+          value = DecodeBatchValue(kvp.Value, typeName);
+        }
+
+        // Strip prefix from key to get remote path (e.g., "PlayerEvent.EventId" -> "EventId")
+        var remotePath = !string.IsNullOrEmpty(pathPrefix) && kvp.Key.StartsWith(pathPrefix + ".")
+          ? kvp.Key.Substring(pathPrefix.Length + 1)
+          : kvp.Key;
+
+        // Use REMOTE PATH as cache key (not interface property name) to prevent shadowing
+        // e.g., cache has "CurrentRoundNumber" = int, so "Unbind(this).CurrentRound" falls through to remote
+        // The wrapper's @base property accesses via remote paths, so this works correctly
+        propertyValues[remotePath] = value;
+      }
+
+      // If we have item tokens, create a proper wrapper with DRO fallback
+      if (hasTokens && typeof(DLRWrapper).IsAssignableFrom(typeof(TPathSource)))
+      {
+        var itemToken = response.ItemTokens[i];
+        var itemTypeName = response.ItemTypeName;
+
+        // Create a RemoteObject for this item from its token, then Dynamify to get DRO
+        var remoteObject = RemoteClient.@client.GetRemoteObjectFromField(itemToken, itemTypeName);
+        var itemDro = remoteObject.Dynamify() as Remoting.Types.DynamicRemoteObject;
+
+        // Create the wrapper instance (e.g., Tournament)
+        var wrapper = (DLRWrapper)Compiler.ObjectFactory.CreateInstance(typeof(TPathSource), itemDro);
+
+        // Populate the wrapper's interface proxy cache with batch data
+        // This makes @base return the CachingRemoteProxy for property access
+        // Pass pathPrefix for fallback access and inverted path map for interface->remote lookup
+        // The path map goes interface name -> remote path (opposite of reversePathMap)
+        var interfaceToRemotePath = reversePathMap
+          .ToDictionary(kvp => kvp.Value, kvp => kvp.Key);
+        var cachingProxy = new Proxy.CachingRemoteProxy(
+          itemDro, propertyValues, pathPrefix, interfaceToRemotePath);
+        wrapper._interfaceProxies[interfaceType] = cachingProxy;
+
+        // Serialize via the wrapper - uses cache for batch data, DRO fallback for complex props
+        // Use reflection to call SerializeAs<TInterface>() on the wrapper
+        var serializeMethod = typeof(Serialization.SerializableBase)
+          .GetMethod("SerializeAs")
+          ?.MakeGenericMethod(interfaceType);
+        if (serializeMethod != null)
+        {
+          var result = serializeMethod.Invoke(wrapper, new object[] { null, null, false });
+          yield return (TInterface)result!;
+        }
+        else
+        {
+          yield return InterfaceProxyBuilder.Create<TInterface>(propertyValues);
+        }
+      }
+      else
+      {
+        // Fallback: create lightweight proxy without DRO fallback
+        yield return InterfaceProxyBuilder.Create<TInterface>(propertyValues);
+      }
+    }
+  }
+
+  /// <summary>
+  /// Serializes a DynamicRemoteObject collection using batch fetching with explicit paths.
+  /// </summary>
+  /// <typeparam name="TInterface">The interface type to serialize items as.</typeparam>
+  /// <param name="collection">The DRO collection to serialize.</param>
+  /// <param name="paths">Explicit property paths to fetch.</param>
+  /// <param name="pathPrefix">Optional prefix for nested object access (e.g., "PlayerEvent" for FilterablePlayerEvent).</param>
+  /// <param name="maxItems">Maximum number of items to serialize (0 = no limit).</param>
+  /// <returns>Enumerable of serialized items implementing TInterface.</returns>
+  public static IEnumerable<TInterface> SerializeDroAs<TInterface>(
+    Remoting.Types.DynamicRemoteObject collection,
+    IEnumerable<string> paths,
+    string? pathPrefix = null,
+    int maxItems = 0)
+    where TInterface : class
+  {
+    var pathList = paths.ToList();
+    if (pathList.Count == 0)
+    {
+      yield break;
+    }
+
+    // Apply path prefix if provided (e.g., "PlayerEvent.EventId" instead of "EventId")
+    var prefixedPaths = string.IsNullOrEmpty(pathPrefix)
+      ? pathList
+      : pathList.Select(p => $"{pathPrefix}.{p}").ToList();
+
+    // Single IPC call to fetch all items' primitive properties
+    var response = RemoteClient.@client.Communicator
+      .GetBatchCollectionMembers(
+        collection.__ro.RemoteToken,
+        collection.__type?.FullName ?? "Unknown",
+        string.Join("|", prefixedPaths),
+        maxItems
+      );
+
+    if (response?.Items == null)
+    {
+      yield break;
+    }
+
+    // Build TInterface objects from response data
+    foreach (var itemData in response.Items)
+    {
+      var propertyValues = new Dictionary<string, object?>();
+      foreach (var kvp in itemData)
+      {
+        // Decode the value
+        object? value = null;
+        if (kvp.Value != null)
+        {
+          var typeName = response.Types?.TryGetValue(kvp.Key, out var t) == true ? t : null;
+          value = DecodeBatchValue(kvp.Value, typeName);
+        }
+
+        // Strip prefix from key for property mapping (response uses full path as key)
+        var propName = !string.IsNullOrEmpty(pathPrefix) && kvp.Key.StartsWith(pathPrefix + ".")
+          ? kvp.Key.Substring(pathPrefix.Length + 1)
+          : kvp.Key;
+        propertyValues[propName] = value;
+      }
+
+      yield return InterfaceProxyBuilder.Create<TInterface>(propertyValues);
+    }
+  }
+
+  /// <summary>
+  /// Decodes a property value from the batch response.
+  /// </summary>
+  private static object? DecodeBatchValue(string encodedValue, string? typeName)
+  {
+    if (string.IsNullOrEmpty(encodedValue))
+      return null;
+
+    // Handle JSON arrays
+    if (encodedValue.StartsWith("["))
+    {
+      try
+      {
+        return System.Text.Json.JsonSerializer.Deserialize<List<string>>(encodedValue);
+      }
+      catch
+      {
+        return encodedValue;
+      }
+    }
+
+    // Try to decode as primitive using the type name
+    if (!string.IsNullOrEmpty(typeName))
+    {
+      try
+      {
+        return Remoting.Interop.PrimitivesEncoder.Decode(encodedValue, typeName);
+      }
+      catch
+      {
+        // Fall through
+      }
+    }
+
+    return encodedValue;
+  }
+
+  //
   // Wrapper methods for safely retrieving properties or invoking methods.
   //
 
@@ -473,18 +775,34 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="ct">The cancellation token to monitor (optional).</param>
   /// <returns>True if the function executed successfully.</returns>
   [DebuggerHidden]
   public static async Task<bool> WaitUntil(
     Func<bool> lambda,
     int delay = 250,
-    int retries = 20)
+    int retries = 20,
+    CancellationToken ct = default)
   {
+    using var activity = s_activitySource.StartActivity("WaitUntil");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("delay.ms", delay.ToString());
+    activity?.SetTag("max.retries", retries.ToString());
+
+    int attempt = 0;
     for (; retries > 0; retries--)
     {
-      try { if (lambda()) return true; } catch { }
+      attempt++;
+      if (ct.IsCancellationRequested)
+      {
+        activity?.SetTag("cancelled", "true");
+        return false;
+      }
+      try { if (lambda()) { activity?.SetTag("attempts", attempt.ToString()); return true; } } catch { }
       await Task.Delay(delay).ConfigureAwait(false);
     }
+    activity?.SetTag("attempts", attempt.ToString());
+    activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
     return false;
   }
 
@@ -494,15 +812,18 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="ct">The cancellation token to monitor (optional).</param>
   /// <returns>True if the function executed successfully.</returns>
   [DebuggerHidden]
   public static bool WaitUntilSync(
     Func<bool> lambda,
     int delay = 250,
-    int retries = 20)
+    int retries = 20,
+    CancellationToken ct = default)
   {
     for (; retries > 0; retries--)
     {
+      if (ct.IsCancellationRequested) return false;
       try { if (lambda()) return true; } catch { }
       Thread.Sleep(delay);
     }
@@ -515,15 +836,18 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="ct">The cancellation token to monitor (optional).</param>
   /// <returns>True if the function executed successfully.</returns>
   [DebuggerHidden]
   public static async Task<bool> WaitUntilAsync(
     Func<Task<bool>> lambda,
     int delay = 250,
-    int retries = 20)
+    int retries = 20,
+    CancellationToken ct = default)
   {
     for (; retries > 0; retries--)
     {
+      if (ct.IsCancellationRequested) return false;
       try { if (await lambda()) return true; } catch { }
       await Task.Delay(delay).ConfigureAwait(false);
     }
@@ -546,15 +870,24 @@ public abstract class DLRWrapper : SerializableBase
     int retries = 3,
     bool raise = false)
   {
+    using var activity = s_activitySource.StartActivity("Retry");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("delay.ms", delay.ToString());
+    activity?.SetTag("max.retries", retries.ToString());
+
+    int attempt = 0;
+    int maxRetries = retries;
     while (true)
     {
-      try { return lambda(); }
+      attempt++;
+      try { var result = lambda(); activity?.SetTag("attempts", attempt.ToString()); return result; }
       catch
       {
         retries--;
         if (retries <= 0)
         {
-          if (raise) throw;
+          activity?.SetTag("attempts", attempt.ToString());
+          if (raise) { activity?.SetStatus(ActivityStatusCode.Error, "Failed"); throw; }
           return @default;
         }
         // This will block the caller's thread for the duration of the delay.
@@ -683,6 +1016,292 @@ public abstract class DLRWrapper : SerializableBase
   {
     return Optional<T>(obj, new Func<dynamic, bool>(_ => condition));
   }
+
+  //
+  // Interface-Driven Hydration Support
+  //
+
+  /// <summary>
+  /// Cache of hydrated proxies per-interface type.
+  /// Different SerializeAs&lt;T&gt; calls may need different properties.
+  /// </summary>
+  internal readonly Dictionary<Type, Proxy.CachingRemoteProxy> _interfaceProxies = new();
+
+  /// <summary>
+  /// Gets whether this wrapper has been hydrated for a specific interface.
+  /// </summary>
+  public bool IsHydratedFor<TInterface>() => _interfaceProxies.ContainsKey(typeof(TInterface));
+
+  /// <summary>
+  /// Internal: Hydrates only properties needed for the given interface.
+  /// </summary>
+  /// <typeparam name="TInterface">The serialization interface.</typeparam>
+  /// <param name="paths">The remote access paths to fetch.</param>
+  internal void HydrateForInterface<TInterface>(string[] paths)
+  {
+    var interfaceType = typeof(TInterface);
+    if (_interfaceProxies.ContainsKey(interfaceType))
+      return;
+    if (paths == null || paths.Length == 0) return;
+
+    // Join paths with pipe delimiter
+    var pathsDelimited = string.Join("|", paths);
+
+    // Get the remote object's address and type
+    var remoteObj = Unbind(this);
+    if (remoteObj is not Remoting.Types.DynamicRemoteObject dro)
+      return;
+
+    // Single IPC call for batch property fetching
+    var response = RemoteClient.@client.Communicator.GetBatchMembers(
+      dro.__ro.RemoteToken,
+      dro.__type?.FullName ?? dro.GetType().Name,
+      pathsDelimited);
+
+    if (response?.Values == null) return;
+
+    // Convert encoded values to dictionary for caching
+    var values = new Dictionary<string, object?>();
+    foreach (var kvp in response.Values)
+    {
+      if (kvp.Value == null)
+      {
+        values[kvp.Key] = null;
+      }
+      else if (kvp.Value.StartsWith("@"))
+      {
+        // This is a remote address - skip non-primitives
+        continue;
+      }
+      else if (kvp.Value.StartsWith("[") || kvp.Value.StartsWith("{"))
+      {
+        // This looks like JSON - deserialize it
+        try
+        {
+          var typeName = response.Types.TryGetValue(kvp.Key, out var t) ? t : null;
+          
+          // Try to deserialize as a generic collection
+          if (kvp.Value.StartsWith("["))
+          {
+            // It's a JSON array - deserialize to List<object> or specific type
+            var deserialized = System.Text.Json.JsonSerializer.Deserialize<List<object>>(kvp.Value);
+            
+            // If we know it's a string array/list, convert items
+            if (typeName != null && (typeName.Contains("String[]") || typeName.Contains("List`1[[System.String")))
+            {
+              values[kvp.Key] = deserialized?.Select(x => x?.ToString()).ToList();
+            }
+            else
+            {
+              values[kvp.Key] = deserialized;
+            }
+          }
+          else
+          {
+            // JSON object - deserialize as dictionary
+            values[kvp.Key] = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(kvp.Value);
+          }
+        }
+        catch
+        {
+          // If JSON deserialization fails, treat as primitive string
+          values[kvp.Key] = kvp.Value;
+        }
+      }
+      else
+      {
+        // Decode primitive value
+        var typeName = response.Types.TryGetValue(kvp.Key, out var t) ? t : "System.String";
+        values[kvp.Key] = Remoting.Interop.PrimitivesEncoder.Decode(kvp.Value, typeName);
+      }
+    }
+
+    _interfaceProxies[interfaceType] = new Proxy.CachingRemoteProxy(remoteObj, values);
+  }
+
+  /// <summary>
+  /// Gets the appropriate proxy for an interface, or falls back to real remote.
+  /// </summary>
+  internal dynamic GetBaseForInterface(Type interfaceType) =>
+    _interfaceProxies.TryGetValue(interfaceType, out var proxy)
+      ? proxy
+      : Unbind(this);
+
+  /// <summary>
+  /// Gets the caching proxy for an interface if hydrated, otherwise null.
+  /// </summary>
+  internal Proxy.CachingRemoteProxy? GetCachingProxy<TInterface>() =>
+    _interfaceProxies.TryGetValue(typeof(TInterface), out var proxy) ? proxy : null;
+
+  //
+  // Cross-collection batch serialization methods
+  //
+
+  /// <summary>
+  /// Serializes items from a collection property to the specified interface type using
+  /// cross-item batch fetching for optimal performance.
+  /// </summary>
+  /// <typeparam name="TInterface">The interface type to serialize items as.</typeparam>
+  /// <typeparam name="TPathSource">The source type for path analysis (e.g., Card for CardDefinition items).</typeparam>
+  /// <param name="collectionPropertyName">Name of the collection property to access (e.g., "Items").</param>
+  /// <param name="pathPrefix">Prefix to add to each path (e.g., "CardDefinition").</param>
+  /// <param name="maxItems">Maximum number of items to serialize (0 = no limit).</param>
+  /// <returns>Enumerable of serialized items implementing TInterface.</returns>
+  /// <remarks>
+  /// This method uses a single IPC call to fetch all items' properties, avoiding
+  /// per-item overhead. For large collections, this can be 5-10x faster than
+  /// iterating and calling SerializeAs on each item individually.
+  /// </remarks>
+  public IEnumerable<TInterface> SerializeCollectionAs<TInterface, TPathSource>(
+    string collectionPropertyName,
+    string pathPrefix,
+    int maxItems = 0)
+    where TInterface : class
+    where TPathSource : class
+  {
+    var interfaceType = typeof(TInterface);
+    
+    // Get paths for interface properties that exist in the prefixed source type
+    var prefixedPaths = Serialization.AccessPathAnalyzer.GetBatchablePathsForInterface(
+      typeof(TPathSource), interfaceType);
+
+    // Build full paths list - prefixed paths for source type properties
+    var paths = new List<string>();
+    var coveredProperties = new HashSet<string>();
+
+    foreach (var path in prefixedPaths)
+    {
+      paths.Add(string.IsNullOrEmpty(pathPrefix) ? path : $"{pathPrefix}.{path}");
+      // Track which interface properties are covered (first segment of path)
+      coveredProperties.Add(path.Split('.')[0]);
+    }
+
+    // Find interface properties NOT covered by the source type - fallback to parent
+    var interfaceProps = interfaceType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+    foreach (var prop in interfaceProps)
+    {
+      if (!coveredProperties.Contains(prop.Name))
+      {
+        // Property not in TPathSource, request it directly from parent (unprefixed)
+        paths.Add(prop.Name);
+      }
+    }
+
+    if (paths.Count == 0)
+    {
+      yield break;
+    }
+
+    // Get the remote collection using the property name
+    dynamic remoteObj = Unbind(this);
+    dynamic remoteCollection;
+    try
+    {
+      // Dynamically access the collection property
+      remoteCollection = ((IDynamicMetaObjectProvider)remoteObj)
+        .GetMetaObject(System.Linq.Expressions.Expression.Parameter(typeof(object)))
+        .BindGetMember(new DynamicGetMemberBinder(collectionPropertyName)).Value;
+    }
+    catch
+    {
+      // Fallback to simple property access
+      var prop = remoteObj.GetType().GetProperty(collectionPropertyName);
+      if (prop == null) yield break;
+      remoteCollection = prop.GetValue(remoteObj);
+    }
+
+    var dro = remoteCollection as Remoting.Types.DynamicRemoteObject;
+    if (dro == null)
+    {
+      yield break;
+    }
+
+    // Single IPC call to fetch all items
+    var response = Remoting.RemoteClient.@client.Communicator
+      .GetBatchCollectionMembers(
+        dro.__ro.RemoteToken,
+        dro.__type?.FullName ?? "Unknown",
+        string.Join("|", paths),
+        maxItems
+      );
+
+    if (response?.Items == null)
+    {
+      yield break;
+    }
+
+    // Build TInterface objects from response data
+    foreach (var itemData in response.Items)
+    {
+      var propertyValues = new Dictionary<string, object?>();
+      foreach (var kvp in itemData)
+      {
+        // Remove prefix to get interface property path
+        var propPath = !string.IsNullOrEmpty(pathPrefix) && kvp.Key.StartsWith(pathPrefix + ".")
+          ? kvp.Key.Substring(pathPrefix.Length + 1)
+          : kvp.Key;
+
+        // Decode the value
+        object? value = null;
+        if (kvp.Value != null)
+        {
+          var typeName = response.Types?.TryGetValue(kvp.Key, out var t) == true ? t : null;
+          value = DecodePropertyValue(kvp.Value, typeName);
+        }
+
+        propertyValues[propPath] = value;
+      }
+
+      yield return Serialization.InterfaceProxyBuilder.Create<TInterface>(propertyValues);
+    }
+  }
+
+  /// <summary>
+  /// Decodes a property value from the batch response.
+  /// </summary>
+  private static object? DecodePropertyValue(string encodedValue, string? typeName)
+  {
+    if (string.IsNullOrEmpty(encodedValue))
+      return null;
+
+    // Handle JSON arrays
+    if (encodedValue.StartsWith("["))
+    {
+      try
+      {
+        return System.Text.Json.JsonSerializer.Deserialize<List<string>>(encodedValue);
+      }
+      catch
+      {
+        return encodedValue;
+      }
+    }
+
+    // Try to decode as primitive using the type name
+    if (!string.IsNullOrEmpty(typeName))
+    {
+      try
+      {
+        return Remoting.Interop.PrimitivesEncoder.Decode(encodedValue, typeName);
+      }
+      catch
+      {
+        // Fall through
+      }
+    }
+
+    return encodedValue;
+  }
+
+  /// <summary>
+  /// Helper binder for dynamic member access.
+  /// </summary>
+  private class DynamicGetMemberBinder : GetMemberBinder
+  {
+    public DynamicGetMemberBinder(string name) : base(name, false) { }
+    public override DynamicMetaObject FallbackGetMember(DynamicMetaObject target, DynamicMetaObject? errorSuggestion)
+      => throw new NotImplementedException();
+  }
 }
 
 /// <summary>
@@ -760,10 +1379,41 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
   /// This is used to extract dynamic objects passed from any derived
   /// classes, deferring any dynamic dispatching of class constructors.
   /// </remarks>
-  internal override dynamic @base =>
-    (field ??= Try(() => obj is DLRWrapper<I> ? obj.obj : obj))
-        ?? throw new ArgumentException(
-            $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+  internal override dynamic @base
+  {
+    get
+    {
+      // If we have a cached proxy from batch hydration, use it
+      // This allows HydrateForInterface to pre-fetch properties
+      if (_interfaceProxies.Count > 0)
+      {
+        // Return the first available cached proxy
+        // (In practice there's usually only one active at a time during SerializeAs)
+        return _interfaceProxies.Values.First();
+      }
+      
+      // Evaluate and cache the underlying object if not already cached
+      if (field == null)
+      {
+        field = Try(() => obj is DLRWrapper<I> ? obj.obj : obj);
+        
+        //
+        // Also store in @base_unbound to maintain a strong reference.
+        //
+        // This prevents GC from collecting the underlying DynamicRemoteObject
+        // while this wrapper is still alive, avoiding "Couldn't find object
+        // in pinned pool" errors when accessing properties later.
+        //
+        if (field != null && @base_unbound == null)
+        {
+          @base_unbound = Try(() => Unbind(field), () => field);
+        }
+      }
+      
+      return field ?? throw new ArgumentException(
+          $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+    }
+  }
 
   //
   // Proxy methods for event and method binding.

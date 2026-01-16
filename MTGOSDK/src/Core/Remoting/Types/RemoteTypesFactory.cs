@@ -98,10 +98,25 @@ public class RemoteTypesFactory(TypeResolver resolver,
     Type shortOutput = resolver.Resolve(typeDump.Assembly, typeDump.Type);
     if (shortOutput != null)
     {
-      return shortOutput;
+      // If it's already a RemoteType, return it directly
+      if (shortOutput is RemoteType)
+      {
+        return shortOutput;
+      }
+
+      // If it's a primitive or value type, return it directly
+      if (shortOutput.IsPrimitive || shortOutput.IsValueType)
+      {
+        return shortOutput;
+      }
+
+      // For non-primitive local types, we need to continue with the full
+      // RemoteType creation to ensure method invocations go to the remote process.
+      // This is important for types like System.Windows.Application where
+      // the type exists locally but we need to invoke methods remotely.
     }
 
-    RemoteType output = new RemoteType(app, typeDump.Type, typeDump.Assembly, typeDump.IsArray);
+    RemoteType output = new RemoteType(app, typeDump.Type, typeDump.Assembly, typeDump.IsArray, sourceTypeDump: typeDump);
 
     // Temporarily indicate we are on-going creation
     _onGoingCreations[new Tuple<string, string>(typeDump.Assembly, typeDump.Type)] = output;
@@ -278,8 +293,8 @@ public class RemoteTypesFactory(TypeResolver resolver,
               {
                 // TODO: Add stub method to indicate this error to the users?
                 Debug.WriteLine(
-                  $"[RemoteTypesFactory] Could not resolve method {func.Name} of {methodParameter.Type} using the function {nameof(ResolveTypeWhileCreating)} " +
-                  $"and it did not throw any exceptions (returned NULL).");
+                $"[RemoteTypesFactory] Could not resolve method {func.Name} of {methodParameter.Type} using the function {nameof(ResolveTypeWhileCreating)} " +
+                $"and it did not throw any exceptions (returned NULL).");
                 return null;
               }
               return paramType;
@@ -288,8 +303,8 @@ public class RemoteTypesFactory(TypeResolver resolver,
             {
               // TODO: Add stub method to indicate this error to the users?
               Debug.WriteLine(
-                $"[RemoteTypesFactory] Could not resolve method {func.Name} of {methodParameter.Type} using the function {nameof(ResolveTypeWhileCreating)} " +
-                $"and it threw this exception: " + e);
+              $"[RemoteTypesFactory] Could not resolve method {func.Name} of {methodParameter.Type} using the function {nameof(ResolveTypeWhileCreating)} " +
+              $"and it threw this exception: " + e);
               return null;
             }
           }
@@ -312,7 +327,7 @@ public class RemoteTypesFactory(TypeResolver resolver,
         {
           // TODO: This sometimes throws because of generic results (like List<SomeAssembly.SomeObject>)
           Debug.WriteLine($"[RemoteTypesFactory] failed to create method {func.Name} because its return type could be created.\n" +
-                  "The throw exception was: " + e);
+                "The throw exception was: " + e);
           // TODO: Add stub method to indicate this error to the users?
           return null;
         }

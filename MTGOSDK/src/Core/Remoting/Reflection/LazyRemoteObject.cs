@@ -23,6 +23,13 @@ public class LazyRemoteObject : DynamicRemoteObject
   private Lazy<dynamic> @instance = null!;
 
   /// <summary>
+  /// Gets the resolved underlying dynamic object instance.
+  /// Triggers lazy initialization if not already resolved.
+  /// </summary>
+  /// <returns>The resolved dynamic remote object.</returns>
+  public dynamic GetResolvedInstance() => @instance?.Value;
+
+  /// <summary>
   /// Callback to reset the lazy initializer for the created instance.
   /// </summary>
   public delegate dynamic TResetter(Func<dynamic> callback);

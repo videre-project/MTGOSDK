@@ -5,11 +5,8 @@
 **/
 
 using System;
-using System.IO;
-using System.Net;
 
-using Newtonsoft.Json;
-
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
@@ -17,42 +14,37 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private string MakeTypeResponse(HttpListenerRequest req)
+  private byte[] MakeTypeResponse()
   {
-    string body = null;
-    using (StreamReader sr = new(req.InputStream))
-    {
-      body = sr.ReadToEnd();
-    }
-    if (string.IsNullOrEmpty(body))
-    {
-      return QuickError("Missing body");
-    }
-
-    var request = JsonConvert.DeserializeObject<TypeDumpRequest>(body);
+    var request = DeserializeRequest<TypeDumpRequest>();
     if (request == null)
-    {
-      return QuickError("Failed to deserialize body");
-    }
+      return QuickError("Missing or invalid request body");
 
     return MakeTypeResponse(request);
   }
 
-  public string MakeTypeResponse(TypeDumpRequest dumpRequest)
+  public byte[] MakeTypeResponse(TypeDumpRequest dumpRequest)
   {
     string type = dumpRequest.TypeFullName;
     if (string.IsNullOrEmpty(type))
-    {
       return QuickError("Missing parameter 'TypeFullName'");
-    }
 
     string assembly = dumpRequest.Assembly;
     Type resolvedType = _runtime.ResolveType(type, assembly);
 
     if (resolvedType != null)
     {
-      TypeDump recursiveTypeDump = TypeDump.ParseType(resolvedType);
-      return JsonConvert.SerializeObject(recursiveTypeDump);
+      // Log when fallback to System.Object occurs (for debugging)
+      string requestedName = dumpRequest.TypeFullName;
+      if (resolvedType == typeof(object) && 
+          !requestedName.EndsWith("Object") && 
+          !requestedName.Equals("System.Object"))
+      {
+         Log.Debug($"[Diver] Fallback type resolution: Requested {requestedName} resolved to System.Object");
+      }
+
+      var typeDump = TypeDump.ParseType(resolvedType);
+      return WrapSuccess(typeDump);
     }
 
     return QuickError("Failed to find type in searched assemblies");

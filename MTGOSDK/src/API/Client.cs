@@ -8,16 +8,19 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.Http;
 using System.Security;
+using System.Text.Json;
 using System.Windows;
 using System.Xml;
 
 using Microsoft.Extensions.Logging;
 
-using Newtonsoft.Json.Linq;
+using FlsClient.Interface;
+using Shiny.Core.Interfaces;
+using WotC.MtGO.Client.Model;
 
 using MTGOSDK.API.Collection;
-using MTGOSDK.API.Users;
 using MTGOSDK.API.Settings;
+using MTGOSDK.API.Users;
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Memory;
@@ -26,10 +29,6 @@ using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Security;
 using MTGOSDK.Resources;
 using static MTGOSDK.Win32.Constants;
-
-using FlsClient.Interface;
-using Shiny.Core.Interfaces;
-using WotC.MtGO.Client.Model;
 
 
 namespace MTGOSDK.API;
@@ -62,7 +61,12 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// View model for the client's login and authentication process.
   /// </summary>
   private static dynamic s_loginManager =>
-    field ??= Unbind(s_shellViewModel).m_loginViewModel;
+    Unbind(s_shellViewModel).m_loginViewModel;
+
+  /// <summary>
+  /// The cancellation token source used to cancel client-dependent operations.
+  /// </summary>
+  private static CancellationTokenSource? s_cts;
 
   //
   // Static fields and properties
@@ -202,7 +206,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   public Client(
     ClientOptions options = default,
     ILoggerProvider? loggerProvider = null,
-    ILoggerFactory? loggerFactory = null
+    ILoggerFactory? loggerFactory = null,
+    Process? process = null
   ) : base(
     //
     // This factory delegate will setup the RemoteClient instance before it
@@ -228,6 +233,11 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
 
         // Start a new MTGO process.
         await RemoteClient.StartProcess();
+      }
+      else if (process != null)
+      {
+        Log.Debug("Overriding connection to MTGO process (PID={ProcessId}).", process.Id);
+        RemoteClient.ClientProcess = process;
       }
     })
   {
@@ -288,6 +298,15 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Verify that any existing user sessions are valid.
     if (!WaitUntilSync(() => this.SessionId != Guid.Empty) && this.IsConnected)
       throw new VerificationException("Current user session is invalid.");
+
+    // Register a cancellation token source for async operations.
+    s_cts = new CancellationTokenSource();
+    RemoteClient.Disposed += (_, _) =>
+    {
+      s_cts?.Cancel();
+      s_cts?.Dispose();
+      s_cts = null;
+    };
   }
 
   /// <summary>
@@ -311,15 +330,16 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         throw new HttpRequestException("Failed to fetch server status");
 
       using var content = response.Content;
-      var json = JObject.Parse(await content.ReadAsStringAsync());
+      using var json = JsonDocument.Parse(await content.ReadAsStringAsync());
+      var root = json.RootElement;
 
-      if (json["returned"].ToObject<int>() == 0)
+      if (root.GetProperty("returned").GetInt32() == 0)
         throw new ExternalErrorException("No MTGO servers were found");
 
       // Check if any servers are online.
-      string[] statuses = [ "high", "medium", "low" ];
-      return json["game_server_status_list"].Any(s =>
-          statuses.Contains(s["last_reported_state"].ToObject<string>()));
+      string[] statuses = ["high", "medium", "low"];
+      return root.GetProperty("game_server_status_list").EnumerateArray().Any(s =>
+          statuses.Contains(s.GetProperty("last_reported_state").GetString()));
     }
   }
 
@@ -341,13 +361,14 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
         throw new HttpRequestException("Failed to fetch server status");
 
       using var content = response.Content;
-      var json = JObject.Parse(await content.ReadAsStringAsync());
+      using var json = JsonDocument.Parse(await content.ReadAsStringAsync());
+      var root = json.RootElement;
 
-      if (!json["response"].ToObject<string>().Equals("success"))
+      if (!root.GetProperty("response").GetString()?.Equals("success") ?? true)
         throw new HttpRequestException("Failed to fetch server status");
 
       // Check if the login server is up.
-      return json["message"].ToObject<string>() == "UP";
+      return root.GetProperty("message").GetString() == "UP";
     }
   }
 
@@ -392,7 +413,6 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   public void ClearCaches()
   {
     Log.Debug("Disposing all pinned remote objects registered with the client.");
-    CollectionManager.Cards.Clear();
     ObjectProvider.ResetCache();
   }
 
@@ -407,28 +427,29 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
 
   public static async Task<bool> WaitForMTGOProcess(TimeSpan timeout = default)
   {
-    return await WaitUntilAsync(async () =>
+    return await WaitUntil(() =>
     {
       // Check if there exists a valid MTGO process running.
       using var process = RemoteClient.MTGOProcess();
       if (process == null || process.Id <= 0 || process.HasExited) return false;
 
       // Wait for the MTGO process UI to start and open kicker window.
-      return await WaitUntil(() =>
-        process.WaitForInputIdle() &&
-        !string.IsNullOrEmpty(process.MainWindowTitle)
-      );
+      process.WaitForInputIdle();
+      process.Refresh();
+      return !string.IsNullOrEmpty(process.MainWindowTitle);
     }, retries: (int) timeout.TotalMilliseconds / 250);
   }
 
   public async Task<bool> WaitForUserLogin(TimeSpan timeout = default)
   {
+    CancellationToken ct = s_cts?.Token ?? CancellationToken.None;
+
     ObjectProvider.SuppressLogging = true;
-    bool res = await WaitUntilAsync(() =>
+    bool res = await WaitUntil(() =>
     {
       ObjectProvider.ResetCache();
-      return Task.FromResult(this.IsLoggedIn);
-    }, retries: (int) timeout.TotalMilliseconds / 250);
+      return this.IsLoggedIn;
+    }, retries: (int) timeout.TotalMilliseconds / 250, ct: ct);
     ObjectProvider.SuppressLogging = false;
 
     return res;
@@ -441,19 +462,39 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <remarks>
   /// The client may take a few seconds to close the overlay when done loading.
   /// </remarks>
-  public async Task<bool> WaitForClientReady() =>
-    await WaitUntil(() =>
-      // Checks to see if the ShellViewModel has finished initializing.
-      Unbind(s_shellViewModel).IsSessionConnected == true &&
-      Unbind(s_shellViewModel).ShowLoadDeckSplashScreen == false &&
-      Unbind(s_shellViewModel).m_blockingProgressInstances.Count == 0 &&
-      // Checks to see if the HomeSceneViewModel has finished initializing.
-      Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count > 0 &&
-      Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count > 0 &&
-      Unbind(s_shellViewModel.CurrentScene).JoinedEvents.Count >= 0,
-      delay: 500, // in ms
-      retries: 60 // or 30 seconds
+  public async Task<bool> WaitForClientReady()
+  {
+    CancellationToken ct = s_cts?.Token ?? CancellationToken.None;
+    return await WaitUntil(() =>
+      Try(() =>
+        // Checks to see if the ShellViewModel has finished initializing.
+        Unbind(s_shellViewModel).IsSessionConnected == true &&
+        Unbind(s_shellViewModel).ShowLoadDeckSplashScreen == false &&
+        Unbind(s_shellViewModel).m_blockingProgressInstances.Count == 0 &&
+        // Checks to see if the HomeSceneViewModel has finished initializing.
+        Unbind(s_shellViewModel.CurrentScene).FeaturedTournaments.Count > 0 &&
+        Unbind(s_shellViewModel.CurrentScene).SuggestedLeagues.Count > 0 &&
+        Unbind(s_shellViewModel.CurrentScene).JoinedEvents.Count >= 0,
+        //
+        // If we're unable to access these properties, check that we haven't
+        // already navigated to a different scene (in which case we've already
+        // initialized the client).
+        //
+        () => Unbind(s_shellViewModel).CurrentScene.GetType().Name switch
+        {
+          // These scenes indicate that we're still in the login flow, or that
+          // we can access the home scene properties.
+          "LoginViewModel" => false,
+          "HomeSceneViewModel" => false,
+          // We will assume any other scene indicates the client is loaded.
+          _ => true
+        }
+      ),
+      delay: 500,  // in ms
+      retries: 60, // or 30 seconds
+      ct
     );
+  }
 
   /// <summary>
   /// Creates a new user session and connects MTGO to the main server.
@@ -525,7 +566,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
     // Invokes logoff command and disconnects the MTGO client.
     Log.Debug("Logging off and disconnecting the client.");
     s_loginManager.Disconnect();
-    if (!await WaitUntil(() => !this.IsConnected || !RemoteClient.IsInitialized )) {
+    if (!await WaitUntil(() => !this.IsConnected || !RemoteClient.IsInitialized))
+    {
       throw new TimeoutException("Failed to log off and disconnect the client.");
     }
   }

@@ -4,6 +4,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Diagnostics;
+using System.Collections.Concurrent;
+
 using MTGOSDK.Core.Memory;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
@@ -13,6 +16,8 @@ namespace MTGOSDK.Core.Remoting.Types;
 
 public class RemoteObject : IObjectReference
 {
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
   public void AddReference() => _ref?.AddReference();
 
   public void ReleaseReference(bool useJitter = false)
@@ -21,6 +26,16 @@ public class RemoteObject : IObjectReference
     _isDisposed = true;
 
     _ref?.ReleaseReference(useJitter);
+  }
+
+  /// <summary>
+  /// Suppresses the remote unpin when disposing.
+  /// </summary>
+  internal void SuppressUnpin()
+  {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    _ref?.SuppressUnpin();
   }
 
   public bool IsValid => _ref != null && _ref.IsValid && !_isDisposed;
@@ -40,7 +55,7 @@ public class RemoteObject : IObjectReference
   private readonly RemoteObjectRef _ref;
   private Type _type = null;
 
-  private readonly Dictionary<Delegate, DiverCommunicator.LocalEventCallback> _eventCallbacksAndProxies = new();
+  private readonly ConcurrentDictionary<Delegate, DiverCommunicator.LocalEventCallback> _eventCallbacksAndProxies = new();
 
   public ulong RemoteToken => _ref.Token;
 
@@ -69,14 +84,24 @@ public class RemoteObject : IObjectReference
   public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(
     string methodName,
     params ObjectOrRemoteAddress[] args)
-  => InvokeMethod(methodName, args);
+  => InvokeMethod(methodName, Array.Empty<string>(), args);
 
   public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(
     string methodName,
     string[] genericArgsFullTypeNames,
     params ObjectOrRemoteAddress[] args)
   {
-    InvocationResults invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
+    using var activity = s_activitySource.StartActivity("RO.InvokeMethod");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("method", methodName);
+
+    InvocationResults? invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
+    if (invokeRes is null)
+    {
+      throw new InvalidOperationException(
+        $"Remote invocation '{GetType().FullName}.{methodName}' returned no result (null). " +
+        "This usually indicates a diver/transport failure or an unexpected response format.");
+    }
     if (invokeRes.VoidReturnType)
     {
       return (false, null);
@@ -107,7 +132,7 @@ public class RemoteObject : IObjectReference
       DynamicRemoteObject[] droParameters = new DynamicRemoteObject[args.Length];
       for (int i = 0; i < args.Length; i++)
       {
-        RemoteObject ro = _app.GetRemoteObject(args[i].RemoteAddress, args[i].Type);
+        RemoteObject ro = _app.GetRemoteObjectFromField(args[i].RemoteAddress, args[i].Type);
         DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
         dro.__timestamp = args[i].Timestamp;
 
@@ -125,11 +150,9 @@ public class RemoteObject : IObjectReference
 
   public void EventUnsubscribe(string eventName, Delegate callback)
   {
-    if (_eventCallbacksAndProxies.TryGetValue(callback, out DiverCommunicator.LocalEventCallback callbackProxy))
+    if (_eventCallbacksAndProxies.TryRemove(callback, out DiverCommunicator.LocalEventCallback callbackProxy))
     {
       _ref.EventUnsubscribe(eventName, callbackProxy);
-
-      _eventCallbacksAndProxies.Remove(callback);
     }
   }
 

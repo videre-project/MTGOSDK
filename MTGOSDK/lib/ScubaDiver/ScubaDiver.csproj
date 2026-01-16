@@ -37,10 +37,20 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
-    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="MessagePack" />
+    <PackageReference Include="MessagePack.Annotations" />
     <PackageReference Include="Lib.Harmony" />
+    <PackageReference Include="System.IO.Pipelines" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
+  </ItemGroup>
+
+  <!-- WPF assemblies for Dispatcher support -->
+  <ItemGroup>
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
   </ItemGroup>
 
 </Project>

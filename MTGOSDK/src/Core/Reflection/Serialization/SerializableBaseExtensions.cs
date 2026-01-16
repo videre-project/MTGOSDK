@@ -3,11 +3,16 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+using System.Diagnostics;
+
 
 namespace MTGOSDK.Core.Reflection.Serialization;
 
 public static class SerializableBaseExtensions
 {
+  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
+
 #if !MTGOSDKCORE
   /// <summary>
   /// Serializes a collection of objects to the specified interface type.
@@ -35,22 +40,60 @@ public static class SerializableBaseExtensions
     IList<string> exclude = default,
     bool strict = false)
   {
-    TypeProxy<dynamic> proxy = new(typeof(TInterface));
-    if (!proxy.IsInterface)
-    {
-      throw new ArgumentException(
-        $"The specified type {typeof(TInterface)} must be an interface.");
-    }
-
-    // Get all properties of the specified interface.
-    var filter = new PropertyFilter(include, exclude, strict, proxy.Class);
-    IList<string> properties = filter.Properties.Select(p => p.Name).ToList();
+    using var activity = s_activitySource.StartActivity("SerializeAs-Enumerable");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("count", enumerable.Count());
 
     foreach (SerializableBase item in enumerable)
     {
-      item.SetSerializationProperties(properties, strict: true);
-      var serializable = item.ToSerializable();
-      yield return (TInterface)BindExpandoToInterface(serializable, proxy.Class);
+      // Use the instance SerializeAs method directly to preserve enum types
+      yield return item.SerializeAs<TInterface>(include, exclude, strict);
+    }
+  }
+
+  /// <summary>
+  /// Serializes a collection to the specified interface type as an async stream.
+  /// Each item is yielded after its properties are serialized (in parallel).
+  /// </summary>
+  /// <typeparam name="TInterface">The interface type to serialize to.</typeparam>
+  /// <param name="enumerable">The source collection.</param>
+  /// <param name="include">Properties to include.</param>
+  /// <param name="exclude">Properties to exclude.</param>
+  /// <param name="strict">If true, only properties in the include list are serialized.</param>
+  /// <param name="cancellationToken">Cancellation token.</param>
+  /// <returns>An async enumerable that yields serialized items one at a time.</returns>
+  /// <remarks>
+  /// Use this method for streaming scenarios where you want:
+  /// 1. Lazy streaming - items are yielded one at a time
+  /// 2. Parallel property fetching - each item's properties are fetched in parallel
+  /// 
+  /// For batch operations where you want all items at once with maximum parallelism,
+  /// use <see cref="SerializationExtensions.SerializeAllAsync{TSource,TInterface}"/> instead.
+  /// </remarks>
+  public static async IAsyncEnumerable<TInterface> SerializeAsAsync<TInterface>(
+    this IEnumerable<SerializableBase> enumerable,
+    IList<string> include = default,
+    IList<string> exclude = default,
+    bool strict = false,
+    [System.Runtime.CompilerServices.EnumeratorCancellation] 
+    CancellationToken cancellationToken = default)
+  {
+    using var activity = s_activitySource.StartActivity("SerializeAsAsync-Enumerable");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    // Count might not be available for generic IEnumerable without iteration, but usually it is materialized
+    if (enumerable is ICollection collection)
+    {
+       activity?.SetTag("count", collection.Count);
+    }
+    
+    foreach (SerializableBase item in enumerable)
+    {
+      if (cancellationToken.IsCancellationRequested)
+        yield break;
+      
+      // Each item's properties are fetched in parallel by SerializeAsAsync
+      yield return await item.SerializeAsAsync<TInterface>(include, exclude, strict)
+        .ConfigureAwait(false);
     }
   }
 

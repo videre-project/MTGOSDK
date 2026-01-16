@@ -44,6 +44,9 @@ public sealed class Tournament(dynamic tournament) : Event
   public IDictionary<string, IList<EventPrize>> Prizes =>
     field ??= EventPrize.FromPrizeStructure(@base.Prizes, HasPlayoffs);
 
+  /// <summary>
+  /// The event structure of the tournament.
+  /// </summary>
   public EventStructure EventStructure =>
     field ??= new(m_queue, Unbind(this).TournamentStructure);
 
@@ -59,15 +62,21 @@ public sealed class Tournament(dynamic tournament) : Event
   /// This is a rough approximation of the end time, based on the current number
   /// of players in the tournament. The actual end time may be earlier than this
   /// time if a round finishes early.
+  /// <para>
+  /// This assumes that each round takes the full match time limit to complete,
+  /// and that there is a 2 minute break between rounds (no fast-rounds).
+  /// </para>
   /// </remarks>
   public DateTime EndTime
   {
     get
     {
+      // Total number of rounds w/ playoffs (top 8) rounds.
       int realTotalRounds = TotalRounds + (HasPlayoffs ? 3 : 0);
+
       DateTime endTime = StartTime.AddMinutes(
         // Minutes per round + 2 minutes between rounds.
-        (2 * Unbind(this).MatchTimeLimit * realTotalRounds) +
+        (TotalRoundDuration.TotalMinutes * realTotalRounds) +
         (2 * (realTotalRounds - 1)) +
         // Minutes for deckbuilding.
         Try<int>(() => Unbind(this).MinutesForDeckbuilding)
@@ -79,17 +88,44 @@ public sealed class Tournament(dynamic tournament) : Event
   }
 
   /// <summary>
+  /// The total expected duration of a single round in the tournament.
+  /// </summary>
+  /// <remarks>
+  /// This includes the match time limit for both players, sideboarding time,
+  /// and a small buffer to account for clock drift from priority exchanges.
+  /// <para>
+  /// Note that this does not account for game resets, which can cause an
+  /// extended round.
+  /// </para>
+  /// </remarks>
+  [NonSerializable]
+  public TimeSpan TotalRoundDuration =>
+    TimeSpan.FromMinutes(
+      // The match time limit applies for both players, meaning it is doubled.
+      (2 * (double)Unbind(this).MatchTimeLimit) +
+      // Bo3 games can have at most 2 sideboard periods of 3 minutes each.
+      (2 * 3.0) +
+      // Per MTGO_Tony, as fractions of a second are added to players' clocks
+      // when exchanging priority, we can have an additional 2 minutes added.
+      2.0
+    );
+
+  /// <summary>
   /// The number of rounds in the tournament.
   /// </summary>
+  /// <remarks>
+  /// This value is calculated based on the number of swiss rounds associated
+  /// with the tournament, or based on the number of players if unavailable.
+  /// </remarks>
   public int TotalRounds =>
-    Try<int>(() =>
-      EliminationStyle == TournamentEliminationStyle.Swiss
-        ? Math.Max(Try<int>(() => @base.TotalRounds),
-                   Math.Max(GetNumberOfRounds(TotalPlayers),
-                            GetNumberOfRounds(MinimumPlayers)))
-        : @base.TotalRounds)
-    // Remove the top 8 rounds from the swiss count.
-    - ((HasPlayoffs && InPlayoffs) ? 3 : 0);
+    Math.Max(
+      // Get the number of swiss rounds from the stored tournament data.
+      Try(() => @base.TotalRounds - ((HasPlayoffs && InPlayoffs) ? 3 : 0),
+          () => Unbind(this).SyncDataNumberOfRounds) ?? 0,
+      // Fallback to calculating rounds based on the current player counts.
+      Math.Max(GetNumberOfRounds(TotalPlayers),
+               GetNumberOfRounds(MinimumPlayers))
+    );
 
   //
   // ITournament wrapper properties
@@ -132,7 +168,15 @@ public sealed class Tournament(dynamic tournament) : Event
   /// </para>
   /// </remarks>
   public DateTime RoundEndTime =>
-    ServerTime.ServerTimeAsClientTime(@base.EndServerTime);
+    ServerTime.ServerTimeAsClientTime(this.State switch
+    {
+      // Uses the same server-side calculation of the round end time, based on
+      // the total match time limit for both players plus sideboarding time.
+      TournamentState.RoundInProgress
+        => Unbind(this).CurrentRound.StartTime + this.TotalRoundDuration,
+      // Fallback to the computed end server time.
+      _ => Unbind(this).EndServerTime
+    });
 
   /// <summary>
   /// The current round of the tournament.
@@ -147,7 +191,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// <summary>
   /// Whether the tournament has progressed to playoffs (i.e. Top-8)
   /// </summary>
-  public bool InPlayoffs => @base.IsInPlayoffs;
+  public bool InPlayoffs => Try<bool>(() => @base.IsInPlayoffs);
 
   /// <summary>
   /// Whether the tournament has playoffs (i.e. Top-8) or concludes after swiss.
@@ -234,7 +278,7 @@ public sealed class Tournament(dynamic tournament) : Event
       {
         Tournament tournament = new(instance);
 
-        var eventArgs = new TournamentStateChangedEventArgs(args);
+        var eventArgs = new TournamentStateChangedEventArgs(args[0]);
         if (eventArgs.OldValue.Equals(TournamentState.Finished)) return null;
         TournamentState state = eventArgs.NewValue;
 

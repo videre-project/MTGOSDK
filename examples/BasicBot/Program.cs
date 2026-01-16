@@ -29,16 +29,13 @@ ILoggerFactory factory = LoggerFactory.Create(builder =>
 });
 
 // Initialize the client instance.
-bool isAlreadyRunning = !restart && Client.HasStarted;
 using var client = new Client(
-  isAlreadyRunning
-    ? new ClientOptions()
-    : new ClientOptions
-      {
-        CreateProcess = true,
-        CloseOnExit = true,
-        AcceptEULAPrompt = true
-      },
+  new ClientOptions
+  {
+    CreateProcess = true,
+    // CloseOnExit = true,
+    AcceptEULAPrompt = true
+  },
   loggerFactory: factory
 );
 Log.Information("Connected to MTGO v{Version}.", Client.Version);
@@ -62,9 +59,3 @@ client.IsConnectedChanged += delegate(object? sender)
 };
 
 Log.Information("Finished loading.");
-
-if (!isAlreadyRunning)
-{
-  await client.LogOff();
-  Log.Information("Stopped the bot.");
-}

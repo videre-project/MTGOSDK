@@ -4,20 +4,15 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections.Specialized;
+using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
-using System.Net.Http;
-using System.Net.Sockets;
-using System.Text;
-using System.Web;
 
-using Newtonsoft.Json;
+using MessagePack;
 
-using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 
@@ -25,109 +20,192 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 namespace MTGOSDK.Core.Remoting.Interop;
 
 /// <summary>
-/// Communicates with a diver in a remote process
+/// TCP-based communicator with the Diver in a remote process.
 /// </summary>
-public class DiverCommunicator : BaseCommunicator
+public class DiverCommunicator : IDisposable
 {
-  private readonly JsonSerializerSettings _withErrors = new()
-  {
-    MissingMemberHandling = MissingMemberHandling.Error,
-  };
-
+  private readonly TcpCommunicator _tcp;
   private int? _process_id = null;
-  private readonly CallbacksListener _listener;
 
-  public bool IsConnected => _process_id.HasValue;
+  // Callback handling
+  private readonly ConcurrentDictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
+  private readonly ConcurrentDictionary<LocalEventCallback, int> _eventHandlersToToken = new();
+  private readonly ConcurrentDictionary<int, LocalHookCallback> _tokensToHookCallbacks = new();
+  private readonly ConcurrentDictionary<LocalHookCallback, int> _hookCallbacksToTokens = new();
 
-  public DiverCommunicator(
-    string hostname,
-    int diverPort,
-    CancellationTokenSource? cts = null)
-      : base(hostname, diverPort, cts)
+  private static readonly AsyncLocal<bool> s_forceUIThread = new();
+  private volatile bool _isDisposed = false;
+
+  public static bool ForceUIThread
   {
-    _listener = new CallbacksListener(this);
-    RemoteClient.Disposed += (s, e) =>
+    get => s_forceUIThread.Value;
+    set => s_forceUIThread.Value = value;
+  }
+
+  public static IDisposable BeginUIThreadScope() => new UIThreadScope();
+
+  private sealed class UIThreadScope : IDisposable
+  {
+    private readonly bool _previousValue;
+    private readonly bool _suppressed;
+    private readonly System.Threading.AsyncFlowControl _flowControl;
+
+    public UIThreadScope()
     {
-      SyncThread.Enqueue(() =>
+      _previousValue = ForceUIThread;
+      
+      // Suppress ExecutionContext flow to prevent AsyncLocal bleeding
+      // to concurrent/parallel operations
+      if (!System.Threading.ExecutionContext.IsFlowSuppressed())
       {
-        base.Cancel();
-        _process_id = null;
-        if (_listener.IsOpen)
-          _listener.Close();
-      });
-    };
-  }
-  public DiverCommunicator(IPAddress ipa, int diverPort)
-    : this(ipa.ToString(), diverPort, null) { }
-  public DiverCommunicator(IPEndPoint ipe)
-    : this(ipe.Address, ipe.Port) { }
-
-  protected override string HandleResponse(string body)
-  {
-    if (body.StartsWith("{\"error\":", StringComparison.InvariantCultureIgnoreCase))
-    {
-      // Diver sent back an error. We parse it here and throwing a 'proxied' exception
-      var errMessage = JsonConvert.DeserializeObject<DiverError>(body, _withErrors);
-      if (errMessage != null)
-        throw new RemoteException(errMessage.Error, errMessage.StackTrace);
+        _flowControl = System.Threading.ExecutionContext.SuppressFlow();
+        _suppressed = true;
+      }
+      
+      ForceUIThread = true;
     }
-    return body;
+
+    public void Dispose()
+    {
+      ForceUIThread = _previousValue;
+      if (_suppressed)
+        _flowControl.Undo();
+    }
   }
+
+  public bool IsConnected => _tcp.IsConnected;
 
   public bool Disconnect()
   {
     if (!IsConnected) return false;
+    return UnregisterClient(_process_id);
+  }
 
-    return UnregisterClient(_process_id.Value);
+  public void Cancel() => _tcp?.Dispose();
+
+  public DiverCommunicator(
+    string hostname,
+    int diverPort,
+    CancellationTokenSource cts = null)
+  {
+    _tcp = new TcpCommunicator(hostname, diverPort, cts);
+
+    // Register callback handler for incoming events/hooks from Diver
+    _tcp.SetCallbackHandler(HandleCallback);
+
+    RemoteClient.Disposed += (s, e) =>
+    {
+      _isDisposed = true;
+      SyncThread.Enqueue(() =>
+      {
+        Cancel();
+        _process_id = null;
+      });
+    };
   }
 
   /// <summary>
-  /// Dumps the heap of the remote process
+  /// Connect to the Diver via TCP.
   /// </summary>
-  /// <param name="typeFilter">TypeFullName filter of objects to get from the heap. Support leading/trailing wildcard (*). NULL returns all objects</param>
-  /// <returns></returns>
+  public async Task ConnectAsync(CancellationToken cancellationToken = default)
+  {
+    await _tcp.ConnectAsync(cancellationToken).ConfigureAwait(false);
+  }
+
+  /// <summary>
+  /// Handles callbacks (events/hooks) received from the Diver.
+  /// </summary>
+  private void HandleCallback(string endpoint, byte[] body)
+  {
+    if (endpoint == "/invoke_callback")
+    {
+      var request = MessagePackSerializer.Deserialize<CallbackInvocationRequest>(body);
+
+      // Set the timestamp for the sender
+      if (request.Parameters.Count > 0)
+        request.Parameters[0].Timestamp = request.Timestamp;
+
+      if (_tokensToEventHandlers.TryGetValue(request.Token, out LocalEventCallback callback))
+      {
+        // Set timestamps for event args
+        if (request.Parameters.Count > 1)
+          request.Parameters[1].Timestamp = request.Timestamp;
+
+        callback([.. request.Parameters]);
+      }
+      else if (_tokensToHookCallbacks.TryGetValue(request.Token, out LocalHookCallback hook))
+      {
+        hook(new HookContext(request.Timestamp),
+             request.Parameters.FirstOrDefault(),
+             [.. request.Parameters.Skip(1)]);
+      }
+    }
+  }
+
+  private static ReadOnlyMemory<byte> Serialize<T>(T value) =>
+    MessagePackSerializer.Serialize(value);
+
+  /// <summary>
+  /// Ensures the TCP connection is established.
+  /// </summary>
+  private void EnsureConnected()
+  {
+    if (_isDisposed)
+      throw new ObjectDisposedException(nameof(DiverCommunicator), "MTGO process has closed");
+
+    if (!_tcp.IsConnected)
+    {
+      _tcp.ConnectAsync().GetAwaiter().GetResult();
+    }
+  }
+
+  /// <summary>
+  /// Sends a request and returns the response.
+  /// </summary>
+  private T SendRequest<T>(string endpoint, object request = null)
+  {
+    EnsureConnected();
+    byte[] body = request != null ? MessagePackSerializer.Serialize(request) : null;
+    return _tcp.SendRequestAsync<T>("/" + endpoint, body).GetAwaiter().GetResult();
+  }
+
+  /// <summary>
+  /// Sends a request without expecting a response.
+  /// </summary>
+  private void SendRequest(string endpoint, object request = null)
+  {
+    EnsureConnected();
+    byte[] body = request != null ? MessagePackSerializer.Serialize(request) : null;
+    _tcp.SendRequestAsync("/" + endpoint, body).GetAwaiter().GetResult();
+  }
+
   public HeapDump DumpHeap(string typeFilter = null, bool dumpHashcodes = true)
   {
-    Dictionary<string, string> queryParams = new();
-    if (typeFilter != null)
-      queryParams["type_filter"] = typeFilter;
-    queryParams["dump_hashcodes"] = dumpHashcodes.ToString();
-
-    string body = SendRequest("heap", queryParams);
-    HeapDump heapDump = JsonConvert.DeserializeObject<HeapDump>(body);
-
-    return heapDump;
+    var request = new HeapDumpRequest
+    {
+      TypeFilter = typeFilter,
+      DumpHashcodes = dumpHashcodes
+    };
+    return SendRequest<HeapDump>("heap", request);
   }
-  public DomainDump DumpDomain()
-  {
-    string body = SendRequest("domains", null);
-    DomainDump results = JsonConvert.DeserializeObject<DomainDump>(body, _withErrors)!;
 
-    return results;
-  }
+  public DomainDump DumpDomain() =>
+    SendRequest<DomainDump>("domains");
 
   public TypesDump DumpTypes(string assembly)
   {
-    Dictionary<string, string> queryParams = new() {};
-    queryParams["assembly"] = assembly;
-
-    string body = SendRequest("types", queryParams);
-    TypesDump? results = JsonConvert.DeserializeObject<TypesDump>(body, _withErrors);
-
-    return results;
+    var request = new TypesDumpRequest { Assembly = assembly };
+    return SendRequest<TypesDump>("types", request);
   }
 
   public TypeDump DumpType(string type, string assembly = null)
   {
-    TypeDumpRequest dumpRequest = new() { TypeFullName = type };
-    if (assembly != null)
-      dumpRequest.Assembly = assembly;
-
-    var requestJsonBody = JsonConvert.SerializeObject(dumpRequest);
-    string body = SendRequest("type", null, requestJsonBody);
-    TypeDump? results = JsonConvert.DeserializeObject<TypeDump>(body, _withErrors);
-
-    return results;
+    var dumpRequest = new TypeDumpRequest
+    {
+      TypeFullName = type,
+      Assembly = assembly
+    };
+    return SendRequest<TypeDump>("type", dumpRequest);
   }
 
   public ObjectDump DumpObject(
@@ -136,43 +214,21 @@ public class DiverCommunicator : BaseCommunicator
     bool pinObject = false,
     int? hashcode = null)
   {
-    Dictionary<string, string> queryParams = new()
+    var request = new ObjectDumpRequest
     {
-      { "address", address.ToString() },
-      { "type_name", typeName },
-      { "pinRequest", pinObject.ToString() },
-      { "hashcode_fallback", "false" }
+      Address = address,
+      TypeName = typeName,
+      PinRequest = pinObject,
+      Hashcode = hashcode,
+      HashcodeFallback = hashcode.HasValue
     };
-    if (hashcode.HasValue)
-    {
-      queryParams["hashcode"] = hashcode.Value.ToString();
-      queryParams["hashcode_fallback"] = "true";
-    }
-
-    string body = SendRequest("object", queryParams);
-    if (body.Contains("\"error\":"))
-    {
-      if (body.Contains("'address' points at an invalid address") ||
-        body.Contains("Method Table value mismatched"))
-      {
-        throw new RemoteObjectMovedException(address, body);
-      }
-      throw new Exception("Diver failed to dump objet. Error: " + body);
-    }
-
-    ObjectDump objectDump = JsonConvert.DeserializeObject<ObjectDump>(body);
-
-    return objectDump;
+    return SendRequest<ObjectDump>("object", request);
   }
 
-  public bool UnpinObject(ulong address)
+  public void UnpinObject(ulong address)
   {
-    Dictionary<string, string> queryParams = new()
-    {
-      { "address", address.ToString() },
-    };
-    string body = SendRequest("unpin", queryParams);
-    return body.Contains("OK");
+    var request = new UnpinRequest { Address = address };
+    SendRequest("unpin", request);
   }
 
   public InvocationResults InvokeMethod(
@@ -182,29 +238,16 @@ public class DiverCommunicator : BaseCommunicator
     string[] genericArgsFullTypeNames,
     params ObjectOrRemoteAddress[] args)
   {
-    InvocationRequest invocReq = new()
+    var invocReq = new InvocationRequest
     {
       ObjAddress = targetAddr,
       TypeFullName = targetTypeFullName,
       MethodName = methodName,
       GenericArgsTypeFullNames = genericArgsFullTypeNames,
-      Parameters = args.ToList()
+      Parameters = new List<ObjectOrRemoteAddress>(args),
+      ForceUIThread = ForceUIThread
     };
-
-    var requestJsonBody = JsonConvert.SerializeObject(invocReq);
-    var resJson = SendRequest("invoke", null, requestJsonBody);
-
-    InvocationResults res;
-    try
-    {
-      res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
-    }
-    catch
-    {
-      return null;
-    }
-
-    return res;
+    return SendRequest<InvocationResults>("invoke", invocReq);
   }
 
   public bool RegisterClient(int? process_id = null)
@@ -213,11 +256,9 @@ public class DiverCommunicator : BaseCommunicator
 
     try
     {
-      string body = SendRequest("register_client",
-        new Dictionary<string, string> {
-          { "process_id", _process_id.Value.ToString() }
-        });
-      return body.Contains("{\"status\":\"OK'\"}");
+      var request = new RegisterClientRequest { ProcessId = _process_id.Value };
+      SendRequest("register_client", request);
+      return true;
     }
     catch
     {
@@ -231,11 +272,9 @@ public class DiverCommunicator : BaseCommunicator
 
     try
     {
-      string body = SendRequest("unregister_client",
-        new Dictionary<string, string> {
-          { "process_id", _process_id.Value.ToString() }
-        });
-      return body.Contains("{\"status\":\"OK'\"}");
+      var request = new UnregisterClientRequest { ProcessId = _process_id.Value };
+      SendRequest("unregister_client", request);
+      return true;
     }
     catch
     {
@@ -251,7 +290,8 @@ public class DiverCommunicator : BaseCommunicator
   {
     try
     {
-      return SendRequest("ping").Contains("pong");
+      SendRequest("ping");
+      return true;
     }
     catch
     {
@@ -261,51 +301,41 @@ public class DiverCommunicator : BaseCommunicator
 
   public ObjectOrRemoteAddress GetItem(ulong token, ObjectOrRemoteAddress key)
   {
-    IndexedItemAccessRequest indexedItemAccess = new()
+    var request = new IndexedItemAccessRequest
     {
       CollectionAddress = token,
       PinRequest = true,
-      Index = key
+      Index = key,
+      ForceUIThread = ForceUIThread
     };
-
-    var requestJsonBody = JsonConvert.SerializeObject(indexedItemAccess);
-    var body = SendRequest("get_item", null, requestJsonBody);
-    if (body.Contains("\"error\":"))
-      throw new Exception("Diver failed to dump item of remote collection object. Error: " + body);
-
-    InvocationResults invokeRes = JsonConvert.DeserializeObject<InvocationResults>(body);
-
-    return invokeRes.ReturnedObjectOrAddress;
+    var result = SendRequest<InvocationResults>("get_item", request);
+    return result.ReturnedObjectOrAddress;
   }
 
   public InvocationResults InvokeStaticMethod(
     string targetTypeFullName,
     string methodName,
     params ObjectOrRemoteAddress[] args)
-  => InvokeStaticMethod(targetTypeFullName, methodName, null, args);
+    => InvokeStaticMethod(targetTypeFullName, methodName, null, args);
 
   public InvocationResults InvokeStaticMethod(
     string targetTypeFullName,
     string methodName,
     string[] genericArgsFullTypeNames,
     params ObjectOrRemoteAddress[] args)
-  => InvokeMethod(0, targetTypeFullName, methodName, genericArgsFullTypeNames, args);
+    => InvokeMethod(0, targetTypeFullName, methodName, genericArgsFullTypeNames, args);
 
   public InvocationResults CreateObject(
     string typeFullName,
     ObjectOrRemoteAddress[] args)
   {
-    var ctorInvocReq = new CtorInvocationRequest()
+    var ctorInvocReq = new CtorInvocationRequest
     {
       TypeFullName = typeFullName,
-      Parameters = args.ToList()
+      Parameters = new List<ObjectOrRemoteAddress>(args),
+      ForceUIThread = ForceUIThread
     };
-
-    var requestJsonBody = JsonConvert.SerializeObject(ctorInvocReq);
-    var resJson = SendRequest("create_object", null, requestJsonBody);
-    InvocationResults res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
-
-    return res;
+    return SendRequest<InvocationResults>("create_object", ctorInvocReq);
   }
 
   public InvocationResults SetField(
@@ -314,19 +344,15 @@ public class DiverCommunicator : BaseCommunicator
     string fieldName,
     ObjectOrRemoteAddress newValue)
   {
-    FieldSetRequest invocReq = new()
+    var invocReq = new FieldSetRequest
     {
       ObjAddress = targetAddr,
       TypeFullName = targetTypeFullName,
       FieldName = fieldName,
-      Value = newValue
+      Value = newValue,
+      ForceUIThread = ForceUIThread
     };
-
-    var requestJsonBody = JsonConvert.SerializeObject(invocReq);
-    var resJson = SendRequest("set_field", null, requestJsonBody);
-    InvocationResults res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
-
-    return res;
+    return SendRequest<InvocationResults>("set_field", invocReq);
   }
 
   public InvocationResults GetField(
@@ -334,18 +360,59 @@ public class DiverCommunicator : BaseCommunicator
     string targetTypeFullName,
     string fieldName)
   {
-    FieldGetRequest invocReq = new()
+    var invocReq = new FieldGetRequest
     {
       ObjAddress = targetAddr,
       TypeFullName = targetTypeFullName,
       FieldName = fieldName,
+      ForceUIThread = ForceUIThread
     };
+    return SendRequest<InvocationResults>("get_field", invocReq);
+  }
 
-    var requestJsonBody = JsonConvert.SerializeObject(invocReq);
-    var resJson = SendRequest("get_field", null, requestJsonBody);
-    InvocationResults res = JsonConvert.DeserializeObject<InvocationResults>(resJson, _withErrors);
+  /// <summary>
+  /// Fetches multiple property values in a single IPC call.
+  /// </summary>
+  /// <param name="targetAddr">Address of the pinned remote object.</param>
+  /// <param name="targetTypeFullName">Full type name of the object.</param>
+  /// <param name="pathsDelimited">Pipe-delimited property paths (e.g., "Name|Id|Rarity.Name").</param>
+  /// <returns>Response containing values dictionary and types dictionary.</returns>
+  public Interactions.Object.BatchMembersResponse GetBatchMembers(
+    ulong targetAddr,
+    string targetTypeFullName,
+    string pathsDelimited)
+  {
+    var request = new Interactions.Object.BatchMembersRequest
+    {
+      ObjAddress = targetAddr,
+      TypeFullName = targetTypeFullName,
+      PathsDelimited = pathsDelimited
+    };
+    return SendRequest<Interactions.Object.BatchMembersResponse>("batch_members", request);
+  }
 
-    return res;
+  /// <summary>
+  /// Fetches properties for all items in a collection in a single IPC call.
+  /// </summary>
+  /// <param name="collectionAddr">Address of the IEnumerable collection.</param>
+  /// <param name="collectionTypeName">Type name of the collection.</param>
+  /// <param name="pathsDelimited">Pipe-delimited property paths.</param>
+  /// <param name="maxItems">Maximum items to process (0 = no limit).</param>
+  /// <returns>Response containing all items' property values.</returns>
+  public Interactions.Object.BatchCollectionResponse GetBatchCollectionMembers(
+    ulong collectionAddr,
+    string collectionTypeName,
+    string pathsDelimited,
+    int maxItems = 0)
+  {
+    var request = new Interactions.Object.BatchCollectionRequest
+    {
+      CollectionAddress = collectionAddr,
+      CollectionTypeName = collectionTypeName,
+      PathsDelimited = pathsDelimited,
+      MaxItems = maxItems
+    };
+    return SendRequest<Interactions.Object.BatchCollectionResponse>("batch_collection", request);
   }
 
   public void EventSubscribe(
@@ -353,33 +420,25 @@ public class DiverCommunicator : BaseCommunicator
     string eventName,
     LocalEventCallback callback)
   {
-    if (!_listener.IsOpen)
-      _listener.Open();
-
-    Dictionary<string, string> queryParams = new()
+    var request = new EventSubscriptionRequest
     {
-      ["address"] = targetAddr.ToString(),
-      ["event"] = eventName,
-      ["ip"] = _listener.IP.ToString(),
-      ["port"] = _listener.Port.ToString()
+      Address = targetAddr,
+      EventName = eventName
     };
-    string body = SendRequest("event_subscribe", queryParams);
-    EventRegistrationResults regRes = JsonConvert.DeserializeObject<EventRegistrationResults>(body);
-    _listener.EventSubscribe(callback, regRes.Token);
+    var regRes = SendRequest<EventRegistrationResults>("event_subscribe", request);
+    _tokensToEventHandlers[regRes.Token] = callback;
+    _eventHandlersToToken[callback] = regRes.Token;
   }
 
   public void EventUnsubscribe(LocalEventCallback callback)
   {
-    int token = _listener.EventUnsubscribe(callback);
+    if (!_eventHandlersToToken.TryRemove(callback, out int token))
+      throw new Exception("EventUnsubscribe: callback not found");
 
-    Dictionary<string, string> queryParams = new();
-    queryParams["token"] = token.ToString();
-    string body = SendRequest("event_unsubscribe", queryParams);
-    if (!body.Contains("{\"status\":\"OK\"}"))
-      throw new Exception("Failed to unsubscribe from an event");
+    _tokensToEventHandlers.TryRemove(token, out _);
 
-    if (!_listener.HasActiveCallbacks)
-      _listener.Close();
+    var request = new EventUnsubscriptionRequest { Token = token };
+    SendRequest("event_unsubscribe", request);
   }
 
   public bool HookMethod(
@@ -389,49 +448,35 @@ public class DiverCommunicator : BaseCommunicator
     LocalHookCallback callback,
     List<string> parametersTypeFullNames = null)
   {
-    if (!_listener.IsOpen)
+    var req = new HookSubscriptionRequest
     {
-      _listener.Open();
-    }
-
-    FunctionHookRequest req = new()
-    {
-      IP = _listener.IP.ToString(),
-      Port = _listener.Port,
       TypeFullName = type,
       MethodName = methodName,
       HookPosition = pos.ToString(),
       ParametersTypeFullNames = parametersTypeFullNames
     };
 
-    var requestJsonBody = JsonConvert.SerializeObject(req);
-
-    var resJson = SendRequest("hook_method", null, requestJsonBody);
-    if (resJson.Contains("\"error\":"))
-      throw new Exception("Hook Method failed. Error from Diver: " + resJson);
-
-    EventRegistrationResults regRes = JsonConvert.DeserializeObject<EventRegistrationResults>(resJson);
-    _listener.HookSubscribe(callback, regRes.Token);
-
-    // Getting back the token tells us the hook was registered successfully.
+    var regRes = SendRequest<EventRegistrationResults>("hook_method", req);
+    _tokensToHookCallbacks[regRes.Token] = callback;
+    _hookCallbacksToTokens[callback] = regRes.Token;
     return true;
   }
 
   public void UnhookMethod(LocalHookCallback callback)
   {
-    int token = _listener.HookUnsubscribe(callback);
+    if (!_hookCallbacksToTokens.TryRemove(callback, out int token))
+      throw new Exception("UnhookMethod: callback not found");
 
-    Dictionary<string, string> queryParams;
-    string body;
-    queryParams = new() { };
-    queryParams["token"] = token.ToString();
-    body = SendRequest("unhook_method", queryParams);
-    if (!body.Contains("{\"status\":\"OK\"}"))
-      throw new Exception("Tried to unhook a method but the Diver's response was not 'OK'");
+    _tokensToHookCallbacks.TryRemove(token, out _);
 
-    if (!_listener.HasActiveCallbacks)
-      _listener.Close();
+    var request = new HookUnsubscriptionRequest { Token = token };
+    SendRequest("unhook_method", request);
   }
 
   public delegate void LocalEventCallback(ObjectOrRemoteAddress[] args);
+
+  public void Dispose()
+  {
+    _tcp?.Dispose();
+  }
 }
