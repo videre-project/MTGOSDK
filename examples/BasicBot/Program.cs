@@ -12,14 +12,14 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Security;
 
 
-// // Wait until the main MTGO server is online.
-// bool restart = false;
-// while (!await Client.IsOnline())
-// {
-//   Console.WriteLine("MTGO servers are currently offline. Waiting...");
-//   await Task.Delay(TimeSpan.FromMinutes(30));
-//   restart |= true; // Restart after downtime.
-// }
+// Wait until the main MTGO server is online.
+bool restart = false;
+while (!await Client.IsOnline())
+{
+  Console.WriteLine("MTGO servers are currently offline. Waiting...");
+  await Task.Delay(TimeSpan.FromMinutes(30));
+  restart |= true; // Restart after downtime.
+}
 
 ILoggerFactory factory = LoggerFactory.Create(builder =>
 {
@@ -29,7 +29,6 @@ ILoggerFactory factory = LoggerFactory.Create(builder =>
 });
 
 // Initialize the client instance.
-// bool isAlreadyRunning = !restart && Client.HasStarted;
 using var client = new Client(
   new ClientOptions
   {
@@ -60,9 +59,3 @@ client.IsConnectedChanged += delegate(object? sender)
 };
 
 Log.Information("Finished loading.");
-
-// if (!isAlreadyRunning)
-// {
-//   await client.LogOff();
-//   Log.Information("Stopped the bot.");
-// }
