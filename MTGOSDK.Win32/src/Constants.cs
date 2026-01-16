@@ -36,12 +36,22 @@ public static class Constants
   /// <summary>
   /// The current application directory for MTGO.
   /// </summary>
-  public static string MTGOAppDirectory =>
-    new Glob(@$"{ClickOncePaths.ApplicationDirectory}\mtgo..tion_*");
+  /// <remarks>
+  /// Returns null if MTGO has never been installed.
+  /// </remarks>
+  public static string? MTGOAppDirectory =>
+    ClickOncePaths.ApplicationDirectory is string appDir
+      ? new Glob(@$"{appDir}\mtgo..tion_*")
+      : null;
 
   /// <summary>
   /// The current data directory for MTGO's user data.
   /// </summary>
-  public static string MTGODataDirectory =>
-    new Glob(@$"{ClickOncePaths.ApplicationDataDirectory}\mtgo..tion_*\Data");
+  /// <remarks>
+  /// Returns null if MTGO has never been installed.
+  /// </remarks>
+  public static string? MTGODataDirectory =>
+    ClickOncePaths.ApplicationDataDirectory is string dataDir
+      ? new Glob(@$"{dataDir}\mtgo..tion_*\Data")
+      : null;
 }

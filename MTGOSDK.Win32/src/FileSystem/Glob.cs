@@ -15,10 +15,10 @@ public class Glob
 {
   public string[] Matches = new string[] { Environment.CurrentDirectory };
 
-  public static implicit operator string[](Glob glob) =>
-    glob.Matches;
-  public static implicit operator string(Glob glob) =>
-    glob.Matches
+  public static implicit operator string[]?(Glob? glob) =>
+    glob?.Matches;
+  public static implicit operator string?(Glob? glob) =>
+    glob?.Matches
       .OrderByDescending(f => new DirectoryInfo(f).LastWriteTime)
       .FirstOrDefault();
 

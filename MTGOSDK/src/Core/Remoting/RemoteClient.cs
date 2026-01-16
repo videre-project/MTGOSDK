@@ -136,7 +136,17 @@ public sealed class RemoteClient : DLRWrapper
     // MTGOAppDirectory will always point to the most recent launch directory,
     // as it sorts all ClickOnce application directories by their creation time.
     //
-    string executablePath = Path.Combine(MTGOAppDirectory, "MTGO.exe");
+    // Note: MTGOAppDirectory returns null if MTGO has never been installed.
+    //
+    if (MTGOAppDirectory is not string appDirectory)
+    {
+      if (throwOnFailure)
+        throw new InvalidOperationException(
+          "MTGO is not installed. Please install MTGO using StartProcess() or InstallOrUpdate().");
+      return null;
+    }
+
+    string executablePath = Path.Combine(appDirectory, "MTGO.exe");
     var processList = new FileInfo(executablePath).GetLockingProcesses();
 
     // If no processes were found, we want to indicate that our syscalls failed.

@@ -44,22 +44,42 @@ public static class ClickOncePaths
   /// <summary>
   /// The application directory for ClickOnce deployments.
   /// </summary>
-  public static string ApplicationDirectory = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    @"Apps\2.0",
-    RegistryStore.GetRegistryToken(SIDEBYSIDE_REGISTRY_KEY_PATH,
-                     "ComponentStore_RandomString")
-  );
+  /// <remarks>
+  /// Returns null if MTGO has never been installed (registry token not found).
+  /// </remarks>
+  public static string? ApplicationDirectory
+  {
+    get
+    {
+      var token = RegistryStore.GetRegistryToken(SIDEBYSIDE_REGISTRY_KEY_PATH,
+                                                 "ComponentStore_RandomString");
+      if (token == null) return null;
+      return Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        @"Apps\2.0",
+        token);
+    }
+  }
 
   /// <summary>
   /// The application data directory for ClickOnce user data.
   /// </summary>
-  public static string ApplicationDataDirectory = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    @"Apps\2.0\Data",
-    RegistryStore.GetRegistryToken(SIDEBYSIDE_STATE_MANAGER_REGISTRY_KEY_PATH,
-                     "StateStore_RandomString")
-  );
+  /// <remarks>
+  /// Returns null if MTGO has never been installed (registry token not found).
+  /// </remarks>
+  public static string? ApplicationDataDirectory
+  {
+    get
+    {
+      var token = RegistryStore.GetRegistryToken(SIDEBYSIDE_STATE_MANAGER_REGISTRY_KEY_PATH,
+                                                 "StateStore_RandomString");
+      if (token == null) return null;
+      return Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        @"Apps\2.0\Data",
+        token);
+    }
+  }
 
   /// <summary>
   /// Gets the names of all MTGO installation subpaths.

@@ -228,7 +228,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
       if (options.CreateProcess)
       {
         // Close any existing MTGO processes.
-        if (!await WaitUntil(() => !RemoteClient.KillProcess(), delay: 10))
+        if (!await WaitUntil(() => !RemoteClient.KillProcess(), delay: 10) &&
+            RemoteClient.MTGOProcess() is not null)
           throw new SetupFailureException("Unable to close existing MTGO processes.");
 
         // Start a new MTGO process.
