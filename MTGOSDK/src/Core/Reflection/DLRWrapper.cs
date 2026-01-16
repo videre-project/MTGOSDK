@@ -35,7 +35,7 @@ public abstract class DLRWrapper : SerializableBase
   /// </summary>
   internal virtual dynamic @base { get; }
 
-  protected dynamic @base_unbound { get; private set; } = null!;
+  protected dynamic @base_unbound { get; set; } = null!;
 
   /// <summary>
   /// Internal reference to the remote object handle.
@@ -1392,10 +1392,26 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
         return _interfaceProxies.Values.First();
       }
       
-      // Otherwise fall back to the raw remote object
-      return (field ??= Try(() => obj is DLRWrapper<I> ? obj.obj : obj))
-          ?? throw new ArgumentException(
-              $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
+      // Evaluate and cache the underlying object if not already cached
+      if (field == null)
+      {
+        field = Try(() => obj is DLRWrapper<I> ? obj.obj : obj);
+        
+        //
+        // Also store in @base_unbound to maintain a strong reference.
+        //
+        // This prevents GC from collecting the underlying DynamicRemoteObject
+        // while this wrapper is still alive, avoiding "Couldn't find object
+        // in pinned pool" errors when accessing properties later.
+        //
+        if (field != null && @base_unbound == null)
+        {
+          @base_unbound = Try(() => Unbind(field), () => field);
+        }
+      }
+      
+      return field ?? throw new ArgumentException(
+          $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
     }
   }
 

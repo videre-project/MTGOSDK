@@ -189,7 +189,11 @@ public static class CollectionManager
   /// Returns all decks in the user's collection.
   /// </summary>
   public static IEnumerable<Deck> Decks =>
-    Map<Deck>(Unbind(s_collectionGroupingManager).m_groupingsById.Values);
+    Map<Deck>(
+      ((DynamicRemoteObject)
+        Unbind(s_collectionGroupingManager).m_groupingsById.Values)
+          .Filter<ICardGrouping>(e => e.Format != null)
+    );
 
   /// <summary>
   /// Returns a deck object by the given deck id.

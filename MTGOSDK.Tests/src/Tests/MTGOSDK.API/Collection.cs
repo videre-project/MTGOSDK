@@ -180,10 +180,10 @@ public abstract class CollectionValidationFixture : BaseFixture
 
     // IDeck properties
     Assert.That(deck.Regions, Is.Not.Empty);
-    // Assert.That(deck.DeckId,
-    //   deck.Name == "New Account Starter Kit Contents"
-    //     ? Is.EqualTo(0)
-    //     : Is.GreaterThan(0));
+    Assert.That(deck.DeckId,
+      deck.Name == "New Account Starter Kit Contents"
+        ? Is.EqualTo(0)
+        : Is.GreaterThan(0));
     Assert.That((bool?)deck.IsLegal, Is.Not.Null);
 
     // IDeck methods
