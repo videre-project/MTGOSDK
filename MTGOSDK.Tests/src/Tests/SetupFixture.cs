@@ -115,7 +115,10 @@ public class SetupFixture : Shared
         Assert.That(client.IsInteractive, Is.False);
       }
 
+      // Force a garbage collection to ensure that all resources are released.
       client.ClearCaches();
+      GC.Collect();
+      GC.WaitForPendingFinalizers();
     }
     // If an exception occurs, log the error and immediately exit the runner.
     catch (Exception ex)
