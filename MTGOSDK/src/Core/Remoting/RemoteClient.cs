@@ -874,6 +874,62 @@ public sealed class RemoteClient : DLRWrapper
   public static dynamic CreateEnum<T>(string valueName) =>
     CreateEnum(typeof(T).FullName!, valueName);
 
+  /// <summary>
+  /// Creates a new array of the specified element type and length in the remote process.
+  /// </summary>
+  /// <typeparam name="T">The element type of the array to create.</typeparam>
+  /// <param name="length">The length of the array.</param>
+  /// <returns>A dynamic wrapper around the remote array.</returns>
+  public static dynamic CreateArray<T>(int length) =>
+    CreateArray(typeof(T).FullName!, length);
+
+  /// <summary>
+  /// Creates a new array of the specified element type and length in the remote process.
+  /// </summary>
+  /// <param name="elementTypeFullName">The full type name of the array element type.</param>
+  /// <param name="length">The length of the array.</param>
+  /// <returns>A dynamic wrapper around the remote array.</returns>
+  public static dynamic CreateArray(string elementTypeFullName, int length)
+  {
+    RemoteActivator activator = @client.Activator;
+    RemoteObject arrayObject = activator.CreateArray(elementTypeFullName, length);
+    if (!arrayObject.IsValid)
+      throw new InvalidOperationException(
+        $"Array '{elementTypeFullName}[{length}]' could not be created.");
+
+    return arrayObject.Dynamify();
+  }
+
+  /// <summary>
+  /// Creates a new array and populates each element with a constructed object.
+  /// </summary>
+  /// <typeparam name="T">The element type of the array to create.</typeparam>
+  /// <param name="constructorArgsPerElement">Constructor arguments for each element.</param>
+  /// <returns>A dynamic wrapper around the remote array.</returns>
+  public static dynamic CreateArray<T>(object[][] constructorArgsPerElement) =>
+    CreateArray(typeof(T).FullName!, constructorArgsPerElement);
+
+  /// <summary>
+  /// Creates a new array and populates each element with a constructed object.
+  /// </summary>
+  /// <param name="elementTypeFullName">The full type name of the array element type.</param>
+  /// <param name="constructorArgsPerElement">Constructor arguments for each element.</param>
+  /// <returns>A dynamic wrapper around the remote array.</returns>
+  public static dynamic CreateArray(
+    string elementTypeFullName,
+    object[][] constructorArgsPerElement)
+  {
+    RemoteActivator activator = @client.Activator;
+    RemoteObject arrayObject = activator.CreateArray(
+      elementTypeFullName,
+      constructorArgsPerElement);
+    if (!arrayObject.IsValid)
+      throw new InvalidOperationException(
+        $"Array '{elementTypeFullName}[{constructorArgsPerElement.Length}]' could not be created.");
+
+    return arrayObject.Dynamify();
+  }
+
   public static void SetProperty(
     DynamicRemoteObject dro,
     string propertyName,

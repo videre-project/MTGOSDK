@@ -56,6 +56,7 @@ public partial class Diver : IDisposable
       {"/type", _ => MakeTypeResponse()},
       {"/object", _ => MakeObjectResponse()},
       {"/create_object", _ => MakeCreateObjectResponse()},
+      {"/create_array", _ => MakeCreateArrayResponse()},
       {"/invoke", _ => MakeInvokeResponse()},
       {"/get_field", _ => MakeGetFieldResponse()},
       {"/set_field", _ => MakeSetFieldResponse()},

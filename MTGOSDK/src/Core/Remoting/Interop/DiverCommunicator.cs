@@ -338,6 +338,28 @@ public class DiverCommunicator : IDisposable
     return SendRequest<InvocationResults>("create_object", ctorInvocReq);
   }
 
+  public InvocationResults CreateArray(string elementTypeFullName, int length)
+  {
+    var request = new ArrayCreationRequest
+    {
+      ElementTypeFullName = elementTypeFullName,
+      Length = length
+    };
+    return SendRequest<InvocationResults>("create_array", request);
+  }
+
+  public InvocationResults CreateArray(
+    string elementTypeFullName,
+    List<List<ObjectOrRemoteAddress>> constructorArgs)
+  {
+    var request = new ArrayCreationRequest
+    {
+      ElementTypeFullName = elementTypeFullName,
+      ConstructorArgs = constructorArgs
+    };
+    return SendRequest<InvocationResults>("create_array", request);
+  }
+
   public InvocationResults SetField(
     ulong targetAddr,
     string targetTypeFullName,

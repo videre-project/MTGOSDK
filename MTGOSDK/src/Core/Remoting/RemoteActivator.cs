@@ -60,4 +60,64 @@ public class RemoteActivator(DiverCommunicator communicator, RemoteHandle app)
   }
 
   public RemoteObject CreateInstance<T>() => CreateInstance(typeof(T));
+
+  public RemoteObject CreateArray(Type elementType, int length) =>
+    CreateArray(elementType.FullName!, length);
+
+  public RemoteObject CreateArray(string elementTypeFullName, int length)
+  {
+    // Create array + pin
+    InvocationResults invoRes = communicator.CreateArray(elementTypeFullName, length);
+
+    // Get proxy object
+    var remoteObject = app.GetRemoteObjectFromField(
+        invoRes.ReturnedObjectOrAddress.RemoteAddress,
+        invoRes.ReturnedObjectOrAddress.Type);
+
+    return remoteObject;
+  }
+
+  public RemoteObject CreateArray<T>(int length) => CreateArray(typeof(T), length);
+
+  /// <summary>
+  /// Creates an array and populates each element with a constructed object.
+  /// </summary>
+  /// <param name="elementTypeFullName">The full type name of the array element type.</param>
+  /// <param name="constructorArgsPerElement">Constructor arguments for each element.</param>
+  /// <returns>A RemoteObject wrapping the created array.</returns>
+  public RemoteObject CreateArray(
+    string elementTypeFullName,
+    object[][] constructorArgsPerElement)
+  {
+    // Convert each element's constructor args to remote parameters
+    var remoteCtorArgs = new List<List<ObjectOrRemoteAddress>>();
+    foreach (var args in constructorArgsPerElement)
+    {
+      var remoteArgs = args
+        .Select(RemoteFunctionsInvokeHelper.CreateRemoteParameter)
+        .ToList();
+      remoteCtorArgs.Add(remoteArgs);
+    }
+
+    // Create array + pin
+    InvocationResults invoRes = communicator.CreateArray(
+      elementTypeFullName,
+      remoteCtorArgs);
+
+    // Get proxy object
+    var remoteObject = app.GetRemoteObjectFromField(
+        invoRes.ReturnedObjectOrAddress.RemoteAddress,
+        invoRes.ReturnedObjectOrAddress.Type);
+
+    return remoteObject;
+  }
+
+  /// <summary>
+  /// Creates an array and populates each element with a constructed object.
+  /// </summary>
+  /// <typeparam name="T">The element type of the array.</typeparam>
+  /// <param name="constructorArgsPerElement">Constructor arguments for each element.</param>
+  /// <returns>A RemoteObject wrapping the created array.</returns>
+  public RemoteObject CreateArray<T>(object[][] constructorArgsPerElement) =>
+    CreateArray(typeof(T).FullName!, constructorArgsPerElement);
 }
