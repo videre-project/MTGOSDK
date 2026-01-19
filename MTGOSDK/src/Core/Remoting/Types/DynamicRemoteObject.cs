@@ -323,6 +323,12 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   public virtual DateTime __timestamp { get => m_timestamp; set => m_timestamp = value; }
   private DateTime m_timestamp = DateTime.Now;
 
+  /// <summary>
+  /// Holds strong references to child DROs returned from property/method access.
+  /// This prevents children from being GC'd (and unpinned) while the parent is alive.
+  /// </summary>
+  private List<DynamicRemoteObject>? __childRefs;
+
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
   private List<MemberInfo> __membersInner = null;
@@ -348,6 +354,11 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // Destructor - we need to make sure we don't leave dangling references to
     // remote objects. This is important because the remote object might be
     // disposed of and we don't want to keep a reference to it.
+
+    // Clear child references first - they'll be GC'd and released separately
+    __childRefs?.Clear();
+    __childRefs = null;
+
     if (__ro != null && __ro.IsValid)
     {
       __ro.ReleaseReference();
@@ -382,8 +393,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // Remote object - wrap in DynamicRemoteObject using lightweight path
     // /get_field already pinned the object, so we skip /object call
     RemoteObject ro = __ra.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
-    dynamic dro = ro.Dynamify();
+    var dro = ro.Dynamify() as DynamicRemoteObject;
     dro.__timestamp = oora.Timestamp;
+
+    // Track child DRO to prevent premature GC while parent is alive
+    __childRefs ??= new List<DynamicRemoteObject>();
+    __childRefs.Add(dro);
+
     return dro;
   }
 
@@ -990,8 +1006,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       else if (item.IsRemoteAddress)
       {
         var remoteObject = __ra.GetRemoteObjectFromField(item.RemoteAddress, item.Type);
-        dynamic dro = remoteObject.Dynamify();
+        var dro = remoteObject.Dynamify() as DynamicRemoteObject;
         dro.__timestamp = item.Timestamp;
+
+        // Track child DRO to prevent premature GC while parent is alive
+        __childRefs ??= new List<DynamicRemoteObject>();
+        __childRefs.Add(dro);
+
         return dro;
       }
       else
