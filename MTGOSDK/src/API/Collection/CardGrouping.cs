@@ -9,6 +9,8 @@ using RegexMatch = System.Text.RegularExpressions.Match;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Reflection.Extensions;
+using MTGOSDK.Core.Remoting.Types;
 
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
@@ -65,11 +67,12 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
   /// this property will only return items with a quantity greater than zero.
   /// </remarks>
   public IEnumerable<CardQuantityPair> Items =>
-    Map<CardQuantityPair>(
-      Filter(@base.Items, new Predicate(item =>
-          // If specified, filter out items with zero quantity.
-          @base.ShouldRemoveZeroQuantityItems == item.Quantity > 0))
-    );
+    @base.ShouldRemoveZeroQuantityItems
+      ? Map<CardQuantityPair>(
+        // If specified, filter out items with zero quantity.
+        ((DynamicRemoteObject)Unbind(@base).Items)
+          .Filter<ICardQuantityPair>(item => item.Quantity > 0))
+      : Map<CardQuantityPair>(@base.Items);
 
   /// <summary>
   /// The unique identifiers of the items contained in this grouping.

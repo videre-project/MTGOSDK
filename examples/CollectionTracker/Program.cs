@@ -55,6 +55,16 @@ foreach (CardQuantityPair card in frozenCollection.Take(25))
 Console.WriteLine($"...and {frozenCollection.Length - 25} more.");
 
 // Select a random card from the collection
-CardQuantityPair randomCard = frozenCollection[Random.Shared.Next(frozenCollection.Length)];
-Console.WriteLine($"\nRandom card: {randomCard.Quantity}x {randomCard.Name} ({randomCard.Id})");
-Console.WriteLine($"{randomCard.Card.ToJSON()}"); // Can print as a JSON object
+CardQuantityPair randomCardA = frozenCollection[Random.Shared.Next(frozenCollection.Length)];
+CardQuantityPair randomCardB = frozenCollection[Random.Shared.Next(frozenCollection.Length)];
+Console.WriteLine($"\nRandom card A: {randomCardA.Quantity}x {randomCardA.Name} ({randomCardA.Id})");
+Console.WriteLine($"{randomCardA.Card.ToJSON()}");
+Console.WriteLine($"Random card B: {randomCardB.Quantity}x {randomCardB.Name} ({randomCardB.Id})");
+Console.WriteLine($"{randomCardB.Card.ToJSON()}");
+
+// Try creating a new deck with both cards:
+Deck newDeck = new Deck(
+  [new CardQuantityPair(randomCardA.Id, 4)],
+  [new CardQuantityPair(randomCardB.Id, 4)]);
+Console.WriteLine($"\nNew deck: {newDeck.ItemCount} cards");
+Console.WriteLine($"{newDeck.ToJSON()}");

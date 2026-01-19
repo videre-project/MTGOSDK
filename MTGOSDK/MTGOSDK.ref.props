@@ -27,6 +27,7 @@
     <Reference Include="FlsClient"                        Private="$(UseRef)" />
     <Reference Include="GameDetails"                      Private="$(UseRef)" />
     <Reference Include="MTGOEnumStruct"                   Private="$(UseRef)" />
+    <Reference Include="MTGOMessage"                      Private="$(UseRef)" />
     <Reference Include="WotC.Common.Client"               Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Common"          Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Chat"      Private="$(UseRef)" />

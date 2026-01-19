@@ -31,7 +31,7 @@ public class CardQuantityPair(dynamic cardQuantityPair)
       field ??= CollectionManager.GetCard(CatalogId);
   }
 
-  public CardQuantityPair(int CatalogId, int Quantity, string Name)
+  public CardQuantityPair(int CatalogId, int Quantity, string Name = null)
     : this(new CardQuantityPairValues(CatalogId, Quantity, Name))
   { }
 
@@ -39,7 +39,7 @@ public class CardQuantityPair(dynamic cardQuantityPair)
   // ICardQuantityPair derived properties
   //
 
-  public int Id => @base.CatalogId;
+  public int Id => Try(() => @base.CatalogId, () => this.Card.Id);
 
   public string Name => field ??= Try(() => @base.Name, () => this.Card.Name);
 

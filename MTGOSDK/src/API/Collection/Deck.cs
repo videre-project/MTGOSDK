@@ -5,7 +5,9 @@
 
 using MTGOSDK.Core.Remoting;
 
+using WotC.MTGO.Common.Message;
 using WotC.MtGO.Client.Model;
+using MTGOSDK.API.Play;
 
 
 namespace MTGOSDK.API.Collection;
@@ -24,13 +26,56 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   /// </summary>
   internal override dynamic obj => Bind<IDeck>(deck);
 
+  /// <summary>
+  /// Creates a new deck from the specified mainboard and sideboard.
+  /// </summary>
+  /// <param name="mainboard">The mainboard items to add to the deck.</param>
+  /// <param name="sideboard">The sideboard items to add to the deck.</param>
+  /// <returns>A new deck instance that can be added to the collection.</returns>
+  public Deck(
+    IEnumerable<CardQuantityPair> mainboard,
+    IEnumerable<CardQuantityPair> sideboard)
+      // We use a nested constructor to avoid using dynamic dispatch.
+      // This gets unwrapped in the DLRWrapper constructor.
+      : this(new Deck(RemoteClient.CreateInstance<WotC.MtGO.Client.Model.Core.Collection.Deck>()))
+  {
+    var deckItems = RemoteClient.CreateArray<DeckItem_t>(
+      new[] { (mainboard, false), (sideboard, true) }
+        .SelectMany(group => group.Item1,
+          // Uses the default annotation (0) and permission code (215).
+          (g, e) => new object[] { e.Id, (uint)0, 215, e.Quantity, g.Item2 })
+        .ToArray()
+    );
+    Unbind(this).ReconcileCards(deckItems);
+  }
+
+  /// <summary>
+  /// Creates a new deck from the specified mainboard and sideboard.
+  /// </summary>
+  /// <param name="mainboard">The mainboard items to add to the deck.</param>
+  /// <param name="sideboard">The sideboard items to add to the deck.</param>
+  /// <param name="name">The name of the deck.</param>
+  /// <param name="format">The format of the deck.</param>
+  /// <returns>A new deck instance that can be added to the collection.</returns>
+  public Deck(
+    IEnumerable<CardQuantityPair> mainboard,
+    IEnumerable<CardQuantityPair> sideboard,
+    string name = null,
+    PlayFormat format = null)
+      : this(mainboard, sideboard)
+  {
+    Unbind(this).Name = name;
+    Unbind(this).Format = format;
+  }
+
   //
   // IDeck wrapper properties
   //
 
   public IEnumerable<DeckRegion> Regions =>
-    Map<DeckRegion>(Unbind(this).Regions,
-      new Func<dynamic, DeckRegion>(e => Cast<DeckRegion>(e.EnumValue)));
+    Map<DeckRegion>(
+      Unbind(this).Regions,
+      Lambda<DeckRegion>(e => Cast<DeckRegion>(e.EnumValue)));
 
   /// <summary>
   /// The unique identifier for this deck used for matchmaking.
