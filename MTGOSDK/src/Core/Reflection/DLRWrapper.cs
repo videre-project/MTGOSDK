@@ -65,7 +65,7 @@ public abstract class DLRWrapper : SerializableBase
           $"{typeof(T).Name} object cannot be null.");
 
     // Unbind any nested interface types before re-binding the object.
-    if (TypeProxy<dynamic>.IsProxy(obj))
+    if (TypeProxy<dynamic>.IsProxy(obj) || obj is DLRWrapper)
       obj = Unbind(obj);
 
     return TypeProxy<T>.As(obj)
