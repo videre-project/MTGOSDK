@@ -15,7 +15,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Emit source generator output to disk for debugging -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-    <CompilerGeneratedFilesOutputPath>$(SolutionDir)$(Configuration)\$(TargetFramework)\Generated</CompilerGeneratedFilesOutputPath>
+    <CompilerGeneratedFilesOutputPath>$(DistDir)\$(Configuration)\$(TargetFramework)\Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <!-- Import MTGOSDK package properties -->
