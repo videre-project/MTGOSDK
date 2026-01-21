@@ -28,12 +28,23 @@ This SDK contains several lightweight packages (with minimal dependencies outsid
 
 ## Documentation
 
-The [SDK documentation](/docs/README.md) is organized into the following sections:
-- [Getting Started](/docs/getting-started.md) — a quick guide to getting started with the SDK.
-- [API Reference](/docs/api-reference.md) — a detailed reference of the SDK's APIs and classes.
-- [Architecture](/docs/architecture/README.md) — an overview of the SDK's design and architecture.
+The [SDK documentation](/docs/README.md) is organized into three tiers:
 
-Refer to the [FAQ](/docs/FAQ.md) for common questions about the SDK, and the project's [examples](/examples) for demo applications built with the SDK.
+- **[Guides](/docs/guides/README.md)** — Task-oriented tutorials for common use cases
+  - [Collection](/docs/guides/collection.md) — Managing decks, cards, and binders
+  - [Play](/docs/guides/play.md) — Monitoring matches, tournaments, and leagues
+  - [Games](/docs/guides/games.md) — In-game state tracking (zones, cards, actions)
+  - [History](/docs/guides/history.md) — Accessing completed matches
+  - [Chat](/docs/guides/chat.md), [Users](/docs/guides/users.md), [Trade](/docs/guides/trade.md), [Settings](/docs/guides/settings.md), [Interface](/docs/guides/interface.md)
+
+- **[Reference](/docs/reference/README.md)** — API documentation and operational details
+  - [Client](/docs/reference/client.md), [ObjectProvider](/docs/reference/object-provider.md), [Connection Lifecycle](/docs/reference/connection-lifecycle.md)
+  - [ClickOnce](/docs/reference/clickonce.md) — Deployment and CI/CD
+  - [Debugging](/docs/reference/debugging.md) — Log files, traces, and troubleshooting
+
+- **[Architecture](/docs/architecture/README.md)** — SDK internals for contributors
+
+See also the [Getting Started](/docs/getting-started.md) guide, the [FAQ](/docs/FAQ.md), and the [examples](/examples) directory for demo applications.
 
 ## Overview
 

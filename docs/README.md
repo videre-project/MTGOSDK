@@ -1,10 +1,46 @@
-# MTGOSDK Codebase Documentation
+# MTGOSDK Documentation
 
-This directory contains some documentation about the MTGOSDK codebase, aimed at readers who are interested in making code contributions. For more general information about the MTGOSDK, refer to the project [README](../README.md) or the [FAQ](FAQ.md).
+Documentation for the MTGOSDK codebase, organized into three tiers:
 
-<!-- Provide the link to the changelog document -->
-For information about the changes in each version of the MTGOSDK, refer to the project [CHANGELOG](../CHANGELOG.md).
+| Section | Description | Audience |
+| ------- | ----------- | -------- |
+| [Guides](./guides/README.md) | Task-oriented tutorials | End users |
+| [Reference](./reference/README.md) | Per-namespace API documentation | End users |
+| [Architecture](./architecture/README.md) | SDK internals and design decisions | Contributors |
 
-## MTGOSDK Architecture Documents
+## Quick Links
 
-- [Architecture](architecture.md) - Overview of the architecture of the MTGOSDK and its components.
+- [Getting Started](./getting-started.md) - Installation and setup
+- [FAQ](./FAQ.md) - Frequently asked questions
+- [Changelog](../CHANGELOG.md) - Version history
+
+## Guides
+
+- [Collection](./guides/collection.md) - Managing decks, cards, and binders
+- [Play](./guides/play.md) - Monitoring matches, games, tournaments, and leagues
+- [Games](./guides/games.md) - In-game state tracking (zones, cards, actions)
+- [History](./guides/history.md) - Accessing completed matches and tournaments
+- [Chat](./guides/chat.md) - Interacting with chat channels and messages
+- [Users](./guides/users.md) - Managing user profiles and buddy lists
+- [Trade](./guides/trade.md) - Accessing trade posts and managing trades
+- [Settings](./guides/settings.md) - Reading client configuration
+- [Interface](./guides/interface.md) - Displaying toasts and dialogs
+
+## Reference
+
+- [Client](./reference/client.md) - Manages MTGO process and session
+- [ObjectProvider](./reference/object-provider.md) - Retrieves globally registered singleton objects
+- [Connection Lifecycle](./reference/connection-lifecycle.md) - Crash recovery and reconnection patterns
+- [ClickOnce](./reference/clickonce.md) - MTGO deployment, installation, and CI/CD
+- [Debugging](./reference/debugging.md) - Log files, traces, and troubleshooting
+
+## Architecture
+
+- [DLRWrapper](./architecture/dlr-wrapper.md) - Type-safe interface binding for dynamic remote objects
+- [RemoteClient](./architecture/remote-client.md) - Low-level class for accessing remote objects
+- [Logging](./architecture/logging.md) - Structured logging with automatic caller detection
+- [Events](./architecture/events.md) - Event proxies and hooks for remote event subscription
+- [Threading](./architecture/threading.md) - Task scheduling and background thread management
+- [Serialization](./architecture/serialization.md) - Batch property fetching for performance
+- [Type Compilation](./architecture/type-compilation.md) - Runtime proxy generation
+- [Memory](./architecture/memory.md) - GC coordination and remote object references
