@@ -1,6 +1,8 @@
 name: Docs
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   workflow_run:
     workflows: ["Release"]
     types:
@@ -11,6 +13,7 @@ env:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -22,20 +25,172 @@ jobs:
   docs:
     name: "Build and Publish Docs"
     runs-on: windows-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >-
+      ${{
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+        (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[Docs]')) ||
+        (github.event_name == 'workflow_dispatch')
+      }}
     steps:
       - name: Setup Dev Drive and Checkout
         id: setup_dev_drive_checkout
         uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
         with:
-          ref: ${{ github.event.workflow_run.head_commit.id }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Download package artifacts
+      - name: Determine package source
+        shell: powershell
+        working-directory: ${{ env.WORKSPACE_PATH }}
+        run: |
+          $eventName = $env:GITHUB_EVENT_NAME
+
+          $docsCommit = $false
+          if ($eventName -eq 'push') {
+            $event = Get-Content $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+            $docsCommit = $event.head_commit.message -match '^\[Docs\]'
+          } elseif ($eventName -eq 'workflow_dispatch') {
+            $docsCommit = $true
+          }
+
+          $tags = git tag --points-at HEAD
+          $hasTag = $false
+          if ($LASTEXITCODE -eq 0 -and $tags) {
+            $tagList = $tags -split "`n" | Where-Object { $_ -ne '' }
+            $hasTag = $tagList.Count -gt 0
+          }
+
+          $source = 'nuget'
+          if ($eventName -eq 'workflow_run') {
+            $source = 'build'
+          }
+
+          Write-Host "Docs commit: $docsCommit"
+          Write-Host "Has tag: $hasTag"
+          Write-Host "Package source: $source"
+          "DOCS_SOURCE=$source" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download package artifacts (release run)
+        if: ${{ env.DOCS_SOURCE == 'build' && github.event_name == 'workflow_run' }}
         uses: ./.github/actions/download-artifact
         with:
           name: mtgosdk-packages
           path: ${{ env.WORKSPACE_PATH }}/publish
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find build run
+        if: ${{ env.DOCS_SOURCE == 'build' && github.event_name != 'workflow_run' }}
+        id: find_build_run
+        shell: powershell
+        working-directory: ${{ env.WORKSPACE_PATH }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $headSha = (git rev-parse HEAD).Trim()
+          $branch = "${{ github.ref_name }}"
+          $repo = "${{ github.repository }}"
+          Write-Host "Checking for successful Release/Test run for $branch @ $headSha"
+
+          $releaseRun = gh run list --workflow "release.yml" --repo "$repo" --branch "$branch" --commit "$headSha" --status success --json databaseId --limit 1 --jq ".[0].databaseId"
+          $testRun = gh run list --workflow "test.yml" --repo "$repo" --branch "$branch" --commit "$headSha" --status success --json databaseId --limit 1 --jq ".[0].databaseId"
+
+          if (-not $releaseRun -and -not $testRun) {
+            Write-Error "No successful Release or Test workflow run found for $branch @ $headSha"
+            exit 1
+          }
+
+          Write-Host "Searching for build.yml run for $branch @ $headSha"
+          $runId = gh run list --workflow "build.yml" --repo "$repo" --branch "$branch" --commit "$headSha" --status success --json databaseId --limit 1 --jq ".[0].databaseId"
+
+          if (-not $runId) {
+            Write-Error "No successful build.yml run found for $branch @ $headSha"
+            exit 1
+          }
+
+          "BUILD_RUN_ID=$runId" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Download package artifacts (build run)
+        if: ${{ env.DOCS_SOURCE == 'build' && github.event_name != 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: mtgosdk-packages
+          path: ${{ env.WORKSPACE_PATH }}/publish
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.find_build_run.outputs.BUILD_RUN_ID }}
+
+      - name: Download packages from NuGet (pre-release)
+        if: ${{ env.DOCS_SOURCE == 'nuget' }}
+        shell: powershell
+        working-directory: ${{ env.WORKSPACE_PATH }}
+        run: |
+          $publish = "${{ env.WORKSPACE_PATH }}\publish"
+          New-Item -ItemType Directory -Path $publish -Force | Out-Null
+
+          $tag = (git describe --tags --abbrev=0).Trim()
+          if (-not $tag) {
+            Write-Error "No git tag found on or before HEAD; cannot determine NuGet version."
+            exit 1
+          }
+
+          $tagVersionPrefix = $tag.TrimStart('v')
+          $tagCommit = (git rev-list -n 1 $tag).Trim()
+          if (-not $tagCommit) {
+            Write-Error "Unable to resolve commit for tag $tag."
+            exit 1
+          }
+
+          $index = Invoke-RestMethod -Uri 'https://api.nuget.org/v3-flatcontainer/mtgosdk/index.json'
+          $matching = @($index.versions | Where-Object { $_ -like "$tagVersionPrefix*" })
+
+          if ($matching.Count -eq 0) {
+            Write-Error "No NuGet versions found with prefix $tagVersionPrefix."
+            exit 1
+          }
+
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $selectedVersion = $null
+
+          foreach ($ver in $matching) {
+            $nupkgUrl = "https://api.nuget.org/v3-flatcontainer/mtgosdk/$ver/mtgosdk.$ver.nupkg"
+            $tmp = Join-Path $env:RUNNER_TEMP ("mtgosdk.$ver.nupkg")
+            Invoke-WebRequest -Uri $nupkgUrl -OutFile $tmp
+
+            $commit = $null
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($tmp)
+            try {
+              $entry = $zip.Entries | Where-Object { $_.FullName -match '\.nuspec$' } | Select-Object -First 1
+              if ($entry) {
+                $reader = New-Object System.IO.StreamReader($entry.Open())
+                $xml = [xml]$reader.ReadToEnd()
+                $reader.Dispose()
+                $commit = $xml.package.metadata.repository.commit
+              }
+            } finally {
+              $zip.Dispose()
+            }
+
+            if ($commit -and ($commit -eq $tagCommit -or $commit.StartsWith($tagCommit.Substring(0,7)))) {
+              $selectedVersion = $ver
+              break
+            }
+          }
+
+          if (-not $selectedVersion) {
+            $selectedVersion = $matching[-1]
+            Write-Host "No matching commit found in nuspec; using latest matching version $selectedVersion"
+          }
+
+          $packages = @(
+            @{ Id = 'MTGOSDK'; Lower = 'mtgosdk' },
+            @{ Id = 'MTGOSDK.MSBuild'; Lower = 'mtgosdk.msbuild' },
+            @{ Id = 'MTGOSDK.Win32'; Lower = 'mtgosdk.win32' }
+          )
+
+          foreach ($pkg in $packages) {
+            $url = "https://api.nuget.org/v3-flatcontainer/$($pkg.Lower)/$selectedVersion/$($pkg.Lower).$selectedVersion.nupkg"
+            $out = Join-Path $publish "$($pkg.Id).$selectedVersion.nupkg"
+            Write-Host "Downloading $($pkg.Id) $selectedVersion"
+            Invoke-WebRequest -Uri $url -OutFile $out
+          }
 
       - name: Setup .NET SDK (no restore)
         uses: ./.github/actions/setup-dotnet
@@ -45,6 +200,11 @@ jobs:
 
       - name: Restore tools
         run: dotnet tool restore
+        shell: powershell
+        working-directory: ${{ env.WORKSPACE_PATH }}
+
+      - name: Restore DocProcessor packages
+        run: dotnet restore tools/DocFX/DocProcessor.csproj
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
 
@@ -65,7 +225,7 @@ jobs:
     name: "Deploy to GitHub Pages"
     needs: docs
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: ${{ needs.docs.result == 'success' }}
     steps:
       - name: Deploy
         uses: actions/deploy-pages@v4

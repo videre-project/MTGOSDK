@@ -232,7 +232,7 @@
   </Target>
   
   <!-- Custom target to build documentation using DocFX and DocProcessor -->
-  <Target Name="docfx" Condition="'$(MSBuildProjectName)' == 'MTGOSDK'" DependsOnTargets="MinVer">
+  <Target Name="docfx" Condition="'$(MSBuildProjectName)' == 'MTGOSDK'">
     <PropertyGroup>
       <DocProcessorDir>$(MSBuildThisFileDirectory)tools\DocFX\</DocProcessorDir>
       <DocFxDir>$(MSBuildThisFileDirectory)</DocFxDir>
@@ -259,16 +259,35 @@
     <Message Text="Building DocProcessor tool..." Importance="High" />
     <MSBuild Projects="$(DocProcessorDir)DocProcessor.csproj" Targets="Build" Properties="Configuration=Release" />
 
-    <!-- 2. Get Version Info -->
-    <!-- MinVer should already be available if this target is run after Restore/Build, but explicitly running it to be safe -->
-    <!-- We rely on MinVer properties being set. If not, fallback to 0.0.0 -->
+    <!-- 2. Get Version Info from extracted nuspec (preferred) or fall back to 0.0.0 -->
     <PropertyGroup>
-      <!-- Parse MinVer properties -->
-      <_VersionMain>$(MinVerMajor).$(MinVerMinor).$(MinVerPatch)</_VersionMain>
-      <_VersionSuffix>$(MinVerPreRelease)</_VersionSuffix>
-      <_CommitHash>$(MinVerBuildMetadata)</_CommitHash>
-       <!-- Fix suffix/hash if MinVer is not active or empty -->
-       <_VersionMain Condition="'$(_VersionMain)' == '..'">0.0.0</_VersionMain>
+      <!-- Use the MTGOSDK package nuspec extracted to dist -->
+      <_DocfxPrimaryNuspec>$(DocfxExtractRoot)\MTGOSDK\MTGOSDK.nuspec</_DocfxPrimaryNuspec>
+    </PropertyGroup>
+
+    <Error Condition="!Exists('$(_DocfxPrimaryNuspec)')"
+           Text="DocFX build expected nuspec at $(_DocfxPrimaryNuspec) (ensure packages were extracted from publish/)." />
+
+    <XmlPeek Query="/package/metadata/version/text()"
+             XmlInputPath="$(_DocfxPrimaryNuspec)"
+             Condition="Exists('$(_DocfxPrimaryNuspec)')">
+      <Output TaskParameter="Result" PropertyName="_NuspecVersion" />
+    </XmlPeek>
+
+    <XmlPeek Query="/package/metadata/repository/@commit"
+             XmlInputPath="$(_DocfxPrimaryNuspec)"
+             Condition="Exists('$(_DocfxPrimaryNuspec)')">
+      <Output TaskParameter="Result" PropertyName="_NuspecCommit" />
+    </XmlPeek>
+
+    <PropertyGroup>
+      <!-- Split version into main and optional suffix from nuspec version (e.g., 1.2.3-preview.5) -->
+      <_VersionMain>$([System.Text.RegularExpressions.Regex]::Match('$(_NuspecVersion)', '^[^-]+').Value)</_VersionMain>
+      <_VersionSuffix>$([System.Text.RegularExpressions.Regex]::Replace('$(_NuspecVersion)', '^[^-]+-?', ''))</_VersionSuffix>
+      <_VersionMain Condition="'$(_VersionMain)' == ''">$(_NuspecVersion)</_VersionMain>
+      <_VersionMain Condition="'$(_VersionMain)' == ''">0.0.0</_VersionMain>
+      <_CommitHash Condition="'$(_NuspecCommit)' != ''">$(_NuspecCommit)</_CommitHash>
+      <_CommitHash Condition="'$(_CommitHash)' == ''"></_CommitHash>
     </PropertyGroup>
     
     <!-- Extract short hash and URL -->
