@@ -6,9 +6,9 @@
       "src": [
         {
           "files": [
-            "MTGOSDK.dll"
+            "**/MTGOSDK.dll"
           ],
-          "src": "MTGOSDK/bin/Debug/net10.0-windows"
+          "src": "dist/MTGOSDK/lib"
         }
       ],
       "output": "docs/_build/_xmldoc/MTGOSDK",
@@ -19,16 +19,16 @@
       "memberLayout": "samePage",
       "disableGitFeatures": true,
       "references": [
-        "MTGOSDK/bin/Debug/net10.0-windows/*.dll"
+        "dist/MTGOSDK/lib/**/*.dll"
       ]
     },
     {
       "src": [
         {
           "files": [
-            "MTGOSDK.MSBuild.dll"
+            "**/MTGOSDK.MSBuild.dll"
           ],
-          "src": "MTGOSDK.MSBuild/bin/Debug/netstandard2.0"
+          "src": "dist/MTGOSDK.MSBuild/lib"
         }
       ],
       "output": "docs/_build/_xmldoc/MTGOSDK.MSBuild",
@@ -43,9 +43,9 @@
       "src": [
         {
           "files": [
-            "MTGOSDK.Win32.dll"
+            "**/MTGOSDK.Win32.dll"
           ],
-          "src": "MTGOSDK.Win32/bin/Debug/netstandard2.0"
+          "src": "dist/MTGOSDK.Win32/lib"
         }
       ],
       "output": "docs/_build/_xmldoc/MTGOSDK.Win32",

@@ -38,25 +38,6 @@ Documentation for the MTGOSDK codebase, organized into three tiers:
 - [FAQ](./FAQ.md) - Frequently asked questions
 - [Changelog](https://github.com/videre-project/MTGOSDK/blob/main/CHANGELOG.md) - Version history
 
-## Building Documentation
-
-The documentation site is generated using DocFX. Before building the docs, you must first build the solution to generate the required assemblies:
-
-```powershell
-# 0. Restore tools (DocFX)
-dotnet tool restore
-
-# 1. Build the solution (required for XML documentation)
-dotnet build SDK.sln
-
-# 2. Generate the documentation site
-dotnet build -t:docfx --no-restore
-
-# 3. Serve locally for preview
-dotnet docfx serve docs\_build\_site --port 8080
-```
-
-The site will be available at `http://localhost:8080`.
 
 ## Guides
 

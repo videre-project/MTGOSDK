@@ -67,6 +67,59 @@
     </Task>
   </UsingTask>
 
+  <UsingTask
+    TaskName="ExtractPackages"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Packages ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <DestinationRoot ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        if (Packages == null || Packages.Length == 0)
+        {
+          Log.LogMessage("No packages to extract.");
+          return true;
+        }
+
+        Directory.CreateDirectory(DestinationRoot);
+        foreach (var pkg in Packages)
+        {
+          var path = pkg.ItemSpec;
+          if (!File.Exists(path))
+          {
+            Log.LogWarning($"Package not found: {path}");
+            continue;
+          }
+
+          var id = Regex.Replace(Path.GetFileNameWithoutExtension(path), @"\.[0-9].*$", "");
+          var dest = Path.Combine(DestinationRoot, id);
+          Directory.CreateDirectory(dest);
+
+          using var archive = ZipFile.OpenRead(path);
+          foreach (var entry in archive.Entries)
+          {
+            if (string.IsNullOrEmpty(entry.FullName)) continue;
+            var outPath = Path.Combine(dest, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+            var outDir = Path.GetDirectoryName(outPath);
+            if (!string.IsNullOrEmpty(outDir)) Directory.CreateDirectory(outDir);
+            if (entry.FullName.EndsWith("/")) continue; // directory
+            entry.ExtractToFile(outPath, overwrite: true);
+          }
+
+          Log.LogMessage(MessageImportance.High, $"Extracted {path} -> {dest}");
+        }
+
+        return true;
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
   <Target Name="PostBuildTimestamp"
           AfterTargets="CoreCompile">
     <!-- Compare timestamps of the output files before and after build -->
@@ -186,6 +239,21 @@
     </PropertyGroup>
 
     <Message Text="=== DocFX Documentation Build Pipeline ===" Importance="High" />
+
+    <!-- 0. Ensure package contents are available for DocFX -->
+    <ItemGroup>
+      <DocfxPackages Include="$(DocFxDir)publish\**\*.nupkg" />
+    </ItemGroup>
+    <Message Text="Preparing packages for DocFX from $(DocFxDir)publish" Importance="High" />
+    <Error Condition="@(DocfxPackages->Count()) == 0"
+           Text="No packages found under $(DocFxDir)publish. Ensure package artifacts are downloaded (or built) before running the docfx target." />
+    <PropertyGroup>
+      <DocfxExtractRoot>$(DocFxDir)dist</DocfxExtractRoot>
+    </PropertyGroup>
+    <MakeDir Directories="$(DocfxExtractRoot)" />
+    <ExtractPackages Packages="@(DocfxPackages)"
+                     DestinationRoot="$(DocfxExtractRoot)"
+                     Condition="@(DocfxPackages->Count()) &gt; 0" />
 
     <!-- 1. Build DocProcessor Tool -->
     <Message Text="Building DocProcessor tool..." Importance="High" />

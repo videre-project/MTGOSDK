@@ -162,6 +162,35 @@ $ dotnet watch --project MTGOSDK/MTGOSDK.csproj build -c Release
 
 This will also pick up changes to dependent **MTGOSDK.MSBuild** and **MTGOSDK.Win32** projects as well. As build evaluation is rooted from the MTGOSDK .csproj file, all logs from the build will be stored under the `MTGOSDK/logs` directory.
 
+## Building Documentation
+
+The DocFX site builds from the published packages generated from building the solution. The `docfx` MSBuild target extracts the `.nupkg` files from `publish/` into `dist/` and then runs DocFX.
+
+Restore tools (DocFX)
+```powershell
+dotnet tool restore
+```
+
+Build to produce `.nupkg` into `publish/`
+```powershell
+dotnet build SDK.sln -c Release
+```
+
+> [!NOTE]
+> If you already have the MTGOSDK nuget packages (or wish to download them from [NuGet](https://nuget.org) instead), you can place the .nupkg files under `publish/` at the repo root instead of rebuilding.
+
+Generate the documentation site (handles extraction into `dist/`)
+```powershell
+dotnet build -t:docfx --no-restore
+```
+
+Serve locally for preview
+```powershell
+dotnet docfx serve docs/_build/_site --port 8080
+```
+
+The site will be available at http://localhost:8080.
+
 ## Acknowledgements
 
 MTGOSDK's snapshot runtime uses the [Microsoft.Diagnostics.Runtime (ClrMD)](https://github.com/microsoft/clrmd) library under the hood. We're grateful to the ClrMD maintainers for their support and their work in providing a powerful library for inspecting and debugging .NET applications.
