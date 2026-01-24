@@ -1,24 +1,74 @@
 items:
-- name: Getting Started
-  href: getting-started.html
+
 - name: API
-  href: api/index.html
+  href: api/index.md
   items:
     - name: MTGOSDK
-      href: api/MTGOSDK/MTGOSDK.html
+      uid: MTGOSDK
     - name: MTGOSDK.MSBuild
-      href: api/MTGOSDK.MSBuild/MTGOSDK.MSBuild.html
+      uid: MTGOSDK.MSBuild
     - name: MTGOSDK.Win32
-      href: api/MTGOSDK.Win32/MTGOSDK.Win32.html
-  expanded: true
-- name: Architecture
-  href: architecture/README.html
-  items:
-    - name: Overview
-      href: architecture/overview.html
-    - name: Core Classes
-      href: architecture/core-classes.html
+      uid: MTGOSDK.Win32
+
+- name: Getting Started
+  href: getting-started.md
 - name: FAQ
-  href: FAQ.html
+  href: FAQ.md
 - name: Changelog
-  href: CHANGELOG.html
+  href: CHANGELOG.md
+
+- name: Guides
+  href: guides/README.md
+  items:
+    - name: Chat
+      href: guides/chat.md
+    - name: Collection
+      href: guides/collection.md
+    - name: Games
+      href: guides/games.md
+    - name: History
+      href: guides/history.md
+    - name: Interface
+      href: guides/interface.md
+    - name: Play
+      href: guides/play.md
+    - name: Settings
+      href: guides/settings.md
+    - name: Trade
+      href: guides/trade.md
+    - name: Users
+      href: guides/users.md
+
+- name: Reference
+  href: reference/README.md
+  items:
+    - name: Client
+      href: reference/client.md
+    - name: Connection Lifecycle
+      href: reference/connection-lifecycle.md
+    - name: ClickOnce
+      href: reference/clickonce.md
+    - name: Debugging
+      href: reference/debugging.md
+    - name: Object Provider
+      href: reference/object-provider.md
+
+- name: Architecture
+  href: architecture/README.md
+  items:
+    - name: DLRWrapper
+      href: architecture/dlr-wrapper.md
+    - name: Events
+      href: architecture/events.md
+    - name: Logging
+      href: architecture/logging.md
+    - name: Memory
+      href: architecture/memory.md
+    - name: Remote Client
+      href: architecture/remote-client.md
+    - name: Serialization
+      href: architecture/serialization.md
+    - name: Threading
+      href: architecture/threading.md
+    - name: Type Compilation
+      href: architecture/type-compilation.md

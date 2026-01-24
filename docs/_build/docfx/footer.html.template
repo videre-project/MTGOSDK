@@ -1,0 +1,20 @@
+<style>
+  .navbar-brand .version-badge {
+    font-size: 0.75em !important;
+    opacity: 0.8;
+    margin-left: 5px;
+    vertical-align: middle;
+  }
+  .navbar-brand .version-badge a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .navbar-brand .version-badge a:hover {
+    text-decoration: underline;
+  }
+</style>
+<div class="container-xxl">
+  <div class="flex-fill">
+    <span>© 2022-{{YEAR}} Videre Project. Licensed under <a href="/LICENSE">Apache-2.0</a>.</span>
+  </div>
+</div>

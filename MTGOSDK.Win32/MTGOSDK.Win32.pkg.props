@@ -7,6 +7,8 @@
     <Summary>A library containing Win32 API definitions used by the SDK.</Summary>
     <Description>Contains Win32 API definitions and helper functions used by MTGOSDK. This package provide a more idiomatic C# API for Win32 functions and ensures consistent API behavior across different versions of Windows.</Description>
     <PackageTags></PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <!-- Publishing Configuration -->

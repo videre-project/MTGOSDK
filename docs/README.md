@@ -2,17 +2,61 @@
 
 Documentation for the MTGOSDK codebase, organized into three tiers:
 
-| Section | Description | Audience |
-| ------- | ----------- | -------- |
-| [Guides](./guides/README.md) | Task-oriented tutorials | End users |
-| [Reference](./reference/README.md) | Per-namespace API documentation | End users |
-| [Architecture](./architecture/README.md) | SDK internals and design decisions | Contributors |
+<table>
+  <thead>
+    <tr>
+      <th>Section</th>
+      <th>Description</th>
+      <th>Audience</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="./api/index.md">API</a></td>
+      <td>Per-namespace API documentation</td>
+      <td rowspan="3">End users</td>
+    </tr>
+    <tr>
+      <td><a href="./guides/README.md">Guides</a></td>
+      <td>Task-oriented tutorials</td>
+    </tr>
+    <tr>
+      <td><a href="./reference/README.md">Reference</a></td>
+      <td>Per-namespace API documentation</td>
+    </tr>
+    <tr>
+      <td><a href="./architecture/README.md">Architecture</a></td>
+      <td>SDK internals and design decisions</td>
+      <td>Contributors</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Quick Links
 
 - [Getting Started](./getting-started.md) - Installation and setup
 - [FAQ](./FAQ.md) - Frequently asked questions
-- [Changelog](../CHANGELOG.md) - Version history
+- [Changelog](https://github.com/videre-project/MTGOSDK/blob/main/CHANGELOG.md) - Version history
+
+## Building Documentation
+
+The documentation site is generated using DocFX. Before building the docs, you must first build the solution to generate the required assemblies:
+
+```powershell
+# 0. Restore tools (DocFX)
+dotnet tool restore
+
+# 1. Build the solution (required for XML documentation)
+dotnet build SDK.sln
+
+# 2. Generate the documentation site
+dotnet build -t:docfx --no-restore
+
+# 3. Serve locally for preview
+dotnet docfx serve docs\_build\_site --port 8080
+```
+
+The site will be available at `http://localhost:8080`.
 
 ## Guides
 

@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "DotNet.ReproducibleBuilds": {
+        "type": "Direct",
+        "requested": "[1.2.39, )",
+        "resolved": "1.2.39",
+        "contentHash": "fcFN01tDTIQqDuTwr1jUQK/geofiwjG5DycJQOnC72i1SsLAk1ELe+apBOuZ11UMQG8YKFZG1FgvjZPbqHyatg=="
+      },
+      "Meziantou.Polyfill": {
+        "type": "Direct",
+        "requested": "[1.0.52, )",
+        "resolved": "1.0.52",
+        "contentHash": "5ONR3Q+n8EzDEsKB4GKTwP6NzFvlOZdGu3XZwdHYdMSt58fWcQ21COCviqeTvoBfsC8pf72+NBLojZsXCsqi/g=="
+      },
+      "Microsoft.NETFramework.ReferenceAssemblies": {
+        "type": "Direct",
+        "requested": "[1.0.3, )",
+        "resolved": "1.0.3",
+        "contentHash": "vUc9Npcs14QsyOD01tnv/m8sQUnGTGOw1BCmKcv77LBJY7OxhJ+zJF7UD/sCL3lYNFuqmQEVlkfS4Quif6FyYg==",
+        "dependencies": {
+          "Microsoft.NETFramework.ReferenceAssemblies.net461": "1.0.3"
+        }
+      },
+      "MinVer": {
+        "type": "Direct",
+        "requested": "[6.1.0-beta.1, )",
+        "resolved": "6.1.0-beta.1",
+        "contentHash": "7G+74w2V7Cd9wy6JmUuRsDY/lskO9smQNlp9rF6BJr70RTQb6odJ3n6Oau23/eBuvQjI6vy4bVbQPZvDFey01g=="
+      },
+      "Microsoft.NETFramework.ReferenceAssemblies.net461": {
+        "type": "Transitive",
+        "resolved": "1.0.3",
+        "contentHash": "AmOJZwCqnOCNp6PPcf9joyogScWLtwy0M1WkqfEQ0M9nYwyDD7EX9ZjscKS5iYnyvteX7kzSKFCKt9I9dXA6mA=="
+      }
+    }
+  }
+}
