@@ -245,7 +245,7 @@ public static class AccessPathAnalyzer
   }
 
   /// <summary>
-  /// Converts a .NET generic type name from backtick notation (`1) to angle bracket notation (<T>)
+  /// Converts a .NET generic type name from backtick notation (`1) to angle bracket notation (&lt;T&gt;)
   /// to match Roslyn's ToDisplayString() format used in the generated registry.
   /// </summary>
   private static string FormatGenericTypeName(Type genericType)

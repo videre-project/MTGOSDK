@@ -9,7 +9,7 @@ namespace MTGOSDK.Core.Reflection.Attributes;
 /// <summary>
 /// A wrapper attribute that indicates that a field is internal to the runtime.
 /// </summary>
-/// <param name="value">The default value.</param>
+/// <param name="baseType">The base type of the attribute.</param>
 public class RuntimeInternalAttribute(Type? baseType = null)
     : CallerAttribute<RuntimeInternalAttribute>
 {

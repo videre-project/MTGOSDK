@@ -224,8 +224,8 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   /// <param name="cardId">The card ID to update focus.</param>
   /// <param name="isFocused">Whether to highlight the card.</param>
-  public void SetCardMouseOver(int cardId, bool isMouseOver = true) =>
-    @base.SetCardMouseOver(cardId, isMouseOver);
+  public void SetCardMouseOver(int cardId, bool isFocused = true) =>
+    @base.SetCardMouseOver(cardId, isFocused);
 
   //
   // IGame wrapper events

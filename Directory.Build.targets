@@ -11,6 +11,8 @@
       <FoldersToClean Include="$(MSBuildProjectDirectory)\bin" />
       <FoldersToClean Include="$(MSBuildProjectDirectory)\logs" />
       <FoldersToClean Include="$(MSBuildProjectDirectory)\obj" />
+      <FoldersToClean Include="$(SolutionDir)\docs\_build\_site" />
+      <FoldersToClean Include="$(SolutionDir)\docs\_build\_xmldoc" />
       <FoldersToClean Include="$(MSBuildProjectDirectory)\html-coverage-report" />
       <FilesToClean Include="$(MSBuildProjectDirectory)\coverage.cobertura.xml" />
       <FilesToClean Include="$(MSBuildProjectDirectory)\coverage.json" />
@@ -62,6 +64,59 @@
             Result = (ToSeconds(FirstDate) - ToSeconds(SecondDate)) > Difference;
         ]]>
       </Code>
+    </Task>
+  </UsingTask>
+
+  <UsingTask
+    TaskName="ExtractPackages"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Packages ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <DestinationRoot ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        if (Packages == null || Packages.Length == 0)
+        {
+          Log.LogMessage("No packages to extract.");
+          return true;
+        }
+
+        Directory.CreateDirectory(DestinationRoot);
+        foreach (var pkg in Packages)
+        {
+          var path = pkg.ItemSpec;
+          if (!File.Exists(path))
+          {
+            Log.LogWarning($"Package not found: {path}");
+            continue;
+          }
+
+          var id = Regex.Replace(Path.GetFileNameWithoutExtension(path), @"\.[0-9].*$", "");
+          var dest = Path.Combine(DestinationRoot, id);
+          Directory.CreateDirectory(dest);
+
+          using var archive = ZipFile.OpenRead(path);
+          foreach (var entry in archive.Entries)
+          {
+            if (string.IsNullOrEmpty(entry.FullName)) continue;
+            var outPath = Path.Combine(dest, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+            var outDir = Path.GetDirectoryName(outPath);
+            if (!string.IsNullOrEmpty(outDir)) Directory.CreateDirectory(outDir);
+            if (entry.FullName.EndsWith("/")) continue; // directory
+            entry.ExtractToFile(outPath, overwrite: true);
+          }
+
+          Log.LogMessage(MessageImportance.High, $"Extracted {path} -> {dest}");
+        }
+
+        return true;
+      ]]></Code>
     </Task>
   </UsingTask>
 
@@ -174,6 +229,94 @@
     <Exec Command="$(NuGetExePath) add $(PackagePath) ^
                     -Source $(FeedOutputPath) ^
                     -Verbosity quiet" />
+  </Target>
+  
+  <!-- Custom target to build documentation using DocFX and DocProcessor -->
+  <Target Name="docfx" Condition="'$(MSBuildProjectName)' == 'MTGOSDK'" DependsOnTargets="MinVer">
+    <PropertyGroup>
+      <DocProcessorDir>$(MSBuildThisFileDirectory)tools\DocFX\</DocProcessorDir>
+      <DocFxDir>$(MSBuildThisFileDirectory)</DocFxDir>
+    </PropertyGroup>
+
+    <Message Text="=== DocFX Documentation Build Pipeline ===" Importance="High" />
+
+    <!-- 0. Ensure package contents are available for DocFX -->
+    <ItemGroup>
+      <DocfxPackages Include="$(DocFxDir)publish\**\*.nupkg" />
+    </ItemGroup>
+    <Message Text="Preparing packages for DocFX from $(DocFxDir)publish" Importance="High" />
+    <Error Condition="@(DocfxPackages->Count()) == 0"
+           Text="No packages found under $(DocFxDir)publish. Ensure package artifacts are downloaded (or built) before running the docfx target." />
+    <PropertyGroup>
+      <DocfxExtractRoot>$(DocFxDir)dist</DocfxExtractRoot>
+    </PropertyGroup>
+    <MakeDir Directories="$(DocfxExtractRoot)" />
+    <ExtractPackages Packages="@(DocfxPackages)"
+                     DestinationRoot="$(DocfxExtractRoot)"
+                     Condition="@(DocfxPackages->Count()) &gt; 0" />
+
+    <!-- 1. Build DocProcessor Tool -->
+    <Message Text="Building DocProcessor tool..." Importance="High" />
+    <MSBuild Projects="$(DocProcessorDir)DocProcessor.csproj" Targets="Build" Properties="Configuration=Release" />
+
+    <!-- 2. Get Version Info -->
+    <!-- MinVer should already be available if this target is run after Restore/Build, but explicitly running it to be safe -->
+    <!-- We rely on MinVer properties being set. If not, fallback to 0.0.0 -->
+    <PropertyGroup>
+      <!-- Parse MinVer properties -->
+      <_VersionMain>$(MinVerMajor).$(MinVerMinor).$(MinVerPatch)</_VersionMain>
+      <_VersionSuffix>$(MinVerPreRelease)</_VersionSuffix>
+      <_CommitHash>$(MinVerBuildMetadata)</_CommitHash>
+       <!-- Fix suffix/hash if MinVer is not active or empty -->
+       <_VersionMain Condition="'$(_VersionMain)' == '..'">0.0.0</_VersionMain>
+    </PropertyGroup>
+    
+    <!-- Extract short hash and URL -->
+    <PropertyGroup>
+      <_ShortHash>$(_CommitHash)</_ShortHash>
+      <_ShortHash Condition="'$(_CommitHash)' != '' And $(_CommitHash.Length) &gt;= 7">$(_CommitHash.Substring(0, 7))</_ShortHash>
+      <_CommitUrl Condition="'$(_ShortHash)' != ''">https://github.com/videre-project/MTGOSDK/commit/$(_ShortHash)</_CommitUrl>
+    </PropertyGroup>
+
+    <!-- Fallback to git hash if MinVer metadata is empty -->
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" Condition="'$(_ShortHash)' == ''">
+       <Output TaskParameter="ConsoleOutput" PropertyName="_ShortHash" />
+    </Exec>
+    <PropertyGroup>
+       <_CommitUrl Condition="'$(_ShortHash)' != ''">https://github.com/videre-project/MTGOSDK/commit/$(_ShortHash)</_CommitUrl>
+    </PropertyGroup>
+
+    <Message Text="Building docs for version: $(_VersionMain) $(_VersionSuffix) + $(_ShortHash)" Importance="High" />
+
+    <!-- 3. DocFX Metadata -->
+    <Message Text="[1/6] Generating metadata..." Importance="High" />
+    <Exec Command="dotnet docfx metadata $(DocFxDir)docfx.json" WorkingDirectory="$(DocFxDir)" />
+
+    <!-- 4. Reorder Members -->
+    <Message Text="[2/6] Reordering members by source order..." Importance="High" />
+    <Exec Command="dotnet run --project $(DocProcessorDir)DocProcessor.csproj -c Release --no-build -- reorder -SourceRoot &quot;$(DocFxDir)MTGOSDK\src&quot; -YamlDirectory &quot;$(DocFxDir)docs\_build\_xmldoc\MTGOSDK&quot;" />
+
+    <!-- 5. Remove Inherited Members -->
+    <Message Text="[3/6] Removing inherited members..." Importance="High" />
+    <Exec Command="dotnet run --project $(DocProcessorDir)DocProcessor.csproj -c Release --no-build -- remove-inherited -YamlDirectory &quot;$(DocFxDir)docs\_build\_xmldoc\MTGOSDK&quot;" />
+
+    <!-- 6. Reclassify Events -->
+    <Message Text="[4/6] Reclassifying event fields..." Importance="High" />
+    <Exec Command="dotnet run --project $(DocProcessorDir)DocProcessor.csproj -c Release --no-build -- reclassify-events -YamlDirectory &quot;$(DocFxDir)docs\_build\_xmldoc\MTGOSDK&quot;" />
+
+    <!-- 7. Organize TOC -->
+    <Message Text="[5/6] Organizing TOC..." Importance="High" />
+    <Exec Command="dotnet run --project $(DocProcessorDir)DocProcessor.csproj -c Release --no-build -- organize-toc -SourceRoot &quot;$(DocFxDir)MTGOSDK\src&quot; -TocPath &quot;$(DocFxDir)docs\_build\_xmldoc\MTGOSDK\toc.yml&quot;" />
+
+    <!-- 8. DocFX Build -->
+    <Message Text="[6/6] Building site..." Importance="High" />
+    
+    <!-- Execute DocFX build via external PowerShell script -->
+    <Exec Command="powershell -ExecutionPolicy Bypass -NoProfile -File &quot;$(DocFxDir)docs\_build\docfx\build.ps1&quot; -DocFxDir &quot;.&quot; -VersionMain &quot;$(_VersionMain)&quot; -VersionSuffix &quot;$(_VersionSuffix)&quot; -ShortHash &quot;$(_ShortHash)&quot; -CommitUrl &quot;$(_CommitUrl)&quot;" 
+          WorkingDirectory="$(DocFxDir)"
+          ConsoleToMSBuild="true" />
+    
+    <Message Text="=== DocFX Build Complete ===" Importance="High" />
   </Target>
 
 </Project>

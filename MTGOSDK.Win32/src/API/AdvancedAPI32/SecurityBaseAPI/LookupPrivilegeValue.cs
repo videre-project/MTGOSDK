@@ -31,6 +31,7 @@ public static partial class AdvApi32
     /// <remarks>
     /// For example, to specify the constant <c>SE_SECURITY_NAME</c>, use it's
     /// corresponding string "SeSecurityPrivilege".
+    /// </remarks>
     string lpName,
     /// <summary>
     /// A pointer to a variable that receives the LUID by which the privilege is

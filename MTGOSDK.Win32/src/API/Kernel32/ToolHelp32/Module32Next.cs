@@ -20,17 +20,17 @@ public static partial class Kernel32
   /// </returns>
   /// <remarks>
   /// To retrieve information about the first module associated with a process,
-  /// use the <cref="Module32First"/> function.
+  /// use the <see cref="Module32First"/> function.
   /// </remarks>
   [DllImport("kernel32.dll")]
   public static extern bool Module32Next(
     /// <summary>
     /// A handle to the snapshot returned from a previous call to the
-    /// <cref="CreateToolhelp32Snapshot"/> function.
+    /// <see cref="CreateToolhelp32Snapshot"/> function.
     /// </summary>
     [In] ToolHelpHandle hSnapshot,
     /// <summary>
-    /// A pointer to a <cref="ModuleEntry32"/> structure.
+    /// A pointer to a <see cref="ModuleEntry32"/> structure.
     /// </summary>
     [In, Out] ref ModuleEntry32 lpme
   );

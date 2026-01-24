@@ -12,7 +12,7 @@ namespace MTGOSDK.API.Settings;
 using static MTGOSDK.API.Events;
 
 /// <summary>
-/// A wrapper for the MTGO client's <see cref="IPrimativeSetting"/> interface.
+/// A wrapper for the MTGO client's <see cref="IPrimitiveSetting{T}"/> interface.
 /// </summary>
 public sealed class PrimitiveSetting<T>(dynamic setting)
     : DLRWrapper<IPrimitiveSetting<T>>, ISetting

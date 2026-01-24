@@ -15,7 +15,7 @@ public static partial class Kernel32
   /// Reserves, commits, or changes the state of a region of memory within the
   /// virtual address space of a specified process.
   /// </summary>
-  /// </remarks>
+  /// <remarks>
   /// The function initializes the memory it allocates to zero (unless MEM_RESET
   /// is used).
   /// </remarks>

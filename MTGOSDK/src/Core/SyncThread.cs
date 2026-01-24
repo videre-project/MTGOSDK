@@ -11,13 +11,10 @@ using MTGOSDK.Core.Logging;
 namespace MTGOSDK.Core;
 
 /// <summary>
-/// Wraps a generic method to be used as an event handler for subscription.
+/// A high-performance thread pool wrapper for executing and grouping tasks.
 /// </summary>
-/// <typeparam name="T">The type of the event arguments.</typeparam>
-/// <param name="handler">The method to be wrapped.</param>
 public static class SyncThread
 {
-
   private static readonly CancellationTokenSource s_cancellationTokenSource = new();
   private static readonly CancellationToken s_cancellationToken =
     s_cancellationTokenSource.Token;

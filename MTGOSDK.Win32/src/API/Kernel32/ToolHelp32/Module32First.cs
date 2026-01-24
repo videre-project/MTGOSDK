@@ -18,18 +18,18 @@ public static partial class Kernel32
   /// buffer or FALSE otherwise.
   /// </returns>
   /// <remarks>
-  /// The calling application must set the <cref="ModuleEntry32.dwSize"/> member
+  /// The calling application must set the <see cref="ModuleEntry32.dwSize"/> member
   /// of <paramref name="lpme"/> to the size, in bytes, of the structure.
   /// </remarks>
   [DllImport("kernel32.dll")]
   public static extern bool Module32First(
     /// <summary>
     /// A handle to the snapshot returned from a previous call to the
-    /// <cref="CreateToolhelp32Snapshot"/> function.
+    /// <see cref="CreateToolhelp32Snapshot"/> function.
     /// </summary>
     [In] ToolHelpHandle hSnapshot,
     /// <summary>
-    /// A pointer to a <cref="ModuleEntry32"/> structure.
+    /// A pointer to a <see cref="ModuleEntry32"/> structure.
     /// </summary>
     [In, Out] ref ModuleEntry32 lpme
   );

@@ -19,19 +19,22 @@ runs:
       id: find_build_run
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        REPOSITORY: ${{ github.repository }}
       shell: powershell
       run: |
-        $head_sha = "${{ github.event.workflow_run.head_sha }}"
-        $head_branch = "${{ github.event.workflow_run.head_branch }}"
+        $head_sha = $env:HEAD_SHA
+        $head_branch = $env:HEAD_BRANCH
         Write-Host "Searching for 'Build' (build.yml) workflow run for branch '$head_branch' and commit '$head_sha'"
         # Use the workflow file name for robustness
-        $build_run_id = gh run list --workflow "build.yml" --repo "${{ github.repository }}" --branch "$head_branch" --commit "$head_sha" --status success --json databaseId --limit 1 --jq ".[0].databaseId"
+        $build_run_id = gh run list --workflow "build.yml" --repo "$env:REPOSITORY" --branch "$head_branch" --commit "$head_sha" --status success --json databaseId --limit 1 --jq ".[0].databaseId"
 
         if ($null -eq $build_run_id -or $build_run_id -eq "null" -or $build_run_id -eq "") {
           Write-Error "No successful 'Build' workflow run found for branch '$head_branch' and commit '$head_sha'."
           # Diagnostic info
           Write-Host "Listing last 5 runs for 'build.yml' on branch '$head_branch':"
-          gh run list --workflow "build.yml" --repo "${{ github.repository }}" --branch "$head_branch" --limit 5 --json headSha,status,conclusion,url,databaseId
+          gh run list --workflow "build.yml" --repo "$env:REPOSITORY" --branch "$head_branch" --limit 5 --json headSha,status,conclusion,url,databaseId
           exit 1
         }
 

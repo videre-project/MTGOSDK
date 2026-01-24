@@ -1,0 +1,71 @@
+name: Docs
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+
+env:
+  WORKSPACE_PATH: D:\workspace
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  docs:
+    name: "Build and Publish Docs"
+    runs-on: windows-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Setup Dev Drive and Checkout
+        id: setup_dev_drive_checkout
+        uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
+        with:
+          ref: ${{ github.event.workflow_run.head_commit.id }}
+
+      - name: Download package artifacts
+        uses: ./.github/actions/download-artifact
+        with:
+          name: mtgosdk-packages
+          path: ${{ env.WORKSPACE_PATH }}/publish
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup .NET SDK (no restore)
+        uses: ./.github/actions/setup-dotnet
+        with:
+          WORKSPACE_PATH: ${{ env.WORKSPACE_PATH }}
+          SKIP_RESTORE: 'true'
+
+      - name: Restore tools
+        run: dotnet tool restore
+        shell: powershell
+        working-directory: ${{ env.WORKSPACE_PATH }}
+
+      - name: Build DocFX Site
+        run: dotnet build -t:docfx --no-restore
+        shell: powershell
+        working-directory: ${{ env.WORKSPACE_PATH }}
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.WORKSPACE_PATH }}/docs/_build/_site
+
+  deploy:
+    name: "Deploy to GitHub Pages"
+    needs: docs
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Deploy
+        uses: actions/deploy-pages@v4

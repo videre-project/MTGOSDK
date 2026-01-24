@@ -1,0 +1,15 @@
+apiRules:
+# Specific exclusions must come BEFORE the general include
+# Exclude MTGOSDK.API.Events namespace types
+- exclude:
+    uidRegex: ^MTGOSDK\.API\.Events
+# Exclude types with RuntimeInternalAttribute
+- exclude:
+    hasAttribute:
+      uid: MTGOSDK.Core.Reflection.Attributes.RuntimeInternalAttribute
+# Include all MTGOSDK namespaces
+- include:
+    uidRegex: ^MTGOSDK
+# Exclude everything else (non-MTGOSDK assemblies)
+- exclude:
+    uidRegex: .

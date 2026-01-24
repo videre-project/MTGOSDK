@@ -14,7 +14,7 @@ public sealed class NamedValue<T>(dynamic namedValue)
     : DLRWrapper<INamedValue<T>>
 {
   /// <summary>
-  /// Stores an internal reference to the INamedValue<T> object.
+  /// Stores an internal reference to the INamedValue&lt;T&gt; object.
   /// </summary>
   internal override dynamic obj => Bind<INamedValue<T>>(namedValue);
 

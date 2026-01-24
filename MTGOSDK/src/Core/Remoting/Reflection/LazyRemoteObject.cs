@@ -37,7 +37,7 @@ public class LazyRemoteObject : DynamicRemoteObject
   /// <summary>
   /// Sets the lazy initializer function for the remote object.
   /// </summary>
-  /// <param name="c">The lazy initializer function.</param>
+  /// <param name="callback">The lazy initializer function.</param>
   /// <returns>A reference to this function.</returns>
   public TResetter Set(Func<dynamic>? callback)
   {

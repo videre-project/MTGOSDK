@@ -32,6 +32,7 @@ public enum ProcessAccessFlags : uint
   /// <summary>
   /// Required to retrieve certain information about a process
   /// such as its token, exit code, and priority class.
+  /// </summary>
   QueryLimitedInformation = 0x00001000,
   /// <summary>
   /// Required to wait for the process to terminate using the wait functions.

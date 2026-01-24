@@ -26,9 +26,9 @@ public struct ModuleEntry32
   /// The size of the structure, in bytes.
   /// </summary>
   /// <remarks>
-  /// Before calling the <cref="Module32First"/> function, set this member to
-  /// sizeof(<cref="ModuleEntry32"/>). If you do not initialize
-  /// <cref="dwSize"/>, <cref="Module32First"/> fails.
+  /// Before calling the <see cref="Kernel32.Module32First"/> function, set this member to
+  /// sizeof(<see cref="ModuleEntry32"/>). If you do not initialize
+  /// <see cref="dwSize"/>, <see cref="Kernel32.Module32First"/> fails.
   /// </remarks>
   public uint dwSize;
   /// <summary>
@@ -45,7 +45,7 @@ public struct ModuleEntry32
   /// </summary>
   public uint GlblcntUsage;
   /// <summary>
-  /// The load count of the module (same as <cref="GlblcntUsage"/>), which is not
+  /// The load count of the module (same as <see cref="GlblcntUsage"/>), which is not
   /// generally meaningful, and usually equal to 0xFFFF.
   /// </summary>
   public uint ProccntUsage;

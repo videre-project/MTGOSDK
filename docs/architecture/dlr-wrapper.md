@@ -137,7 +137,7 @@ public static class Foo
 }
 ```
 
-Here the `GetBar()` method is a placeholder for a method that retrieves the dynamic object from a remote source, such as [`ObjectProvider.Get<T>`](./object-provider.md) or [`RemoteClient.GetInstance()`](./remote-client.md). In this example we assume that the **baz** object is another class that implements the `IBaz` interface, which is bound to the **bar** dynamic object behind the **baz** property.
+Here the `GetBar()` method is a placeholder for a method that retrieves the dynamic object from a remote source, such as `ObjectProvider.Get<T>` or [`RemoteClient.GetInstance()`](./remote-client.md). In this example we assume that the **baz** object is another class that implements the `IBaz` interface, which is bound to the **bar** dynamic object behind the **baz** property.
 
 If the **baz** property is present in the `IBar` interface, we can simply access it and specity it's type as `IBaz` without any additional binding. This will allow us to access the public members of the **baz** object in the same way as the **bar** object.
 

@@ -7,6 +7,8 @@
     <Summary>A MSBuild library for design/compile-time code generation of the SDK.</Summary>
     <Description>An MSBuild library that manages the code-generation of the SDK. This builds reference assemblies containing only the public types and members of internal classes from the MTGO client and does not handle or contain any implementation details or private code.</Description>
     <PackageTags></PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <!-- Publishing Configuration -->

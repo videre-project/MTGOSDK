@@ -1,3 +1,7 @@
+---
+# _layout: landing
+---
+
 # ![MTGOSDK Icon](/assets/icon_36h.png) MTGOSDK
 
 ![.NET](https://img.shields.io/badge/dynamic/yaml?label=.NET&labelColor=3f4551&color=8a2be2&prefix=v&query=$.sdk.version&url=https://raw.githubusercontent.com/videre-project/mtgo-sdk/main/global.json)
@@ -157,6 +161,35 @@ $ dotnet watch --project MTGOSDK/MTGOSDK.csproj build -c Release
 ```
 
 This will also pick up changes to dependent **MTGOSDK.MSBuild** and **MTGOSDK.Win32** projects as well. As build evaluation is rooted from the MTGOSDK .csproj file, all logs from the build will be stored under the `MTGOSDK/logs` directory.
+
+## Building Documentation
+
+The DocFX site builds from the published packages generated from building the solution. The `docfx` MSBuild target extracts the `.nupkg` files from `publish/` into `dist/` and then runs DocFX.
+
+Restore tools (DocFX)
+```powershell
+dotnet tool restore
+```
+
+Build to produce `.nupkg` into `publish/`
+```powershell
+dotnet build SDK.sln -c Release
+```
+
+> [!NOTE]
+> If you already have the MTGOSDK nuget packages (or wish to download them from [NuGet](https://nuget.org) instead), you can place the .nupkg files under `publish/` at the repo root instead of rebuilding.
+
+Generate the documentation site (handles extraction into `dist/`)
+```powershell
+dotnet build -t:docfx --no-restore
+```
+
+Serve locally for preview
+```powershell
+dotnet docfx serve docs/_build/_site --port 8080
+```
+
+The site will be available at http://localhost:8080.
 
 ## Acknowledgements
 

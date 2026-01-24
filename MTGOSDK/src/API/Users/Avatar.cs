@@ -36,7 +36,7 @@ public sealed class Avatar(dynamic avatar) : DLRWrapper<IAvatar>
   /// </summary>
   /// <remarks>
   /// This corresponds to the ID of the associated card definition,
-  /// which can be fetched with the <see cref="Collection.CardManager"/> class.
+  /// which can be fetched with the <see cref="CollectionManager"/> class.
   /// </remarks>
   public int Id => CardDefinition.Id;
 

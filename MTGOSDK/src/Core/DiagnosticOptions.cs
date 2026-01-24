@@ -3,6 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Memory.Snapshot;
+
 
 namespace MTGOSDK.Core;
 
@@ -17,8 +20,9 @@ public struct DiagnosticOptions()
   /// <remarks>
   /// By default, the SDK will use a NullLogger which will not log to any
   /// output. To enable logging, provide a logger factory through the
-  /// <see cref="MTGOSDK.Core.Logging.Log.SetFactoryInstance"/> method or
-  /// through the <see cref="MTGOSDK.API.Client"/> constructor.
+  /// <see cref="LoggerBase.SetFactoryInstance"/> method or by setting a
+  /// logger provider through the <see cref="LoggerBase.SetProviderInstance"/>
+  /// method.
   /// </remarks>
   /// <value>
   /// <c>true</c> to enable logging, <c>false</c> otherwise.
@@ -46,7 +50,7 @@ public struct DiagnosticOptions()
   /// As the SDK takes continuous snapshots of the MTGO client, enabling this
   /// option will reserve the past few snapshots to inspect previous states of
   /// the client. This is managed through the
-  /// <see cref="MTGOSDK.Core.Reflection.Snapshot.SnapshotRuntime"/> class to
+  /// <see cref="SnapshotRuntime"/> class to
   /// provide several copy-on-write snapshots of the client's state.
   /// Enabling snapshots can be useful for debugging behaviors intricately
   /// dependent on the client's state that are not easily reproducible.
