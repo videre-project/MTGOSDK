@@ -26,9 +26,9 @@ public struct ModuleEntry32
   /// The size of the structure, in bytes.
   /// </summary>
   /// <remarks>
-  /// Before calling the <see cref="Module32First"/> function, set this member to
+  /// Before calling the <see cref="Kernel32.Module32First"/> function, set this member to
   /// sizeof(<see cref="ModuleEntry32"/>). If you do not initialize
-  /// <see cref="dwSize"/>, <see cref="Module32First"/> fails.
+  /// <see cref="dwSize"/>, <see cref="Kernel32.Module32First"/> fails.
   /// </remarks>
   public uint dwSize;
   /// <summary>
