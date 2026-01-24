@@ -20,6 +20,7 @@ public static class SerializableBaseExtensions
   /// <typeparam name="TInterface">
   /// The interface type to serialize to.
   /// </typeparam>
+  /// <param name="enumerable">The collection of objects to serialize.</param>
   /// <param name="include">Properties to include.</param>
   /// <param name="exclude">Properties to exclude.</param>
   /// <param name="strict">

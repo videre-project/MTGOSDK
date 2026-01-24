@@ -56,7 +56,8 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="obj">The object to bind.</param>
   /// <returns>The bound object.</returns>
   /// <remarks>
-  /// This method is a wrapper for the <see cref="Proxy{T}.As"/> method.
+  /// This method is a wrapper for the <see cref="TypeProxy{T}.As(object)"/>
+  /// method.
   /// </remarks>
   public static T Bind<T>(dynamic obj) where T : class
   {
@@ -76,10 +77,10 @@ public abstract class DLRWrapper : SerializableBase
   /// <summary>
   /// Unbinds the given object instance from the proxied wrapper type.
   /// </summary>
-  /// <param name="obj">The object to unbind.</param>
+  /// <param name="dro">The DLRWrapper object to unbind.</param>
   /// <returns>The unbound object.</returns>
   /// <remarks>
-  /// This method is a wrapper for the <see cref="Proxy{T}.From"/> method.
+  /// This method is a wrapper for the <see cref="TypeProxy{T}.From"/> method.
   /// </remarks>
   public static dynamic Unbind(DLRWrapper dro)
   {
@@ -121,7 +122,7 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="obj">The object to unbind.</param>
   /// <returns>The unbound object.</returns>
   /// <remarks>
-  /// This method is a wrapper for the <see cref="Proxy{T}.From"/> method.
+  /// This method is a wrapper for the <see cref="TypeProxy{T}.From"/> method.
   /// </remarks>
   public static dynamic Unbind(dynamic obj)
   {
@@ -165,7 +166,7 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="objs">The objects to unbind.</param>
   /// <returns>The unbound objects.</returns>
   /// <remarks>
-  /// This method is a wrapper for the <see cref="Proxy{T}.From"/> method.
+  /// This method is a wrapper for the <see cref="TypeProxy{T}.From"/> method.
   /// </remarks>
   public static dynamic Unbind(dynamic [] objs)
   {
@@ -861,6 +862,7 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="default">The default value to fallback to (optional).</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="raise">Whether to raise an exception if the function fails (optional).</param>
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
   [DebuggerHidden]
   public static T Retry<T>(
@@ -900,9 +902,9 @@ public abstract class DLRWrapper : SerializableBase
   /// Safely executes a lambda function with a given number of retries.
   /// </summary>
   /// <param name="lambda">The function to execute.</param>
-  /// <param name="default">The default value to fallback to (optional).</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="raise">Whether to raise an exception if the function fails (optional).</param>
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
   [DebuggerHidden]
   public static void Retry(
@@ -920,6 +922,7 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="raise">Whether to raise an exception if the function fails (optional).</param>
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
   /// <remarks>
   /// This method is a wrapper for the <see cref="Retry{T}"/> method.
@@ -953,6 +956,7 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="lambda">The function to execute.</param>
   /// <param name="delay">The delay in ms between retries (optional).</param>
   /// <param name="retries">The number of times to retry (optional).</param>
+  /// <param name="raise">Whether to raise an exception if the function fails (optional).</param>
   /// <returns>The result of the function, otherwise an exception is thrown.</returns>
   /// <remarks>
   /// This method is a wrapper for the <see cref="Retry{T}"/> method.
@@ -1308,11 +1312,11 @@ public abstract class DLRWrapper : SerializableBase
 /// A wrapper for dynamic objects that implement an interface at runtime.
 /// </summary>
 /// <remarks>
-/// This class exposes an overrideable <see cref="obj"/> property that is used
+/// This class exposes an overrideable <c>obj</c> property that is used
 /// to capture dynamic objects passed to the constructor. This allows derived
 /// classes to defer dynamic dispatching of class constructors until after
 /// the base class constructor has completed, exposing the captured dynamic
-/// object to derived classes with the <see cref="@base"/> property.
+/// object to derived classes with the <c>@base</c> property.
 /// </remarks>
 /// <typeparam name="I">The interface type to wrap.</typeparam>
 public class DLRWrapper<I>(): DLRWrapper where I : class

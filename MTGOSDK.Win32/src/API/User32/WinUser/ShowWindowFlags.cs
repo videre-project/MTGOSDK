@@ -38,7 +38,7 @@ public enum ShowWindowFlags : int
   /// Displays a window in its most recent size and position.
   /// </summary>
   /// <remarks
-  /// >This value is similar to <cref="SW_SHOWNORMAL"/>, except the window is
+  /// >This value is similar to <see cref="SW_SHOWNORMAL"/>, except the window is
   /// not activated.
   /// </remarks>
   SW_SHOWNOACTIVATE = 4,
@@ -55,7 +55,7 @@ public enum ShowWindowFlags : int
   /// Displays the window as a minimized window.
   /// </summary>
   /// <remarks>
-  /// This value is similar to <cref="SW_SHOWMINIMIZED"/>, except the window is
+  /// This value is similar to <see cref="SW_SHOWMINIMIZED"/>, except the window is
   /// not activated.
   /// </remarks>
   SW_SHOWMINNOACTIVE = 7,
@@ -63,7 +63,7 @@ public enum ShowWindowFlags : int
   /// Displays the window in its current size and position.
   /// </summary>
   /// <remarks>
-  /// This value is similar to <cref="SW_SHOW"/>, except the window is not
+  /// This value is similar to <see cref="SW_SHOW"/>, except the window is not
   /// activated.
   /// </remarks>
   SW_SHOWNA = 8,

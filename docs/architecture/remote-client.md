@@ -120,4 +120,4 @@ You can also use `RemoteClient.CreateInstance("Foo.Bar", 1, "foo")` to create a 
 
 As the `RemoteClient` class is a low-level class that interacts directly with the client's memory space, it is best to limit frequent use of the `RemoteClient` class to cases where the `MTGOSDK.API` classes are not sufficient. Each method in the `RemoteClient` class may traverse the client's memory heap or require reflection to retrieve or interact with objects, which can be slow and resource-intensive.
 
-As such, it is recommended to use the `MTGOSDK.API` classes or the [`ObjectProvider`](./object-provider.md) class instead where possible, as these classes provide a safer and more optimized code-path for interacting with remote objects in the client's memory space.
+As such, it is recommended to use the `MTGOSDK.API` classes or the `ObjectProvider` class instead where possible, as these classes provide a safer and more optimized code-path for interacting with remote objects in the client's memory space.

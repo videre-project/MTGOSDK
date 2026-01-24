@@ -32,10 +32,10 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   private static readonly ILogger s_nulllogger = s_factory.CreateLogger("NullLogger");
 
   /// <summary>
-  /// A concurrent dictionary of ILogger<T> instances mapped to their type.
+  /// A concurrent dictionary of <see cref="ILogger"/> instances mapped to their type.
   /// </summary>
   /// <remarks>
-  /// Used to cache ILogger instances for performance.
+  /// Used to cache <see cref="ILogger"/> instances for performance.
   /// </remarks>
   private static readonly ConcurrentDictionary<Type, ILogger> s_loggers = new();
 

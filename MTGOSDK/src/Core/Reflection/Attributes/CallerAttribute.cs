@@ -9,7 +9,7 @@ namespace MTGOSDK.Core.Reflection.Attributes;
 /// <summary>
 /// A wrapper attribute that allows for a default value to fallback to.
 /// </summary>
-/// <param name="value">The default value.</param>
+[AttributeUsage(AttributeTargets.All, Inherited = true, AllowMultiple = false)]
 public class CallerAttribute<T> : Attribute where T : Attribute
 {
   /// <summary>

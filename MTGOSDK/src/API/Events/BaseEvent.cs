@@ -35,18 +35,15 @@ namespace MTGOSDK.API;
 /// <see cref="Events.ChannelEventCallback"/><br/>
 /// <see cref="Events.ChannelStateEventCallback"/><br/>
 /// <see cref="Events.ChatSessionEventCallback"/><br/>
-/// <see cref="Events.CountdownEventCallback"/><br/>
 /// <see cref="Events.ErrorEventCallback"/><br/>
 /// <see cref="Events.GameCardEventCallback"/><br/>
 /// <see cref="Events.GameEventCallback"/><br/>
 /// <see cref="Events.GamePlayerEventCallback"/><br/>
-/// <see cref="Events.GameStateEventCallback"/><br/>
 /// <see cref="Events.GameZoneEventCallback"/><br/>
 /// <see cref="Events.LeagueEventCallback"/><br/>
 /// <see cref="Events.LeagueOperationEventCallback"/><br/>
 /// <see cref="Events.LeagueStateEventCallback"/><br/>
 /// <see cref="Events.MatchErrorEventCallback"/><br/>
-/// <see cref="Events.MatchStatusEventCallback"/><br/>
 /// <see cref="Events.PlayerEventErrorEventCallback"/><br/>
 /// <see cref="Events.PlayerEventsCreatedEventCallback"/><br/>
 /// <see cref="Events.PlayerEventsRemovedEventCallback"/><br/>
@@ -58,8 +55,6 @@ namespace MTGOSDK.API;
 /// <see cref="Events.SystemAlertEventCallback"/><br/>
 /// <see cref="Events.ToastEventCallback"/><br/>
 /// <see cref="Events.TournamentEventCallback"/><br/>
-/// <see cref="Events.TournamentErrorEventCallback"/><br/>
-/// <see cref="Events.TournamentRoundChangedEventCallback"/><br/>
 /// <see cref="Events.TournamentStateChangedEventCallback"/><br/>
 /// <see cref="Events.TradeErrorEventCallback"/><br/>
 /// <see cref="Events.TradeStartedEventCallback"/><br/>

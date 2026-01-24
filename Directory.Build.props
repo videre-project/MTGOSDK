@@ -2,7 +2,10 @@
 
   <!-- Project Properties -->
   <PropertyGroup>
-    <NoWarn>$(NoWarn);NU1702</NoWarn>
+    <NoWarn>$(NoWarn);
+      NU1702; <!-- Package is not compatible with the target framework -->
+      CS1587; <!-- XML comment is not placed on valid language element -->
+    </NoWarn>
   </PropertyGroup>
 
   <!-- Project Directories -->

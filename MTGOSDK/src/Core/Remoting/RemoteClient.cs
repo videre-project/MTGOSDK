@@ -652,7 +652,7 @@ public sealed class RemoteClient : DLRWrapper
   /// <summary>
   /// Event raised when the RemoteClient is disposed. Future-only: handlers
   /// added after disposal will NOT be invoked. Use <see cref="IsDisposed"/>
-  /// or <see cref="WaitForDisposeAsync"/> / <see cref="OnDisposed"/> for
+  /// or <see cref="WaitForDisposeAsync"/> / <see cref="Disposed"/> for
   /// deterministic post-disposal logic.
   /// </summary>
   public static event EventHandler? Disposed

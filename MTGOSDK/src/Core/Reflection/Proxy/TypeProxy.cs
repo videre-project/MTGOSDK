@@ -24,9 +24,7 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <summary>
   /// Binds the proxied object to the specified interface type.
   /// </summary>
-  /// <typeparam name="T">The interface type to bind to.</typeparam>
   /// <param name="obj">The remote object to bind to.</param>
-  /// <param name="otherInterfaces">The other interface types to bind to.</param>
   /// <returns>The proxied object.</returns>
   public static T As(object obj)
   {

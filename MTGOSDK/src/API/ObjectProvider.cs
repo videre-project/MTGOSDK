@@ -36,7 +36,7 @@ public static class ObjectProvider
   /// <remarks>
   /// This method will explicitly disable creating another lazy instance in
   /// the created callback as the <see cref="Get"/> method will invoke this
-  /// method when the <paramref name="useLazy"/> parameter is set to <c>true</c>.
+  /// method when the <c>useLazy</c> parameter is set to <c>true</c>.
   /// </remarks>
   /// <exception cref="TypeInitializationException">
   /// Thrown when the given type cannot be retrieved on invocation.

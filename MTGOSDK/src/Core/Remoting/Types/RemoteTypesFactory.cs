@@ -21,7 +21,7 @@ public class RemoteTypesFactory(TypeResolver resolver,
 {
   /// <summary>
   /// This collection marks which types the factory is currently creating
-  /// it's important since <see cref="Create"/> might recursively call itself and
+  /// it's important since <see cref="Create(RemoteHandle, TypeDump)"/> might recursively call itself and
   /// types might depend on one another (circular references)
   /// </summary>
   private readonly Dictionary<Tuple<string, string>, Type> _onGoingCreations =

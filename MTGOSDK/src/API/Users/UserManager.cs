@@ -70,9 +70,11 @@ public static class UserManager
   /// Retrieves a user object from the client's UserManager.
   /// </summary>
   /// <param name="name">The display name of the user.</param>
+  /// <param name="ignoreCase">Whether to ignore case when searching for the user.</param>
   /// <returns>A new User object.</returns>
   /// <exception cref="ArgumentException">
   /// Thrown if the username is null or empty.
+  /// </exception>
   /// <exception cref="KeyNotFoundException">
   /// Thrown if the user does not exist.
   /// </exception>

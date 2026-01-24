@@ -22,7 +22,7 @@ Or using the Package Manager Console:
 Install-Package MTGOSDK
 ```
 
-For the latest development builds, see [building from source](../README.md#building-this-project).
+For the latest development builds, see [building from source](https://github.com/videre-project/MTGOSDK/blob/main/README.md#building-this-project).
 
 ---
 
@@ -71,7 +71,7 @@ This code starts MTGO if it isn't already running, waits for initialization, the
 
 The `IsConnectedChanged` event fires if the user logs out or MTGO crashes unexpectedly. You can also uses the `Disposed` event from `MTGOSDK.Core.Remoting.RemoteClient` to detect if the MTGO process has been terminated by the user or an external process. For long-running bots, you'll want to handle this to restart or exit gracefully.
 
-This pattern is used in the [BasicBot example](../examples/BasicBot/Program.cs), which also demonstrates checking server status before attempting to connect.
+This pattern is used in the [BasicBot example](https://github.com/videre-project/MTGOSDK/blob/main/examples/BasicBot/Program.cs), which also demonstrates checking server status before attempting to connect.
 
 ### Implicit Initialization
 
@@ -92,7 +92,7 @@ foreach (var item in HistoryManager.Items)
 
 The first time you access any SDK type like `HistoryManager`, the SDK automatically locates the running MTGO process and establishes a connection. There's no explicit setup required.
 
-This approach works well for companion tools, overlays, or quick scripts where you're reading data from an existing session. The [GameTracker example](../examples/GameTracker/Program.cs) uses this pattern to iterate through match history without any client setup code.
+This approach works well for companion tools, overlays, or quick scripts where you're reading data from an existing session. The [GameTracker example](https://github.com/videre-project/MTGOSDK/blob/main/examples/GameTracker/Program.cs) uses this pattern to iterate through match history without any client setup code.
 
 One thing to keep in mind: if MTGO isn't running when you access an SDK type, you'll get an error. The SDK won't wait for a process to appear. This is one reason you might prefer explicit `Client` initialization even for read-only tools (as we do in the [Tracker project](https://github.com/videre-project/Tracker)), since it gives you control over process discovery and startup. Similarly, some APIs like `HistoryManager` won't have data until the user completes the login process.
 
@@ -198,7 +198,7 @@ Card lookup works by name or catalog ID. The returned `Card` object includes all
 ## Next Steps
 
 - **[Guides](./guides/README.md)** – Task-oriented tutorials for all API features
-- **[Examples](../examples)** – Working sample applications
+- **[Examples](https://github.com/videre-project/MTGOSDK/tree/main/examples)** – Working sample applications
 - **[Architecture Guide](./architecture/README.md)** – How the SDK works internally
 - **[FAQ](./FAQ.md)** – Common questions and troubleshooting
 
