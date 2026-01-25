@@ -45,20 +45,12 @@
     var baseName = textNode.textContent.trim();
     
     // Build version HTML
-    var html = baseName + ' <span class="version-badge">v' + CONFIG.versionMain;
-    if (CONFIG.versionSuffix) {
-      html += '-' + CONFIG.versionSuffix;
+    var versionText = 'v' + CONFIG.versionMain + (CONFIG.versionSuffix ? '-' + CONFIG.versionSuffix : '');
+    var versionHtml = versionText;
+    if (CONFIG.commitUrl) {
+      versionHtml = '<a href="' + CONFIG.commitUrl + '" target="_blank" rel="noopener" class="commit-link">' + versionText + '</a>';
     }
-    if (CONFIG.commitHash) {
-       html += '<span class="d-none d-sm-inline">'; // Hide hash on very small screens?
-       if (CONFIG.commitUrl) {
-           html += '+<a href="' + CONFIG.commitUrl + '" target="_blank" rel="noopener" class="commit-link">' + CONFIG.commitHash.substring(0,7) + '</a>';
-       } else {
-           html += '+' + CONFIG.commitHash.substring(0,7);
-       }
-       html += '</span>';
-    }
-    html += '</span>';
+    var html = baseName + ' <span class="version-badge">' + versionHtml + '</span>';
     
     var span = document.createElement('span');
     span.className = 'brand-with-version brand-text'; 

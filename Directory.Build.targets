@@ -268,13 +268,13 @@
     <Error Condition="!Exists('$(_DocfxPrimaryNuspec)')"
            Text="DocFX build expected nuspec at $(_DocfxPrimaryNuspec) (ensure packages were extracted from publish/)." />
 
-    <XmlPeek Query="/package/metadata/version/text()"
+    <XmlPeek Query="/*[local-name()='package']/*[local-name()='metadata']/*[local-name()='version']/text()"
              XmlInputPath="$(_DocfxPrimaryNuspec)"
              Condition="Exists('$(_DocfxPrimaryNuspec)')">
       <Output TaskParameter="Result" PropertyName="_NuspecVersion" />
     </XmlPeek>
 
-    <XmlPeek Query="/package/metadata/repository/@commit"
+    <XmlPeek Query="/*[local-name()='package']/*[local-name()='metadata']/*[local-name()='repository']/@commit"
              XmlInputPath="$(_DocfxPrimaryNuspec)"
              Condition="Exists('$(_DocfxPrimaryNuspec)')">
       <Output TaskParameter="Result" PropertyName="_NuspecCommit" />

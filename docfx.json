@@ -87,8 +87,7 @@
       {
         "files": [
           "assets/**",
-          "public/**",
-          "LICENSE"
+          "public/**"
         ]
       }
     ],
@@ -101,10 +100,10 @@
     "globalMetadata": {
       "_appName": "MTGOSDK",
       "_appTitle": "MTGOSDK",
+      "_appBasePath": "/MTGOSDK/",
       "_appLogoPath": "assets/icon_28h_5mr.png",
       "_appFaviconPath": "assets/favicon.png",
       "_enableSearch": true,
-      "_appFooter": "<span>© 2022-<span id='footer-year'></span> Videre Project. Licensed under Apache-2.0.</span><script>document.getElementById('footer-year').textContent=new Date().getFullYear();</script><script src='{{_rel}}public/main.js'></script>",
       "_githubUrl": "https://github.com/videre-project/MTGOSDK"
     },
     "rules": {

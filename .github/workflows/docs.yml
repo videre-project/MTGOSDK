@@ -219,6 +219,12 @@ jobs:
         env:
           DOCFX_BASE_URL: ${{ steps.pages.outputs.base_url }}
 
+      - name: Add .nojekyll
+        shell: powershell
+        working-directory: ${{ env.WORKSPACE_PATH }}
+        run: |
+          New-Item -ItemType File -Path "${{ env.WORKSPACE_PATH }}\docs\_build\_site\.nojekyll" -Force | Out-Null
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

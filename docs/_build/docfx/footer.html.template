@@ -15,6 +15,6 @@
 </style>
 <div class="container-xxl">
   <div class="flex-fill">
-    <span>© 2022-{{YEAR}} Videre Project. Licensed under <a href="/LICENSE">Apache-2.0</a>.</span>
+    <span>© 2022-{{YEAR}} Videre Project. Licensed under <a href="https://github.com/videre-project/MTGOSDK/blob/main/LICENSE">Apache-2.0</a>.</span>
   </div>
 </div>
