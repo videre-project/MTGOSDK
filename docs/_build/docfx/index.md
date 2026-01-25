@@ -1,3 +1,3 @@
 ---
-redirect_url: /docs/README.html
+redirect_url: docs/README.html
 ---

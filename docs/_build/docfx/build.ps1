@@ -57,6 +57,11 @@ try {
     $metadata | Add-Member -MemberType NoteProperty -Name "_commitHash" -Value $ShortHash -Force
     $metadata | Add-Member -MemberType NoteProperty -Name "_commitUrl" -Value $CommitUrl -Force
 
+    # Configure baseUrl for GitHub Pages if provided
+    if ($env:DOCFX_BASE_URL) {
+        $docfxConfig.build | Add-Member -MemberType NoteProperty -Name "baseUrl" -Value $env:DOCFX_BASE_URL -Force
+    }
+
     # Construct the Footer HTML
     $footerTemplatePath = Join-Path $DocFxDir "docs/_build/docfx/footer.html.template"
     if (-not (Test-Path $footerTemplatePath)) {
