@@ -19,17 +19,43 @@ public static class DotEnv
   /// <summary>
   /// The internal dictionary of variables.
   /// </summary>
-  private static readonly Dictionary<string, SecureVariable> s_variables = new();
+  private static readonly Dictionary<string, SecureVariable> s_variables =
+    new(StringComparer.OrdinalIgnoreCase);
 
   /// <summary>
   /// Gets the value of the specified variable.
   /// </summary>
   /// <param name="key">The name of the variable to get.</param>
   /// <returns>The value of the variable, if it exists.</returns>
-  /// <exception cref="KeyNotFoundException">
-  /// Thrown if the variable does not exist.
-  /// </exception>
-  public static dynamic Get(string key) => s_variables[key];
+  public static dynamic Get(string key)
+  {
+    if (s_variables.TryGetValue(key, out var variable))
+      return variable;
+
+    // Fallback to environment variables if not found in .env file.
+    string? envValue = Environment.GetEnvironmentVariable(key);
+    if (!string.IsNullOrEmpty(envValue))
+    {
+      SecureString secureValue = new();
+      foreach (char c in envValue!) secureValue.AppendChar(c);
+      return new SecureVariable(secureValue);
+    }
+
+    throw new KeyNotFoundException($"The variable '{key}' was not found.");
+  }
+
+  /// <summary>
+  /// Adds a key-value pair to the internal dictionary.
+  /// </summary>
+  private static void AddVariable(StringBuilder key, SecureString value)
+  {
+    string keyStr = key.ToString().Trim();
+    if (keyStr.Length > 0)
+    {
+      // Use indexer to allow overwriting if multiple .env files are loaded.
+      s_variables[keyStr] = new SecureVariable(value);
+    }
+  }
 
   /// <summary>
   /// Loads the .env file from the current directory or a given filepath.
@@ -51,12 +77,13 @@ public static class DotEnv
       // If the filepath does not point to an .env file (caller path),
       // search for the .env file in the current directory.
       if (Path.GetFileName(filepath) != ".env")
-        filepath = Path.Combine(Path.GetDirectoryName(filepath), @".env");
+        filepath = Path.Combine(Path.GetDirectoryName(filepath) ?? "", @".env");
       // Otherwise, keep searching for the .env file in the parent directory.
       else
-        filepath = Path.Combine(Path.GetDirectoryName(filepath), @"..\.env");
+        filepath = Path.Combine(Path.GetDirectoryName(filepath) ?? "", @"..\.env");
 
-      if (Path.GetDirectoryName(filepath) == Path.GetPathRoot(filepath) ||
+      if (string.IsNullOrEmpty(Path.GetDirectoryName(filepath)) ||
+          Path.GetDirectoryName(filepath) == Path.GetPathRoot(filepath) ||
           maxSearchDepth-- <= 0)
         throw new FileNotFoundException("Could not find .env file.");
     }
@@ -82,9 +109,7 @@ public static class DotEnv
         // Skip and reset cursor on newlines.
         if ((c == '\n' || c == '\r') && key.Length > 0)
         {
-          string keyStr = key.ToString().Trim();
-          if (keyStr.Length > 0)
-            s_variables.Add(keyStr, new SecureVariable(value));
+          AddVariable(key, value);
           key.Clear();
           value = new();
 
@@ -96,7 +121,7 @@ public static class DotEnv
         // Handle delimiters.
         if (inKey && (c == '=' || c == ':'))
         {
-          if (key[key.Length - 1] == ' ')
+          if (key.Length > 0 && key[key.Length - 1] == ' ')
             key.Remove(key.Length - 1, 1);
 
           inKey = false;
@@ -108,6 +133,12 @@ public static class DotEnv
           key.Append(c);
         else
           value.AppendChar(c);
+      }
+
+      // Handle the last line if it doesn't end with a newline.
+      if (key.Length > 0)
+      {
+        AddVariable(key, value);
       }
     }
   }

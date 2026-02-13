@@ -141,14 +141,14 @@ public static class Bootstrapper
     };
 
     // Get the .NET diver assembly to inject into the target process
-    byte[] diverResource = GetBinaryResource(@"Resources\Microsoft.Diagnostics.Runtime.dll");
+    byte[] diverResource = GetBinaryResource(@"Resources/Microsoft.Diagnostics.Runtime.dll");
     string diverPath = Path.Combine(tempDir, "Microsoft.Diagnostics.Runtime.dll");
 
     // Check if injector or bootstrap resources differ from copies on disk
     OverrideFileIfChanged(diverPath, diverResource);
 
     // Update all diver dependencies
-    byte[] harmonyResource = GetBinaryResource(@"Resources\0Harmony.dll");
+    byte[] harmonyResource = GetBinaryResource(@"Resources/0Harmony.dll");
     string harmonyPath = Path.Combine(tempDir, "0Harmony.dll");
     OverrideFileIfChanged(harmonyPath, harmonyResource);
 
@@ -157,7 +157,7 @@ public static class Bootstrapper
     VerifyFileExists(harmonyPath, "0Harmony.dll");
 
     var injector = new InjectorBase();
-    injector.Inject(target, diverPath, "ScubaDiver.DllEntry", "EntryPoint");
+    injector.Inject(target, diverPath, "ScubaDiver.DllEntry", "EntryPoint", diverPort.ToString());
 #endif
   }
 }

@@ -24,11 +24,11 @@ public class RemoteHandle : DLRWrapper, IDisposable
   {
     // Lock-free cache using ConcurrentDictionary for better concurrent performance
     private readonly ConcurrentDictionary<ulong, Lazy<WeakReference<RemoteObject>>> _pinnedAddressesToRemoteObjects;
-    
+
     // Cache for RemoteObjectRef to ensure refs are shared across RemoteObject recreations
     // This prevents multiple refs to the same Diver token from unpinning prematurely
     private readonly ConcurrentDictionary<ulong, WeakReference<RemoteObjectRef>> _pinnedAddressesToRefs;
-    
+
     private readonly RemoteHandle _app;
 
     public RemoteObjectsCollection(RemoteHandle app)
@@ -82,10 +82,10 @@ public class RemoteHandle : DLRWrapper, IDisposable
       }, delay: 10, raise: true);
 
       var objRef = new RemoteObjectRef(od, td, _app.Communicator);
-      
+
       // Cache the ref for future reuse (use PinnedAddress from ObjectDump)
       _pinnedAddressesToRefs[od.PinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
-      
+
       var remoteObject = new RemoteObject(objRef, _app);
 
       return remoteObject;
@@ -136,10 +136,10 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
       // Use lightweight constructor - no /object call needed
       var objRef = new RemoteObjectRef(pinnedAddress, typeName, td, _app.Communicator);
-      
+
       // Cache the ref for future reuse
       _pinnedAddressesToRefs[pinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
-      
+
       var remoteObject = new RemoteObject(objRef, _app);
 
       return remoteObject;
@@ -406,6 +406,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
     // dumping of dependent types) and should be avoided as much as possible.
     RemoteTypesFactory rtf = new RemoteTypesFactory(resolver, Communicator);
     var dumpedType = Communicator.DumpType(typeFullName, assembly);
+
     return rtf.Create(this, dumpedType);
   }
 
@@ -416,8 +417,24 @@ public class RemoteHandle : DLRWrapper, IDisposable
     GetRemoteType(localType.FullName, localType.Assembly.GetName().Name);
   public Type GetRemoteType(CandidateType candidate) =>
     GetRemoteType(candidate.TypeFullName, candidate.Assembly);
-  internal Type GetRemoteType(TypeDump typeDump) =>
-    GetRemoteType(typeDump.Type, typeDump.Assembly);
+  internal Type GetRemoteType(TypeDump typeDump)
+  {
+    var resolver = TypeResolver.Instance;
+
+    // Check cache for an already-complete RemoteType (built from TypeDump)
+    Type cached = resolver.Resolve(typeDump.Assembly, typeDump.Type);
+    if (cached is RemoteType rt && rt.SourceTypeDump != null)
+      return rt;
+
+    //
+    // Use TypeDump directly via RemoteTypesFactory.
+    //
+    // Don't fall back to local reference assemblies which only contain public
+    // stubs and would lose private member metadata from the Diver.
+    //
+    RemoteTypesFactory rtf = new RemoteTypesFactory(resolver, Communicator);
+    return rtf.Create(this, typeDump);
+  }
 
   public RemoteEnum GetRemoteEnum(string typeFullName, string assembly = null)
   {

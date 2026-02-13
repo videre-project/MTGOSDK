@@ -94,7 +94,10 @@ public class DllEntry
       // The port is the process ID by default, but can be overridden by
       // the bootstrap with the first argument given to the entry point.
       if (!ushort.TryParse((string) pwzArgument, out ushort port))
-        port = (ushort) Process.GetCurrentProcess().Id;
+      {
+        Log.Debug("[DiverHost] Invalid port specified, using default.");
+        port = (ushort) (Process.GetCurrentProcess().Id + 1024);
+      }
 
       // Configure logging options to write to a dedicated log file sink.
       Bootstrapper.ExtractDir = "MTGOSDK";
