@@ -214,9 +214,7 @@ public class SnapshotRuntime : IDisposable
     _lock.EnterWriteLock();
     try
     {
-      // NOTE: This subprocess inherits handles to DLLs in the current process
-      //       so it might "lock" both the Bootstrapper and ScubaDiver dlls.
-      _dt = DataTarget.CreateSnapshotAndAttach(Process.GetCurrentProcess().Id);
+      _dt = DataTarget.AttachToProcess(Process.GetCurrentProcess().Id, suspend: false);
       _runtime = _dt.ClrVersions.Single().CreateRuntime();
     }
     finally
@@ -239,79 +237,8 @@ public class SnapshotRuntime : IDisposable
       _runtime?.Dispose();
       _runtime = null;
 
-      // Check the DataReader's state as a proxy to the snapshot process state.
-      var dr = _dt?.DataReader;
-      if (dr == null) return;
-
-      //
-      // We use reflection to control the disposal of the snapshot process from
-      // the WindowsProcessDataReader class. This is because the 'Dispose()'
-      // method called by the DataTarget class attempts to kill the process
-      // without waiting for process exit and without the correct privileges.
-      //
-      // As this a result, a Win32Exception is thrown which will repeatedly spam
-      // any subscribed Trace listeners (as a Trace.Write is called internally).
-      //
-      // Refer to:
-      // https://github.com/microsoft/clrmd/pull/926
-      // https://github.com/microsoft/clrmd/blob/f1b5dd2aed90e46d3b1d7a44b1d86dba5336dac0/src/Microsoft.Diagnostics.Runtime/DataReaders/Windows/WindowsProcessDataReader.cs#L76-L113
-      //
-      try
-      {
-        if (dr.GetType().Name == "WindowsProcessDataReader")
-        {
-          // Parse snapshot process ID from DataReader display name
-          var id = int.Parse(dr.DisplayName["pid:".Length..],
-              System.Globalization.NumberStyles.HexNumber);
-
-          // Kill the snapshot process
-          var proc = Process.GetCurrentProcess();
-          var snapshotProc = Process.GetProcessById(id);
-          if (snapshotProc.ProcessName == proc.ProcessName)
-          {
-            try
-            {
-              // Get the snapshot process handle
-              var _snapshotHandle = (IntPtr) dr.GetType()
-                .GetField("_snapshotHandle",
-                    BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(dr);
-              // Free snapshot memory
-              if (Kernel32.PssFreeSnapshot(proc.Handle, _snapshotHandle) != 0)
-              {
-                throw new Win32Exception("Failed to free snapshot memory");
-              }
-            }
-            finally
-            {
-              snapshotProc.Kill();
-              snapshotProc.WaitForExit();
-            }
-          }
-
-          // Close the native process handle
-          var nativeHandle = (IntPtr) dr.GetType()
-            .GetField("_process",
-                BindingFlags.NonPublic | BindingFlags.Instance)
-            .GetValue(dr);
-          Kernel32.CloseHandle(nativeHandle);
-
-          // Mark DataReader as disposed
-          dr.GetType()
-            .GetField("_disposed",
-                BindingFlags.NonPublic | BindingFlags.Instance)
-            .SetValue(dr, true);
-        }
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine("Failed to dispose DataReader: " + ex.ToString());
-      }
-      finally
-      {
-        _dt?.Dispose();
-        _dt = null;
-      }
+      _dt?.Dispose();
+      _dt = null;
     }
     finally
     {
