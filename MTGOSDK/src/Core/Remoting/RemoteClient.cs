@@ -41,7 +41,7 @@ public sealed class RemoteClient : DLRWrapper
 
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
-  
+
   private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
 
   /// <summary>
@@ -79,7 +79,7 @@ public sealed class RemoteClient : DLRWrapper
   private RemoteClient()
   {
     // Initialize trace exporter
-    try 
+    try
     {
       // Cache trace directory path before Bootstrapper.ExtractDir is modified
       _traceDir = Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace");
@@ -147,7 +147,21 @@ public sealed class RemoteClient : DLRWrapper
     }
 
     string executablePath = Path.Combine(appDirectory, "MTGO.exe");
-    var processList = new FileInfo(executablePath).GetLockingProcesses();
+    List<Process> processList;
+    try
+    {
+      processList = new FileInfo(executablePath).GetLockingProcesses();
+    }
+    catch
+    {
+      processList = new List<Process>();
+    }
+
+    // Fallback for Wine or systems where the Restart Manager is unavailable.
+    if (processList.Count == 0)
+    {
+      processList.AddRange(Process.GetProcessesByName("MTGO"));
+    }
 
     // If no processes were found, we want to indicate that our syscalls failed.
     if (processList.Count == 0 && throwOnFailure)
@@ -264,7 +278,7 @@ public sealed class RemoteClient : DLRWrapper
   {
     using var activity = s_activitySource.StartActivity("RemoteClient.StartProcess");
     activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
-    
+
     // Check if there are any updates first before starting MTGO.
     await InstallOrUpdate();
 
@@ -408,7 +422,7 @@ public sealed class RemoteClient : DLRWrapper
     if (ClientProcess is null) RefreshClientProcess(throwOnFailure: true);
 
     // Connect to the MTGO process using the specified or default port
-    if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id);
+    if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id + 1024);
     Log.Trace("Connecting to MTGO process on port {Port}", Port.Value);
 
     // Suppress expected transient timeouts / connection failures while the
@@ -510,17 +524,17 @@ public sealed class RemoteClient : DLRWrapper
 
     // Best-effort cleanup; swallow any individual errors.
     Try(() => @this._traceExporter?.Dispose()); // Flush SDK trace file
-    
+
     // Merge SDK + Diver trace files into a single combined trace
-    try 
-    { 
-      MergeTraceFiles(); 
+    try
+    {
+      MergeTraceFiles();
     }
-    catch (Exception ex) 
-    { 
-      Log.Error($"[MergeTraceFiles] Exception: {ex}"); 
+    catch (Exception ex)
+    {
+      Log.Error($"[MergeTraceFiles] Exception: {ex}");
     }
-    
+
     Try(@client.Dispose);
 
     if (CloseOnExit)
@@ -554,14 +568,14 @@ public sealed class RemoteClient : DLRWrapper
   private static void MergeTraceFiles()
   {
     Log.Debug("[MergeTraceFiles] Starting merge...");
-    
+
     // Use cached trace directory (set at initialization before Bootstrapper.ExtractDir is modified)
     if (string.IsNullOrEmpty(_traceDir))
     {
       Log.Warning("[MergeTraceFiles] Trace directory not initialized, skipping merge.");
       return;
     }
-    
+
     string sdkPath = Path.Combine(_traceDir, "trace_sdk.json");
     string diverPath = Path.Combine(_traceDir, "trace_diver.json");
     string combinedPath = Path.Combine(_traceDir, "trace_combined.json");
