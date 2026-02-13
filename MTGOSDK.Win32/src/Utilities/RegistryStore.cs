@@ -6,6 +6,7 @@
 using System;
 using System.IO;
 using System.Linq;
+
 using Microsoft.Win32;
 
 
@@ -23,7 +24,14 @@ public static class RegistryStore
   /// <returns>A registry key object.</returns>
   public static RegistryKey? GetUserRegistryKey(string keyPath)
   {
-    return Registry.CurrentUser.OpenSubKey(keyPath, false);
+    try
+    {
+      return Registry.CurrentUser.OpenSubKey(keyPath, false);
+    }
+    catch (NullReferenceException)
+    {
+      return null;
+    }
   }
 
   /// <summary>

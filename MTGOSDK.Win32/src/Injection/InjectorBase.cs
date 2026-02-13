@@ -44,6 +44,7 @@ public class InjectorBase
   /// <param name="dllPath">The file path to the managed assembly.</param>
   /// <param name="typeName">The type name of the entry point.</param>
   /// <param name="methodName">The method name of the entry point.</param>
+  /// <param name="argument">The argument to pass to the entry point (optional).</param>
   /// <exception cref="Exception">
   /// Thrown if the target process has an architecture mismatch.
   /// </exception>
@@ -51,8 +52,9 @@ public class InjectorBase
     Process process,
     string dllPath,
     string typeName,
-    string methodName)
-  {
+    string methodName,
+    string? argument = null)
+ {
     bool x86 = !process.Is64Bit();
     IntPtr handle = Kernel32.OpenProcess(InjectionFlags, false, (uint)process.Id);
     var bindToRuntimeAddr = GetCorBindToRuntimeExAddress(process, handle, x86);
@@ -62,7 +64,7 @@ public class InjectorBase
       dllPath,
       typeName,
       methodName,
-      null,
+      argument,
       bindToRuntimeAddr,
       x86,
       ClrVersion
