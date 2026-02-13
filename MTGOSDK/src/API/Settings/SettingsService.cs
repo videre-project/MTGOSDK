@@ -55,17 +55,16 @@ public static class SettingsService
   /// This method converts the <c>Settings</c> enum to a remote reference to
   /// the client's <c>SettingName</c> enum.
   /// </remarks>
-  private static dynamic GetSettingKey(Setting key)
+  private static dynamic? GetSettingKey(Setting key)
   {
     try
     {
       return RemoteClient.CreateEnum<SettingName>(
-        Enum.GetName(typeof(Setting), key));
+        Enum.GetName(typeof(Setting), key)!);
     }
     catch
     {
-      throw new KeyNotFoundException(
-          $"The key '{key}' was not found in the client settings.");
+      return null;
     }
   }
 
@@ -80,7 +79,9 @@ public static class SettingsService
   /// </exception>
   public static T GetSetting<T>(Setting key)
   {
-    dynamic remoteKey = GetSettingKey(key);
+    dynamic? remoteKey = GetSettingKey(key)
+      ?? throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the client settings.");
     var obj = Try(() => Unbind(s_settingsService).GetSetting(remoteKey))
       ?? throw new KeyNotFoundException(
           $"The key '{key}' was not found in the client settings.");
@@ -110,7 +111,9 @@ public static class SettingsService
   /// </exception>
   public static T GetDefaultSetting<T>(Setting key)
   {
-    dynamic remoteKey = GetSettingKey(key);
+    dynamic? remoteKey = GetSettingKey(key)
+      ?? throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the default client settings.");
     var obj = Unbind(s_settingsService).GetDefaultSetting(remoteKey)
       ?? throw new KeyNotFoundException(
           $"The key '{key}' was not found in the default client settings.");
@@ -131,7 +134,9 @@ public static class SettingsService
 
   public static void SetSetting(Setting key, object value)
   {
-    dynamic remoteKey = GetSettingKey(key);
+    dynamic? remoteKey = GetSettingKey(key)
+      ?? throw new KeyNotFoundException(
+          $"The key '{key}' was not found in the client settings.");
     var obj = Unbind(s_settingsService).GetSetting(remoteKey)
       ?? throw new KeyNotFoundException(
           $"The key '{key}' was not found in the client settings.");
