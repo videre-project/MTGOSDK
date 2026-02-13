@@ -1,12 +1,18 @@
 {
   "version": 2,
   "dependencies": {
-    "net10.0-windows7.0": {
+    "net10.0": {
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
         "requested": "[1.2.39, )",
         "resolved": "1.2.39",
         "contentHash": "fcFN01tDTIQqDuTwr1jUQK/geofiwjG5DycJQOnC72i1SsLAk1ELe+apBOuZ11UMQG8YKFZG1FgvjZPbqHyatg=="
+      },
+      "Meziantou.Polyfill": {
+        "type": "Direct",
+        "requested": "[1.0.52, )",
+        "resolved": "1.0.52",
+        "contentHash": "5ONR3Q+n8EzDEsKB4GKTwP6NzFvlOZdGu3XZwdHYdMSt58fWcQ21COCviqeTvoBfsC8pf72+NBLojZsXCsqi/g=="
       },
       "MinVer": {
         "type": "Direct",
@@ -44,11 +50,6 @@
         "type": "Transitive",
         "resolved": "3.1.4",
         "contentHash": "CTaSsN/liJ7MhLCAB7Z4ZLBNuVGCq9lt2BT/cbrc9vzGv89yK3CqIA+z9T19a11eQYl9etZHL6MQJgCqECRVpg=="
-      },
-      "Microsoft.Bcl.AsyncInterfaces": {
-        "type": "Transitive",
-        "resolved": "1.1.1",
-        "contentHash": "yuvf07qFWFqtK3P/MRkEKLhn5r2UbSpVueRziSqj0yJQIKFwG1pq9mOayK3zE5qZCTs0CbrwL9M6R8VwqyGy2w=="
       },
       "Microsoft.Diagnostics.NETCore.Client": {
         "type": "Transitive",
@@ -145,8 +146,13 @@
           "MTGOSDK.Win32": "[1.0.0, )",
           "MessagePack": "[3.1.4, )",
           "MessagePack.Annotations": "[3.1.4, )",
+          "Microsoft.Bcl.AsyncInterfaces": "[10.0.1, )",
           "Microsoft.Diagnostics.Runtime": "[4.0.0-beta.24360.3, )",
-          "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )"
+          "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )",
+          "Microsoft.WindowsDesktop.App.Ref": "[10.0.0-rc.1.25451.107, )",
+          "System.Diagnostics.DiagnosticSource": "[10.0.1, )",
+          "System.IO.Pipelines": "[10.0.1, )",
+          "System.Threading.Channels": "[10.0.1, )"
         }
       },
       "mtgosdk.win32": {
@@ -187,6 +193,12 @@
         "resolved": "3.1.4",
         "contentHash": "aVWrDAkCdqxwQsz/q0ldPh2EFn48M99YUzE9OvZjMq2RNLKz4o2z88iGFvSvbMqOWRweRvKPHBJZe22PRqzslQ=="
       },
+      "Microsoft.Bcl.AsyncInterfaces": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.1, )",
+        "resolved": "10.0.1",
+        "contentHash": "E1HSLkPHXEO30JEij2pWbOuzz1Z5ND4a5l7IP1T2RgQuE0a0NzEIvtO64RNy3Otn6PFezbT80cfm3M/Cgt70PA=="
+      },
       "Microsoft.Diagnostics.Runtime": {
         "type": "CentralTransitive",
         "requested": "[4.0.0-beta.24360.3, )",
@@ -207,6 +219,37 @@
           "Microsoft.Extensions.Logging.Abstractions": "10.0.0-rc.1.25451.107",
           "Microsoft.Extensions.Options": "10.0.0-rc.1.25451.107"
         }
+      },
+      "Microsoft.WindowsDesktop.App.Ref": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.0-rc.1.25451.107, )",
+        "resolved": "10.0.0-rc.1.25451.107",
+        "contentHash": "yaatWGbNGYRFF5umeH09id3padGGiaMya9Wf798CImwBQn0RnGI3dfoZ5IBY7UHPDi+M/uKswsT67/8XK2JjSw=="
+      },
+      "System.Diagnostics.DiagnosticSource": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.1, )",
+        "resolved": "10.0.1",
+        "contentHash": "wVYO4/71Pk177uQ3TG8ZQFS3Pnmr98cF9pYxnpuIb/bMnbEWsdZZoLU/euv29mfSi2/Iuypj0TRUchPk7aqBGg=="
+      },
+      "System.IO.Pipelines": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.1, )",
+        "resolved": "10.0.1",
+        "contentHash": "26LbFXHKd7PmRnWlkjnYgmjd5B6HYVG+1MpTO25BdxTJnx6D0O16JPAC/S4YBqjtt4YpfGj1QO/Ss6SPMGEGQw=="
+      },
+      "System.Threading.Channels": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.1, )",
+        "resolved": "10.0.1",
+        "contentHash": "YRqU6Y2Cl6C+HrG5h1ftgKZ5VDTSA7j1wMKs5RtlauPeQ2EZ639Jt5aOFHdX3naP01hDDWFOWPApmNDVKwOpmg=="
+      }
+    },
+    "net10.0/win-x64": {
+      "System.Security.Cryptography.ProtectedData": {
+        "type": "Transitive",
+        "resolved": "4.7.0",
+        "contentHash": "ehYW0m9ptxpGWvE4zgqongBVWpSDU/JCFD4K7krxkQwSz/sFQjEXCUqpvencjy6DYDbn7Ig09R8GFffu8TtneQ=="
       }
     }
   }

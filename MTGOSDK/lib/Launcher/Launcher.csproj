@@ -14,12 +14,14 @@
   <ItemGroup>
     <PackageReference Include="FrameworkExtract.System.Deployment"
                       PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                      PrivateAssets="All" />
   </ItemGroup>
 
   <Target Name="BuildArtifactDirectory"
           AfterTargets="AfterBuild;MergeReferenceAssemblies">
     <Copy SourceFiles="$(OutputPath)Launcher.exe"
-          DestinationFolder="$(SolutionDir)dist\$(Configuration)" />
+          DestinationFolder="$(SolutionDir)dist/$(Configuration)" />
   </Target>
 
 </Project>

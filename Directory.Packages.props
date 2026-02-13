@@ -27,6 +27,8 @@
                     Version="10.0.1" />
     <PackageVersion Include="System.Threading.Channels"
                     Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces"
+                    Version="10.0.1" />
 		<PackageVersion Include="Microsoft.CSharp"
                     Version="4.7.0" />
     <PackageVersion Include="Microsoft.Diagnostics.Runtime"
@@ -34,6 +36,8 @@
     <PackageVersion Include="Microsoft.Extensions.Logging"
                     Version="$(DotNetSdkVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console"
+                    Version="$(DotNetSdkVersion)" />
+    <PackageVersion Include="Microsoft.WindowsDesktop.App.Ref"
                     Version="$(DotNetSdkVersion)" />
     <PackageVersion Include="ImpromptuInterface"
                     Version="8.0.6" />
@@ -93,6 +97,8 @@
                     Version="2.0.44" />
     <PackageVersion Include="ILRepack.Lib"
                     Version="2.0.44" />
+    <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies"
+                    Version="1.0.3" />
   </ItemGroup>
 
   <!-- .NET Standard 2.0 -->
@@ -105,10 +111,6 @@
 
   <!-- .NET Framework 2.0+ -->
   <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789.`))' == 'net'">
-    <!-- Prefer reference assemblies to help produce deterministic builds -->
-    <GlobalPackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
-                            Version="1.0.3"
-                            PrivateAssets="all" />
     <!-- Use API polyfills to help write .NET 5.0+ compatible code -->
     <PackageReference Include="Meziantou.Polyfill"
                       PrivateAssets="all"

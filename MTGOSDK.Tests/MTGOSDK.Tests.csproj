@@ -1,10 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <LangVersion>Latest</LangVersion>
     <Nullable>enable</Nullable>
-    <NoWarn>$(NoWarn);NUnit1033</NoWarn>
+    <NoWarn>$(NoWarn);
+      CA1416;    <!-- This call site is reachable on all platforms (`Thread.SetApartmentState(ApartmentState.STA)`) -->
+      NUnit1033; <!-- The Write methods on TestContext will be marked as Obsolete and eventually removed -->
+    </NoWarn>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 

@@ -1,5 +1,10 @@
 <Project>
 
+  <!-- Overrides to support multi-platform builds when using WPF -->
+  <Target Name="_CheckForInvalidConfigurationAndPlatform" />
+  <Target Name="_CheckForUnnecessaryWindowsDesktopSDK" />
+  <Target Name="_CheckForInvalidWindowsDesktopTargetingConfiguration" />
+
   <Target Name="CleanProject"
           BeforeTargets="Clean">
     <ItemGroup>
@@ -230,7 +235,7 @@
                     -Source $(FeedOutputPath) ^
                     -Verbosity quiet" />
   </Target>
-  
+
   <!-- Custom target to build documentation using DocFX and DocProcessor -->
   <Target Name="docfx" Condition="'$(MSBuildProjectName)' == 'MTGOSDK'">
     <PropertyGroup>
@@ -289,7 +294,7 @@
       <_CommitHash Condition="'$(_NuspecCommit)' != ''">$(_NuspecCommit)</_CommitHash>
       <_CommitHash Condition="'$(_CommitHash)' == ''"></_CommitHash>
     </PropertyGroup>
-    
+
     <!-- Extract short hash and URL -->
     <PropertyGroup>
       <_ShortHash>$(_CommitHash)</_ShortHash>
@@ -329,12 +334,12 @@
 
     <!-- 8. DocFX Build -->
     <Message Text="[6/6] Building site..." Importance="High" />
-    
+
     <!-- Execute DocFX build via external PowerShell script -->
-    <Exec Command="powershell -ExecutionPolicy Bypass -NoProfile -File &quot;$(DocFxDir)docs\_build\docfx\build.ps1&quot; -DocFxDir &quot;.&quot; -VersionMain &quot;$(_VersionMain)&quot; -VersionSuffix &quot;$(_VersionSuffix)&quot; -ShortHash &quot;$(_ShortHash)&quot; -CommitUrl &quot;$(_CommitUrl)&quot;" 
+    <Exec Command="powershell -ExecutionPolicy Bypass -NoProfile -File &quot;$(DocFxDir)docs\_build\docfx\build.ps1&quot; -DocFxDir &quot;.&quot; -VersionMain &quot;$(_VersionMain)&quot; -VersionSuffix &quot;$(_VersionSuffix)&quot; -ShortHash &quot;$(_ShortHash)&quot; -CommitUrl &quot;$(_CommitUrl)&quot;"
           WorkingDirectory="$(DocFxDir)"
           ConsoleToMSBuild="true" />
-    
+
     <Message Text="=== DocFX Build Complete ===" Importance="High" />
   </Target>
 

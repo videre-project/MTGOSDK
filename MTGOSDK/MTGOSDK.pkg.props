@@ -13,7 +13,8 @@
   </PropertyGroup>
 
   <!-- Publishing Configuration -->
-  <PropertyGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
+  <PropertyGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)' And
+                           '$(TargetFramework)' != 'net10.0-windows'">
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
     <UseILLinkTrim>true</UseILLinkTrim>

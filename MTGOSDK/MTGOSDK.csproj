@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net10.0-windows;$(_MTGOSDKCoreTFM)</TargetFrameworks>
+    <TargetFrameworks>net10.0;$(_MTGOSDKCoreTFM)</TargetFrameworks>
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -26,6 +26,10 @@
           Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'" />
 
   <ItemGroup>
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
+    <PackageReference Include="System.IO.Pipelines" />
+    <PackageReference Include="System.Threading.Channels" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
     <PackageReference Include="Microsoft.CSharp" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
@@ -34,14 +38,14 @@
                       GeneratePathProperty="true" />
     <PackageReference Include="MessagePack.Annotations"
                       GeneratePathProperty="true" />
-    <PackageReference Include="System.IO.Pipelines" />
-    <PackageReference Include="System.Threading.Channels" />
-    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!-- Source generator for batch serialization -->
     <ProjectReference Include="lib\MTGOSDK.SourceGenerators\MTGOSDK.SourceGenerators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
+    <!-- Reference assemblies for .NET Framework TFM -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                      PrivateAssets="All" />
   </ItemGroup>
 
   <!-- Import MTGOSDK Resources for embedding manifest and resource files -->

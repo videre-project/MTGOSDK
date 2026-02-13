@@ -1,6 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
+  <UsingTask TaskName="DownloadMTGOManifest" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <OutputFile ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Net.Http" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs">
+<![CDATA[
+        try {
+          using (var client = new HttpClient()) {
+            var response = client.GetStringAsync("https://api.videreproject.com/mtgo/manifest").Result;
+            var match = Regex.Match(response, @"""version""\s*:\s*""([^""]+)""");
+            if (!match.Success) {
+              Log.LogError("Could not find version in API response.");
+              return false;
+            }
+            string version = match.Groups[1].Value;
+            string content = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<assembly xmlns=""urn:schemas-microsoft-com:asm.v1"" manifestVersion=""1.0"">
+  <assemblyIdentity version=""{version}"" name=""MTGO.exe"" />
+</assembly>";
+            Directory.CreateDirectory(Path.GetDirectoryName(OutputFile));
+            File.WriteAllText(OutputFile, content);
+          }
+          return true;
+        } catch (Exception ex) {
+          Log.LogError("Failed to fetch MTGO manifest: " + ex.Message);
+          return false;
+        }
+]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="GenerateMTGOManifest" BeforeTargets="EmbedResources">
+    <DownloadMTGOManifest OutputFile="$(SolutionDir)dist\MTGO.exe.manifest" />
+  </Target>
+
   <!-- Configures build-time resource dependencies for the main library -->
   <Target Name="CollectResourceProjects"
           BeforeTargets="ResolveLockFileReferences;ResolveProjectReferences"
@@ -16,21 +57,23 @@
   <!-- Embed assembly resources into the main library -->
   <Target Name="EmbedResources"
           BeforeTargets="CoreCompile;AssignTargetPaths"
-          DependsOnTargets="CollectResourceProjects">
+          DependsOnTargets="CollectResourceProjects;GenerateMTGOManifest">
     <!-- Embed the MTGO manifest for verifying assembly compatibility -->
-    <ItemGroup Condition="'$(MTGOVersion)' != ''">
-      <EmbeddedResource Include="$(MTGOAppDir)\MTGO.exe.manifest"
+    <ItemGroup>
+      <EmbeddedResource Include="$(SolutionDir)dist\MTGO.exe.manifest"
                         LogicalName="Manifests\MTGO"
                         WithCulture="false" />
     </ItemGroup>
     <!-- Bundle resource projects' build artifacts into the main library -->
     <ItemGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
-      <ResourceFiles Include="$(SolutionDir)\dist\$(Configuration)\*.*" />
+      <ResourceFiles Include="$(SolutionDir)dist/$(Configuration)/*.*" />
+      <ResourceFiles Include="$(SolutionDir)dist/$(Configuration)/$(RuntimeIdentifier)/*.*"
+                     Condition="'$(RuntimeIdentifier)' != ''" />
     </ItemGroup>
     <!-- Embed all resource files into the MTGOSDK assembly -->
     <ItemGroup Condition="'@(ResourceFiles)' != ''">
       <EmbeddedResource Include="@(ResourceFiles)"
-                        LogicalName="Resources\%(Filename)%(Extension)"
+                        LogicalName="Resources/%(Filename)%(Extension)"
                         WithCulture="false"
                         Condition="'%(Extension)' == '.dll' OR
                                    '%(Extension)' == '.exe'" />

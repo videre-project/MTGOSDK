@@ -2,6 +2,7 @@
 
   <!-- Project Properties -->
   <PropertyGroup>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <NoWarn>$(NoWarn);
       NU1702; <!-- Package is not compatible with the target framework -->
       CS1587; <!-- XML comment is not placed on valid language element -->
@@ -26,15 +27,15 @@
     <UseFullSDKPaths>true</UseFullSDKPaths>
     <_MTGOSDKCoreTFM>net48</_MTGOSDKCoreTFM>
     <_MTGOSDKCoreTarget>.NETFramework4.8</_MTGOSDKCoreTarget>
-    <_MTGOSDKCorePath>$(SolutionDir)\MTGOSDK\bin\$(Configuration)\$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
-    <NuGetExePath>$(SolutionDir)\NuGet.exe</NuGetExePath>
+    <_MTGOSDKCorePath>$(SolutionDir)MTGOSDK/bin/$(Configuration)/$(_MTGOSDKCoreTFM)</_MTGOSDKCorePath>
+    <NuGetExePath>$(SolutionDir)NuGet.exe</NuGetExePath>
   </PropertyGroup>
 
   <!-- Tool paths -->
   <PropertyGroup>
-    <_ILRepackTaskPath>$(DistDir)\tools\ILRepack\ILRepack.MSBuild.dll</_ILRepackTaskPath>
-    <_ILRepackProjectPath>$(ToolsDir)\ILRepack.MSBuild\ILRepack.MSBuild.csproj</_ILRepackProjectPath>
-    <_ILRepackTargetsPath>$(ToolsDir)\ILRepack.MSBuild\ILRepack.MSBuild.targets</_ILRepackTargetsPath>
+    <_ILRepackTaskPath>$(DistDir)/tools/ILRepack/ILRepack.MSBuild.dll</_ILRepackTaskPath>
+    <_ILRepackProjectPath>$(ToolsDir)/ILRepack.MSBuild/ILRepack.MSBuild.csproj</_ILRepackProjectPath>
+    <_ILRepackTargetsPath>$(ToolsDir)/ILRepack.MSBuild/ILRepack.MSBuild.targets</_ILRepackTargetsPath>
   </PropertyGroup>
 
   <!-- Debugging Options -->
