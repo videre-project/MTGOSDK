@@ -19,6 +19,9 @@ using Dynamitey;
 using ImpromptuInterface;
 using ImpromptuInterface.Build;
 
+using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Remoting.Types;
+
 
 namespace MTGOSDK.Core.Reflection.Proxy.Builder;
 
@@ -159,9 +162,9 @@ public class TypeAssembler //: ActLikeMaker
     MakePropertyHelper(builder, typeBuilder, tEmitInfo);
   }
 
-  private static Type DefineCallsiteFieldForMethod(TypeBuilder builder, TypeAssembler maker, string name, Type returnType, IEnumerable<Type> argTypes, MethodInfo info)
+  private static Type DefineCallsiteFieldForMethod(TypeBuilder builder, TypeAssembler maker, string name, Type returnType, IEnumerable<Type> argTypes, MethodInfo info, Type contextType)
   {
-    Type tFuncType = maker.GenerateCallSiteFuncType(argTypes, returnType, info, builder);
+    Type tFuncType = maker.GenerateCallSiteFuncType(argTypes, returnType, info, builder, contextType);
     Type tReturnType = typeof(CallSite<>).MakeGenericType(tFuncType);
 
     builder.DefineField(name, tReturnType, FieldAttributes.Static | FieldAttributes.Public);
@@ -186,7 +189,14 @@ public class TypeAssembler //: ActLikeMaker
     public MethodSigHash(MethodInfo info)
     {
       Name = info.Name;
-      Parameters = info.GetParameters().Select(it => it.ParameterType).ToArray();
+      try
+      {
+        Parameters = info.GetParameters().Select(it => it.ParameterType).ToArray();
+      }
+      catch (TypeLoadException)
+      {
+        Parameters = Type.EmptyTypes;
+      }
     }
 
     public MethodSigHash(string name, Type[] parameters)
@@ -346,8 +356,44 @@ public class TypeAssembler //: ActLikeMaker
       tEmitInfo.Alias = alias.Name;
     }
 
-    var tParamAttri = info.GetParameters();
-    Type[] tParamTypes = tParamAttri.Select(it => it.ParameterType).ToArray();
+    ParameterInfo[] tParamAttri;
+    Type[] tParamTypes;
+    var tReturnType = typeof(void);
+
+    try
+    {
+      tParamAttri = info.GetParameters();
+      tParamTypes = tParamAttri.Select(it => it.ParameterType).ToArray();
+      tReturnType = info.ReturnType;
+    }
+    catch (TypeLoadException)
+    {
+      // Metadata fallback: use the RemoteType (from TypeDump) as the source of truth
+      // when the local reference assembly stub is too broken for reflection.
+      if (contextType is RemoteType rt)
+      {
+        var remoteMethods = rt.Methods.Where(m => m.Name == info.Name).ToArray();
+        var remoteMethod = remoteMethods.Length == 1 ? remoteMethods[0] :
+            remoteMethods.FirstOrDefault(m => m.GetParameters().Length == 0); // fallback for properties
+
+        if (remoteMethod != null)
+        {
+          tParamAttri = remoteMethod.GetParameters();
+          tParamTypes = tParamAttri.Select(it => ResolveLocalType(it.ParameterType, info.Module)).ToArray();
+          tReturnType = ResolveLocalType(remoteMethod.ReturnType, info.Module);
+        }
+        else
+        {
+          tParamAttri = Array.Empty<ParameterInfo>();
+          tParamTypes = Type.EmptyTypes;
+        }
+      }
+      else
+      {
+        tParamAttri = Array.Empty<ParameterInfo>();
+        tParamTypes = Type.EmptyTypes;
+      }
+    }
 
 
     IEnumerable<string> tArgNames;
@@ -367,9 +413,6 @@ public class TypeAssembler //: ActLikeMaker
         : Enumerable.Repeat(default(string), tParam.i).Concat(tParamAttri.Skip(Math.Min(tParam.i - 1, 0)).Select(it => it.Name)).ToList();
     }
 
-    var tReturnType = typeof(void);
-    if (info.ReturnParameter != null)
-      tReturnType = info.ReturnParameter.ParameterType;
 
     var tCallSiteName = tEmitInfo.CallSiteName;
     var tCStp = DefineBuilderForCallSite(builder, tCallSiteName);
@@ -389,7 +432,7 @@ public class TypeAssembler //: ActLikeMaker
     }
 
     var tInvokeMethod = tEmitInfo.CallSiteInvokeName;
-    var tInvokeFuncType = DefineCallsiteFieldForMethod(tCStp, this, tInvokeMethod, tReturnType != typeof(void) ? typeof(object) : typeof(void), tParamTypes, info);
+    var tInvokeFuncType = DefineCallsiteFieldForMethod(tCStp, this, tInvokeMethod, tReturnType != typeof(void) ? typeof(object) : typeof(void), tParamTypes, info, contextType);
 
     Type tCallSite = tCStp.CreateTypeInfo();
 
@@ -423,7 +466,16 @@ public class TypeAssembler //: ActLikeMaker
     tMethodBuilder.SetReturnType(tReturnType);
     tMethodBuilder.SetParameters(tParamTypes);
 
-    foreach (var tParam in info.GetParameters())
+    ParameterInfo[] tParamsToDefine;
+    try
+    {
+      tParamsToDefine = info.GetParameters();
+    }
+    catch (TypeLoadException)
+    {
+      tParamsToDefine = tParamAttri;
+    }
+    foreach (var tParam in tParamsToDefine)
     {
       var tParamBuilder = tMethodBuilder.DefineParameter(tParam.Position + 1, AttributesForParam(tParam), tParam.Name);
 
@@ -466,15 +518,40 @@ public class TypeAssembler //: ActLikeMaker
     );
   }
 
-  internal Tuple<Type, Type[]> GetParamTypes(dynamic builder, MethodInfo info)
+  internal Tuple<Type, Type[]> GetParamTypes(dynamic builder, MethodInfo info, Type contextType = null)
   {
     if (info == null)
       return null;
 
-    var paramTypes = info.GetParameters().Select(it => it.ParameterType).ToArray();
-    var returnType = typeof(void);
-    if (info.ReturnParameter != null)
-      returnType = info.ReturnParameter.ParameterType;
+    Type[] paramTypes;
+    Type returnType;
+    try
+    {
+      paramTypes = info.GetParameters().Select(it => it.ParameterType).ToArray();
+      returnType = info.ReturnType;
+    }
+    catch (TypeLoadException)
+    {
+      if (contextType is RemoteType rt)
+      {
+        var remoteMethod = rt.Methods.FirstOrDefault(m => m.Name == info.Name);
+        if (remoteMethod != null)
+        {
+          paramTypes = remoteMethod.GetParameters().Select(it => ResolveLocalType(it.ParameterType, info.Module)).ToArray();
+          returnType = ResolveLocalType(remoteMethod.ReturnType, info.Module);
+        }
+        else
+        {
+          paramTypes = Type.EmptyTypes;
+          returnType = typeof(void);
+        }
+      }
+      else
+      {
+        paramTypes = Type.EmptyTypes;
+        returnType = typeof(void);
+      }
+    }
 
     var tGenericParams = info.GetGenericArguments()
       .SelectMany(FlattenGenericParameters)
@@ -719,10 +796,42 @@ public class TypeAssembler //: ActLikeMaker
 
     if (!tEmitInfo.DefaultInterfaceImplementation)
     {
-      typeBuilder.DefineMethodOverride(tAddBuilder, info.GetAddMethod());
+      var tAddMethodInfo = info.GetAddMethod();
+      if (tAddMethodInfo != null)
+        typeBuilder.DefineMethodOverride(tAddBuilder, tAddMethodInfo);
     }
 
-    foreach (var tParam in tAddMethod.GetParameters())
+    ParameterInfo[] tAddParams;
+    try
+    {
+      tAddParams = tAddMethod.GetParameters();
+    }
+    catch (TypeLoadException)
+    {
+      if (tEmitInfo.ContextType is RemoteType rt)
+      {
+        var rm = rt.Methods.FirstOrDefault(m => m.Name == tAddMethod.Name);
+        if (rm != null)
+        {
+          tAddParams = rm.GetParameters(); // These are RemoteParameterInfos
+          //
+          // We don't strictly need to resolve local types here for the param builder
+          // but we should for consistency if we use their types.
+          //
+          // Notably, tAddBuilder.DefineParameter only uses Name and Attributes.
+          //
+        }
+        else
+        {
+          tAddParams = Array.Empty<ParameterInfo>();
+        }
+      }
+      else
+      {
+        tAddParams = Array.Empty<ParameterInfo>();
+      }
+    }
+    foreach (var tParam in tAddParams)
     {
       tAddBuilder.DefineParameter(tParam.Position + 1, AttributesForParam(tParam), tParam.Name);
     }
@@ -746,10 +855,36 @@ public class TypeAssembler //: ActLikeMaker
       tEmitInfo.ResolvedAddParamTypes);
     if (!tEmitInfo.DefaultInterfaceImplementation)
     {
-      typeBuilder.DefineMethodOverride(tRemoveBuilder, info.GetRemoveMethod());
+      var tRemoveMethodInfo = info.GetRemoveMethod();
+      if (tRemoveMethodInfo != null)
+        typeBuilder.DefineMethodOverride(tRemoveBuilder, tRemoveMethodInfo);
     }
 
-    foreach (var tParam in tRemoveMethod.GetParameters())
+    ParameterInfo[] tRemoveParams;
+    try
+    {
+      tRemoveParams = tRemoveMethod.GetParameters();
+    }
+    catch (TypeLoadException)
+    {
+      if (tEmitInfo.ContextType is RemoteType rt)
+      {
+        var rm = rt.Methods.FirstOrDefault(m => m.Name == tRemoveMethod.Name);
+        if (rm != null)
+        {
+          tRemoveParams = rm.GetParameters();
+        }
+        else
+        {
+          tRemoveParams = Array.Empty<ParameterInfo>();
+        }
+      }
+      else
+      {
+        tRemoveParams = Array.Empty<ParameterInfo>();
+      }
+    }
+    foreach (var tParam in tRemoveParams)
     {
       tRemoveBuilder.DefineParameter(tParam.Position + 1, AttributesForParam(tParam), tParam.Name);
     }
@@ -993,7 +1128,25 @@ public class TypeAssembler //: ActLikeMaker
     emitInfo.ResolvedIndexParamTypes = new Type[] { };
     if (info != null)
     {
-      emitInfo.ResolvedIndexParamTypes = Enumerable.Select(info.GetIndexParameters(), it => it.ParameterType).ToArray();
+      try
+      {
+        emitInfo.ResolvedIndexParamTypes = Enumerable.Select(info.GetIndexParameters(), it => it.ParameterType).ToArray();
+      }
+      catch (TypeLoadException)
+      {
+        if (emitInfo.ContextType is RemoteType rt)
+        {
+          var rp = rt.GetProperties().FirstOrDefault(p => p.Name == info.Name);
+          if (rp != null)
+          {
+            emitInfo.ResolvedIndexParamTypes = rp.GetIndexParameters().Select(it => ResolveLocalType(it.ParameterType, info.Module)).ToArray();
+          }
+          else
+          {
+            emitInfo.ResolvedIndexParamTypes = new Type[] { };
+          }
+        }
+      }
     }
 
 
@@ -1014,8 +1167,29 @@ public class TypeAssembler //: ActLikeMaker
     var tInvokeSet = emitInfo.CallSiteInvokeSetName;
     if (info != null && info.CanWrite)
     {
-      emitInfo.ResolvedParamTypes = info.GetSetMethod().GetParameters().Select(it => it.ParameterType).ToArray();
-
+      try
+      {
+        emitInfo.ResolvedParamTypes = info.GetSetMethod().GetParameters().Select(it => it.ParameterType).ToArray();
+      }
+      catch (TypeLoadException)
+      {
+        if (emitInfo.ContextType is RemoteType rt)
+        {
+          var rp = rt.GetProperties().FirstOrDefault(p => p.Name == info.Name);
+          if (rp != null && rp.GetSetMethod() != null)
+          {
+            emitInfo.ResolvedParamTypes = rp.GetSetMethod().GetParameters().Select(it => ResolveLocalType(it.ParameterType, info.Module)).ToArray();
+          }
+          else
+          {
+            emitInfo.ResolvedParamTypes = new Type[] { };
+          }
+        }
+        else
+        {
+          emitInfo.ResolvedParamTypes = new Type[] { };
+        }
+      }
       emitInfo.CallSiteInvokeSetFuncType = DefineCallsiteField(tCStp, this, tInvokeSet, typeof(object), emitInfo.ResolvedParamTypes);
     }
 
@@ -1364,8 +1538,9 @@ public class TypeAssembler //: ActLikeMaker
   /// <param name="returnType">Type of the return.</param>
   /// <param name="methodInfo">The method info. Required for reference types or delegates with more than 16 arguments.</param>
   /// <param name="builder">The Type Builder. Required for reference types or delegates with more than 16 arguments.</param>
-  /// <returns></returns>
-  internal Type GenerateCallSiteFuncType(IEnumerable<Type> argTypes, Type returnType, MethodInfo methodInfo = null, TypeBuilder builder = null)
+  /// <param name="contextType">The context type.</param>
+  /// <returns>The delegate type of the call site function.</returns>
+  internal Type GenerateCallSiteFuncType(IEnumerable<Type> argTypes, Type returnType, MethodInfo methodInfo = null, TypeBuilder builder = null, Type contextType = null)
   {
     bool tIsFunc = returnType != typeof(void);
 
@@ -1394,7 +1569,7 @@ public class TypeAssembler //: ActLikeMaker
         || (tIsFunc && tList.Count >= 16)
         || (!tIsFunc && tList.Count >= 16))
       {
-        tType = DynamicTypeBuilder.GenerateFullDelegate(builder, returnType, tList, methodInfo);
+        tType = DynamicTypeBuilder.GenerateFullDelegate(builder, returnType, tList, methodInfo, contextType);
 
         _delegateCache[tHash] = tType;
         return tType;
@@ -1416,5 +1591,37 @@ public class TypeAssembler //: ActLikeMaker
   internal ParameterAttributes AttributesForParam(ParameterInfo param)
   {
     return param.Attributes;
+  }
+
+  internal static Type ResolveLocalType(Type type, Module module)
+  {
+    if (type == null) return null;
+    if (type.IsArray)
+    {
+      return ResolveLocalType(type.GetElementType(), module).MakeArrayType();
+    }
+    if (type.IsGenericType && !type.IsGenericTypeDefinition)
+    {
+      var genericDef = ResolveLocalType(type.GetGenericTypeDefinition(), module);
+      var args = type.GetGenericArguments().Select(a => ResolveLocalType(a, module)).ToArray();
+      return genericDef.MakeGenericType(args);
+    }
+    if (type is RemoteType rt)
+    {
+      var targetAsmName = rt.Assembly.GetName().Name;
+      var assembly = AppDomain.CurrentDomain.GetAssemblies()
+          .FirstOrDefault(a => a.GetName().Name == targetAsmName);
+
+      if (assembly != null)
+      {
+        var resolved = assembly.GetType(rt.FullName);
+        if (resolved != null) return resolved;
+        Log.Error("Failed to find {0} in {1}", rt.FullName, targetAsmName);
+        return typeof(object);
+      }
+      Log.Error("Failed to find assembly {0} for {1}", targetAsmName, rt.FullName);
+      return typeof(object);
+    }
+    return type;
   }
 }
