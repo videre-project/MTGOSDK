@@ -73,11 +73,14 @@ public sealed class RemoteClient : DLRWrapper
   /// </summary>
   public static ushort? Port = null;
 
+#if DEBUG
   private TraceExporter _traceExporter;
+#endif
   private static string _traceDir;
 
   private RemoteClient()
   {
+#if DEBUG
     // Initialize trace exporter
     try
     {
@@ -91,6 +94,7 @@ public sealed class RemoteClient : DLRWrapper
     {
        Log.Warning($"[RemoteClient] Failed to initialize trace exporter: {ex.Message}");
     }
+#endif
 
     // A new instance implies the previous one (if any) is either not created
     // or has been fully disposed. Reset disposal state here.
@@ -527,7 +531,9 @@ public sealed class RemoteClient : DLRWrapper
     });
 
     // Best-effort cleanup; swallow any individual errors.
+#if DEBUG
     Try(() => @this._traceExporter?.Dispose()); // Flush SDK trace file
+#endif
 
     // Merge SDK + Diver trace files into a single combined trace
     try
