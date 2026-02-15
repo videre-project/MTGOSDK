@@ -1,6 +1,14 @@
 <Project>
   <Import Project="SourceLink.props" />
 
+  <!-- Default Packaging Exclusions -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsPackable Condition="'$(MSBuildProjectDirectory)' == '$(SolutionDir)MTGOSDK' OR
+                           '$(MSBuildProjectDirectory)' == '$(SolutionDir)MTGOSDK.Win32' OR
+                           '$(MSBuildProjectDirectory)' == '$(SolutionDir)MTGOSDK.MSBuild'">true</IsPackable>
+  </PropertyGroup>
+
   <!-- Publishing: Package Properties -->
   <PropertyGroup>
     <Title>$(AssemblyName)</Title>
@@ -39,7 +47,8 @@
 
   <!-- Include build metadata in the package version if it is present. -->
   <Target Name="SetMinVerBuildMetadata"
-          AfterTargets="MinVer">
+          AfterTargets="MinVer"
+          Condition="'$(MinVerSkip)' != 'true'">
     <!-- Remove stages from prerelease identifiers. -->
     <PropertyGroup>
       <MinVerPreRelease>$([System.Text.RegularExpressions.Regex]::Replace($(MinVerPreRelease), `(?%3C=[a-z]).\d+`, ''))</MinVerPreRelease>

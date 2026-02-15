@@ -488,7 +488,7 @@ public abstract class DLRWrapper : SerializableBase
     }
 
     var interfaceType = typeof(TInterface);
-    
+
     // Get batchable paths from the source type
     var sourcePaths = Serialization.AccessPathAnalyzer
       .GetBatchablePathsForInterface(typeof(TPathSource), interfaceType)
@@ -551,7 +551,7 @@ public abstract class DLRWrapper : SerializableBase
     {
       var itemData = response.Items[i];
       var propertyValues = new Dictionary<string, object?>();
-      
+
       foreach (var kvp in itemData)
       {
         // Decode the value
@@ -1083,13 +1083,13 @@ public abstract class DLRWrapper : SerializableBase
         try
         {
           var typeName = response.Types.TryGetValue(kvp.Key, out var t) ? t : null;
-          
+
           // Try to deserialize as a generic collection
           if (kvp.Value.StartsWith("["))
           {
             // It's a JSON array - deserialize to List<object> or specific type
             var deserialized = System.Text.Json.JsonSerializer.Deserialize<List<object>>(kvp.Value);
-            
+
             // If we know it's a string array/list, convert items
             if (typeName != null && (typeName.Contains("String[]") || typeName.Contains("List`1[[System.String")))
             {
@@ -1164,7 +1164,7 @@ public abstract class DLRWrapper : SerializableBase
     where TPathSource : class
   {
     var interfaceType = typeof(TInterface);
-    
+
     // Get paths for interface properties that exist in the prefixed source type
     var prefixedPaths = Serialization.AccessPathAnalyzer.GetBatchablePathsForInterface(
       typeof(TPathSource), interfaceType);
@@ -1395,12 +1395,12 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
         // (In practice there's usually only one active at a time during SerializeAs)
         return _interfaceProxies.Values.First();
       }
-      
+
       // Evaluate and cache the underlying object if not already cached
       if (field == null)
       {
         field = Try(() => obj is DLRWrapper<I> ? obj.obj : obj);
-        
+
         //
         // Also store in @base_unbound to maintain a strong reference.
         //
@@ -1413,7 +1413,7 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
           @base_unbound = Try(() => Unbind(field), () => field);
         }
       }
-      
+
       return field ?? throw new ArgumentException(
           $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
     }

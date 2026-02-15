@@ -161,6 +161,10 @@ public sealed class RemoteClient : DLRWrapper
     if (processList.Count == 0)
     {
       processList.AddRange(Process.GetProcessesByName("MTGO"));
+      if (processList.Count == 0)
+      {
+        processList.AddRange(Process.GetProcessesByName("MTGO.exe"));
+      }
     }
 
     // If no processes were found, we want to indicate that our syscalls failed.
@@ -532,7 +536,7 @@ public sealed class RemoteClient : DLRWrapper
     }
     catch (Exception ex)
     {
-      Log.Error($"[MergeTraceFiles] Exception: {ex}");
+      Log.Error("[MergeTraceFiles] Exception: {Exception}", ex);
     }
 
     Try(@client.Dispose);
@@ -580,8 +584,8 @@ public sealed class RemoteClient : DLRWrapper
     string diverPath = Path.Combine(_traceDir, "trace_diver.json");
     string combinedPath = Path.Combine(_traceDir, "trace_combined.json");
 
-    Log.Debug($"[MergeTraceFiles] Looking for: {sdkPath}");
-    Log.Debug($"[MergeTraceFiles] SDK exists: {File.Exists(sdkPath)}, Diver exists: {File.Exists(diverPath)}");
+    Log.Debug("[MergeTraceFiles] Looking for: {Path}", sdkPath);
+    Log.Debug("[MergeTraceFiles] SDK exists: {SdkExists}, Diver exists: {DiverExists}", File.Exists(sdkPath), File.Exists(diverPath));
 
     var allEventJson = new List<string>();
 
@@ -599,11 +603,11 @@ public sealed class RemoteClient : DLRWrapper
             allEventJson.Add(evt.GetRawText());
           }
         }
-        Log.Debug($"[MergeTraceFiles] Read {allEventJson.Count} events from SDK trace");
+        Log.Debug("[MergeTraceFiles] Read {Count} events from SDK trace", allEventJson.Count);
       }
       catch (Exception ex)
       {
-        Log.Warning($"[MergeTraceFiles] Failed to read SDK trace: {ex.Message}");
+        Log.Warning("[MergeTraceFiles] Failed to read SDK trace: {Message}", ex.Message);
       }
     }
 
@@ -623,15 +627,15 @@ public sealed class RemoteClient : DLRWrapper
             allEventJson.Add(evt.GetRawText());
           }
         }
-        Log.Debug($"[MergeTraceFiles] Read {allEventJson.Count - sdkCount} events from Diver trace");
+        Log.Debug("[MergeTraceFiles] Read {Count} events from Diver trace", allEventJson.Count - sdkCount);
       }
       catch (Exception ex)
       {
-        Log.Warning($"[MergeTraceFiles] Failed to read Diver trace: {ex.Message}");
+        Log.Warning("[MergeTraceFiles] Failed to read Diver trace: {Message}", ex.Message);
       }
     }
 
-    Log.Debug($"[MergeTraceFiles] Total events: {allEventJson.Count}");
+    Log.Debug("[MergeTraceFiles] Total events: {Count}", allEventJson.Count);
 
     if (allEventJson.Count == 0)
     {
@@ -645,11 +649,11 @@ public sealed class RemoteClient : DLRWrapper
       var eventsArray = "[" + string.Join(",", allEventJson) + "]";
       var combinedJson = $"{{\"traceEvents\":{eventsArray},\"displayTimeUnit\":\"ms\"}}";
       File.WriteAllText(combinedPath, combinedJson);
-      Log.Information($"[MergeTraceFiles] Combined trace written to: {combinedPath}");
+      Log.Information("[MergeTraceFiles] Combined trace written to: {Path}", combinedPath);
     }
     catch (Exception ex)
     {
-      Log.Warning($"[MergeTraceFiles] Failed to write combined trace: {ex.Message}");
+      Log.Warning("[MergeTraceFiles] Failed to write combined trace: {Message}", ex.Message);
     }
   }
 

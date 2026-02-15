@@ -107,7 +107,7 @@ To reference the local package feed created by the SDK, you can add the followin
       <package pattern="MTGOSDK.MSBuild" />
       <package pattern="MTGOSDK.Win32" />
     </packageSource>
-    <packageSource key="nuget.org">
+    <packageSource key="nuget">
       <package pattern="*" />
     </packageSource>
   </packageSourceMapping>

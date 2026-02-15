@@ -96,10 +96,16 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
   /// <summary>
   /// The current build version of the running MTGO client.
   /// </summary>
-  public static Version Version =>
-    new(FileVersionInfo.GetVersionInfo(
-      Path.Join(MTGOAppDirectory, "MTGO.exe")
-    ).FileVersion);
+  public static Version Version
+  {
+    get
+    {
+      string path = Path.Join(MTGOAppDirectory, "MTGO.exe");
+      return File.Exists(path)
+        ? new Version(FileVersionInfo.GetVersionInfo(path).FileVersion)
+        : new Version(0, 0, 0, 0);
+    }
+  }
 
   /// <summary>
   /// The latest version of the MTGO client that this SDK is compatible with.

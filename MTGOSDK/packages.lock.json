@@ -445,7 +445,7 @@
         }
       }
     },
-    "net10.0": {
+    "net10.0-windows7.0": {
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
         "requested": "[1.2.39, )",
@@ -477,12 +477,6 @@
         "requested": "[3.1.4, )",
         "resolved": "3.1.4",
         "contentHash": "aVWrDAkCdqxwQsz/q0ldPh2EFn48M99YUzE9OvZjMq2RNLKz4o2z88iGFvSvbMqOWRweRvKPHBJZe22PRqzslQ=="
-      },
-      "Meziantou.Polyfill": {
-        "type": "Direct",
-        "requested": "[1.0.52, )",
-        "resolved": "1.0.52",
-        "contentHash": "5ONR3Q+n8EzDEsKB4GKTwP6NzFvlOZdGu3XZwdHYdMSt58fWcQ21COCviqeTvoBfsC8pf72+NBLojZsXCsqi/g=="
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Direct",
@@ -579,8 +573,7 @@
         "dependencies": {
           "Azure.Core": "1.38.0",
           "Microsoft.Identity.Client": "4.61.3",
-          "Microsoft.Identity.Client.Extensions.Msal": "4.61.3",
-          "System.Security.Cryptography.ProtectedData": "4.7.0"
+          "Microsoft.Identity.Client.Extensions.Msal": "4.61.3"
         }
       },
       "Dynamitey": {
@@ -649,8 +642,7 @@
         "resolved": "4.61.3",
         "contentHash": "PWnJcznrSGr25MN8ajlc2XIDW4zCFu0U6FkpaNLEWLgd1NgFCp5uDY3mqLDgM8zCN8hqj8yo5wHYfLB2HjcdGw==",
         "dependencies": {
-          "Microsoft.Identity.Client": "4.61.3",
-          "System.Security.Cryptography.ProtectedData": "4.5.0"
+          "Microsoft.Identity.Client": "4.61.3"
         }
       },
       "Microsoft.IdentityModel.Abstractions": {
@@ -681,11 +673,6 @@
         "resolved": "1.0.2",
         "contentHash": "JGkzeqgBsiZwKJZ1IxPNsDFZDhUvuEdX8L8BDC8N3KOj+6zMcNU28CNN59TpZE/VJYy9cP+5M+sbxtWJx3/xtw=="
       },
-      "System.Security.Cryptography.ProtectedData": {
-        "type": "Transitive",
-        "resolved": "4.7.0",
-        "contentHash": "ehYW0m9ptxpGWvE4zgqongBVWpSDU/JCFD4K7krxkQwSz/sFQjEXCUqpvencjy6DYDbn7Ig09R8GFffu8TtneQ=="
-      },
       "mtgosdk.win32": {
         "type": "Project",
         "dependencies": {
@@ -699,12 +686,6 @@
         "contentHash": "dv5+81Q1TBQvVMSOOOmRcjJmvWcX3BZPZsIq31+RLc5cNft0IHAyNlkdb7ZarOWG913PyBoFDsDXoCIlKmLclg=="
       }
     },
-    "net10.0/win-x64": {
-      "System.Security.Cryptography.ProtectedData": {
-        "type": "Transitive",
-        "resolved": "4.7.0",
-        "contentHash": "ehYW0m9ptxpGWvE4zgqongBVWpSDU/JCFD4K7krxkQwSz/sFQjEXCUqpvencjy6DYDbn7Ig09R8GFffu8TtneQ=="
-      }
-    }
+    "net10.0-windows7.0/win-x64": {}
   }
 }

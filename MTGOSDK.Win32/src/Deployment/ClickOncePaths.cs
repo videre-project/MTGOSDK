@@ -54,10 +54,11 @@ public static class ClickOncePaths
       var token = RegistryStore.GetRegistryToken(SIDEBYSIDE_REGISTRY_KEY_PATH,
                                                  "ComponentStore_RandomString");
       if (token == null) return null;
-      return Path.Combine(
+      var path = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         @"Apps\2.0",
         token);
+      return path;
     }
   }
 
