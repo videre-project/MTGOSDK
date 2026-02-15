@@ -232,13 +232,6 @@
         "resolved": "10.0.1",
         "contentHash": "YRqU6Y2Cl6C+HrG5h1ftgKZ5VDTSA7j1wMKs5RtlauPeQ2EZ639Jt5aOFHdX3naP01hDDWFOWPApmNDVKwOpmg=="
       }
-    },
-    "net10.0-windows7.0/win-x64": {
-      "System.Security.Cryptography.ProtectedData": {
-        "type": "Transitive",
-        "resolved": "4.7.0",
-        "contentHash": "ehYW0m9ptxpGWvE4zgqongBVWpSDU/JCFD4K7krxkQwSz/sFQjEXCUqpvencjy6DYDbn7Ig09R8GFffu8TtneQ=="
-      }
     }
   }
 }
