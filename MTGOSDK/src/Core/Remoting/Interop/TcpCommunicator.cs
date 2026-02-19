@@ -38,6 +38,7 @@ public class TcpCommunicator : TcpPipelineBase
   private readonly ConcurrentDictionary<int, TaskCompletionSource<byte[]>> _pendingRequests = new();
 
   // Callback handling
+  private readonly ChannelScheduler _callbackScheduler;
   private Action<string, byte[]> _callbackHandler;
 
   /// <summary>
@@ -53,6 +54,7 @@ public class TcpCommunicator : TcpPipelineBase
     _hostname = hostname;
     _port = port;
     _cts = cancellationTokenSource ?? new CancellationTokenSource();
+    _callbackScheduler = new ChannelScheduler(Environment.ProcessorCount);
   }
 
   /// <summary>
@@ -268,6 +270,7 @@ public class TcpCommunicator : TcpPipelineBase
   public override void Dispose()
   {
     _cts.Cancel();
+    _callbackScheduler.Dispose();
     _isConnected = false;
 
     // Wait for tasks to complete
