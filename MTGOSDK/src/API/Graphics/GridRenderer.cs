@@ -170,6 +170,30 @@ public static class GridRenderer
 
       // Pre-load control template
       s_cachedSelector.ApplyTemplate();
+
+      // Warm-up layout to ensure visual tree is initialized.
+      // We use a real card (Colossal Dreadmaw) to ensure the ItemContainerGenerator
+      // runs and the template is fully applied.
+      try
+      {
+        var dreadmaw = CollectionManager.GetCard("Colossal Dreadmaw");
+        var cardPair = new CardQuantityPair(dreadmaw.Id, 1);
+        var dummyDeck = new Deck(new[] { cardPair }, Array.Empty<CardQuantityPair>());
+
+        dynamic deckGrouping = Unbind(dummyDeck);
+        s_cachedVM!.SetCardGrouping(deckGrouping, true);
+        s_cachedSelector.ItemsSource = s_cachedVM.Slots;
+
+        s_cachedSelector.Measure(RemoteClient.CreateInstance<Size>(100.0, 100.0));
+        s_cachedSelector.Arrange(RemoteClient.CreateInstance<Rect>(0.0, 0.0, 100.0, 100.0));
+        s_cachedSelector.UpdateLayout();
+
+        s_cachedSelector.ItemsSource = null;
+      }
+      catch
+      {
+        // If warm-up fails (e.g. card not found), proceed without it
+      }
     }
 
     // Cache PixelFormat
