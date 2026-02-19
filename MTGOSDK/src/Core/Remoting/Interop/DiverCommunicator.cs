@@ -437,6 +437,29 @@ public class DiverCommunicator : IDisposable
     return SendRequest<Interactions.Object.BatchCollectionResponse>("batch_collection", request);
   }
 
+  /// <summary>
+  /// Async variant of <see cref="GetBatchCollectionMembers"/> that does not
+  /// block a thread pool thread while waiting for the IPC response.
+  /// </summary>
+  public Task<Interactions.Object.BatchCollectionResponse> GetBatchCollectionMembersAsync(
+    ulong collectionAddr,
+    string collectionTypeName,
+    string pathsDelimited,
+    int maxItems = 0)
+  {
+    EnsureConnected();
+    var request = new Interactions.Object.BatchCollectionRequest
+    {
+      CollectionAddress = collectionAddr,
+      CollectionTypeName = collectionTypeName,
+      PathsDelimited = pathsDelimited,
+      MaxItems = maxItems
+    };
+    byte[] body = MessagePackSerializer.Serialize(request);
+    return _tcp.SendRequestAsync<Interactions.Object.BatchCollectionResponse>(
+      "/batch_collection", body);
+  }
+
   public void EventSubscribe(
     ulong targetAddr,
     string eventName,
