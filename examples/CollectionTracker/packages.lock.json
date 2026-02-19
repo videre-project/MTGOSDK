@@ -137,10 +137,7 @@
           "Microsoft.Bcl.AsyncInterfaces": "[10.0.1, )",
           "Microsoft.Diagnostics.Runtime": "[4.0.0-beta.24360.3, )",
           "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )",
-          "Microsoft.WindowsDesktop.App.Ref": "[10.0.0-rc.1.25451.107, )",
-          "System.Diagnostics.DiagnosticSource": "[10.0.1, )",
-          "System.IO.Pipelines": "[10.0.1, )",
-          "System.Threading.Channels": "[10.0.1, )"
+          "Microsoft.WindowsDesktop.App.Ref": "[10.0.0-rc.1.25451.107, )"
         }
       },
       "mtgosdk.win32": {
@@ -213,24 +210,6 @@
         "requested": "[10.0.0-rc.1.25451.107, )",
         "resolved": "10.0.0-rc.1.25451.107",
         "contentHash": "yaatWGbNGYRFF5umeH09id3padGGiaMya9Wf798CImwBQn0RnGI3dfoZ5IBY7UHPDi+M/uKswsT67/8XK2JjSw=="
-      },
-      "System.Diagnostics.DiagnosticSource": {
-        "type": "CentralTransitive",
-        "requested": "[10.0.1, )",
-        "resolved": "10.0.1",
-        "contentHash": "wVYO4/71Pk177uQ3TG8ZQFS3Pnmr98cF9pYxnpuIb/bMnbEWsdZZoLU/euv29mfSi2/Iuypj0TRUchPk7aqBGg=="
-      },
-      "System.IO.Pipelines": {
-        "type": "CentralTransitive",
-        "requested": "[10.0.1, )",
-        "resolved": "10.0.1",
-        "contentHash": "26LbFXHKd7PmRnWlkjnYgmjd5B6HYVG+1MpTO25BdxTJnx6D0O16JPAC/S4YBqjtt4YpfGj1QO/Ss6SPMGEGQw=="
-      },
-      "System.Threading.Channels": {
-        "type": "CentralTransitive",
-        "requested": "[10.0.1, )",
-        "resolved": "10.0.1",
-        "contentHash": "YRqU6Y2Cl6C+HrG5h1ftgKZ5VDTSA7j1wMKs5RtlauPeQ2EZ639Jt5aOFHdX3naP01hDDWFOWPApmNDVKwOpmg=="
       }
     }
   }
