@@ -192,19 +192,23 @@ docker run -it --name mtgosdk-dev \
 
 ### Persistent Setup (Docker Compose)
 
-For more complex setups involving persistent Wine volumes or custom configuration, use the Compose files in the [mtgo-oci](https://github.com/videre-project/mtgo-oci) repository.
+For more complex setups involving persistent Wine volumes or custom configuration, use the included `docker-compose.yml` file.
 
 ```bash
-# 1. Clone the infrastructure repo
-git clone https://github.com/videre-project/mtgo-oci.git && cd mtgo-oci
-
-# 2. Start the appropriate service (pointing to your local MTGOSDK repo)
-MTGOSDK_PATH=../MTGOSDK docker compose -f mtgosdk/docker-compose.yml up -d mtgosdk-headless
+# Start the service
+$ docker-compose up -d
 ```
 
 ### Running Tests
 
-Inside any SDK container, use the `wine-run` utility to execute tests against a Windows-targeted build:
+We recommend using the included `docker-compose.yml` to run tests in a consistent environment.
+
+```bash
+# Run tests using docker-compose
+$ docker-compose run --rm mtgosdk wine-run MTGOSDK.Tests
+```
+
+Alternatively, if you are already inside the container:
 
 ```bash
 # Run tests from the container shell

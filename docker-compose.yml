@@ -1,0 +1,15 @@
+services:
+  mtgosdk:
+    image: videreproject/mtgosdk:latest
+    container_name: mtgosdk
+    stdin_open: true
+    tty: true
+    environment:
+      - DISPLAY=:99
+      - WINEDEBUG=-all
+      - ALSA_LOG_LEVEL=0
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    entrypoint: ["/usr/local/bin/xvfb-entrypoint.sh"]
+    command: ["/bin/bash"]
