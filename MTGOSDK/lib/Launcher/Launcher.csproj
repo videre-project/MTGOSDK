@@ -2,6 +2,7 @@
 
 	<PropertyGroup>
     <TargetFramework>net48</TargetFramework>
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
     <LangVersion>Latest</LangVersion>
     <Nullable>enable</Nullable>
     <OutputType>Exe</OutputType>
