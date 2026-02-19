@@ -147,6 +147,7 @@ public class TcpCommunicator : TcpPipelineBase
     byte[] body,
     CancellationToken cancellationToken = default)
   {
+#if DEBUG
     //
     // Wrap request in TracedRequest for distributed tracing
     //
@@ -169,6 +170,10 @@ public class TcpCommunicator : TcpPipelineBase
     byte[] wrappedBody = TracedRequest.Serialize(tracedReq);
 
     await SendRequestAsync<object>(endpoint, wrappedBody, cancellationToken).ConfigureAwait(false);
+#else
+    // In Release mode, skip tracing overhead and send raw body directly
+    await SendRequestAsync<object>(endpoint, body ?? Array.Empty<byte>(), cancellationToken).ConfigureAwait(false);
+#endif
   }
 
   private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
@@ -205,15 +210,25 @@ public class TcpCommunicator : TcpPipelineBase
               break;
 
             case TcpMessageType.Callback:
+              //
               // Dispatch callback (fire-and-forget)
-              try
+              //
+              // Offload to thread pool to prevent blocking the reader loop
+              // which is needed to handle nested IPC calls (e.g. DumpType)
+              //
+              var endpoint = frame.Endpoint;
+              var body = frame.Body;
+              _callbackScheduler.Enqueue(() =>
               {
-                _callbackHandler?.Invoke(frame.Endpoint, frame.Body);
-              }
-              catch (Exception ex)
-              {
-                Log.Error($"[TcpCommunicator] Callback handler error: {ex.Message}");
-              }
+                try
+                {
+                  _callbackHandler?.Invoke(endpoint, body);
+                }
+                catch (Exception ex)
+                {
+                  Log.Error($"[TcpCommunicator] Callback handler error: {ex.Message}");
+                }
+              });
               break;
           }
         }

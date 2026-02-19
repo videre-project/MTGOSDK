@@ -101,6 +101,7 @@ public partial class Diver : IDisposable
   /// </summary>
   private byte[] HandleTcpRequest(string endpoint, byte[] body)
   {
+#if DEBUG
     // Unwrap the TracedRequest
     TracedRequest tracedReq;
     try 
@@ -136,12 +137,17 @@ public partial class Diver : IDisposable
 
     // Set the actual request body in thread-local storage
     _cachedRequestBody.Value = tracedReq.Body;
+#else
+    // In Release mode, tracing is disabled to improve performance
+    Activity activity = null;
+    _cachedRequestBody.Value = body;
+#endif
 
     if (_tcpHandlers.TryGetValue(endpoint, out var handler))
     {
       try
       {
-        return handler(tracedReq.Body);
+        return handler(_cachedRequestBody.Value);
       }
       catch (Exception ex)
       {
