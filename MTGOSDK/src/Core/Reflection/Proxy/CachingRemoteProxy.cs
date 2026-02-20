@@ -116,54 +116,64 @@ public sealed class CachingRemoteProxy : DynamicObject
     // Fall through to real remote if not cached
     if (_realRemote != null)
     {
-      try
+      // Resolve the remote member name to use for the binder call
+      var binderName = (_interfaceToRemotePath != null && _interfaceToRemotePath.TryGetValue(binder.Name, out var mappedName))
+        ? mappedName
+        : binder.Name;
+
+      // If there's a path prefix, navigate to the nested object first
+      // e.g., for pathPrefix="PlayerEvent", access _realRemote.PlayerEvent.PropertyName
+      dynamic targetObj = _realRemote;
+      if (!string.IsNullOrEmpty(_pathPrefix))
       {
-        // Cast to object to get the real runtime type (dynamic obscures this)
-        object realRemoteObj = _realRemote;
-        
-        // If there's a path prefix, navigate to the nested object first
-        // e.g., for pathPrefix="PlayerEvent", access _realRemote.PlayerEvent.PropertyName
-        dynamic targetObj = _realRemote;
-        if (!string.IsNullOrEmpty(_pathPrefix))
-        {
-          // Navigate through the path prefix to get the nested object
-          var prefixCallSite = System.Runtime.CompilerServices.CallSite<Func<
-            System.Runtime.CompilerServices.CallSite, object, object>>.Create(
-            Microsoft.CSharp.RuntimeBinder.Binder.GetMember(
-              Microsoft.CSharp.RuntimeBinder.CSharpBinderFlags.None,
-              _pathPrefix,
-              typeof(object),
-              new[] { Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo.Create(
-                Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfoFlags.None, null) }));
-          targetObj = prefixCallSite.Target(prefixCallSite, _realRemote);
-          realRemoteObj = targetObj;
-        }
-        
-        // If target is a DynamicObject (e.g., DynamicRemoteObject), forward TryGetMember directly
-        if (realRemoteObj is DynamicObject dynObj)
-        {
-          return dynObj.TryGetMember(binder, out result);
-        }
-        
-        // For other dynamic objects, use the runtime binder
-        var callSite = System.Runtime.CompilerServices.CallSite<Func<
+        // Navigate through the path prefix to get the nested object
+        var prefixCallSite = System.Runtime.CompilerServices.CallSite<Func<
           System.Runtime.CompilerServices.CallSite, object, object>>.Create(
           Microsoft.CSharp.RuntimeBinder.Binder.GetMember(
             Microsoft.CSharp.RuntimeBinder.CSharpBinderFlags.None,
-            binder.Name,
+            _pathPrefix,
             typeof(object),
             new[] { Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo.Create(
               Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfoFlags.None, null) }));
-        
-        result = callSite.Target(callSite, targetObj);
-        return true;
+        targetObj = prefixCallSite.Target(prefixCallSite, _realRemote);
       }
-      catch
+
+      if (targetObj == null)
       {
-        // Property doesn't exist on remote object either
-        result = null;
-        return false;
+        throw new InvalidOperationException(
+          $"Unable to navigate to path prefix '{_pathPrefix}' on remote object.");
       }
+
+      // If target is a DynamicObject (e.g., DynamicRemoteObject), forward directly
+      if (targetObj is DynamicObject dynObj)
+      {
+        // For DynamicObjects we need to create a new binder with the resolved name
+        // (The original binder has the interface property name)
+        var newBinder = Microsoft.CSharp.RuntimeBinder.Binder.GetMember(
+          Microsoft.CSharp.RuntimeBinder.CSharpBinderFlags.None,
+          binderName,
+          typeof(object),
+          new[] { Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo.Create(
+            Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfoFlags.None, null) }) as GetMemberBinder;
+
+        if (newBinder != null && dynObj.TryGetMember(newBinder, out result))
+        {
+          return true;
+        }
+      }
+
+      // For other dynamic objects, use the runtime binder
+      var callSite = System.Runtime.CompilerServices.CallSite<Func<
+        System.Runtime.CompilerServices.CallSite, object, object>>.Create(
+        Microsoft.CSharp.RuntimeBinder.Binder.GetMember(
+          Microsoft.CSharp.RuntimeBinder.CSharpBinderFlags.None,
+          binderName,
+          typeof(object),
+          new[] { Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo.Create(
+            Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfoFlags.None, null) }));
+
+      result = callSite.Target(callSite, targetObj);
+      return true;
     }
 
     result = null;
