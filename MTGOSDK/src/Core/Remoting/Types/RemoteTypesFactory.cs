@@ -104,8 +104,8 @@ public class RemoteTypesFactory(TypeResolver resolver,
         return shortOutput;
       }
 
-      // If it's a primitive or value type, return it directly
-      if (shortOutput.IsPrimitive || shortOutput.IsValueType)
+      // If it's a primitive, return it directly
+      if (shortOutput.IsPrimitive)
       {
         return shortOutput;
       }

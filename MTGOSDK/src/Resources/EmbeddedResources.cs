@@ -19,8 +19,13 @@ namespace MTGOSDK.Resources;
 /// </summary>
 public static class EmbeddedResources
 {
-  private static readonly Assembly asm =
+  internal static readonly Assembly asm =
     Assembly.GetAssembly(typeof(EmbeddedResources));
+
+  /// <summary>
+  /// Returns the names of all embedded resources in the assembly.
+  /// </summary>
+  public static string[] GetResourceNames() => asm.GetManifestResourceNames();
 
   /// <summary>
   /// Provides a stream to the specified embedded resource.
@@ -29,7 +34,15 @@ public static class EmbeddedResources
   /// <returns>A stream to the resource.</returns>
   public static Stream GetResourceStream(string name)
   {
-    return asm.GetManifestResourceStream(name);
+    var stream = asm.GetManifestResourceStream(name);
+    if (stream == null)
+    {
+      // Fallback: try replacing backslashes with forward slashes (or vice versa)
+      var altName = name.Replace('\\', '/');
+      if (altName != name)
+        stream = asm.GetManifestResourceStream(altName);
+    }
+    return stream;
   }
 
   /// <summary>

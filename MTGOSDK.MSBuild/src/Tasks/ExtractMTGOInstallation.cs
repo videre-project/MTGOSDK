@@ -51,8 +51,10 @@ public class ExtractMTGOInstallation : MSBuildTask
   public override bool Execute()
   {
     // Try to expand any glob patterns in the input paths
+#pragma warning disable CS8601
     MTGOAppDir = new Glob(MTGOAppDir);
     MTGODataDir = new Glob(MTGODataDir);
+#pragma warning restore CS8601
 
     if (MTGOAppDir is not null && Directory.Exists(MTGOAppDir))
     {

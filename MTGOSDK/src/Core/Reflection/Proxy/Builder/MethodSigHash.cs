@@ -15,8 +15,21 @@ public class MethodSigHash(string name, Type[] parameters)
   public readonly Type[] Parameters = parameters;
 
   public MethodSigHash(MethodInfo mi)
-    : this(mi.Name, mi.GetParameters().Select(i => i.ParameterType).ToArray())
+    : this(mi.Name, GetParametersSafe(mi))
   {
+  }
+
+  private static Type[] GetParametersSafe(MethodInfo mi)
+  {
+    try
+    {
+      return mi.GetParameters().Select(i => i.ParameterType).ToArray();
+    }
+    catch (TypeLoadException)
+    {
+      // Reference assembly stubs may have invalid RVAs on Wine.
+      return Type.EmptyTypes;
+    }
   }
 
   public bool Equals(MethodSigHash other)

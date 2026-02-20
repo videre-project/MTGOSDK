@@ -6,10 +6,25 @@
     <UseWPF>true</UseWPF>
     <!-- Whether to include reference assemblies as part of the package. -->
     <UseRef>true</UseRef>
-    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+    <NoWarn>$(NoWarn);MSB3277;MSB3243</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <RunCommand>wine</RunCommand>
+    <RunArguments>$(OutputPath)$(AssemblyName).exe</RunArguments>
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Include WPF reference assemblies when not explicitly targeting windows.
+    -->
+    <PackageReference Include="Microsoft.WindowsDesktop.App.Ref"
+                      ExcludeAssets="all"
+                      GeneratePathProperty="true" />
+    <!-- Manually reference WPF assemblies for metadata-only reflection. -->
+    <Reference Include="PresentationCore"                 Private="$(UseRef)" />
+    <Reference Include="PresentationFramework"            Private="$(UseRef)" />
+    <Reference Include="System.Xaml"                      Private="$(UseRef)" />
+    <Reference Include="WindowsBase"                      Private="$(UseRef)" />
     <!--
       Include reference assemblies to compile against the current MTGO version.
 
@@ -62,8 +77,8 @@
     the MTGOSDK.MSBuild project instead of the NuGet package.
   -->
   <ImportGroup Condition="'$(UseFullSDKPaths)' == 'true'">
-    <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
-    <Import Project="$(SolutionDir)\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.targets" />
+    <Import Project="$(SolutionDir)MTGOSDK.MSBuild/build/MTGOSDK.MSBuild.props" />
+    <Import Project="$(SolutionDir)MTGOSDK.MSBuild/build/MTGOSDK.MSBuild.targets" />
   </ImportGroup>
 
 </Project>

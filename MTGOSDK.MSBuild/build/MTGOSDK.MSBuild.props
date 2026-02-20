@@ -20,12 +20,14 @@
 
   <!-- These directories are automatically built for internal use of the SDK -->
   <PropertyGroup>
-    <_MTGOSDK_MSBuild_Dir>$(MSBuildThisFileDirectory)\..\</_MTGOSDK_MSBuild_Dir>
+    <_MTGOSDK_MSBuild_Dir>$(MSBuildThisFileDirectory)..\</_MTGOSDK_MSBuild_Dir>
     <_MTGOSDK_MSBuild>$(_MTGOSDK_MSBuild_Dir)lib\netstandard2.0\MTGOSDK.MSBuild.dll</_MTGOSDK_MSBuild>
     <_MTGOSDK_Refs>$(SolutionDir)dist\$(Configuration)\Reference\MTGO</_MTGOSDK_Refs>
   </PropertyGroup>
   <PropertyGroup Condition="'$(UseFullSDKPaths)' == 'true'">
-    <_MTGOSDK_MSBuild>$(_MTGOSDK_MSBuild_Dir)bin\$(Configuration)\netstandard2.0\MTGOSDK.MSBuild.dll</_MTGOSDK_MSBuild>
+    <_MTGOSDK_MSBuild_RID>$(RuntimeIdentifier)</_MTGOSDK_MSBuild_RID>
+    <_MTGOSDK_MSBuild_RID Condition="'$(_MTGOSDK_MSBuild_RID)' != ''">$(_MTGOSDK_MSBuild_RID)\</_MTGOSDK_MSBuild_RID>
+    <_MTGOSDK_MSBuild>$(_MTGOSDK_MSBuild_Dir)bin\$(Configuration)\netstandard2.0\$(_MTGOSDK_MSBuild_RID)MTGOSDK.MSBuild.dll</_MTGOSDK_MSBuild>
   </PropertyGroup>
 
 </Project>

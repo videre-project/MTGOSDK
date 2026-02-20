@@ -4,6 +4,8 @@
 **/
 
 using System.Collections;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using RegexMatch = System.Text.RegularExpressions.Match;
 
@@ -144,6 +146,17 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
   public IEnumerable<TInterface> SerializeItemsAs<TInterface>(int maxItems = 0)
     where TInterface : class
     => SerializeCollectionAs<TInterface, Card>(
+        nameof(ICardGrouping.Items),
+        nameof(ICardQuantityPair.CardDefinition),
+        maxItems);
+
+  /// <summary>
+  /// Async variant of <see cref="SerializeItemsAs{TInterface}"/> that does not block
+  /// a thread pool thread while waiting for the batch IPC response.
+  /// </summary>
+  public Task<IList<TInterface>> SerializeItemsAsAsync<TInterface>(int maxItems = 0)
+    where TInterface : class
+    => SerializeCollectionAsAsync<TInterface, Card>(
         nameof(ICardGrouping.Items),
         nameof(ICardQuantityPair.CardDefinition),
         maxItems);

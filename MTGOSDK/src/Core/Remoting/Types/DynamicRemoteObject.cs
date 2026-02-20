@@ -339,12 +339,9 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   {
     __ra = ra;
     __ro = ro;
-    __type = ro.GetType() as RemoteType;
+    Type roType = ro.GetType();
+    __type = (roType as RemoteType) ?? new RemoteType(ra, roType);
     __timestamp = DateTime.Now;
-    if (__type == null && ro.GetType() != null)
-    {
-      throw new ArgumentException("Can only create DynamicRemoteObjects of RemoteObjects with Remote Types. (As returned from GetType())");
-    }
   }
 
   public DynamicRemoteObject() { } // For avoiding overriding reference type
@@ -601,13 +598,13 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         __ro.RemoteToken,
         __type.FullName,
         "get_IsCompleted",
-        Array.Empty<string>(), 
-        Array.Empty<ObjectOrRemoteAddress>()); 
-      
+        Array.Empty<string>(),
+        Array.Empty<ObjectOrRemoteAddress>());
+
       bool isCompleted = (bool)ProcessInvocationResult(invokeResult);
-      
+
       if (isCompleted) break;
-      
+
       await Task.Delay(delay);
       if (delay < 50) delay += 5;
     }
@@ -630,15 +627,15 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         "get_Exception",
         Array.Empty<string>(),
         Array.Empty<ObjectOrRemoteAddress>());
-      
+
       dynamic remoteEx = ProcessInvocationResult(exRes);
       // Try to get message from exception
       string exMsg = "Unknown Remote Exception";
       try { exMsg = remoteEx.ToString(); } catch {}
-      
+
       throw new Exception($"Remote Task Faulted: {exMsg}");
     }
-    
+
     // Check for Result property (if Task<T>)
     if (HasMember("Result"))
     {
@@ -650,7 +647,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         Array.Empty<ObjectOrRemoteAddress>());
       return ProcessInvocationResult(resultRes);
     }
-    
+
     return null;
   }
 

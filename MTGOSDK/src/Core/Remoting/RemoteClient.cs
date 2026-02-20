@@ -41,7 +41,7 @@ public sealed class RemoteClient : DLRWrapper
 
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
-  
+
   private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
 
   /// <summary>
@@ -73,13 +73,16 @@ public sealed class RemoteClient : DLRWrapper
   /// </summary>
   public static ushort? Port = null;
 
+#if DEBUG
   private TraceExporter _traceExporter;
+#endif
   private static string _traceDir;
 
   private RemoteClient()
   {
+#if DEBUG
     // Initialize trace exporter
-    try 
+    try
     {
       // Cache trace directory path before Bootstrapper.ExtractDir is modified
       _traceDir = Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace");
@@ -91,6 +94,7 @@ public sealed class RemoteClient : DLRWrapper
     {
        Log.Warning($"[RemoteClient] Failed to initialize trace exporter: {ex.Message}");
     }
+#endif
 
     // A new instance implies the previous one (if any) is either not created
     // or has been fully disposed. Reset disposal state here.
@@ -147,7 +151,25 @@ public sealed class RemoteClient : DLRWrapper
     }
 
     string executablePath = Path.Combine(appDirectory, "MTGO.exe");
-    var processList = new FileInfo(executablePath).GetLockingProcesses();
+    List<Process> processList;
+    try
+    {
+      processList = new FileInfo(executablePath).GetLockingProcesses();
+    }
+    catch
+    {
+      processList = new List<Process>();
+    }
+
+    // Fallback for Wine or systems where the Restart Manager is unavailable.
+    if (processList.Count == 0)
+    {
+      processList.AddRange(Process.GetProcessesByName("MTGO"));
+      if (processList.Count == 0)
+      {
+        processList.AddRange(Process.GetProcessesByName("MTGO.exe"));
+      }
+    }
 
     // If no processes were found, we want to indicate that our syscalls failed.
     if (processList.Count == 0 && throwOnFailure)
@@ -264,7 +286,7 @@ public sealed class RemoteClient : DLRWrapper
   {
     using var activity = s_activitySource.StartActivity("RemoteClient.StartProcess");
     activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
-    
+
     // Check if there are any updates first before starting MTGO.
     await InstallOrUpdate();
 
@@ -408,7 +430,7 @@ public sealed class RemoteClient : DLRWrapper
     if (ClientProcess is null) RefreshClientProcess(throwOnFailure: true);
 
     // Connect to the MTGO process using the specified or default port
-    if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id);
+    if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id + 1024);
     Log.Trace("Connecting to MTGO process on port {Port}", Port.Value);
 
     // Suppress expected transient timeouts / connection failures while the
@@ -509,18 +531,20 @@ public sealed class RemoteClient : DLRWrapper
     });
 
     // Best-effort cleanup; swallow any individual errors.
+#if DEBUG
     Try(() => @this._traceExporter?.Dispose()); // Flush SDK trace file
-    
+#endif
+
     // Merge SDK + Diver trace files into a single combined trace
-    try 
-    { 
-      MergeTraceFiles(); 
+    try
+    {
+      MergeTraceFiles();
     }
-    catch (Exception ex) 
-    { 
-      Log.Error($"[MergeTraceFiles] Exception: {ex}"); 
+    catch (Exception ex)
+    {
+      Log.Error("[MergeTraceFiles] Exception: {Exception}", ex);
     }
-    
+
     Try(@client.Dispose);
 
     if (CloseOnExit)
@@ -554,20 +578,20 @@ public sealed class RemoteClient : DLRWrapper
   private static void MergeTraceFiles()
   {
     Log.Debug("[MergeTraceFiles] Starting merge...");
-    
+
     // Use cached trace directory (set at initialization before Bootstrapper.ExtractDir is modified)
     if (string.IsNullOrEmpty(_traceDir))
     {
       Log.Warning("[MergeTraceFiles] Trace directory not initialized, skipping merge.");
       return;
     }
-    
+
     string sdkPath = Path.Combine(_traceDir, "trace_sdk.json");
     string diverPath = Path.Combine(_traceDir, "trace_diver.json");
     string combinedPath = Path.Combine(_traceDir, "trace_combined.json");
 
-    Log.Debug($"[MergeTraceFiles] Looking for: {sdkPath}");
-    Log.Debug($"[MergeTraceFiles] SDK exists: {File.Exists(sdkPath)}, Diver exists: {File.Exists(diverPath)}");
+    Log.Debug("[MergeTraceFiles] Looking for: {Path}", sdkPath);
+    Log.Debug("[MergeTraceFiles] SDK exists: {SdkExists}, Diver exists: {DiverExists}", File.Exists(sdkPath), File.Exists(diverPath));
 
     var allEventJson = new List<string>();
 
@@ -585,11 +609,11 @@ public sealed class RemoteClient : DLRWrapper
             allEventJson.Add(evt.GetRawText());
           }
         }
-        Log.Debug($"[MergeTraceFiles] Read {allEventJson.Count} events from SDK trace");
+        Log.Debug("[MergeTraceFiles] Read {Count} events from SDK trace", allEventJson.Count);
       }
       catch (Exception ex)
       {
-        Log.Warning($"[MergeTraceFiles] Failed to read SDK trace: {ex.Message}");
+        Log.Warning("[MergeTraceFiles] Failed to read SDK trace: {Message}", ex.Message);
       }
     }
 
@@ -609,15 +633,15 @@ public sealed class RemoteClient : DLRWrapper
             allEventJson.Add(evt.GetRawText());
           }
         }
-        Log.Debug($"[MergeTraceFiles] Read {allEventJson.Count - sdkCount} events from Diver trace");
+        Log.Debug("[MergeTraceFiles] Read {Count} events from Diver trace", allEventJson.Count - sdkCount);
       }
       catch (Exception ex)
       {
-        Log.Warning($"[MergeTraceFiles] Failed to read Diver trace: {ex.Message}");
+        Log.Warning("[MergeTraceFiles] Failed to read Diver trace: {Message}", ex.Message);
       }
     }
 
-    Log.Debug($"[MergeTraceFiles] Total events: {allEventJson.Count}");
+    Log.Debug("[MergeTraceFiles] Total events: {Count}", allEventJson.Count);
 
     if (allEventJson.Count == 0)
     {
@@ -631,11 +655,11 @@ public sealed class RemoteClient : DLRWrapper
       var eventsArray = "[" + string.Join(",", allEventJson) + "]";
       var combinedJson = $"{{\"traceEvents\":{eventsArray},\"displayTimeUnit\":\"ms\"}}";
       File.WriteAllText(combinedPath, combinedJson);
-      Log.Information($"[MergeTraceFiles] Combined trace written to: {combinedPath}");
+      Log.Information("[MergeTraceFiles] Combined trace written to: {Path}", combinedPath);
     }
     catch (Exception ex)
     {
-      Log.Warning($"[MergeTraceFiles] Failed to write combined trace: {ex.Message}");
+      Log.Warning("[MergeTraceFiles] Failed to write combined trace: {Message}", ex.Message);
     }
   }
 

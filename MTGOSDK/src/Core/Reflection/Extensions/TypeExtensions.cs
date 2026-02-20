@@ -13,15 +13,15 @@ namespace MTGOSDK.Core.Reflection.Extensions;
 public static class TypeExtensions
 {
   private static readonly TypeComparer _wildCardTypesComparer = new();
-  
+
   // Reflection caches for method and field lookups
   // Key: (typeFullName, memberName, genericArgsHash, paramTypesHash)
-  private static readonly ConcurrentDictionary<(string, string, int, int), MethodInfo?> 
+  private static readonly ConcurrentDictionary<(string, string, int, int), MethodInfo?>
     _methodCache = new();
   // Key: (typeFullName, fieldName)
-  private static readonly ConcurrentDictionary<(string, string), FieldInfo?> 
+  private static readonly ConcurrentDictionary<(string, string), FieldInfo?>
     _fieldCache = new();
-  
+
   private static int ComputeTypesHash(Type[]? types)
   {
     if (types == null || types.Length == 0) return 0;
@@ -229,7 +229,8 @@ public static class TypeExtensions
       realType == typeof(string) ||
       realType == typeof(decimal) ||
       realType == typeof(DateTime) ||
-      realType == typeof(IntPtr);
+      realType == typeof(IntPtr) ||
+      realType == typeof(Guid);
   }
 
   public static bool IsStringCoercible(this Type realType)

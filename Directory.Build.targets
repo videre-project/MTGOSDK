@@ -1,5 +1,10 @@
 <Project>
 
+  <!-- Overrides to support multi-platform builds when using WPF -->
+  <Target Name="_CheckForInvalidConfigurationAndPlatform" />
+  <Target Name="_CheckForUnnecessaryWindowsDesktopSDK" />
+  <Target Name="_CheckForInvalidWindowsDesktopTargetingConfiguration" />
+
   <Target Name="CleanProject"
           BeforeTargets="Clean">
     <ItemGroup>
@@ -199,9 +204,16 @@
     </ItemGroup>
   </Target>
 
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <NuGetCommand>wine "$(NuGetExePath)"</NuGetCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <NuGetCommand>"$(NuGetExePath)"</NuGetCommand>
+  </PropertyGroup>
+
   <Target Name="UpdateFeed"
           AfterTargets="Pack"
-          Condition="'$(OS)' == 'Windows_NT'">
+          Condition="'$(IsPackable)' == 'true' AND ('$(EnableWindowsTargeting)' == 'true' OR '$(OS)' == 'Windows_NT')">
     <!-- Query all existing package versions in the feed -->
     <PropertyGroup>
       <FeedPackagePath>$(FeedOutputPath)\$(MSBuildProjectName.ToLower())</FeedPackagePath>
@@ -209,10 +221,9 @@
     <ItemGroup>
       <_SDKPackagePaths Include="$(FeedPackagePath)\**\*.nupkg" />
       <_SDKPackagePaths>
-        <VersionPath>$([System.IO.Path]::GetDirectoryName('%(Identity)').Replace('$(FeedOutputPath)\', ''))</VersionPath>
+        <VersionPath>$([System.IO.Path]::GetRelativePath('$(FeedOutputPath)', [System.IO.Path]::GetDirectoryName('%(Identity)')))</VersionPath>
       </_SDKPackagePaths>
       <_SDKPackagePaths>
-        <File>$([System.IO.Path]::Combine('%(VersionPath)', 'nupkg').Replace('\', '.'))</File>
         <Version>$([System.IO.Path]::GetFileName('%(VersionPath)'))</Version>
       </_SDKPackagePaths>
     </ItemGroup>
@@ -226,11 +237,10 @@
     <PropertyGroup>
       <PackagePath>$(PackageOutputPath)\$(MSBuildProjectName).$(PackageVersion).nupkg</PackagePath>
     </PropertyGroup>
-    <Exec Command="$(NuGetExePath) add $(PackagePath) ^
-                    -Source $(FeedOutputPath) ^
-                    -Verbosity quiet" />
+    <Exec Command="$(NuGetCommand) add &quot;$(PackagePath)&quot; -Source &quot;$(FeedOutputPath)&quot; -Verbosity quiet" Condition="'$(OS)' == 'Windows_NT' AND Exists('$(PackagePath)')" />
+    <Exec Command="$(NuGetCommand) add %24(winepath -w &quot;$(PackagePath)&quot;) -Source %24(winepath -w &quot;$(FeedOutputPath)&quot;) -Verbosity quiet" Condition="'$(OS)' != 'Windows_NT' AND Exists('$(PackagePath)')" />
   </Target>
-  
+
   <!-- Custom target to build documentation using DocFX and DocProcessor -->
   <Target Name="docfx" Condition="'$(MSBuildProjectName)' == 'MTGOSDK'">
     <PropertyGroup>
@@ -289,7 +299,7 @@
       <_CommitHash Condition="'$(_NuspecCommit)' != ''">$(_NuspecCommit)</_CommitHash>
       <_CommitHash Condition="'$(_CommitHash)' == ''"></_CommitHash>
     </PropertyGroup>
-    
+
     <!-- Extract short hash and URL -->
     <PropertyGroup>
       <_ShortHash>$(_CommitHash)</_ShortHash>
@@ -329,12 +339,12 @@
 
     <!-- 8. DocFX Build -->
     <Message Text="[6/6] Building site..." Importance="High" />
-    
+
     <!-- Execute DocFX build via external PowerShell script -->
-    <Exec Command="powershell -ExecutionPolicy Bypass -NoProfile -File &quot;$(DocFxDir)docs\_build\docfx\build.ps1&quot; -DocFxDir &quot;.&quot; -VersionMain &quot;$(_VersionMain)&quot; -VersionSuffix &quot;$(_VersionSuffix)&quot; -ShortHash &quot;$(_ShortHash)&quot; -CommitUrl &quot;$(_CommitUrl)&quot;" 
+    <Exec Command="powershell -ExecutionPolicy Bypass -NoProfile -File &quot;$(DocFxDir)docs\_build\docfx\build.ps1&quot; -DocFxDir &quot;.&quot; -VersionMain &quot;$(_VersionMain)&quot; -VersionSuffix &quot;$(_VersionSuffix)&quot; -ShortHash &quot;$(_ShortHash)&quot; -CommitUrl &quot;$(_CommitUrl)&quot;"
           WorkingDirectory="$(DocFxDir)"
           ConsoleToMSBuild="true" />
-    
+
     <Message Text="=== DocFX Build Complete ===" Importance="High" />
   </Target>
 

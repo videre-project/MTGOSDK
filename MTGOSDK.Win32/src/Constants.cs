@@ -41,8 +41,8 @@ public static class Constants
   /// </remarks>
   public static string? MTGOAppDirectory =>
     ClickOncePaths.ApplicationDirectory is string appDir
-      ? new Glob(@$"{appDir}\mtgo..tion_*")
-      : null;
+        ? new Glob(@$"{appDir}\mtgo..tion_*")
+        : null;
 
   /// <summary>
   /// The current data directory for MTGO's user data.

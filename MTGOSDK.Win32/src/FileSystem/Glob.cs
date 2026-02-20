@@ -30,20 +30,30 @@ public class Glob
 
   public Glob(string directory)
   {
-    // foreach (string pattern in directory.Replace("/", @"\").Split(@"\"))
-    foreach (string pattern in directory.Replace("/", @"\").Split(new char[] { '\\' }))
+    // Normalize path separators to facilitate splitting.
+    string normalizedPath = directory.Replace('\\', '/');
+    string[] patterns = normalizedPath.Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+    // If the path was rooted, re-add the root segment correctly.
+    if (directory.StartsWith("/") || directory.StartsWith("\\"))
     {
-      // Skip if pattern is an absolute path.
-      if (Path.IsPathRooted(pattern))
-      {
-        Matches = new string[] {
-          pattern.Contains(":")
-            ? pattern + Path.DirectorySeparatorChar
-            : pattern
-        };
-      }
+      Matches = new string[] { "/" };
+    }
+    else if (normalizedPath.Contains(":") && Path.IsPathRooted(directory))
+    {
+       string drive = normalizedPath.Split(':')[0] + ":/";
+       Matches = new string[] { drive };
+       // Skip the drive segment in patterns if it was parsed as a root.
+       if (patterns.Length > 0 && patterns[0].Contains(":"))
+       {
+           patterns = patterns.Skip(1).ToArray();
+       }
+    }
+
+    foreach (string pattern in patterns)
+    {
       // Handle relative parent directory pattern as a special case.
-      else if (pattern == "..")
+      if (pattern == "..")
       {
         Matches = Matches
           .Select(p => new DirectoryInfo(p).Parent.FullName)
@@ -70,12 +80,21 @@ public class Glob
             new DirectoryInfo(basePath)
               .EnumerateFileSystemInfos()
               // Evaluate the glob pattern against each file and directory.
-              .Where(p => pattern.Contains("*") || pattern.Contains("?")
-                // If the glob pattern contains any wildcards, use Regex to match.
-                ? ParseGlob(pattern)
-                    .IsMatch(p.FullName.Substring(basePath.Length + 1))
-                // Otherwise, match the glob pattern as literals.
-                : p.FullName == Path.Combine(basePath, pattern)))
+              .Where(p =>
+              {
+                string relativePath = p.FullName.Replace('\\', '/');
+                string normalizedBase = basePath.Replace('\\', '/');
+                if (relativePath.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase))
+                {
+                  relativePath = relativePath.Substring(normalizedBase.Length).TrimStart('/');
+                }
+
+                return pattern.Contains("*") || pattern.Contains("?")
+                  // If the glob pattern contains any wildcards, use Regex to match.
+                  ? ParseGlob(pattern).IsMatch(relativePath)
+                  // Otherwise, match the glob pattern as literals.
+                  : relativePath.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+              }))
           .Select(f => f.FullName)
           .ToArray();
       }

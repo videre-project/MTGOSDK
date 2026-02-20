@@ -7,6 +7,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IsPackable>false</IsPackable>
+    <UseILRepack>true</UseILRepack>
   </PropertyGroup>
 
   <!-- ILLink trimmer -->
@@ -20,8 +21,8 @@
   <Import Project="$(_ILRepackTargetsPath)" />
   <PropertyGroup>
     <ILRepackTarget>Microsoft.Diagnostics.Runtime</ILRepackTarget>
-    <HarmonyAssembly>bin\$(Configuration)\$(_MTGOSDKCoreTFM)\0Harmony.dll</HarmonyAssembly>
-    <ILRepackOutput>$(SolutionDir)dist\$(Configuration)\$(ILRepackTarget).dll</ILRepackOutput>
+    <HarmonyAssembly>bin/$(Configuration)/$(_MTGOSDKCoreTFM)/$(RuntimeIdentifier)/0Harmony.dll</HarmonyAssembly>
+    <ILRepackOutput>$(SolutionDir)dist/$(Configuration)/$(RuntimeIdentifier)/$(ILRepackTarget).dll</ILRepackOutput>
   </PropertyGroup>
 
   <!-- Export the Harmony assembly to the output directory for packing -->
@@ -32,18 +33,27 @@
       <InputAssemblies Remove="$(HarmonyAssembly)" />
     </ItemGroup>
     <Copy SourceFiles="$(HarmonyAssembly)"
-          DestinationFolder="$(SolutionDir)dist\$(Configuration)" />
+          DestinationFolder="$(SolutionDir)dist/$(Configuration)" />
+  </Target>
+
+  <Target Name="BuildArtifactDirectory"
+          AfterTargets="AfterBuild"
+          Condition="'$(UseILRepack)' != 'true'">
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"
+          DestinationFiles="$(ILRepackOutput)" />
   </Target>
 
   <ItemGroup>
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
+    <PackageReference Include="System.IO.Pipelines" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                      PrivateAssets="All" />
     <PackageReference Include="MessagePack" />
     <PackageReference Include="MessagePack.Annotations" />
     <PackageReference Include="Lib.Harmony" />
-    <PackageReference Include="System.IO.Pipelines" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
-    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
   </ItemGroup>
 
   <!-- WPF assemblies for Dispatcher support -->

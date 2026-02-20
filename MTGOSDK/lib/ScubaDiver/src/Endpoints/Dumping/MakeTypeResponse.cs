@@ -36,8 +36,8 @@ public partial class Diver : IDisposable
     {
       // Log when fallback to System.Object occurs (for debugging)
       string requestedName = dumpRequest.TypeFullName;
-      if (resolvedType == typeof(object) && 
-          !requestedName.EndsWith("Object") && 
+      if (resolvedType == typeof(object) &&
+          !requestedName.EndsWith("Object") &&
           !requestedName.Equals("System.Object"))
       {
          Log.Debug($"[Diver] Fallback type resolution: Requested {requestedName} resolved to System.Object");

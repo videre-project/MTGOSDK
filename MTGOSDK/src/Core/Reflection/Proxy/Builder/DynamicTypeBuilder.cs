@@ -7,9 +7,12 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 
 using ImpromptuInterface;
 using ImpromptuInterface.Build;
+
+using MTGOSDK.Core.Remoting.Types;
 
 
 namespace MTGOSDK.Core.Reflection.Proxy.Builder;
@@ -43,22 +46,67 @@ public static class DynamicTypeBuilder
     TypeBuilder builder,
     Type returnType,
     IEnumerable<Type> types,
-    MethodInfo info = null)
+    MethodInfo info = null,
+    Type contextType = null)
   {
     var tBuilder = s_builder.DefineType(
       GenerateTypeProxyName("Delegate"),
       TypeAttributes.Class | TypeAttributes.AnsiClass | TypeAttributes.Sealed | TypeAttributes.Public,
       typeof(MulticastDelegate));
 
-    var tReplacedTypes = s_assembler.GetParamTypes(tBuilder, info);
+    var tReplacedTypes = s_assembler.GetParamTypes(tBuilder, info, contextType);
+
+    ParameterInfo[] tParams;
+    try
+    {
+      tParams = info?.GetParameters() ?? Array.Empty<ParameterInfo>();
+    }
+    catch (TypeLoadException)
+    {
+      if (contextType is RemoteType rt)
+      {
+        var remoteMethod = rt.Methods.FirstOrDefault(m => m.Name == info.Name);
+        if (remoteMethod != null)
+        {
+          tParams = remoteMethod.GetParameters();
+        }
+        else
+        {
+          tParams = Array.Empty<ParameterInfo>();
+        }
+      }
+      else
+      {
+        tParams = Array.Empty<ParameterInfo>();
+      }
+    }
 
     var tParamTypes = info == null
       ? types.ToList()
-      : info.GetParameters().Select(it => it.ParameterType).ToList();
+      : tParams.Select(it => TypeAssembler.ResolveLocalType(it.ParameterType, info.Module)).ToList();
 
     if (tReplacedTypes != null)
     {
       tParamTypes = tReplacedTypes.Item2.ToList();
+      returnType = tReplacedTypes.Item1;
+    }
+    else if (info != null)
+    {
+      try
+      {
+        returnType = TypeAssembler.ResolveLocalType(info.ReturnType, info.Module);
+      }
+      catch (TypeLoadException)
+      {
+        if (contextType is RemoteType rt)
+        {
+          returnType = TypeAssembler.ResolveLocalType(rt.Methods.FirstOrDefault(m => m.Name == info.Name)?.ReturnType ?? typeof(void), info.Module);
+        }
+        else
+        {
+          returnType = typeof(void);
+        }
+      }
     }
 
     if (info != null)
@@ -84,9 +132,9 @@ public static class DynamicTypeBuilder
 
     if (info != null)
     {
-      foreach (var tParam in info.GetParameters())
+      foreach (var tParam in tParams)
       {
-        //+3 because of the callsite and target are added
+        // +3 because of the callsite and target are added
         tMethod.DefineParameter(tParam.Position + 3, s_assembler.AttributesForParam(tParam), tParam.Name);
       }
     }
@@ -168,22 +216,45 @@ public static class DynamicTypeBuilder
 
       var tNonRecursive = tInterface.GetCustomAttributes(typeof(NonRecursiveInterfaceAttribute), true).Any();
 
-      foreach (var tInfo in tInterface.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+      PropertyInfo[] tProperties;
+      try { tProperties = tInterface.GetProperties(BindingFlags.Public | BindingFlags.Instance); }
+      catch (TypeLoadException) { tProperties = Array.Empty<PropertyInfo>(); }
+      foreach (var tInfo in tProperties)
       {
-        var tNonRecursiveProp = tNonRecursive ||
-            tInfo.GetCustomAttributes(typeof(NonRecursiveInterfaceAttribute), true).Any();
+        try
+        {
+          var tNonRecursiveProp = tNonRecursive ||
+              tInfo.GetCustomAttributes(typeof(NonRecursiveInterfaceAttribute), true).Any();
 
-        s_assembler.MakeProperty(builder, tInfo, tB, contextType, nonRecursive: tNonRecursiveProp, defaultImp: tPropertyNameHash.Add(tInfo.Name));
+          s_assembler.MakeProperty(builder, tInfo, tB, contextType, nonRecursive: tNonRecursiveProp, defaultImp: tPropertyNameHash.Add(tInfo.Name));
+        }
+        catch (TypeLoadException) { }
       }
-      foreach (var tInfo in tInterface.GetMethods(BindingFlags.Public | BindingFlags.Instance).Where(it => !it.IsSpecialName))
+
+      MethodInfo[] tMethods;
+      try { tMethods = tInterface.GetMethods(BindingFlags.Public | BindingFlags.Instance); }
+      catch (TypeLoadException) { tMethods = Array.Empty<MethodInfo>(); }
+      foreach (var tInfo in tMethods.Where(it => !it.IsSpecialName))
       {
-        var tNonRecursiveMeth = tNonRecursive ||
-            tInfo.GetCustomAttributes(typeof(NonRecursiveInterfaceAttribute), true).Any();
-        s_assembler.MakeMethod(builder, tInfo, tB, contextType, nonRecursive: tNonRecursiveMeth, defaultImp: tMethodHashSet.Add(new MethodSigHash(tInfo)));
+        try
+        {
+          var tNonRecursiveMeth = tNonRecursive ||
+              tInfo.GetCustomAttributes(typeof(NonRecursiveInterfaceAttribute), true).Any();
+          s_assembler.MakeMethod(builder, tInfo, tB, contextType, nonRecursive: tNonRecursiveMeth, defaultImp: tMethodHashSet.Add(new MethodSigHash(tInfo)));
+        }
+        catch (TypeLoadException) { }
       }
-      foreach (var tInfo in tInterface.GetEvents(BindingFlags.Public | BindingFlags.Instance).Where(it => !it.IsSpecialName))
+
+      EventInfo[] tEvents;
+      try { tEvents = tInterface.GetEvents(BindingFlags.Public | BindingFlags.Instance); }
+      catch (TypeLoadException) { tEvents = Array.Empty<EventInfo>(); }
+      foreach (var tInfo in tEvents.Where(it => !it.IsSpecialName))
       {
-        s_assembler.MakeEvent(builder, tInfo, tB, contextType, defaultImp: tPropertyNameHash.Add(tInfo.Name));
+        try
+        {
+          s_assembler.MakeEvent(builder, tInfo, tB, contextType, defaultImp: tPropertyNameHash.Add(tInfo.Name));
+        }
+        catch (TypeLoadException) { }
       }
     }
     var tType = tB.CreateTypeInfo();

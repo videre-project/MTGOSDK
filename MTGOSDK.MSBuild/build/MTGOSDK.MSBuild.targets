@@ -73,7 +73,8 @@
       <!-- Filter reference paths for those pointing to reference assemblies -->
       <ReferenceAssemblies
         Include="@(ReferenceCopyLocalPaths)"
-        Condition="$([System.String]::Copy(%(FullPath)).Contains($(_MTGOSDK_Refs)))" />
+        Condition="$([System.String]::Copy(%(FullPath)).Contains($(_MTGOSDK_Refs))) Or
+                   $([System.String]::Copy(%(FullPath)).Contains($(PkgMicrosoft_WindowsDesktop_App_Ref)))" />
     </ItemGroup>
   </Target>
 
@@ -82,6 +83,12 @@
                          ResolveAssemblyReferences"
           Condition="'$(UseReferenceAssemblies)' != 'false'">
     <!-- Add the reference assembly path to the assembly search paths -->
+
+    <PropertyGroup>
+       <_WpfRefTfm>$(TargetFramework)</_WpfRefTfm>
+       <_WpfRefTfm Condition="$(TargetFramework.Contains('-'))">$([System.String]::Copy('$(TargetFramework)').Split('-')[0])</_WpfRefTfm>
+    </PropertyGroup>
+
     <PropertyGroup Condition="Exists('$(_MTGOSDK_Refs)')">
       <MTGOSDK_RefsCount>$([System.IO.Directory]::GetFiles($(_MTGOSDK_Refs), "*", System.IO.SearchOption.TopDirectoryOnly).Length)</MTGOSDK_RefsCount>
       <MTGOSDK_Refs Condition="$(MTGOSDK_RefsCount) > 0">$(_MTGOSDK_Refs)</MTGOSDK_Refs>
@@ -89,8 +96,9 @@
       <AssemblySearchPaths>$(AssemblySearchPaths);$(MTGOSDK_Refs)</AssemblySearchPaths>
       <DesignTimeAssemblySearchPaths>$(DesignTimeAssemblySearchPaths);$(MTGOSDK_Refs)</DesignTimeAssemblySearchPaths>
     </PropertyGroup>
-    <!-- Update hintpaths for MTGO reference assemblies -->
+
     <ItemGroup>
+      <!-- Update hintpaths for MTGO reference assemblies -->
       <Reference Update="@(Reference)"
                  HintPath="$(MTGOSDK_Refs)\%(Identity).dll"
                  Condition="Exists('$(MTGOSDK_Refs)\%(Identity).dll') And
@@ -99,6 +107,11 @@
                  HintPath="$(MTGOSDK_Refs)\%(Identity)"
                  Condition="Exists('$(MTGOSDK_Refs)\%(Identity)') And
                             '%(Extension)' == '.dll'" />
+      <!-- Update hintpaths for WPF reference assemblies from the NuGet package -->
+      <Reference Update="@(Reference)"
+                 HintPath="$(PkgMicrosoft_WindowsDesktop_App_Ref)/ref/$(_WpfRefTfm)/%(Identity).dll"
+                 Condition="'$(PkgMicrosoft_WindowsDesktop_App_Ref)' != '' And
+                            Exists('$(PkgMicrosoft_WindowsDesktop_App_Ref)/ref/$(_WpfRefTfm)/%(Identity).dll')" />
     </ItemGroup>
   </Target>
 

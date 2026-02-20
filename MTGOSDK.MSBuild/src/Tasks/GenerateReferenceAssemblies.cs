@@ -13,6 +13,7 @@ using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using MSBuildTask = Microsoft.Build.Utilities.Task;
 
+using JetBrains.Refasmer;
 using JetBrains.Refasmer.Filters;
 
 
@@ -80,7 +81,8 @@ public class GenerateReferenceAssemblies : MSBuildTask
       var fileName = Path.GetFileName(filePath);
       try
       {
-        var asm = ReferenceAssemblyGenerator.Convert(filePath, new AllowAll());
+        var logger = new ReferenceAssemblyGenerator.TaskLogger(Log);
+        var asm = ReferenceAssemblyGenerator.Convert(filePath, new AllowAll(), logger);
         File.WriteAllBytes(Path.Combine(OutputPath, fileName), asm);
       }
       catch (InvalidOperationException e)

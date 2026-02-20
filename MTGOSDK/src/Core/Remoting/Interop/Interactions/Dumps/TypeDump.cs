@@ -245,15 +245,19 @@ public class TypeDump
     {
       if (typeObj == null) return null;
 
-      var ctors = typeObj.GetConstructors((BindingFlags)0xffff).Select(ci => new TypeDump.TypeMethod(ci))
+      const BindingFlags allMembers = BindingFlags.Public | BindingFlags.NonPublic |
+                                      BindingFlags.Instance | BindingFlags.Static;
+
+      var ctors = typeObj.GetConstructors(allMembers).Select(ci => new TypeDump.TypeMethod(ci))
         .ToList();
-      var methods = typeObj.GetRuntimeMethods().Select(mi => new TypeDump.TypeMethod(mi))
+      var methods = typeObj.GetMethods(allMembers).Select(mi => new TypeDump.TypeMethod(mi))
         .ToList();
-      var fields = typeObj.GetRuntimeFields().Select(fi => new TypeDump.TypeField(fi))
+      var fields = typeObj.GetFields(allMembers).Select(fi => new TypeDump.TypeField(fi))
         .ToList();
-      var events = typeObj.GetRuntimeEvents().Select(ei => new TypeDump.TypeEvent(ei))
+
+      var events = typeObj.GetEvents(allMembers).Select(ei => new TypeDump.TypeEvent(ei))
         .ToList();
-      var props = typeObj.GetRuntimeProperties().Select(pi => new TypeDump.TypeProperty(pi))
+      var props = typeObj.GetProperties(allMembers).Select(pi => new TypeDump.TypeProperty(pi))
         .ToList();
 
       TypeDump td = new()

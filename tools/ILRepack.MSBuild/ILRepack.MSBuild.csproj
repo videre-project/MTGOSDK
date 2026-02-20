@@ -14,10 +14,16 @@
     <PackageReference Include="ILRepack.Lib" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                      PrivateAssets="All" />
   </ItemGroup>
 
   <Target Name="Repack" AfterTargets="Build">
-    <Exec Command="&quot;$(ILRepack)&quot; /out:ILRepack.MSBuild.dll ILRepack.MSBuild.dll ILRepack.dll"
+    <PropertyGroup>
+      <ILRepackCommand>"$(ILRepack)"</ILRepackCommand>
+      <ILRepackCommand Condition="'$(OS)' != 'Windows_NT'">wine $(ILRepackCommand)</ILRepackCommand>
+    </PropertyGroup>
+    <Exec Command="$(ILRepackCommand) /out:ILRepack.MSBuild.dll ILRepack.MSBuild.dll ILRepack.dll"
           WorkingDirectory="$(OutDir)"
           ConsoleToMSBuild="True"/>
     <!-- Copy to the solution-level dist/ directory -->

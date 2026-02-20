@@ -114,22 +114,22 @@ public static class GridRenderer
       // This ensures same-name cards (different printings) are consistently ordered
       var sortModeType = RemoteClient.GetInstanceType("Shiny.CardManager.CardSortMode");
       var sortKeyType = RemoteClient.GetInstanceType("Shiny.CardManager.CardSortKey");
-      
+
       // Get CardSortKey.Name and CardSortKey.CardId static fields
-      var nameKey = sortKeyType.GetField("Name", 
+      var nameKey = sortKeyType.GetField("Name",
         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
       var cardIdKey = sortKeyType.GetField("CardId",
         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
-      
+
       // Create custom CardSortMode("pile:none;sort:Name,CardId")
       dynamic customSortMode = RemoteClient.CreateInstance(
         "Shiny.CardManager.CardSortMode", "pile:none;sort:Name,CardId");
-      
+
       // Set PilingCriterion = CardSortKey.None
       var noneKey = sortKeyType.GetField("None",
         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
       customSortMode.PilingCriterion = noneKey;
-      
+
       // Clear and populate SortingCriteria with Name + CardId
       // The constructor initializes with a default list, so we can modify it
       dynamic sortingCriteria = customSortMode.SortingCriteria;
@@ -170,6 +170,30 @@ public static class GridRenderer
 
       // Pre-load control template
       s_cachedSelector.ApplyTemplate();
+
+      // Warm-up layout to ensure visual tree is initialized.
+      // We use a real card (Colossal Dreadmaw) to ensure the ItemContainerGenerator
+      // runs and the template is fully applied.
+      try
+      {
+        var dreadmaw = CollectionManager.GetCard("Colossal Dreadmaw");
+        var cardPair = new CardQuantityPair(dreadmaw.Id, 1);
+        var dummyDeck = new Deck(new[] { cardPair }, Array.Empty<CardQuantityPair>());
+
+        dynamic deckGrouping = Unbind(dummyDeck);
+        s_cachedVM!.SetCardGrouping(deckGrouping, true);
+        s_cachedSelector.ItemsSource = s_cachedVM.Slots;
+
+        s_cachedSelector.Measure(RemoteClient.CreateInstance<Size>(100.0, 100.0));
+        s_cachedSelector.Arrange(RemoteClient.CreateInstance<Rect>(0.0, 0.0, 100.0, 100.0));
+        s_cachedSelector.UpdateLayout();
+
+        s_cachedSelector.ItemsSource = null;
+      }
+      catch
+      {
+        // If warm-up fails (e.g. card not found), proceed without it
+      }
     }
 
     // Cache PixelFormat
@@ -465,7 +489,7 @@ public static class GridRenderer
 
         // Calculate card width
         int cardWidth = (int)(cardHeight * CardAspectRatio);
-        
+
         // Extract slot metadata while VM still has the deck loaded
         int slotCount = Cast<int>(s_cachedVM!.Slots.Count);
         var slots = new List<SlotInfo>(slotCount);

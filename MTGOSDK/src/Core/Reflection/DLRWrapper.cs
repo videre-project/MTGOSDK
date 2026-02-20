@@ -488,7 +488,7 @@ public abstract class DLRWrapper : SerializableBase
     }
 
     var interfaceType = typeof(TInterface);
-    
+
     // Get batchable paths from the source type
     var sourcePaths = Serialization.AccessPathAnalyzer
       .GetBatchablePathsForInterface(typeof(TPathSource), interfaceType)
@@ -551,7 +551,7 @@ public abstract class DLRWrapper : SerializableBase
     {
       var itemData = response.Items[i];
       var propertyValues = new Dictionary<string, object?>();
-      
+
       foreach (var kvp in itemData)
       {
         // Decode the value
@@ -1083,13 +1083,13 @@ public abstract class DLRWrapper : SerializableBase
         try
         {
           var typeName = response.Types.TryGetValue(kvp.Key, out var t) ? t : null;
-          
+
           // Try to deserialize as a generic collection
           if (kvp.Value.StartsWith("["))
           {
             // It's a JSON array - deserialize to List<object> or specific type
             var deserialized = System.Text.Json.JsonSerializer.Deserialize<List<object>>(kvp.Value);
-            
+
             // If we know it's a string array/list, convert items
             if (typeName != null && (typeName.Contains("String[]") || typeName.Contains("List`1[[System.String")))
             {
@@ -1164,7 +1164,7 @@ public abstract class DLRWrapper : SerializableBase
     where TPathSource : class
   {
     var interfaceType = typeof(TInterface);
-    
+
     // Get paths for interface properties that exist in the prefixed source type
     var prefixedPaths = Serialization.AccessPathAnalyzer.GetBatchablePathsForInterface(
       typeof(TPathSource), interfaceType);
@@ -1259,6 +1259,107 @@ public abstract class DLRWrapper : SerializableBase
       yield return Serialization.InterfaceProxyBuilder.Create<TInterface>(propertyValues);
     }
   }
+
+  /// <summary>
+  /// Async variant of <see cref="SerializeCollectionAs{TInterface, TPathSource}"/> that
+  /// awaits the batch IPC call instead of blocking a thread pool thread.
+  /// </summary>
+  /// <remarks>
+  /// The DynamicObject API is inherently synchronous, so resolving the remote collection
+  /// reference still requires a single synchronous IPC call. Only the expensive batch
+  /// property fetch is awaited.
+  /// </remarks>
+  public async Task<IList<TInterface>> SerializeCollectionAsAsync<TInterface, TPathSource>(
+    string collectionPropertyName,
+    string pathPrefix,
+    int maxItems = 0)
+    where TInterface : class
+    where TPathSource : class
+  {
+    var interfaceType = typeof(TInterface);
+
+    // Path analysis is pure CPU work — no IPC
+    var prefixedPaths = Serialization.AccessPathAnalyzer.GetBatchablePathsForInterface(
+      typeof(TPathSource), interfaceType);
+
+    var paths = new List<string>();
+    var coveredProperties = new HashSet<string>();
+
+    foreach (var path in prefixedPaths)
+    {
+      paths.Add(string.IsNullOrEmpty(pathPrefix) ? path : $"{pathPrefix}.{path}");
+      coveredProperties.Add(path.Split('.')[0]);
+    }
+
+    var interfaceProps = interfaceType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+    foreach (var prop in interfaceProps)
+    {
+      if (!coveredProperties.Contains(prop.Name))
+        paths.Add(prop.Name);
+    }
+
+    if (paths.Count == 0)
+      return Array.Empty<TInterface>();
+
+    // Resolve the remote collection reference — one fast synchronous IPC call via DynamicObject
+    dynamic remoteObj = Unbind(this);
+    dynamic remoteCollection;
+    try
+    {
+      remoteCollection = ((IDynamicMetaObjectProvider)remoteObj)
+        .GetMetaObject(System.Linq.Expressions.Expression.Parameter(typeof(object)))
+        .BindGetMember(new DynamicGetMemberBinder(collectionPropertyName)).Value;
+    }
+    catch
+    {
+      var prop = remoteObj.GetType().GetProperty(collectionPropertyName);
+      if (prop == null) return Array.Empty<TInterface>();
+      remoteCollection = prop.GetValue(remoteObj);
+    }
+
+    var dro = remoteCollection as Remoting.Types.DynamicRemoteObject;
+    if (dro == null)
+      return Array.Empty<TInterface>();
+
+    // Await the expensive batch IPC call — does NOT block a thread pool thread
+    var response = await Remoting.RemoteClient.@client.Communicator
+      .GetBatchCollectionMembersAsync(
+        dro.__ro.RemoteToken,
+        dro.__type?.FullName ?? "Unknown",
+        string.Join("|", paths),
+        maxItems
+      ).ConfigureAwait(false);
+
+    if (response?.Items == null)
+      return Array.Empty<TInterface>();
+
+    // Build result list (pure CPU work)
+    var result = new List<TInterface>(response.Items.Count);
+    foreach (var itemData in response.Items)
+    {
+      var propertyValues = new Dictionary<string, object?>();
+      foreach (var kvp in itemData)
+      {
+        var propPath = !string.IsNullOrEmpty(pathPrefix) && kvp.Key.StartsWith(pathPrefix + ".")
+          ? kvp.Key.Substring(pathPrefix.Length + 1)
+          : kvp.Key;
+
+        object? value = null;
+        if (kvp.Value != null)
+        {
+          var typeName = response.Types?.TryGetValue(kvp.Key, out var t) == true ? t : null;
+          value = DecodePropertyValue(kvp.Value, typeName);
+        }
+
+        propertyValues[propPath] = value;
+      }
+
+      result.Add(Serialization.InterfaceProxyBuilder.Create<TInterface>(propertyValues));
+    }
+
+    return result;
+  }
+
 
   /// <summary>
   /// Decodes a property value from the batch response.
@@ -1395,12 +1496,12 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
         // (In practice there's usually only one active at a time during SerializeAs)
         return _interfaceProxies.Values.First();
       }
-      
+
       // Evaluate and cache the underlying object if not already cached
       if (field == null)
       {
         field = Try(() => obj is DLRWrapper<I> ? obj.obj : obj);
-        
+
         //
         // Also store in @base_unbound to maintain a strong reference.
         //
@@ -1413,7 +1514,7 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
           @base_unbound = Try(() => Unbind(field), () => field);
         }
       }
-      
+
       return field ?? throw new ArgumentException(
           $"{nameof(DLRWrapper<I>)} object has no valid {type.Name} type.");
     }

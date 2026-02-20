@@ -32,12 +32,6 @@
           "Microsoft.Extensions.Options": "10.0.0-rc.1.25451.107"
         }
       },
-      "MinVer": {
-        "type": "Direct",
-        "requested": "[6.1.0-beta.1, )",
-        "resolved": "6.1.0-beta.1",
-        "contentHash": "7G+74w2V7Cd9wy6JmUuRsDY/lskO9smQNlp9rF6BJr70RTQb6odJ3n6Oau23/eBuvQjI6vy4bVbQPZvDFey01g=="
-      },
       "Azure.Core": {
         "type": "Transitive",
         "resolved": "1.38.0",
@@ -68,11 +62,6 @@
         "type": "Transitive",
         "resolved": "3.1.4",
         "contentHash": "CTaSsN/liJ7MhLCAB7Z4ZLBNuVGCq9lt2BT/cbrc9vzGv89yK3CqIA+z9T19a11eQYl9etZHL6MQJgCqECRVpg=="
-      },
-      "Microsoft.Bcl.AsyncInterfaces": {
-        "type": "Transitive",
-        "resolved": "1.1.1",
-        "contentHash": "yuvf07qFWFqtK3P/MRkEKLhn5r2UbSpVueRziSqj0yJQIKFwG1pq9mOayK3zE5qZCTs0CbrwL9M6R8VwqyGy2w=="
       },
       "Microsoft.Diagnostics.NETCore.Client": {
         "type": "Transitive",
@@ -222,8 +211,10 @@
           "MTGOSDK.Win32": "[1.0.0, )",
           "MessagePack": "[3.1.4, )",
           "MessagePack.Annotations": "[3.1.4, )",
+          "Microsoft.Bcl.AsyncInterfaces": "[10.0.1, )",
           "Microsoft.Diagnostics.Runtime": "[4.0.0-beta.24360.3, )",
-          "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )"
+          "Microsoft.Extensions.Logging": "[10.0.0-rc.1.25451.107, )",
+          "Microsoft.WindowsDesktop.App.Ref": "[10.0.0-rc.1.25451.107, )"
         }
       },
       "mtgosdk.win32": {
@@ -264,6 +255,12 @@
         "resolved": "3.1.4",
         "contentHash": "aVWrDAkCdqxwQsz/q0ldPh2EFn48M99YUzE9OvZjMq2RNLKz4o2z88iGFvSvbMqOWRweRvKPHBJZe22PRqzslQ=="
       },
+      "Microsoft.Bcl.AsyncInterfaces": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.1, )",
+        "resolved": "10.0.1",
+        "contentHash": "E1HSLkPHXEO30JEij2pWbOuzz1Z5ND4a5l7IP1T2RgQuE0a0NzEIvtO64RNy3Otn6PFezbT80cfm3M/Cgt70PA=="
+      },
       "Microsoft.Diagnostics.Runtime": {
         "type": "CentralTransitive",
         "requested": "[4.0.0-beta.24360.3, )",
@@ -273,6 +270,12 @@
           "Azure.Identity": "1.11.4",
           "Microsoft.Diagnostics.NETCore.Client": "0.2.510501"
         }
+      },
+      "Microsoft.WindowsDesktop.App.Ref": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.0-rc.1.25451.107, )",
+        "resolved": "10.0.0-rc.1.25451.107",
+        "contentHash": "yaatWGbNGYRFF5umeH09id3padGGiaMya9Wf798CImwBQn0RnGI3dfoZ5IBY7UHPDi+M/uKswsT67/8XK2JjSw=="
       }
     }
   }
