@@ -165,4 +165,20 @@ public static class SerializationHelpers
     var value = ResolvePath(obj, path);
     return value?.GetType();
   }
+
+  /// <summary>
+  /// Converts a <c>byte[]</c> to a Base64-encoded string.
+  /// </summary>
+  /// <remarks>
+  /// Intended for IPC transport: call this in a second
+  /// <c>RemoteClient.InvokeMethod</c> round-trip, passing the
+  /// <c>DynamicRemoteObject</c> returned by a method that produces a
+  /// <c>byte[]</c>. Because a <c>string</c> is always serialized inline,
+  /// the caller can then decode locally with
+  /// <c>Convert.FromBase64String</c>.
+  /// </remarks>
+  /// <param name="data">The byte array to encode.</param>
+  /// <returns>A Base64-encoded string representation of the bytes.</returns>
+  public static string BytesToBase64(byte[] data) =>
+    Convert.ToBase64String(data);
 }

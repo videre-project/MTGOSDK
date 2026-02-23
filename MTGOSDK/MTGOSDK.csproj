@@ -54,4 +54,16 @@
     <Import Project="lib\MTGOSDK.Resources.targets" />
   </ImportGroup>
 
+  <!--
+    WPF reference assemblies for the injected net48 target.
+    
+    PresentationCore and WindowsBase are available from MTGO's GAC at
+    runtime, so they are marked Private="false" to avoid being copied.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == '$(_MTGOSDKCoreTFM)'">
+    <Reference Include="PresentationCore"      Private="false" />
+    <Reference Include="PresentationFramework" Private="false" />
+    <Reference Include="WindowsBase"           Private="false" />
+  </ItemGroup>
+
 </Project>
