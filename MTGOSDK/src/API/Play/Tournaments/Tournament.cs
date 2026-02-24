@@ -181,7 +181,7 @@ public sealed class Tournament(dynamic tournament) : Event
   /// <summary>
   /// The current round of the tournament.
   /// </summary>
-  public int CurrentRound => @base.CurrentRoundNumber;
+  public int RoundNumber => @base.CurrentRoundNumber;
 
   /// <summary>
   /// Whether the user has a bye in the current round.

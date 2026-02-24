@@ -303,8 +303,8 @@ public abstract class EventValidationFixture : BaseFixture
     // ITournament properties
     Assert.That(tournament.State, Is.Not.EqualTo(TournamentState.NotSet));
     Assert.That(tournament.TimeRemaining, Is.GreaterThanOrEqualTo(TimeSpan.Zero));
-    Assert.That(tournament.CurrentRound, Is.GreaterThanOrEqualTo(0));
-    Assert.That(tournament.Rounds.Count, Is.EqualTo(tournament.CurrentRound));
+    Assert.That(tournament.RoundNumber, Is.GreaterThanOrEqualTo(0));
+    Assert.That(tournament.Rounds.Count, Is.EqualTo(tournament.RoundNumber));
     Assert.That(tournament.Standings.Count,
         Is.GreaterThanOrEqualTo(
             Math.Floor(tournament.TotalPlayers * 0.95)).Or.EqualTo(0));
@@ -315,7 +315,7 @@ public abstract class EventValidationFixture : BaseFixture
     {
       Assert.That(round.Number, Is.GreaterThan(0));
       Assert.That(round.IsComplete,
-          round.Number > tournament.CurrentRound || tournament.IsCompleted
+          round.Number > tournament.RoundNumber || tournament.IsCompleted
             ? Is.True
             // Can be true or false if the tournament is still in progress
             : Is.AnyOf(true, false));
@@ -327,7 +327,7 @@ public abstract class EventValidationFixture : BaseFixture
     foreach(StandingRecord standing in tournament.Standings.Take(3))
     {
       Assert.That(standing.Rank,
-          tournament.CurrentRound <= 1 ? Is.GreaterThanOrEqualTo(0) : Is.GreaterThan(0));
+          tournament.RoundNumber <= 1 ? Is.GreaterThanOrEqualTo(0) : Is.GreaterThan(0));
       Assert.That(standing.Player, Is.Not.Null);
       Assert.That(standing.Points, Is.GreaterThanOrEqualTo(0));
 
@@ -348,14 +348,14 @@ public abstract class EventValidationFixture : BaseFixture
       Assert.That(standing.GameWinPercentage, Is.Not.Empty);
       Assert.That(standing.OpponentGameWinPercentage, Is.Not.Empty);
       Assert.That(standing.PreviousMatches,
-          tournament.CurrentRound == 0 ? Is.Empty : Is.Not.Empty);
+          tournament.RoundNumber == 0 ? Is.Empty : Is.Not.Empty);
 
       foreach(MatchStandingRecord match in standing.PreviousMatches)
       {
         Assert.That(match.Id,
           match.HasBye ? Is.EqualTo(-1) : Is.GreaterThan(0));
         Assert.That(match.Round, Is.GreaterThan(0));
-        Assert.That(match.Round, Is.LessThanOrEqualTo(tournament.CurrentRound));
+        Assert.That(match.Round, Is.LessThanOrEqualTo(tournament.RoundNumber));
         Assert.That(match.State,
           match.HasBye
             ? Is.EqualTo(MatchState.Invalid)
