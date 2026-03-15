@@ -51,10 +51,13 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   {
     get
     {
-      if (s_provider != null)
+      if (s_provider != null && s_provider != NullLoggerProvider.Instance)
         return s_provider.CreateLogger("Unknown");
-      else
+
+      if (s_factory != null && s_factory != NullLoggerFactory.Instance)
         return s_factory.CreateLogger("Unknown");
+
+      return s_nulllogger;
     }
   }
 
@@ -76,10 +79,15 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
         Type callerType;
         int depth = 3;
         do { callerType = GetCallerType(depth); depth++; }
-        while (callerType.FullName.StartsWith("System.") ||
-               callerType.FullName.StartsWith("MTGOSDK.Core.Logging.") ||
-               callerType.FullName.StartsWith("MTGOSDK.Core.Reflection.EventHookWrapper") ||
-               callerType.FullName.StartsWith("MTGOSDK.Core.Reflection.Proxy.EventHookProxy"));
+        while (callerType != null &&
+               !string.IsNullOrEmpty(callerType.FullName) &&
+               (callerType.FullName.StartsWith("System.") ||
+                callerType.FullName.StartsWith("MTGOSDK.Core.Logging.") ||
+                callerType.FullName.StartsWith("MTGOSDK.Core.Reflection.EventHookWrapper") ||
+                callerType.FullName.StartsWith("MTGOSDK.Core.Reflection.Proxy.EventHookProxy")));
+
+        if (callerType == null)
+          return s_anonymousLogger;
 
         // Fetch the base type if the caller is a compiler-generated type
         // (e.g. lambda expressions, async state machines, etc.).
@@ -88,10 +96,14 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
           if (!s_callerTypes.TryGetValue(callerType, out Type? baseType))
             baseType = callerType.GetBaseType();
 
-          callerType = baseType;
+          if (baseType != null)
+          {
+            s_callerTypes.TryAdd(callerType, baseType);
+            callerType = baseType;
+          }
         }
 
-        return s_loggers.GetOrAdd(callerType, CreateLogger(callerType));
+        return s_loggers.GetOrAdd(callerType, CreateLogger);
       }
       catch (Exception)
       {

@@ -19,6 +19,13 @@ public class Log : LoggerBase
   public static IDisposable Suppress(LogLevel level = LogLevel.None) =>
     new SuppressionContext(level);
 
+  /// <summary>
+  /// Suppresses logging on the current thread only and does not flow to async continuations.
+  /// Use this for transient retry/setup noise where background tasks must keep normal logging.
+  /// </summary>
+  public static IDisposable SuppressLocal(LogLevel level = LogLevel.None) =>
+    new SuppressionContext(level, flowAcrossAsync: false);
+
   //
   // ILogger Extensions
   //

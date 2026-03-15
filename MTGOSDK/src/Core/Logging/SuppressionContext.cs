@@ -25,22 +25,42 @@ public class SuppressionContext : IDisposable
   private static readonly AsyncLocal<LogLevel?> s_suppressionLevel = new();
 
   /// <summary>
+  /// Thread-local suppression state that does not flow across async/task boundaries.
+  /// Useful for muting transient retry noise in setup code that may spawn long-lived tasks.
+  /// </summary>
+  [ThreadStatic]
+  private static LogLevel? t_suppressionLevel;
+
+  /// <summary>
   /// Track previous suppression level to restore on dispose (for nesting).
   /// </summary>
   private readonly LogLevel? _previousLevel;
+  private readonly LogLevel? _previousThreadLevel;
+  private readonly bool _flowAcrossAsync;
 
-  public SuppressionContext(LogLevel logLevel = LogLevel.None)
+  public SuppressionContext(LogLevel logLevel = LogLevel.None, bool flowAcrossAsync = true)
   {
-    // Store previous level for proper nesting support
+    _flowAcrossAsync = flowAcrossAsync;
     _previousLevel = s_suppressionLevel.Value;
-    s_suppressionLevel.Value = logLevel;
+    _previousThreadLevel = t_suppressionLevel;
+
+    if (_flowAcrossAsync)
+    {
+      // Store previous level for proper nesting support
+      s_suppressionLevel.Value = logLevel;
+    }
+    else
+    {
+      t_suppressionLevel = logLevel;
+    }
   }
 
   /// <summary>
   /// Checks if logging is currently suppressed in this async context.
   /// </summary>
   /// <returns>True if logging is suppressed.</returns>
-  public static bool IsSuppressed() => s_suppressionLevel.Value != null;
+  public static bool IsSuppressed() =>
+    s_suppressionLevel.Value != null || t_suppressionLevel != null;
 
   /// <summary>
   /// Checks if a specific log level is suppressed in this async context.
@@ -49,7 +69,7 @@ public class SuppressionContext : IDisposable
   /// <returns>True if the level is suppressed.</returns>
   public static bool IsSuppressed(LogLevel level)
   {
-    var suppressionLevel = s_suppressionLevel.Value;
+    var suppressionLevel = s_suppressionLevel.Value ?? t_suppressionLevel;
     // If suppression is enabled and the log level is at or below the threshold
     return suppressionLevel.HasValue && level <= suppressionLevel.Value;
   }
@@ -57,6 +77,13 @@ public class SuppressionContext : IDisposable
   public void Dispose()
   {
     // Restore previous suppression level (supports nesting)
-    s_suppressionLevel.Value = _previousLevel;
+    if (_flowAcrossAsync)
+    {
+      s_suppressionLevel.Value = _previousLevel;
+    }
+    else
+    {
+      t_suppressionLevel = _previousThreadLevel;
+    }
   }
 }

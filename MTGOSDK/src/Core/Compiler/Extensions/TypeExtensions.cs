@@ -32,10 +32,17 @@ public static class TypeExtensions
   {
     if (!t.IsCompilerGenerated()) return t;
 
-    string fullName = t.FullName;
-    string baseName = fullName.Substring(0, fullName.IndexOf("+<"));
-    Type baseType = t.DeclaringType.Assembly.GetType(baseName);
+    string? fullName = t.FullName;
+    if (string.IsNullOrEmpty(fullName))
+      return t;
 
-    return baseType;
+    int markerIndex = fullName.IndexOf("+<", StringComparison.Ordinal);
+    if (markerIndex <= 0)
+      return t;
+
+    string baseName = fullName.Substring(0, markerIndex);
+    Type? baseType = t.DeclaringType?.Assembly.GetType(baseName);
+
+    return baseType ?? t;
   }
 }
