@@ -228,7 +228,7 @@ public class TcpCommunicator : TcpPipelineBase
                 }
                 catch (Exception ex)
                 {
-                  Log.Error($"[TcpCommunicator] Callback handler error: {ex.Message}");
+                  Log.Error(ex, "[TcpCommunicator] Callback handler error");
                 }
               });
               break;
@@ -249,7 +249,7 @@ public class TcpCommunicator : TcpPipelineBase
     }
     catch (Exception ex)
     {
-      Log.Error($"[TcpCommunicator] Reader loop error: {ex.Message}");
+      Log.Error(ex, "[TcpCommunicator] Reader loop error");
     }
     finally
     {

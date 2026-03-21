@@ -98,12 +98,11 @@ public class RemoteFieldInfo(
     Binder binder,
     CultureInfo culture)
   {
-    var val = value;
-    if (val.GetType().IsEnum)
+    if (value != null && value.GetType().IsEnum)
     {
-      var enumClass = App.GetRemoteEnum(val.GetType().FullName);
+      var enumClass = App.GetRemoteEnum(value.GetType().FullName);
       // TODO: This will break on the first enum value which represents 2 or more flags
-      object enumVal = enumClass.GetValue(val.ToString());
+      object enumVal = enumClass.GetValue(value.ToString());
       // NOTE: Object stays in place in the remote app as long as we have it's reference
       // in the the value variable(so untill end of this method)
       value = enumVal;

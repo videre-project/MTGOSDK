@@ -25,8 +25,8 @@ public static class PrimitivesEncoder
   /// <returns>Encoded value as a string</returns>
   public static string Encode(object toEncode)
   {
-    if (toEncode == null) // This is specific for the String case, but I can't guarantee it here...
-      return string.Empty;
+    if (toEncode == null)
+      return "null";
 
     Type t = toEncode.GetType();
     if (t == typeof(string))
@@ -111,6 +111,8 @@ public static class PrimitivesEncoder
     {
       if (toDecode == "null")
         return null;
+      else if (string.IsNullOrEmpty(toDecode))
+        throw new Exception("Missing quotes on encoded string");
       else if (toDecode[0] == '"' && toDecode[toDecode.Length - 1] == '"')
         return toDecode.Substring(1, toDecode.Length - 2);
       else
@@ -153,7 +155,7 @@ public static class PrimitivesEncoder
 
       // Capture the position of each element in the string
       List<int> commas = new();
-      commas.Add(0); // To capture the first item we need to "imagine a comma" right before it.
+      commas.Add(-1); // Treat the start of the string like a virtual comma.
       for (int i = 1; i < toDecode.Length; i++)
       {
         if (toDecode[i] == ',' && toDecode[i - 1] != '\\')
@@ -172,9 +174,18 @@ public static class PrimitivesEncoder
         {
           nextCommandIndex = commas[i + 1];
         }
-        encodedElements.Add(
-          toDecode.Substring(currCommaIndex + 1,
-                             nextCommandIndex - currCommaIndex - 1).Trim('\"'));
+        string encodedElement = toDecode.Substring(
+          currCommaIndex + 1,
+          nextCommandIndex - currCommaIndex - 1);
+
+        if (encodedElement.Length >= 2 &&
+            encodedElement[0] == '"' &&
+            encodedElement[encodedElement.Length - 1] == '"')
+        {
+          encodedElement = encodedElement.Substring(1, encodedElement.Length - 2);
+        }
+
+        encodedElements.Add(encodedElement);
       }
 
       // Decode each extracted element

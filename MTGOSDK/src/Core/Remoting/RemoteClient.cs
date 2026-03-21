@@ -966,6 +966,22 @@ public sealed class RemoteClient : DLRWrapper
     propInfo.SetValue(dro, value);
   }
 
+  /// <summary>
+  /// Sets a remote field on a DynamicRemoteObject, finding it by name.
+  /// </summary>
+  public static void SetField(
+    DynamicRemoteObject dro,
+    string fieldName,
+    object value)
+  {
+    var fieldInfo = dro.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+    if (fieldInfo is null)
+      throw new MissingMemberException(
+          $"Field '{fieldName}' not found on remote object.");
+
+    fieldInfo.SetValue(dro, value);
+  }
+
   //
   // Reflection wrapper methods
   //
@@ -999,6 +1015,11 @@ public sealed class RemoteClient : DLRWrapper
           $"Method '{methodName}' not found on remote type '{queryPath}'.");
     }
   }
+
+  public static MethodInfo? GetMethod<T>(
+    string methodName,
+    Type[]? genericTypes = null) =>
+      GetMethod(typeof(T).FullName!, methodName, genericTypes);
 
   /// <summary>
   /// Invokes a static method on the target process.
@@ -1038,6 +1059,18 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   /// <summary>
+  /// Hooks a remote object's method using a Harmony callback with MethodBase for overload disambiguation.
+  /// </summary>
+  /// <param name="method">The method to hook (provides overload disambiguation).</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
+  public static void HookMethod(
+    MethodBase method,
+    HookAction callback)
+  {
+    @client.Harmony.Patch(method, prefix: callback);
+  }
+
+  /// <summary>
   /// Unhooks a remote object's method using a Harmony callback.
   /// </summary>
   /// <param name="queryPath">The query path to the remote object.</param>
@@ -1054,6 +1087,19 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   /// <summary>
+  /// Unhooks a remote object's method using a Harmony callback with MethodBase for overload disambiguation.
+  /// </summary>
+  /// <param name="method">The method to unhook (provides overload disambiguation).</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
+  /// <returns>True if the method was successfully unhooked.</returns>
+  public static bool UnhookMethod(
+    MethodBase method,
+    HookAction callback)
+  {
+    return @client.Harmony.UnhookMethod(method, callback);
+  }
+
+  /// <summary>
   /// Checks if a remote object's method has a Harmony callback.
   /// </summary>
   /// <param name="queryPath">The query path to the remote object.</param>
@@ -1066,6 +1112,19 @@ public sealed class RemoteClient : DLRWrapper
     HookAction callback)
   {
     MethodInfo method = GetInstanceMethod(queryPath, methodName);
+    return @client.Harmony.HasHook(method, callback);
+  }
+
+  /// <summary>
+  /// Checks if a remote object's method has a Harmony callback with MethodBase for overload disambiguation.
+  /// </summary>
+  /// <param name="method">The method to check (provides overload disambiguation).</param>
+  /// <param name="callback">The local Harmony callback to check.</param>
+  /// <returns>True if the method has the Harmony callback.</returns>
+  public static bool MethodHasHook(
+    MethodBase method,
+    HookAction callback)
+  {
     return @client.Harmony.HasHook(method, callback);
   }
 }
