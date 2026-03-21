@@ -75,25 +75,6 @@ public partial class Diver : IDisposable
       fieldInfo.SetValue(instance, value);
       results = fieldInfo.GetValue(instance);
     }
-    catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
-                               (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
-    {
-      // Retry on STA/UI thread only for fields that actually need it
-      Log.Debug($"[Diver] Retrying SetField on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
-      try
-      {
-        object value = _runtime.ParseParameterObject(request.Value);
-        results = STAThread.Execute(() =>
-        {
-          fieldInfo.SetValue(instance, value);
-          return fieldInfo.GetValue(instance);
-        });
-      }
-      catch (Exception retryEx)
-      {
-        return QuickError($"Invocation caused exception (after STA retry): {retryEx}");
-      }
-    }
     catch (Exception e)
     {
       return QuickError($"Invocation caused exception: {e}");

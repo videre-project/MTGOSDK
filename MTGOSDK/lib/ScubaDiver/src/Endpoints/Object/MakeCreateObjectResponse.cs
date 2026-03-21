@@ -60,20 +60,6 @@ public partial class Diver : IDisposable
         createdObject = Activator.CreateInstance(t, paramsArray);
       }
     }
-    catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
-                               (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
-    {
-      // Retry on STA/UI thread for types that throw on worker thread
-      Log.Debug($"[Diver] Retrying CreateInstance on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
-      try
-      {
-        createdObject = STAThread.Execute(() => Activator.CreateInstance(t, paramsArray));
-      }
-      catch (Exception retryEx)
-      {
-        return QuickError(retryEx.Message, retryEx.ToString());
-      }
-    }
     catch (Exception ex)
     {
       return QuickError(ex.Message, ex.ToString());
