@@ -34,22 +34,29 @@ public class BatchMembersRequest
 }
 
 /// <summary>
-/// Response containing batch-fetched property values.
+/// Response containing batch-fetched property values in parallel arrays.
 /// </summary>
 [MessagePackObject]
 public class BatchMembersResponse
 {
   /// <summary>
-  /// Dictionary of path to serialized value.
-  /// Values are encoded as strings using PrimitivesEncoder where possible.
-  /// Non-primitive values return their remote address as string.
+  /// Property path names (e.g., "Name", "Id", "Rarity.Name").
   /// </summary>
   [Key(0)]
-  public Dictionary<string, string> Values { get; set; }
+  public string[] Schema { get; set; }
 
   /// <summary>
-  /// Dictionary of path to type full name.
+  /// Type full names, parallel to <see cref="Schema"/>.
   /// </summary>
   [Key(1)]
-  public Dictionary<string, string> Types { get; set; }
+  public string[] SchemaTypes { get; set; }
+
+  /// <summary>
+  /// Encoded values, parallel to <see cref="Schema"/>.
+  /// Values are encoded as strings using PrimitivesEncoder where possible.
+  /// Non-primitive values return their remote address as string prefixed with '@'.
+  /// Null entries indicate null or unresolvable values.
+  /// </summary>
+  [Key(2)]
+  public string?[] Values { get; set; }
 }

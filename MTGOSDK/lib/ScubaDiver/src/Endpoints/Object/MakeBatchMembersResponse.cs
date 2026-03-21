@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 using MTGOSDK.Core.Logging;
@@ -33,76 +34,69 @@ public partial class Diver : IDisposable
       return QuickError("Can't get members of an unpinned object");
 
     var paths = request.PathsDelimited?.Split('|') ?? Array.Empty<string>();
-    var values = new Dictionary<string, string>();
-    var types = new Dictionary<string, string>();
 
-    foreach (var path in paths)
+    // Filter empty paths and build ordered arrays
+    var validPaths = paths.Where(p => !string.IsNullOrEmpty(p)).ToArray();
+    var schema = new string[validPaths.Length];
+    var schemaTypes = new string[validPaths.Length];
+    var values = new string?[validPaths.Length];
+
+    for (int i = 0; i < validPaths.Length; i++)
     {
-      if (string.IsNullOrEmpty(path)) continue;
+      var path = validPaths[i];
+      schema[i] = path;
 
       Log.Debug($"[Diver] Resolving path: {path}");
       try
       {
         var (value, type) = ResolveMemberPath(instance, path);
-        
+
         if (value == null)
         {
           Log.Debug($"[Diver] Path '{path}' resolved to null");
-          values[path] = null;
-          types[path] = "null";
+          values[i] = null;
+          schemaTypes[i] = "null";
         }
         else if (value.GetType().IsEnum)
         {
-          // Serialize enums as their string representation
-          Log.Debug($"[Diver] Path '{path}' is enum: {value.GetType().Name}");
           var stringValue = value.ToString();
-          values[path] = PrimitivesEncoder.Encode(stringValue); // Encode with quotes
-          types[path] = "System.String"; // Mark as string since we're serializing it
+          values[i] = PrimitivesEncoder.Encode(stringValue);
+          schemaTypes[i] = "System.String";
         }
         else if (value.GetType().IsPrimitiveEtc())
         {
-          Log.Debug($"[Diver] Path '{path}' is primitive: {value.GetType().Name}");
-          // Encode primitive value as string
-          values[path] = PrimitivesEncoder.Encode(value);
-          types[path] = value.GetType().FullName ?? value.GetType().Name;
+          values[i] = PrimitivesEncoder.Encode(value);
+          schemaTypes[i] = value.GetType().FullName ?? value.GetType().Name;
         }
         else if (value is System.Collections.IEnumerable enumerable && !(value is string))
         {
-          Log.Debug($"[Diver] Path '{path}' is collection: {value.GetType().Name}");
-          // Serialize collections (arrays, lists) as JSON
           var items = new List<object>();
           foreach (var item in enumerable)
-          {
             items.Add(item);
-          }
-          
-          // Use simple JSON array serialization
-          var json = System.Text.Json.JsonSerializer.Serialize(items);
-          Log.Debug($"[Diver] Serialized '{path}' as JSON: {json.Substring(0, Math.Min(100, json.Length))}...");
-          values[path] = json;
-          types[path] = value.GetType().FullName ?? value.GetType().Name;
+
+          values[i] = System.Text.Json.JsonSerializer.Serialize(items);
+          schemaTypes[i] = value.GetType().FullName ?? value.GetType().Name;
         }
         else
         {
-          Log.Debug($"[Diver] Path '{path}' is remote object: {value.GetType().Name}");
-          // Pin non-primitive object and return its address
           ulong address = _runtime.PinObject(value);
-          values[path] = $"@{address}";
-          types[path] = value.GetType().FullName ?? value.GetType().Name;
+          values[i] = $"@{address}";
+          schemaTypes[i] = value.GetType().FullName ?? value.GetType().Name;
         }
       }
       catch (Exception ex)
       {
         Log.Debug($"[Diver] Failed to resolve path '{path}': {ex.Message}");
-        values[path] = null;
-        types[path] = "error";
+        values[i] = null;
+        schemaTypes[i] = "error";
       }
     }
 
     var response = new BatchMembersResponse
     {
-      Values = values,
-      Types = types
+      Schema = schema,
+      SchemaTypes = schemaTypes,
+      Values = values
     };
 
     return WrapSuccess(response);

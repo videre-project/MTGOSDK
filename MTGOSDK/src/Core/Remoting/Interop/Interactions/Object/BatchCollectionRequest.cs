@@ -40,39 +40,49 @@ public class BatchCollectionRequest
 }
 
 /// <summary>
-/// Response containing batch-fetched property values for all collection items.
+/// Response containing batch-fetched property values for all collection items
+/// in a columnar layout. Property names and types appear once in the schema;
+/// values are stored as <c>Columns[propertyIndex][itemIndex]</c>.
 /// </summary>
 [MessagePackObject]
 public class BatchCollectionResponse
 {
   /// <summary>
-  /// List of items, each containing a dictionary of path to serialized value.
+  /// Property path names (e.g., "Name", "Id"). Defines column order.
   /// </summary>
   [Key(0)]
-  public List<Dictionary<string, string>> Items { get; set; }
+  public string[] Schema { get; set; }
 
   /// <summary>
-  /// Dictionary of path to type full name (shared across all items).
+  /// Type full names, parallel to <see cref="Schema"/>.
   /// </summary>
   [Key(1)]
-  public Dictionary<string, string> Types { get; set; }
+  public string[] SchemaTypes { get; set; }
+
+  /// <summary>
+  /// Columnar values: <c>Columns[propertyIndex][itemIndex]</c>.
+  /// Each inner array has <see cref="Count"/> elements.
+  /// Values are PrimitivesEncoder-encoded strings; null for unresolvable values.
+  /// </summary>
+  [Key(2)]
+  public string?[][] Columns { get; set; }
 
   /// <summary>
   /// Total number of items processed.
   /// </summary>
-  [Key(2)]
+  [Key(3)]
   public int Count { get; set; }
 
   /// <summary>
-  /// Remote tokens (addresses) for each pinned item, in same order as Items.
+  /// Remote tokens (addresses) for each pinned item, in item order.
   /// Used to create DRO references for DLRWrapper fallback access.
   /// </summary>
-  [Key(3)]
+  [Key(4)]
   public List<ulong> ItemTokens { get; set; }
 
   /// <summary>
   /// Full type name for items in the collection.
   /// </summary>
-  [Key(4)]
+  [Key(5)]
   public string ItemTypeName { get; set; }
 }

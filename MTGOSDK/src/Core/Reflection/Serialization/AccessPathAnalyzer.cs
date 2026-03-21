@@ -41,7 +41,7 @@ public static class AccessPathAnalyzer
   public static string[] GetBatchablePathsForInterface(Type wrapperType, Type interfaceType)
   {
     var key = (wrapperType, interfaceType);
-    
+
     lock (s_lock)
     {
       if (s_pathCache.TryGetValue(key, out var cached))
@@ -49,13 +49,24 @@ public static class AccessPathAnalyzer
     }
 
     var paths = AnalyzePaths(wrapperType, interfaceType);
-    
+
     lock (s_lock)
     {
       s_pathCache[key] = paths;
     }
-    
+
     return paths;
+  }
+
+  /// <summary>
+  /// Gets batchable access paths for a set of property names on a wrapper type.
+  /// Used by ToJSON() where there is no target interface type.
+  /// </summary>
+  public static string[] GetBatchablePathsForProperties(
+    Type wrapperType,
+    IEnumerable<string> propertyNames)
+  {
+    return AnalyzePaths(wrapperType, propertyNames.ToHashSet());
   }
 
   /// <summary>
@@ -115,15 +126,19 @@ public static class AccessPathAnalyzer
 
   private static string[] AnalyzePaths(Type wrapperType, Type interfaceType)
   {
-    // Get interface properties
     var interfaceProps = interfaceType.GetProperties(
       BindingFlags.Public | BindingFlags.Instance)
       .Select(p => p.Name)
       .ToHashSet();
 
+    return AnalyzePaths(wrapperType, interfaceProps);
+  }
+
+  private static string[] AnalyzePaths(Type wrapperType, HashSet<string> propertyNames)
+  {
     // Try to get property map first, walking the inheritance hierarchy
     var allMaps = new List<Dictionary<string, string>>();
-    
+
     // Walk up the inheritance chain collecting property maps
     var currentType = wrapperType;
     while (currentType != null && currentType != typeof(object))
@@ -135,7 +150,7 @@ public static class AccessPathAnalyzer
       }
       currentType = currentType.BaseType;
     }
-    
+
     if (allMaps.Count > 0)
     {
       // Merge all maps (derived class properties override base class if same name)
@@ -148,10 +163,10 @@ public static class AccessPathAnalyzer
           mergedMap[kvp.Key] = kvp.Value;
         }
       }
-      
-      // Filter to interface properties AND primitive types only
+
+      // Filter to requested properties AND primitive types only
       // Complex types can't be batch-serialized properly and should fall through to DRO
-      // We check the WRAPPER's property type, not the interface type, because:
+      // We check the WRAPPER's property type because:
       // - ITournament.Format is string, but Tournament.Format is PlayFormat (complex)
       // - The batch fetch can't handle this conversion so we need to skip it
       var wrapperPropsDict = new Dictionary<string, Type?>();
@@ -168,9 +183,9 @@ public static class AccessPathAnalyzer
         }
         searchType = searchType.BaseType;
       }
-        
+
       var resultPaths = new HashSet<string>();
-      foreach (var propName in interfaceProps)
+      foreach (var propName in propertyNames)
       {
         if (mergedMap.TryGetValue(propName, out var path))
         {
@@ -193,10 +208,10 @@ public static class AccessPathAnalyzer
       return Array.Empty<string>();
 
     return allPaths
-      .Where(p => 
+      .Where(p =>
       {
         var firstSegment = p.Split('.')[0];
-        return interfaceProps.Contains(firstSegment);
+        return propertyNames.Contains(firstSegment);
       })
       .ToArray();
   }

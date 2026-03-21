@@ -6,6 +6,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 using MTGOSDK.Core.Logging;
@@ -20,7 +21,8 @@ public partial class Diver : IDisposable
 {
   /// <summary>
   /// Handles /batch_collection requests - fetches properties for all items in a collection.
-  /// This avoids per-item pinning overhead by iterating the collection on the Diver side.
+  /// Returns a columnar response where property names/types appear once and values are
+  /// stored as Columns[propertyIndex][itemIndex].
   /// </summary>
   private byte[] MakeBatchCollectionResponse()
   {
@@ -30,98 +32,95 @@ public partial class Diver : IDisposable
     if (request == null)
       return QuickError("Missing or invalid request body");
 
-    // Get the collection object
     if (!_runtime.TryGetPinnedObject(request.CollectionAddress, out object collection))
       return QuickError("Can't iterate an unpinned collection");
 
-    // Verify it's enumerable
     if (collection is not IEnumerable enumerable)
       return QuickError($"Object at {request.CollectionAddress} is not IEnumerable");
 
-    var paths = request.PathsDelimited?.Split('|') ?? Array.Empty<string>();
-    var items = new List<Dictionary<string, string>>();
+    // Build schema from valid paths
+    var schema = (request.PathsDelimited?.Split('|') ?? Array.Empty<string>())
+      .Where(p => !string.IsNullOrEmpty(p))
+      .ToArray();
+    var schemaTypes = new string[schema.Length];
     var itemTokens = new List<ulong>();
-    var types = new Dictionary<string, string>();
-    int count = 0;
     int maxItems = request.MaxItems > 0 ? request.MaxItems : int.MaxValue;
     string itemTypeName = null;
 
-    Log.Debug($"[Diver] Iterating collection with {paths.Length} paths, max={maxItems}");
+    Log.Debug($"[Diver] Iterating collection with {schema.Length} paths, max={maxItems}");
 
+    // First pass: collect all items and their values into column lists
+    var columnLists = new List<string?>[schema.Length];
+    for (int c = 0; c < schema.Length; c++)
+      columnLists[c] = new List<string?>();
+
+    int count = 0;
     foreach (var item in enumerable)
     {
       if (count >= maxItems) break;
 
-      // Pin the item and record its token for SDK to create DRO references
       ulong itemToken = _runtime.PinObject(item);
       itemTokens.Add(itemToken);
 
-      // Capture item type name (first item defines it)
       if (itemTypeName == null && item != null)
-      {
         itemTypeName = item.GetType().FullName;
-      }
 
-      var itemValues = new Dictionary<string, string>();
-
-      foreach (var path in paths)
+      for (int c = 0; c < schema.Length; c++)
       {
-        if (string.IsNullOrEmpty(path)) continue;
-
         try
         {
-          var (value, type) = ResolveMemberPath(item, path);
+          var (value, type) = ResolveMemberPath(item, schema[c]);
 
           if (value == null)
           {
-            itemValues[path] = null;
+            columnLists[c].Add(null);
           }
           else if (value.GetType().IsEnum)
           {
-            // Serialize enums as their string representation
-            var stringValue = value.ToString();
-            itemValues[path] = PrimitivesEncoder.Encode(stringValue);
-            if (!types.ContainsKey(path))
-              types[path] = "System.String";
+            columnLists[c].Add(PrimitivesEncoder.Encode(value.ToString()));
+            if (schemaTypes[c] == null) schemaTypes[c] = "System.String";
           }
           else if (value.GetType().IsPrimitiveEtc())
           {
-            itemValues[path] = PrimitivesEncoder.Encode(value);
-            if (!types.ContainsKey(path))
-              types[path] = value.GetType().FullName;
+            columnLists[c].Add(PrimitivesEncoder.Encode(value));
+            if (schemaTypes[c] == null) schemaTypes[c] = value.GetType().FullName;
           }
           else if (IsSimpleCollection(value))
           {
-            // Serialize simple collections as JSON
-            var json = System.Text.Json.JsonSerializer.Serialize(value);
-            itemValues[path] = json;
-            if (!types.ContainsKey(path))
-              types[path] = value.GetType().FullName;
+            columnLists[c].Add(System.Text.Json.JsonSerializer.Serialize(value));
+            if (schemaTypes[c] == null) schemaTypes[c] = value.GetType().FullName;
           }
           else
           {
-            // Non-primitive/non-collection: skip or return null
-            // We don't pin individual items to avoid overhead
-            itemValues[path] = null;
+            columnLists[c].Add(null);
           }
         }
         catch (Exception ex)
         {
-          Log.Debug($"[Diver] Error resolving path '{path}' on item {count}: {ex.Message}");
-          itemValues[path] = null;
+          Log.Debug($"[Diver] Error resolving path '{schema[c]}' on item {count}: {ex.Message}");
+          columnLists[c].Add(null);
         }
       }
 
-      items.Add(itemValues);
       count++;
     }
+
+    // Convert column lists to arrays
+    var columns = new string?[schema.Length][];
+    for (int c = 0; c < schema.Length; c++)
+      columns[c] = columnLists[c].ToArray();
+
+    // Fill in any null schema types with "null"
+    for (int c = 0; c < schemaTypes.Length; c++)
+      schemaTypes[c] ??= "null";
 
     Log.Debug($"[Diver] Processed {count} items from collection, pinned {itemTokens.Count} items");
 
     var response = new BatchCollectionResponse
     {
-      Items = items,
-      Types = types,
+      Schema = schema,
+      SchemaTypes = schemaTypes,
+      Columns = columns,
       Count = count,
       ItemTokens = itemTokens,
       ItemTypeName = itemTypeName

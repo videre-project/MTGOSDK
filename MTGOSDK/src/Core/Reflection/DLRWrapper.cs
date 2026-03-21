@@ -35,6 +35,58 @@ public abstract class DLRWrapper : SerializableBase
   /// </summary>
   internal virtual dynamic @base { get; }
 
+  /// <summary>
+  /// Batch-fetches primitive properties before serialization to minimize IPC calls.
+  /// Called by ToJSON() to convert N individual IPC calls into 1 batch call.
+  /// </summary>
+  internal void HydrateForSerialization(IEnumerable<string> propertyNames)
+  {
+    // Use IJsonSerializable as sentinel key for general serialization
+    var sentinelKey = typeof(Serialization.IJsonSerializable);
+    if (_interfaceProxies.ContainsKey(sentinelKey))
+      return;
+
+    var paths = Serialization.AccessPathAnalyzer
+      .GetBatchablePathsForProperties(this.GetType(), propertyNames);
+    if (paths.Length == 0) return;
+
+    var pathsDelimited = string.Join("|", paths);
+
+    var remoteObj = Unbind(this);
+    if (remoteObj is not Remoting.Types.DynamicRemoteObject dro)
+      return;
+
+    var response = RemoteClient.@client.Communicator.GetBatchMembers(
+      dro.__ro.RemoteToken,
+      dro.__type?.FullName ?? dro.GetType().Name,
+      pathsDelimited);
+
+    if (response?.Schema == null || response.Values == null) return;
+
+    var values = new Dictionary<string, object?>();
+    for (int i = 0; i < response.Schema.Length; i++)
+    {
+      var path = response.Schema[i];
+      var encodedValue = response.Values[i];
+      var typeName = response.SchemaTypes[i];
+
+      if (encodedValue == null)
+      {
+        values[path] = null;
+      }
+      else if (encodedValue.StartsWith("@"))
+      {
+        continue; // Skip non-primitives; they fall through to the real DRO
+      }
+      else
+      {
+        values[path] = DecodeBatchValue(encodedValue, typeName);
+      }
+    }
+
+    _interfaceProxies[sentinelKey] = new Proxy.CachingRemoteProxy(remoteObj, values);
+  }
+
   protected dynamic @base_unbound { get; set; } = null!;
 
   /// <summary>
@@ -538,38 +590,34 @@ public abstract class DLRWrapper : SerializableBase
         maxItems
       );
 
-    if (response?.Items == null)
+    if (response?.Schema == null || response.Columns == null)
     {
       yield break;
     }
 
     // Check if we have item tokens for hybrid mode (create wrappers with DRO fallback)
-    bool hasTokens = response.ItemTokens != null && response.ItemTokens.Count == response.Items.Count;
+    bool hasTokens = response.ItemTokens != null && response.ItemTokens.Count == response.Count;
 
-    // Build TInterface objects from response data
-    for (int i = 0; i < response.Items.Count; i++)
+    // Build TInterface objects from columnar response data
+    for (int i = 0; i < response.Count; i++)
     {
-      var itemData = response.Items[i];
       var propertyValues = new Dictionary<string, object?>();
 
-      foreach (var kvp in itemData)
+      for (int col = 0; col < response.Schema.Length; col++)
       {
-        // Decode the value
-        object? value = null;
-        if (kvp.Value != null)
-        {
-          var typeName = response.Types?.TryGetValue(kvp.Key, out var t) == true ? t : null;
-          value = DecodeBatchValue(kvp.Value, typeName);
-        }
+        var encodedValue = response.Columns[col][i];
+        var typeName = response.SchemaTypes[col];
+
+        object? value = encodedValue != null
+          ? DecodeBatchValue(encodedValue, typeName)
+          : null;
 
         // Strip prefix from key to get remote path (e.g., "PlayerEvent.EventId" -> "EventId")
-        var remotePath = !string.IsNullOrEmpty(pathPrefix) && kvp.Key.StartsWith(pathPrefix + ".")
-          ? kvp.Key.Substring(pathPrefix.Length + 1)
-          : kvp.Key;
+        var remotePath = response.Schema[col];
+        if (!string.IsNullOrEmpty(pathPrefix) && remotePath.StartsWith(pathPrefix + "."))
+          remotePath = remotePath.Substring(pathPrefix.Length + 1);
 
         // Use REMOTE PATH as cache key (not interface property name) to prevent shadowing
-        // e.g., cache has "CurrentRoundNumber" = int, so "Unbind(this).CurrentRound" falls through to remote
-        // The wrapper's @base property accesses via remote paths, so this works correctly
         propertyValues[remotePath] = value;
       }
 
@@ -655,29 +703,30 @@ public abstract class DLRWrapper : SerializableBase
         maxItems
       );
 
-    if (response?.Items == null)
+    if (response?.Schema == null || response.Columns == null)
     {
       yield break;
     }
 
-    // Build TInterface objects from response data
-    foreach (var itemData in response.Items)
+    // Build TInterface objects from columnar response data
+    for (int i = 0; i < response.Count; i++)
     {
       var propertyValues = new Dictionary<string, object?>();
-      foreach (var kvp in itemData)
-      {
-        // Decode the value
-        object? value = null;
-        if (kvp.Value != null)
-        {
-          var typeName = response.Types?.TryGetValue(kvp.Key, out var t) == true ? t : null;
-          value = DecodeBatchValue(kvp.Value, typeName);
-        }
 
-        // Strip prefix from key for property mapping (response uses full path as key)
-        var propName = !string.IsNullOrEmpty(pathPrefix) && kvp.Key.StartsWith(pathPrefix + ".")
-          ? kvp.Key.Substring(pathPrefix.Length + 1)
-          : kvp.Key;
+      for (int col = 0; col < response.Schema.Length; col++)
+      {
+        var encodedValue = response.Columns[col][i];
+        var typeName = response.SchemaTypes[col];
+
+        object? value = encodedValue != null
+          ? DecodeBatchValue(encodedValue, typeName)
+          : null;
+
+        // Strip prefix from key for property mapping
+        var propName = response.Schema[col];
+        if (!string.IsNullOrEmpty(pathPrefix) && propName.StartsWith(pathPrefix + "."))
+          propName = propName.Substring(pathPrefix.Length + 1);
+
         propertyValues[propName] = value;
       }
 
@@ -1062,61 +1111,28 @@ public abstract class DLRWrapper : SerializableBase
       dro.__type?.FullName ?? dro.GetType().Name,
       pathsDelimited);
 
-    if (response?.Values == null) return;
+    if (response?.Schema == null || response.Values == null) return;
 
     // Convert encoded values to dictionary for caching
     var values = new Dictionary<string, object?>();
-    foreach (var kvp in response.Values)
+    for (int i = 0; i < response.Schema.Length; i++)
     {
-      if (kvp.Value == null)
+      var path = response.Schema[i];
+      var encodedValue = response.Values[i];
+      var typeName = response.SchemaTypes[i];
+
+      if (encodedValue == null)
       {
-        values[kvp.Key] = null;
+        values[path] = null;
       }
-      else if (kvp.Value.StartsWith("@"))
+      else if (encodedValue.StartsWith("@"))
       {
         // This is a remote address - skip non-primitives
         continue;
       }
-      else if (kvp.Value.StartsWith("[") || kvp.Value.StartsWith("{"))
-      {
-        // This looks like JSON - deserialize it
-        try
-        {
-          var typeName = response.Types.TryGetValue(kvp.Key, out var t) ? t : null;
-
-          // Try to deserialize as a generic collection
-          if (kvp.Value.StartsWith("["))
-          {
-            // It's a JSON array - deserialize to List<object> or specific type
-            var deserialized = System.Text.Json.JsonSerializer.Deserialize<List<object>>(kvp.Value);
-
-            // If we know it's a string array/list, convert items
-            if (typeName != null && (typeName.Contains("String[]") || typeName.Contains("List`1[[System.String")))
-            {
-              values[kvp.Key] = deserialized?.Select(x => x?.ToString()).ToList();
-            }
-            else
-            {
-              values[kvp.Key] = deserialized;
-            }
-          }
-          else
-          {
-            // JSON object - deserialize as dictionary
-            values[kvp.Key] = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(kvp.Value);
-          }
-        }
-        catch
-        {
-          // If JSON deserialization fails, treat as primitive string
-          values[kvp.Key] = kvp.Value;
-        }
-      }
       else
       {
-        // Decode primitive value
-        var typeName = response.Types.TryGetValue(kvp.Key, out var t) ? t : "System.String";
-        values[kvp.Key] = Remoting.Interop.PrimitivesEncoder.Decode(kvp.Value, typeName);
+        values[path] = DecodeBatchValue(encodedValue, typeName);
       }
     }
 
@@ -1229,29 +1245,28 @@ public abstract class DLRWrapper : SerializableBase
         maxItems
       );
 
-    if (response?.Items == null)
+    if (response?.Schema == null || response.Columns == null)
     {
       yield break;
     }
 
-    // Build TInterface objects from response data
-    foreach (var itemData in response.Items)
+    // Build TInterface objects from columnar response data
+    for (int i = 0; i < response.Count; i++)
     {
       var propertyValues = new Dictionary<string, object?>();
-      foreach (var kvp in itemData)
-      {
-        // Remove prefix to get interface property path
-        var propPath = !string.IsNullOrEmpty(pathPrefix) && kvp.Key.StartsWith(pathPrefix + ".")
-          ? kvp.Key.Substring(pathPrefix.Length + 1)
-          : kvp.Key;
 
-        // Decode the value
-        object? value = null;
-        if (kvp.Value != null)
-        {
-          var typeName = response.Types?.TryGetValue(kvp.Key, out var t) == true ? t : null;
-          value = DecodePropertyValue(kvp.Value, typeName);
-        }
+      for (int col = 0; col < response.Schema.Length; col++)
+      {
+        var encodedValue = response.Columns[col][i];
+        var typeName = response.SchemaTypes[col];
+
+        object? value = encodedValue != null
+          ? DecodeBatchValue(encodedValue, typeName)
+          : null;
+
+        var propPath = response.Schema[col];
+        if (!string.IsNullOrEmpty(pathPrefix) && propPath.StartsWith(pathPrefix + "."))
+          propPath = propPath.Substring(pathPrefix.Length + 1);
 
         propertyValues[propPath] = value;
       }
@@ -1330,26 +1345,27 @@ public abstract class DLRWrapper : SerializableBase
         maxItems
       ).ConfigureAwait(false);
 
-    if (response?.Items == null)
+    if (response?.Schema == null || response.Columns == null)
       return Array.Empty<TInterface>();
 
-    // Build result list (pure CPU work)
-    var result = new List<TInterface>(response.Items.Count);
-    foreach (var itemData in response.Items)
+    // Build result list from columnar data (pure CPU work)
+    var result = new List<TInterface>(response.Count);
+    for (int i = 0; i < response.Count; i++)
     {
       var propertyValues = new Dictionary<string, object?>();
-      foreach (var kvp in itemData)
-      {
-        var propPath = !string.IsNullOrEmpty(pathPrefix) && kvp.Key.StartsWith(pathPrefix + ".")
-          ? kvp.Key.Substring(pathPrefix.Length + 1)
-          : kvp.Key;
 
-        object? value = null;
-        if (kvp.Value != null)
-        {
-          var typeName = response.Types?.TryGetValue(kvp.Key, out var t) == true ? t : null;
-          value = DecodePropertyValue(kvp.Value, typeName);
-        }
+      for (int col = 0; col < response.Schema.Length; col++)
+      {
+        var encodedValue = response.Columns[col][i];
+        var typeName = response.SchemaTypes[col];
+
+        object? value = encodedValue != null
+          ? DecodeBatchValue(encodedValue, typeName)
+          : null;
+
+        var propPath = response.Schema[col];
+        if (!string.IsNullOrEmpty(pathPrefix) && propPath.StartsWith(pathPrefix + "."))
+          propPath = propPath.Substring(pathPrefix.Length + 1);
 
         propertyValues[propPath] = value;
       }
@@ -1358,44 +1374,6 @@ public abstract class DLRWrapper : SerializableBase
     }
 
     return result;
-  }
-
-
-  /// <summary>
-  /// Decodes a property value from the batch response.
-  /// </summary>
-  private static object? DecodePropertyValue(string encodedValue, string? typeName)
-  {
-    if (string.IsNullOrEmpty(encodedValue))
-      return null;
-
-    // Handle JSON arrays
-    if (encodedValue.StartsWith("["))
-    {
-      try
-      {
-        return System.Text.Json.JsonSerializer.Deserialize<List<string>>(encodedValue);
-      }
-      catch
-      {
-        return encodedValue;
-      }
-    }
-
-    // Try to decode as primitive using the type name
-    if (!string.IsNullOrEmpty(typeName))
-    {
-      try
-      {
-        return Remoting.Interop.PrimitivesEncoder.Decode(encodedValue, typeName);
-      }
-      catch
-      {
-        // Fall through
-      }
-    }
-
-    return encodedValue;
   }
 
   /// <summary>
@@ -1566,6 +1544,9 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
   /// <returns>True if the objects are equal; otherwise, false.</returns>
   public static new bool Equals(dynamic obj1, dynamic obj2)
   {
+    if (obj1 is null && obj2 is null) return true;
+    if (obj1 is null || obj2 is null) return false;
+
     return Unbind(obj1).GetHashCode() == Unbind(obj2).GetHashCode();
     // TypeProxy r1_type = new(Unbind(obj1).GetType());
     // TypeProxy r_type = new(typeof(object));
@@ -1582,6 +1563,9 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
   /// <returns>True if the objects are the same instance; otherwise, false.</returns>
   public static new bool ReferenceEquals(dynamic obj1, dynamic obj2)
   {
+    if (obj1 is null && obj2 is null) return true;
+    if (obj1 is null || obj2 is null) return false;
+
     TypeProxy r_type = new(typeof(object));
     object[] r_params = new object[] { Unbind(obj1), Unbind(obj2) };
     return RemoteClient.InvokeMethod(r_type, "ReferenceEquals", null, r_params);
