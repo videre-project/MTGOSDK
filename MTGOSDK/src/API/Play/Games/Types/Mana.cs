@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
@@ -12,7 +13,10 @@ namespace MTGOSDK.API.Play.Games;
 
 public sealed class Mana(dynamic manaItem) : DLRWrapper<IManaPoolItem>
 {
-  internal override dynamic obj => Bind<IManaPoolItem>(manaItem);
+  internal override dynamic obj =>
+    manaItem is GamePlayerPartial.ManaPartial partial
+      ? partial
+      : Bind<IManaPoolItem>(manaItem);
 
   /// <summary>
   /// The unique identifier for the given mana type.

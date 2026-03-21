@@ -7,6 +7,8 @@ using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
 
+using MTGOSDK.API.Play.Games.Processors.Partials;
+
 
 namespace MTGOSDK.API.Play.Games;
 
@@ -35,7 +37,7 @@ public sealed class Targetable(dynamic targetable) : DLRWrapper<ITargetable>
 
   public dynamic ToGameObject() => targetable.GetType().Name switch
   {
-    "GameCard" => new GameCard(targetable),
+    "GameCard" or "GameCardPartial" => new GameCard(targetable),
     "GamePlayer" => new GamePlayer(targetable),
     _ => throw new InvalidOperationException(
         $"Unknown targetable type: {targetable.GetType().Name}")
