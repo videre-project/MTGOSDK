@@ -7,14 +7,12 @@ using System.Collections;
 
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Interface.ViewModels;
-using MTGOSDK.API.Users;
+using MTGOSDK.API.Play.Games.Processors;
+using MTGOSDK.API.Play.Games.Processors.EventArgs;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
-using WotC.MtGO.Client.Model.Chat;
 using WotC.MtGO.Client.Model.Play;
-
-using ChannelManager = MTGOSDK.API.Chat.ChannelManager;
 
 
 namespace MTGOSDK.API.Play.Games;
@@ -160,6 +158,46 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         valueMapper: Lambda<IList<GameZone>>(z =>
             Map<IList, GameZone>(z.Values)));
 
+  private dynamic m_thingIDHistory => Unbind(this).m_thingIDHistory;
+
+  /// <summary>
+  /// Finds the original root ID for a given card ID by traversing its history backwards.
+  /// </summary>
+  /// <param name="currentId">The current card ID.</param>
+  /// <returns>The original card ID, or the current ID if no history exists.</returns>
+  public int GetOriginalCardId(int currentId)
+  {
+    int previousId = currentId;
+    try
+    {
+      bool found;
+      do
+      {
+        found = false;
+        foreach (var kvp in m_thingIDHistory)
+        {
+          if ((int)kvp.Value == previousId)
+          {
+            previousId = (int)kvp.Key;
+            found = true;
+            break;
+          }
+        }
+      } while (found);
+    }
+    catch { /* Ignore unbind or collection modification exceptions */ }
+
+    return previousId;
+  }
+
+  /// <summary>
+  /// Finds the next active ID for a given historical card ID by traversing its history forward.
+  /// </summary>
+  /// <param name="currentId">The historical card ID.</param>
+  /// <returns>The active card ID, or the current ID if it is the latest.</returns>
+  public int GetNextCardId(int currentId) =>
+    Unbind(this).LookupCurrentID(currentId);
+
   //
   // IGame wrapper methods
   //
@@ -228,14 +266,87 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     @base.SetCardMouseOver(cardId, isFocused);
 
   //
-  // IGame wrapper events
+  // Processor infrastructure
   //
+
+  private GameProcessor? _processor;
+
+  /// <summary>
+  /// Gets or creates the <see cref="GameProcessor"/> for this game and
+  /// registers it in the static routing table so that
+  /// <c>HandleGamePlayStatus</c> hooks are routed here automatically.
+  /// </summary>
+  internal GameProcessor EnsureProcessor()
+  {
+    if (_processor == null)
+    {
+      _processor = new GameProcessor(this);
+      GameProcessor.Activate(this.Id, _processor);
+    }
+    return _processor;
+  }
+
+  //
+  // Processor events
+  //
+
+  /// <summary>
+  /// Event triggered when cards move between zones.
+  /// </summary>
+  public ProcessorEvent<ZoneChangeEventArgs> OnZoneChanged
+  {
+    get => field ??= new(this, typeof(ZoneChangeTracker), () => new ZoneChangeTracker());
+    set => field = value;
+  }
+
+  /// <summary>
+  /// Event triggered when a card's properties change between snapshots.
+  /// </summary>
+  public ProcessorEvent<CardChangedEventArgs> OnCardChanged
+  {
+    get => field ??= new(this, typeof(PropertyChangeTracker), () => new PropertyChangeTracker());
+    set => field = value;
+  }
+
+  /// <summary>
+  /// Event triggered when a player's properties change between snapshots.
+  /// </summary>
+  public ProcessorEvent<PlayerChangedEventArgs> OnPlayerChanged
+  {
+    get => field ??= new(this, typeof(PropertyChangeTracker), () => new PropertyChangeTracker());
+    set => field = value;
+  }
+
+  /// <summary>
+  /// Event triggered when a game action is finalized.
+  /// </summary>
+  public ProcessorEvent<ActionFinalizedEventArgs> OnActionFinalized
+  {
+    get => field ??= new(this, typeof(ActionProcessor), () => new ActionProcessor());
+    set => field = value;
+  }
 
   /// <summary>
   /// Event triggered when the current game prompt changes.
   /// </summary>
-  public EventHookWrapper<GamePrompt> OnPromptChanged =
-    new(GamePromptChanged, new Filter<GamePrompt>((s,_) => s.Id == game.Id));
+  public ProcessorEvent<PromptChangedEventArgs> OnPromptChanged
+  {
+    get => field ??= new(this, typeof(PromptProcessor), () => new PromptProcessor());
+    set => field = value;
+  }
+
+  /// <summary>
+  /// Event triggered when a log message is correlated with a game state snapshot.
+  /// </summary>
+  public ProcessorEvent<LogMessageCorrelatedEventArgs> OnLogMessage
+  {
+    get => field ??= new(this, typeof(LogMessageProcessor), () => new LogMessageProcessor());
+    set => field = value;
+  }
+
+  //
+  // IGame wrapper events
+  //
 
   /// <summary>
   /// Event triggered when the game completion status changes.
@@ -244,211 +355,14 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     new(/* IGame */ game, "GameStateChanged");
 
   /// <summary>
-  /// Event triggered when the player whose turn it is changes.
-  /// </summary>
-  public EventProxy<GameEventArgs> ActivePlayerChanged =
-    new(/* IGame */ game, nameof(ActivePlayerChanged));
-
-  /// <summary>
-  /// Event triggered when the player who can take actions changes.
-  /// </summary>
-  public EventProxy<GameEventArgs> PriorityPlayerChanged =
-    new(/* IGame */ game, nameof(PriorityPlayerChanged));
-
-  /// <summary>
   /// Event triggered when the game results for the current game change.
   /// </summary>
   public EventHookWrapper<IList<GamePlayerResult>> OnGameResultsChanged =
     new(GameResultsChanged, new Filter<IList<GamePlayerResult>>((s,_) => s.Id == game.Id));
 
-  /// <summary>
-  /// Event triggered when the game phase for the current turn.
-  /// </summary>
-  public EventHookWrapper<CurrentPlayerPhase> OnGamePhaseChange =
-    new(GamePhaseChanged, new Filter<CurrentPlayerPhase>((s,_) => s.Id == game.Id));
-
-  /// <summary>
-  /// Event triggered when the current turn number changes.
-  /// </summary>
-  public EventProxy<GameEventArgs> CurrentTurnChanged =
-    new(/* IGame */ game, nameof(CurrentTurnChanged));
-
-  /// <summary>
-  /// Event triggered when any cards are added or removed from a zone.
-  /// </summary>
-  public EventHookWrapper<GameCard> OnZoneChange =
-    new(CardZoneChanged, new Filter<GameCard>((s,_) => s.Id == game.Id));
-
-  /// <summary>
-  /// Event triggered when a game action is performed.
-  /// </summary>
-  public EventHookWrapper<GameAction> OnGameAction =
-    new(GameActionPerformed, new Filter<GameAction>((s,_) => s.Id == game.Id));
-
-  /// <summary>
-  /// Event triggered when a player's life total changes.
-  /// </summary>
-  public EventHookWrapper<GamePlayer> OnLifeChange =
-    new(PlayerLifeChanged, new Filter<GamePlayer>((s,_) => s.Id == game.Id));
-
-  /// <summary>
-  /// Event triggered when a log message is received.
-  /// </summary>
-  public EventHookWrapper<Message> OnLogMessage =
-    new(LogMessageReceived, new Filter<Message>((s,_) =>
-    {
-      //
-      // Cache the historical game log channel for this game.
-      //
-      // This is a performance optimization to avoid creating a new channel
-      // object for each log message received.
-      //
-      if (!ChannelManager.s_gameLogChannels.TryGetValue(game.Id,
-          out IHistoricalChatChannel channel))
-      {
-        channel = Bind<IHistoricalChatChannel>(game.LogChannel.HistoricalChatChannel);
-        ChannelManager.s_gameLogChannels.TryAdd(game.Id, channel);
-      }
-
-      // Check if the originating channel is parented to the game log channel.
-      // If so, it's a valid log message for the current game.
-      return s.LocalFileName == channel.LocalFileName;
-    }));
-
   //
   // IGame static events
   //
-
-  /// <summary>
-  /// Event triggered when the current game prompt changes in any active game.
-  /// </summary>
-  public static EventHookProxy<Game, GamePrompt> GamePromptChanged =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game>(),
-      "ProcessTurnStepElement",
-      new((instance, args) =>
-      {
-        Game game = new(instance);
-        DateTime __timestamp = instance.__timestamp;
-
-        dynamic turnStep = args[0];
-        GamePrompt gamePrompt = new(new
-        {
-          // DynamicRemoteObject properties
-          __timestamp,
-          // IGamePrompt properties
-          Text = turnStep.PromptText,
-          Timestamp = turnStep.TimeStamp,
-          Options = new List<GameAction>()
-        });
-
-        return (game, gamePrompt);
-      })
-    );
-
-  /// <summary>
-  /// Event triggered when the current phase changes in any active game.
-  /// </summary>
-  public static EventHookProxy<Game, CurrentPlayerPhase> GamePhaseChanged =
-    new(
-      new TypeProxy<Shiny.Play.Duel.ViewModel.PhaseControllerViewModel>(),
-      "set_CurrentPhase",
-      new((instance, args) =>
-      {
-        GamePlayer activePlayer = new(args[0]);
-        Game game = activePlayer.GameInterface;
-        if (game == null) return null; // Ignore invalid game objects.
-
-        GamePhase currentPhase = Cast<GamePhase>(args[1]);
-        if (currentPhase == GamePhase.Invalid) return null;
-
-        // Set timestamp on activePlayer
-        Unbind(activePlayer).__timestamp = instance.__timestamp;
-
-        return (game, new CurrentPlayerPhase(activePlayer, currentPhase));
-      })
-    );
-
-  /// <summary>
-  /// Event triggered when a card from any game changes zones.
-  /// </summary>
-  public static EventHookProxy<Game, GameCard> CardZoneChanged =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Play.GameCard>(),
-      "OnZoneChanged",
-      new((instance, _) =>
-      {
-        GameCard card = new(instance);
-        Game game = card.GameInterface;
-
-        // Return a tuple of (Game, GameCard)
-        return (game, card);
-      })
-    );
-
-  /// <summary>
-  /// Event triggered when a game action in any active game is performed.
-  /// </summary>
-  public static EventHookProxy<Game, GameAction> GameActionPerformed =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Play.Actions.GameAction>(),
-      "Execute",
-      new((instance, args) =>
-      {
-        GameAction action = GameAction.GameActionFactory(instance);
-        if (action == null) return null; // Ignore unknown actions.
-        if (action.IsLocal) return null; // Ignore local actions.
-
-        Game game = new(args[0]);
-        if (action.Timestamp == 0) action.SetTimestamp(game.Prompt!.Timestamp);
-        if (action is CardAction cardAction) cardAction.UseTargetEvents();
-
-        return (game, action); // Return a tuple of (Game, GameAction).
-      })
-    );
-
-  /// <summary>
-  /// Event triggered when a player's life total changes in any active game.
-  /// </summary>
-  public static EventHookProxy<Game, GamePlayer> PlayerLifeChanged =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Play.GamePlayer>(),
-      "OnLifeChanged",
-      new((instance, _) =>
-      {
-        GamePlayer player = new(instance);
-        if (string.IsNullOrEmpty(player.Name)) return null;
-        Game game = player.GameInterface;
-
-        // Return a tuple of (Game, GamePlayer)
-        return (game, player);
-      })
-    );
-
-  /// <summary>
-  /// Event triggered when a game action in any active game is performed.
-  /// </summary>
-  public static EventHookProxy<dynamic, Message> LogMessageReceived =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Chat.HistoricalChatChannel>(),
-      "AppendMessage",
-      new((instance, args) =>
-      {
-        DateTime timestamp = args[0];
-        string text = args[1];
-        string username = args[2];
-
-        Message message = new(new
-        {
-          Timestamp = timestamp,
-          Message = text,
-          FromUser = Optional<User>(instance.GetUser(username),
-                                    string.IsNullOrEmpty(username))
-        });
-
-        return (instance, message);
-      })
-    );
 
   /// <summary>
   /// Event triggered when the game results for the current game update.

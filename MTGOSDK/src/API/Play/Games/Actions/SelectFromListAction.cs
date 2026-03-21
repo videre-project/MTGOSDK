@@ -5,6 +5,7 @@
 
 using System.Collections;
 
+using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Play;
 
 
@@ -18,6 +19,19 @@ public sealed class SelectFromListAction(dynamic selectFromListAction)
   /// </summary>
   internal override dynamic obj =>
     Bind<ISelectFromListAction>(selectFromListAction);
+
+  public readonly struct NamedValue<T>
+  {
+    public string Name { get; init; }
+    public T Value { get; init; }
+
+    public NamedValue(dynamic namedValue)
+    {
+      var item = Bind<INamedValue<T>>(namedValue);
+      Name = item.Name;
+      Value = item.Value;
+    }
+  }
 
   //
   // ISelectFromListAction wrapper properties

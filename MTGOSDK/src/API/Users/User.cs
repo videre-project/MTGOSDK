@@ -38,7 +38,7 @@ public sealed class User(dynamic user) : DLRWrapper<IUser>
   /// <summary>
   /// The display name of the user.
   /// </summary>
-  public string Name => @base.Name;
+  public string Name => field ??= @base.Name;
 
   /// <summary>
   /// The user's avatar resource.
