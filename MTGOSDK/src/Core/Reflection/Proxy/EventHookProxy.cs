@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Reflection;
+
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Hooking;
@@ -39,6 +41,35 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   {
     this._typeName = typeName;
     this._methodName = methodName;
+    this._hook = hook;
+
+    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
+    {
+      (dynamic, dynamic)? res = hook(instance, args);
+      if (res == null) return; // Skip if the hook returns null.
+
+      try
+      {
+        _eventHook?.Invoke(res?.Item1, res?.Item2);
+      }
+      catch (Exception e)
+      {
+        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
+        Log.Debug(e.StackTrace);
+      }
+    });
+  }
+
+  /// <summary>
+  /// Creates a new instance of the <see cref="EventHookProxy{I, T}"/> class using a method group.
+  /// </summary>
+  /// <param name="typeName">The name of the type to hook.</param>
+  /// <param name="method">The method to hook (method group).</param>
+  /// <param name="hook">The hook function to call when the method is invoked.</param>
+  public EventHookProxy(string typeName, MethodBase method, EventHook hook)
+  {
+    this._typeName = typeName;
+    this._methodName = method.Name;
     this._hook = hook;
 
     this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
