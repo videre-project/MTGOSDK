@@ -1502,7 +1502,7 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
   // Proxy methods for event and method binding.
   //
 
-  public void ClearEvents()
+  public virtual void ClearEvents()
   {
     // Clear all event proxy fields in the current instance of the class.
     IEnumerable<FieldInfo> fields = this.GetType()

@@ -286,6 +286,28 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     return _processor;
   }
 
+  /// <inheritdoc />
+  public override void ClearEvents()
+  {
+    base.ClearEvents();
+
+    if (_processor != null)
+    {
+      // Clear all ProcessorEvent handlers so dispatched events are no-ops.
+      OnZoneChanged.Clear();
+      OnCardChanged.Clear();
+      OnPlayerChanged.Clear();
+      OnActionFinalized.Clear();
+      OnPromptChanged.Clear();
+      OnLogMessage.Clear();
+
+      // Remove from the static routing table so HandleGamePlayStatus
+      // messages for this game are no longer dispatched.
+      GameProcessor.Deactivate(this.Id);
+      _processor = null;
+    }
+  }
+
   //
   // Processor events
   //
