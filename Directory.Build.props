@@ -3,6 +3,7 @@
   <!-- Project Properties -->
   <PropertyGroup>
     <NoWarn>$(NoWarn);
+      MSB3277; <!-- Found conflicts between different versions of "..." that could not be resolved -->
       NU1702; <!-- Package is not compatible with the target framework -->
       CS1587; <!-- XML comment is not placed on valid language element -->
     </NoWarn>
