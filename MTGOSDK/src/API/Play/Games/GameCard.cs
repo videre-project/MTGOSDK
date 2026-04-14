@@ -130,9 +130,32 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   public int SourceId => @base.SourceId;
 
   /// <summary>
+  /// For parent cards (adventure/split/MDFC), the game IDs of the SUBC children.
+  /// Returns 0 if no child is present at that index.
+  /// </summary>
+  public int SplitChildId0 => @base.SplitChildId0;
+  public int SplitChildId1 => @base.SplitChildId1;
+
+  /// <summary>
   /// The card name.
   /// </summary>
   public string Name => @base.Name;
+
+  /// <summary>
+  /// The rules text for this card or ability on the stack.
+  /// Uses MTGO's priority chain: ACTION_SPELL_TEXT_STRING,
+  /// then EFFECT_NAME_STRING, then REAL_ORACLETEXT_STRING.
+  /// </summary>
+  public string RulesText =>
+    field ??= MTGOSDK.API.MtgoTextNormalizer.NormalizeText(@base.RulesText);
+
+  /// <summary>
+  /// The "blue text" — granted abilities and effects text shown in blue
+  /// on the card in MTGO. Concatenation of BLUETEXT_STRING0 and
+  /// ABILITY_BLUETEXT_STRING0 properties.
+  /// </summary>
+  public string BlueText =>
+    field ??= MTGOSDK.API.MtgoTextNormalizer.NormalizeText(@base.BlueText);
 
   /// <summary>
   /// The associated card definition.
@@ -189,6 +212,20 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   public IEnumerable<GameCardAssociation> Associations =>
     Map<GameCardAssociation>(@base.Associations);
 
+  /// <summary>
+  /// The card ID this card is visually attached to (equipment target, aura
+  /// target, mutate parent, encoded host, or exile-under parent).
+  /// Returns 0 if not attached.
+  /// </summary>
+  /// <remarks>
+  /// Uses MTGO's priority chain: SHOW_ATTACHED_TO → ATTACHED_TO_ID →
+  /// MUTATE_PARENT_ID → ENCODED_ON.
+  /// </remarks>
+  public int AttachedToId =>
+    gameCard is GameCardPartial partial
+      ? partial.ResolveAttachedToId()
+      : @base.AttachedToId;
+
   public IEnumerable<GameCard> AttackingOrders
   {
     get
@@ -233,15 +270,35 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   public IEnumerable<CardCounter> Counters =>
     Map<IList, CardCounter>(Unbind(this).Counters);
 
+  public string TypeLine => (string)Unbind(this).TypeLine;
+
   public GamePlayer Owner =>
     gameCard is GameCardPartial partialOwner
       ? partialOwner.GetOwnerWrapper()
       : new(@base.Owner);
 
+  /// <summary>
+  /// The raw owner player index from the card's properties.
+  /// Avoids the GamePlayer wrapper chain which requires IPC that can fail.
+  /// </summary>
+  public int OwnerIndex =>
+    gameCard is GameCardPartial po
+      ? po.GetPlayerIndex(MagicProperty.OWNER)
+      : -1;
+
   public GamePlayer Controller =>
     gameCard is GameCardPartial partialController
       ? partialController.GetControllerWrapper()
       : new(@base.Controller);
+
+  /// <summary>
+  /// The raw controller player index from the card's properties.
+  /// Avoids the GamePlayer wrapper chain which requires IPC that can fail.
+  /// </summary>
+  public int ControllerIndex =>
+    gameCard is GameCardPartial pc
+      ? pc.GetPlayerIndex(MagicProperty.CONTROLLER)
+      : -1;
 
   public GamePlayer? Protector =>
     gameCard is GameCardPartial partialProtector
@@ -264,35 +321,39 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   public int CurrentChapter => @base.CurrentChapter;
 
-public bool HasSummoningSickness => (bool?)(@base.HasSummoningSickness) ?? false;
+  public bool HasSummoningSickness => (bool?)(@base.HasSummoningSickness) ?? false;
 
-    public bool IsNewlyControlled => (bool?)(@base.IsNewlyControlled) ?? false;
+  public bool IsNewlyControlled => (bool?)(@base.IsNewlyControlled) ?? false;
 
-    public bool IsAttacking => (bool?)(@base.IsAttacking) ?? false;
+  public bool IsAttacking => (bool?)(@base.IsAttacking) ?? false;
 
-    public bool IsBlocking => (bool?)(@base.IsBlocking) ?? false;
+  public bool IsBlocking => (bool?)(@base.IsBlocking) ?? false;
 
-    public bool IsBlocked => (bool?)(@base.IsBlocked) ?? false;
+  public bool IsBlocked => (bool?)(@base.IsBlocked) ?? false;
 
-    public bool IsTapped => (bool?)(@base.IsTapped) ?? false;
+  public bool IsTapped => (bool?)(@base.IsTapped) ?? false;
 
-    public bool IsFlipped => (bool?)(@base.IsFlipped) ?? false;
+  public bool IsFlipped => (bool?)(@base.IsFlipped) ?? false;
 
-    public bool IsCompanion => (bool?)(@base.IsCompanion) ?? false;
+  public bool IsCompanion => (bool?)(@base.IsCompanion) ?? false;
 
-    public bool IsEmblem => (bool?)(@base.IsEmblem) ?? false;
+  public bool IsEmblem => (bool?)(@base.IsEmblem) ?? false;
 
-    public bool IsActivatedAbility => (bool?)(@base.IsActivatedAbility) ?? false;
+  public bool IsActivatedAbility => (bool?)(@base.IsActivatedAbility) ?? false;
 
-    public bool IsTriggeredAbility => (bool?)(@base.IsTriggeredAbility) ?? false;
+  public bool IsTriggeredAbility => (bool?)(@base.IsTriggeredAbility) ?? false;
 
-    public bool IsDelayedTrigger => (bool?)(@base.IsDelayedTrigger) ?? false;
+  public bool IsDelayedTrigger => (bool?)(@base.IsDelayedTrigger) ?? false;
 
-    public bool IsReplacementEffect => (bool?)(@base.IsReplacementEffect) ?? false;
+  public bool IsReplacementEffect => (bool?)(@base.IsReplacementEffect) ?? false;
 
-    public bool IsYieldAbility => (bool?)(@base.IsYieldAbility) ?? false;
+  public bool IsYieldAbility => (bool?)(@base.IsYieldAbility) ?? false;
 
-    public bool HasAutoTargets => (bool?)(@base.HasAutoTargets) ?? false;
+  public bool HasAutoTargets => (bool?)(@base.HasAutoTargets) ?? false;
+
+  public bool IsToken => (bool?)(@base.IsToken) ?? false;
+
+  public bool IsLand => (bool?)(@base.IsLand) ?? false;
 
   //
   // IGameCard wrapper methods

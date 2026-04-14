@@ -147,7 +147,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// The total duration of the game.
   /// </summary>
   [Default(null)]
-  public TimeSpan? CompletedDuration => Cast(Unbind(this).CompletedDuration);
+  public TimeSpan? CompletedDuration => Cast<TimeSpan>(Unbind(this).CompletedDuration);
 
   public IList<GameZone> SharedZones =>
     Map<IList, GameZone>(Unbind(this).m_sharedZones.Values);
@@ -286,6 +286,42 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     return _processor;
   }
 
+  /// <summary>
+  /// Signals that all <see cref="ProcessorEvent{T}"/> subscriptions are
+  /// complete and the <see cref="GameProcessor"/> may begin draining queued
+  /// hooks. Must be called after subscribing to all processor events.
+  /// </summary>
+  public void ReadyProcessor()
+  {
+    if (_processor != null)
+      _processor.IsInitialized = true;
+  }
+
+  /// <summary>
+  /// Blocks the calling thread until the <see cref="GameProcessor"/> has
+  /// processed all currently-pending hooks AND the <see cref="PromptProcessor"/>
+  /// has correlated any pending snapshots with their prompts (which arrive
+  /// via a separate <c>set_Prompt</c> IPC call). Returns immediately if no
+  /// processor is active or nothing is pending.
+  /// </summary>
+  /// <param name="timeout">Maximum time to wait.</param>
+  /// <returns><c>true</c> if processing completed within the timeout.</returns>
+  public bool WaitForPendingProcessing(TimeSpan timeout)
+  {
+    if (_processor == null) return true;
+
+    // Phase 1: Wait for the drain loop to process all pending hooks.
+    if (!_processor.WaitForPendingDrain(timeout))
+      return false;
+
+    // Phase 2: Wait for prompt correlation. After the drain loop processes
+    // a snapshot, the set_Prompt IPC may still be in flight. The
+    // PromptProcessor signals PromptCorrelated when the prompt arrives and
+    // the pending snapshot is matched.
+    var promptProcessor = _processor.GetProcessor<PromptProcessor>();
+    return promptProcessor?.PromptCorrelated.Wait(timeout) ?? true;
+  }
+
   /// <inheritdoc />
   public override void ClearEvents()
   {
@@ -300,7 +336,8 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
       OnActionFinalized.Clear();
       OnPromptChanged.Clear();
       OnLogMessage.Clear();
-
+      OnDamageAssignment.Clear();
+      OnRevealedCards.Clear();
       // Remove from the static routing table so HandleGamePlayStatus
       // messages for this game are no longer dispatched.
       GameProcessor.Deactivate(this.Id);
@@ -326,7 +363,14 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<CardChangedEventArgs> OnCardChanged
   {
-    get => field ??= new(this, typeof(PropertyChangeTracker), () => new PropertyChangeTracker());
+    get => field ??= new(this, typeof(PropertyChangeTracker), () =>
+    {
+      // CombatProcessor must populate AttackingOrders/BlockingOrders before
+      // PropertyChangeTracker diffs them.
+      EnsureProcessor().EnsureRegistered(
+        typeof(CombatProcessor), () => new CombatProcessor());
+      return new PropertyChangeTracker();
+    });
     set => field = value;
   }
 
@@ -366,6 +410,24 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
     set => field = value;
   }
 
+  /// <summary>
+  /// Event triggered when combat damage assignments are received from the server.
+  /// </summary>
+  public ProcessorEvent<DamageAssignmentEventArgs> OnDamageAssignment
+  {
+    get => field ??= new(this, typeof(DamageAssignmentProcessor), () => new DamageAssignmentProcessor());
+    set => field = value;
+  }
+
+  /// <summary>
+  /// Event triggered when cards enter or leave a revealed or pile zone.
+  /// </summary>
+  public ProcessorEvent<RevealedCardsEventArgs> OnRevealedCards
+  {
+    get => field ??= new(this, typeof(RevealedZoneTracker), () => new RevealedZoneTracker());
+    set => field = value;
+  }
+
   //
   // IGame wrapper events
   //
@@ -402,6 +464,15 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
         dynamic message = args[1];
         if (message == null) return null; // Ignore invalid messages.
 
+        // Always compute elapsed game time for the clock field.
+        // GameResultsInfo_t.PlayingTime is unreliable — it reports
+        // sentinel values or garbage for untimed matches, and for
+        // timed matches it represents time remaining, not elapsed.
+        TimeSpan elapsed = game.EndTime is DateTime endTime
+                        && endTime > game.StartTime
+          ? endTime - game.StartTime
+          : DateTime.Now - game.StartTime;
+
         List<GamePlayerResult> results = new();
         foreach(var entry in message.GameResults)
         {
@@ -412,9 +483,8 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
             : PlayDrawResult.Draw;
 
           GameResult result = Cast<GameResult>(entry.Results);
-          TimeSpan clockRemaining = TimeSpan.FromSeconds(entry.PlayingTime);
 
-          results.Add(new(player, playDrawResult, result, clockRemaining));
+          results.Add(new(player, playDrawResult, result, elapsed));
         }
 
         return (game, results); // Return a tuple of (Game, IList<GamePlayerResult>)

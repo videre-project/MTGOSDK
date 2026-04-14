@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Dynamic;
+
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model.Play;
@@ -15,7 +17,10 @@ namespace MTGOSDK.API.Play.Games;
 [NonSerializable]
 public sealed class Targetable(dynamic targetable) : DLRWrapper<ITargetable>
 {
-  internal override dynamic obj => Bind<ITargetable>(targetable);
+  internal override dynamic obj =>
+    targetable is DynamicObject partial
+      ? partial
+      : Bind<ITargetable>(targetable);
 
   internal TargetSet? parentSet = null;
 

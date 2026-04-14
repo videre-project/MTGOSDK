@@ -35,6 +35,13 @@ public abstract class GameAction : DLRWrapper<IGameAction>
     _timestamp > 0 ? _timestamp : Unbind(this).Timestamp;
 
   /// <summary>
+  /// The client-side DateTime when this action was executed in the game client.
+  /// Captured from the EventHookProxy's instance.__timestamp.
+  /// </summary>
+  [NonSerializable]
+  public DateTime ClientTimestamp { get; private set; }
+
+  /// <summary>
   /// The type of game action (e.g. ChooseOption, OrderTargets, PayMana, etc.).
   /// </summary>
   public ActionType Type =>
@@ -93,6 +100,9 @@ public abstract class GameAction : DLRWrapper<IGameAction>
   //
 
   public void SetTimestamp(uint timestamp) => this._timestamp = timestamp;
+
+  public void SetClientTimestamp(DateTime timestamp) =>
+    this.ClientTimestamp = timestamp;
 
   public static readonly Func<dynamic, GameAction> GameActionFactory =
     new(FromGameAction);

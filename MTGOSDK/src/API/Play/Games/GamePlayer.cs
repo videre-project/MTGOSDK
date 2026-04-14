@@ -41,18 +41,32 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   // IGamePlayer wrapper properties
   //
 
-  public string Name => field ??= m_user.Name;
+  public string Name => field ??= _isPartial
+    ? (string)Unbind(gamePlayer).Name
+    : m_user.Name;
 
   /// <summary>
   /// The User object for the player.
   /// </summary>
   [NonSerializable]
-  public User User => field ??= new(Unbind(this).User.Id);
+  public User User => field ??= _isPartial
+    ? ((GamePlayerPartial)gamePlayer).User
+    : new(Unbind(this).User.Id);
 
   /// <summary>
   /// The amount of time left on the player's clock.
   /// </summary>
   public TimeSpan ChessClock => Cast<TimeSpan>(Unbind(this).ChessClock);
+
+  /// <summary>
+  /// The user's Login ID, captured from the game's IGamePlayer.User.
+  /// </summary>
+  public int UserId => User.Id;
+
+  /// <summary>
+  /// The catalog ID of the player's avatar card definition.
+  /// </summary>
+  public int AvatarId => Try<int>(() => Unbind(User).AvatarId);
 
   /// <summary>
   /// The amount of life the player has.

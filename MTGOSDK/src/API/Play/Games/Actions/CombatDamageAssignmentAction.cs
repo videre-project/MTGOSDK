@@ -4,6 +4,10 @@
 **/
 
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+
+using MTGOSDK.API.Play.Games.Processors.Partials;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -14,19 +18,28 @@ public sealed class CombatDamageAssignmentAction(
     dynamic combatDamageAssignmentAction) : GameAction
 {
   /// <summary>
-  /// Stores an internal reference to the IGameCard object.
+  /// Stores an internal reference to the ICombatDamageAssignmentAction object.
   /// </summary>
   internal override dynamic obj =>
-    Bind<ICombatDamageAssignmentAction>(combatDamageAssignmentAction);
+    combatDamageAssignmentAction is DamageAssignmentPartial partial
+      ? partial
+      : Bind<ICombatDamageAssignmentAction>(combatDamageAssignmentAction);
 
   //
-  // ICardSelectorAction wrapper properties
+  // ICombatDamageAssignmentAction wrapper properties
   //
 
-  public GameCard Source => new(@base.Source);
+  public GameCard Source =>
+    combatDamageAssignmentAction is DamageAssignmentPartial partial
+      ? new GameCard(partial.SourceCard)
+      : new(@base.Source);
 
   public IList<Distribution> Distributions =>
-    Map<IList, Distribution>(Unbind(this).Distributions);
+    combatDamageAssignmentAction is DamageAssignmentPartial partial
+      ? partial.DistributionPartials
+          .Select(d => new Distribution(d))
+          .ToList<Distribution>()
+      : Map<IList, Distribution>(Unbind(this).Distributions);
 
   public int MinimumTotal => @base.MinimumTotal;
 
