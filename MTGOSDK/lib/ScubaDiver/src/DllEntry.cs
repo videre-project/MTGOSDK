@@ -5,6 +5,7 @@
 **/
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -18,69 +19,68 @@ namespace ScubaDiver;
 
 public class DllEntry
 {
-  private static Assembly LoadAssembly(string name)
+  /// <summary>
+  /// Resolve version-mismatched framework assemblies (e.g. System.ValueTuple)
+  /// by finding an already-loaded assembly with a matching name. Registered
+  /// in the static constructor so it runs before any other code in this class
+  /// is JIT'd.
+  /// </summary>
+  static DllEntry()
   {
-    string assemblyPath = Path.Combine(
-      Path.GetDirectoryName(typeof(DllEntry).Assembly.Location),
-      name + ".dll"
-    );
+    AppDomain.CurrentDomain.AssemblyResolve += ResolveFromLoadedAssemblies;
+  }
 
-    // Retry logic for non-deterministic file availability issues
-    // The file may not be immediately available after extraction
-    const int maxRetries = 5;
-    const int initialDelayMs = 50;
-
-    for (int attempt = 0; attempt < maxRetries; attempt++)
+  private static Assembly ResolveFromLoadedAssemblies(object sender, ResolveEventArgs e)
+  {
+    var requestedName = new AssemblyName(e.Name).Name;
+    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
     {
-      if (File.Exists(assemblyPath))
-      {
-        try
-        {
-          return Assembly.LoadFrom(assemblyPath);
-        }
-        catch (IOException) when (attempt < maxRetries - 1)
-        {
-          // File exists but may be locked; wait and retry
-          Thread.Sleep(initialDelayMs * (1 << attempt)); // Exponential backoff
-        }
-        catch (BadImageFormatException)
-        {
-          // File is corrupted or incomplete; wait for it to be fully written
-          Thread.Sleep(initialDelayMs * (1 << attempt));
-        }
-      }
-      else if (attempt < maxRetries - 1)
-      {
-        // File doesn't exist yet; wait for extraction to complete
-        Thread.Sleep(initialDelayMs * (1 << attempt));
-      }
+      if (asm.GetName().Name == requestedName) return asm;
     }
-
     return null;
   }
 
+  /// <summary>
+  /// Maps assembly simple name → full path for DLLs co-located with the
+  /// Diver assembly. Built once at startup so the resolve handler can do a
+  /// fast dictionary lookup instead of hitting the filesystem on every call.
+  /// </summary>
+  private static readonly Dictionary<string, string> s_localAssemblies = new(
+    StringComparer.OrdinalIgnoreCase);
+
   private static void UseAssemblyLoadHook()
   {
-    //
-    // Add a hook to resolve assemblies that can't be found.
-    //
-    // First tries to load from disk next to ScubaDiver's location.
-    // Then falls back to finding any already-loaded assembly with matching name
-    // (ignoring version). This fixes version mismatches with assemblies like
-    // System.Numerics.Vectors, System.Memory, etc.
-    //
+    // Pre-scan the directory next to the Diver DLL and index every .dll
+    // by its file name (without extension). This lets the resolve handler
+    // skip file I/O and GetAssemblies() for assemblies we don't ship,
+    // which avoids taking CLR-internal locks that serialize assembly
+    // loading across all threads in the host process.
+    string diverDir = Path.GetDirectoryName(typeof(DllEntry).Assembly.Location);
+    if (diverDir != null)
+    {
+      foreach (string file in Directory.GetFiles(diverDir, "*.dll"))
+      {
+        string name = Path.GetFileNameWithoutExtension(file);
+        s_localAssemblies[name] = file;
+      }
+    }
+
     AppDomain.CurrentDomain.AssemblyResolve += (s, e) =>
     {
       var requestedName = new AssemblyName(e.Name);
 
-      // First, try loading from disk next to the current assembly
-      var diskAssembly = LoadAssembly(requestedName.Name);
-      if (diskAssembly != null) return diskAssembly;
-
-      // Fallback: Use already-loaded assembly with matching name (any version)
-      foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+      // Load from disk only for assemblies we ship next to the Diver DLL.
+      // The version-mismatch fallback (GetAssemblies scan) is handled by
+      // the static constructor's ResolveFromLoadedAssemblies handler.
+      if (s_localAssemblies.TryGetValue(requestedName.Name, out string path)
+          && File.Exists(path))
       {
-        if (asm.GetName().Name == requestedName.Name) return asm;
+        try
+        {
+          return Assembly.LoadFrom(path);
+        }
+        catch (IOException) { }
+        catch (BadImageFormatException) { }
       }
 
       return null;
@@ -116,9 +116,6 @@ public class DllEntry
         Log.Error(e.ExceptionObject.ToString());
       };
 
-      // Load any dependencies that are not in the GAC.
-      UseAssemblyLoadHook();
-
       // Start the diver instance and block the thread until it exits.
       Diver _instance = new();
       _instance.Start(port);
@@ -135,6 +132,10 @@ public class DllEntry
 
   public static int EntryPoint(string pwzArgument)
   {
+    // Register the disk-loading hook for assemblies co-located with the Diver.
+    // The version-mismatch fallback is already active from the static constructor.
+    UseAssemblyLoadHook();
+
     // The bootstrapper is expecting to call a C# function with this signature,
     // so we use it to start a new thread to host the diver in it's own thread.
     ParameterizedThreadStart func = DiverHost;
