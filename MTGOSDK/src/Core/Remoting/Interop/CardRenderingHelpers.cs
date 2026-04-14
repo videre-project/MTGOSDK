@@ -11,9 +11,12 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 
+using MTGOSDK.Core.Logging;
+
 #if NETFRAMEWORK
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 #endif
@@ -434,6 +437,63 @@ public static class CardRenderingHelpers
   }
 
   /// <summary>
+  /// If the card definition's <c>FrontFace</c> resolves to a different card
+  /// (e.g. adventure sub-cards), returns a shallow clone with the internal
+  /// state patched so that <c>FrontFace</c> returns the clone itself.
+  /// The original singleton in <c>CardDataManager</c> is never modified.
+  /// Returns the original object unchanged if no patching is needed.
+  /// </summary>
+  /// <remarks>
+  /// <c>FrontFace</c> checks <c>HiddenSubcard is CardDefinitionHiddenSubcard
+  /// { IsParentSubcard: not false }</c>.  By setting the clone's cached
+  /// <c>m_hiddenSubcard</c> field to the clone itself (a <c>CardDefinition</c>,
+  /// not a <c>CardDefinitionHiddenSubcard</c>), the pattern match fails and
+  /// <c>FrontFace</c> falls through to <c>return this</c>.
+  /// </remarks>
+  private static object CloneCardDefIfNeeded(object cardDef, int expectedId)
+  {
+    try
+    {
+      // Check if FrontFace already returns this card
+      var frontFaceProp = cardDef.GetType().GetProperty("FrontFace",
+        BindingFlags.Public | BindingFlags.Instance);
+      var frontFace = frontFaceProp?.GetValue(cardDef);
+      if (frontFace == null) return cardDef;
+
+      var idProp = frontFace.GetType().GetProperty("Id",
+        BindingFlags.Public | BindingFlags.Instance);
+      int frontFaceId = idProp != null ? (int)(idProp.GetValue(frontFace) ?? 0) : 0;
+
+      if (frontFaceId == expectedId) return cardDef; // No patching needed
+
+      // MemberwiseClone the CardDefinition — shallow copy with its own fields,
+      // still sharing the same PropertyContainer (so HasProperty,
+      // IsAdventure, etc. all work correctly).
+      var cloneMethod = cardDef.GetType().GetMethod("MemberwiseClone",
+        BindingFlags.NonPublic | BindingFlags.Instance);
+      if (cloneMethod == null) return cardDef;
+      var clone = cloneMethod.Invoke(cardDef, null);
+
+      // Set m_hiddenSubcard to the clone itself.  The HiddenSubcard property
+      // returns the cached value (bypassing re-resolution).  Since the clone
+      // is a CardDefinition (not CardDefinitionHiddenSubcard), the FrontFace
+      // pattern match fails → returns `this`.
+      var hiddenSubcardField = clone.GetType().GetField("m_hiddenSubcard",
+        BindingFlags.NonPublic | BindingFlags.Instance);
+      if (hiddenSubcardField == null) return cardDef;
+      hiddenSubcardField.SetValue(clone, clone);
+
+      return clone;
+    }
+    catch (Exception ex)
+    {
+      Log.Debug("[CloneCardDefIfNeeded] Failed for catId={Id}: {Msg}",
+        expectedId, ex.Message);
+      return cardDef; // Fall back to original
+    }
+  }
+
+  /// <summary>
   /// Blocks until resource reaches Loaded state, or until timeoutMs elapses.
   /// </summary>
   private static bool WaitForLoad(object resource, int timeoutMs = 8000)
@@ -790,6 +850,16 @@ public static class CardRenderingHelpers
       }
       if (cardDef == null) continue;
 
+      // For adventure/SUBC sub-cards, CardDefinition.FrontFace returns the
+      // parent definition.  CardQuantityPair's constructor and
+      // CardGrouping.AddItems both call FrontFace, so the sub-card gets
+      // replaced by the parent in the CGVM — wrong slot, wrong frame.
+      //
+      // Fix: if FrontFace != this, create a shallow clone of the CardDefinition
+      // and patch its internal state so FrontFace returns the clone itself.
+      // The original singleton in CardDataManager is never touched.
+      cardDef = CloneCardDefIfNeeded(cardDef, catId);
+
       try
       {
         if (s_cqpCtorWithCardDef == null || s_addItemsMethod == null) continue;
@@ -799,7 +869,12 @@ public static class CardRenderingHelpers
         s_addItemsMethod.Invoke(grouping, new object[] { arr, (ulong?)null });
         added++;
       }
-      catch { /* skip cards that cannot be wrapped */ }
+      catch (Exception ex)
+      {
+        Log.Debug(
+          $"[CardRenderingHelpers] Failed to add catId={catId}: " +
+          $"{(ex.InnerException ?? ex).GetType().Name}: {(ex.InnerException ?? ex).Message}");
+      }
     }
 
     if (added == 0)
@@ -1136,6 +1211,195 @@ public static class CardRenderingHelpers
     t.Start();
     t.Join();
     if (threadEx != null) throw threadEx;
+  }
+
+  //
+  // Single-card rendering (bypasses CGVM)
+  //
+
+  // Cached DetailsViewModel type + Initialize method
+  private static Type       s_detailsVmType;
+  private static MethodInfo s_detailsVmInit; // Initialize(ICardDefinition, bool owned)
+
+  /// <summary>
+  /// Renders a single card by catalog ID using the same WPF pipeline as MTGO's
+  /// card export (<c>CardRenderExportUtils</c>).  This bypasses the
+  /// <c>CardGroupingViewModel</c>, which coalesces adventure sub-cards into
+  /// their parent.  The result is a PNG byte array.
+  /// </summary>
+  /// <param name="catalogId">Catalog ID of the card to render.</param>
+  /// <param name="cardHeight">Desired card height in pixels (default 300).</param>
+  /// <param name="timeoutMs">Art-download timeout in milliseconds.</param>
+  /// <returns>PNG bytes, or empty array if the card could not be rendered.</returns>
+  public static byte[] RenderSingleCardPng(
+    int catalogId,
+    int cardHeight = 300,
+    int timeoutMs  = 8000)
+  {
+    EnsureInitialized();
+
+    // ── Resolve card definition ────────────────────────────────────────────
+    object dict = null;
+    MethodInfo tryGetValue = null;
+    if (s_digitalObjectsByCatIdProp != null && s_cardDataManagerInstance != null)
+    {
+      dict = s_digitalObjectsByCatIdProp.GetValue(s_cardDataManagerInstance);
+      if (dict != null)
+        tryGetValue = dict.GetType().GetMethod("TryGetValue");
+    }
+    if (dict == null || tryGetValue == null)
+      return Array.Empty<byte>();
+
+    object cardDef;
+    {
+      var args = new object[] { catalogId, null };
+      bool found = (bool)(tryGetValue.Invoke(dict, args) ?? false);
+      if (!found || args[1] == null) return Array.Empty<byte>();
+      cardDef = args[1];
+    }
+
+    // ── Pre-load art resource ──────────────────────────────────────────────
+    Uri artUri = null;
+    var resource = GetVisualResource(cardDef);
+    if (resource != null && WaitForLoad(resource, timeoutMs))
+    {
+      var uri = s_viewProp.GetValue(resource) as Uri;
+      if (uri != null && uri.OriginalString != ".") artUri = uri;
+    }
+
+    // ── WPF render on STA ──────────────────────────────────────────────────
+    Log.Debug("[RenderSingleCardPng] catId={Id} cardDef={Def} artUri={Art}",
+      catalogId, cardDef?.GetType().Name ?? "null", artUri?.ToString() ?? "null");
+    const double AspectRatio = 5.0 / 7.0;
+    int cardWidth = (int)Math.Ceiling(cardHeight * AspectRatio);
+    var renderSize = new Size(cardWidth, cardHeight);
+
+    byte[] png = null;
+    RunOnSTA(() =>
+    {
+      // Ensure WPF infrastructure (InstantRender, bitmap converter, etc.)
+      EnsureWpfInfrastructure();
+
+      // Cache DetailsViewModel type
+      if (s_detailsVmType == null)
+      {
+        s_detailsVmType = FindType("Shiny.CardManager.ViewModels.DetailsViewModel");
+        // Initialize(ICardDefinition, bool, bool = true, AttributeAnnotation = NotSet)
+        // 4 parameters total (2 optional), so match by name rather than exact signature.
+        s_detailsVmInit = s_detailsVmType?.GetMethod("Initialize",
+          BindingFlags.Public | BindingFlags.Instance);
+      }
+      if (s_detailsVmType == null || s_detailsVmInit == null)
+      {
+        Log.Warning("[RenderSingleCardPng] DetailsViewModel type={T} init={I}",
+          s_detailsVmType != null, s_detailsVmInit != null);
+        return;
+      }
+
+      // Warm art bitmap cache so WPF binding loads synchronously
+      if (artUri != null && s_getBitmapSourceMethod != null && s_bitmapConverterInstance != null)
+      {
+        try
+        {
+          s_getBitmapSourceMethod.Invoke(
+            s_bitmapConverterInstance, new object[] { artUri, false });
+        }
+        catch (Exception ex)
+        {
+          Log.Warning("[RenderSingleCardPng] Bitmap warm failed: {Msg}", ex.Message);
+        }
+      }
+
+      bool prevInstantRender = false;
+      try
+      {
+        // Force synchronous art loading
+        if (s_instantRenderProp != null)
+        {
+          prevInstantRender = (bool)s_instantRenderProp.GetValue(null);
+          s_instantRenderProp.SetValue(null, true);
+        }
+
+        // Create DetailsViewModel and initialize with the card definition
+        // Initialize(ICardDefinition, bool owned, bool initializeMeldCards = true,
+        //            AttributeAnnotation annotation = NotSet)
+        var detailsVm = Activator.CreateInstance(s_detailsVmType);
+        Log.Debug("[RenderSingleCardPng] DetailsViewModel created: {V}", detailsVm != null);
+        var annotationType = FindType("WotC.MtGO.Client.Model.Collection.AttributeAnnotation");
+        object notSet = Enum.ToObject(annotationType, 0);
+        s_detailsVmInit.Invoke(detailsVm, new[] { cardDef, (object)false, (object)true, notSet });
+        Log.Debug("[RenderSingleCardPng] DetailsViewModel initialized");
+
+        // Use CardOrItemTemplateSelector to pick the same CGVM-style
+        // DataTemplate (baseCardView_PostM15, etc.) that the collection
+        // view uses.  These templates contain CardControlPostM15 and
+        // friends with responsive font sizing, unlike baseCardViewExport
+        // which wraps everything in a Viewbox.
+        //
+        // The selector's SelectTemplate calls container.TryFindResource,
+        // so the container must have access to MTGO's resource dictionaries.
+        // Use MTGO's main window as the container for resource lookup.
+        var selectorType = FindType(
+          "Shiny.CardManager.Utilities.CardOrItemTemplateSelector");
+        var selectorInstance = selectorType?.GetField("Instance",
+          BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        var selectMethod = selectorType?.GetMethod("SelectTemplate",
+          BindingFlags.Public | BindingFlags.Instance, null,
+          new[] { typeof(object), typeof(DependencyObject) }, null);
+
+        var app = Application.Current;
+        var resourceContainer = (DependencyObject)app?.MainWindow;
+
+        DataTemplate template = null;
+        if (selectorInstance != null && selectMethod != null && resourceContainer != null)
+        {
+          template = selectMethod.Invoke(selectorInstance,
+            new[] { detailsVm, (object)resourceContainer }) as DataTemplate;
+        }
+        Log.Debug("[RenderSingleCardPng] CGVM template found: {T}", template != null);
+
+        if (template == null)
+        {
+          // Fallback to export template
+          template = app?.TryFindResource("baseCardViewExport") as DataTemplate;
+          Log.Debug("[RenderSingleCardPng] Fallback export template: {T}", template != null);
+        }
+
+        var presenter = new ContentPresenter();
+
+        presenter.BeginInit();
+        presenter.ContentTemplate = template;
+        presenter.Content = detailsVm;
+        presenter.EndInit();
+
+        presenter.Measure(renderSize);
+        presenter.Arrange(new Rect(renderSize));
+        presenter.UpdateLayout();
+
+        var rtb = new RenderTargetBitmap(
+          cardWidth, cardHeight, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(presenter);
+        Log.Debug("[RenderSingleCardPng] Rendered {W}x{H}", rtb.PixelWidth, rtb.PixelHeight);
+
+        using var ms = new MemoryStream();
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(rtb));
+        encoder.Save(ms);
+        png = ms.ToArray();
+        Log.Debug("[RenderSingleCardPng] PNG bytes: {Len}", png.Length);
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "[RenderSingleCardPng] WPF render failed for catId={Id}", catalogId);
+      }
+      finally
+      {
+        if (s_instantRenderProp != null)
+          s_instantRenderProp.SetValue(null, prevInstantRender);
+      }
+    });
+
+    return png ?? Array.Empty<byte>();
   }
 
   // Pixel blit / scale

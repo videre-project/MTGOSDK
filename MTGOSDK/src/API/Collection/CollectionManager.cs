@@ -108,6 +108,20 @@ public static class CollectionManager
   public static IEnumerable<Card> GetCards(string cardName) =>
     Map<IEnumerable, int, Card>(GetCardIds(cardName), GetCard);
 
+  /// <summary>
+  /// Returns a card object by the given card texture number (CTN).
+  /// </summary>
+  /// <param name="textureId">The card texture number to look up.</param>
+  /// <returns>A new card object.</returns>
+  /// <exception cref="KeyNotFoundException">
+  /// Thrown if no card is found with the given texture number.
+  /// </exception>
+  public static Card GetCardByTextureId(int textureId) =>
+    new(
+      Unbind(s_cardDataManager).GetCardDefinitionForTextureNumber(textureId, true)
+        ?? throw new KeyNotFoundException(
+          $"No card found with texture number #{textureId}."));
+
   //
   // ICardSet wrapper methods
   //

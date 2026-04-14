@@ -83,6 +83,34 @@ public static class CardRenderer
   }
 
   //
+  // Single-card rendering
+  //
+
+  /// <summary>
+  /// Renders a single card by catalog ID as a base64-encoded PNG string.
+  /// Uses the WPF card export pipeline directly, bypassing the CGVM which
+  /// coalesces adventure/split sub-cards into their parent.
+  /// </summary>
+  /// <param name="catalogId">Catalog ID to render.</param>
+  /// <param name="cardHeight">Card height in pixels. Default: 300.</param>
+  /// <returns>Base64-encoded PNG, or null if rendering failed.</returns>
+  public static string? RenderCard(int catalogId, int cardHeight = 300)
+  {
+    byte[] png = (byte[])RemoteClient.InvokeMethod(
+      "MTGOSDK.Core.Remoting.Interop.CardRenderingHelpers",
+      "RenderSingleCardPng",
+      null,
+      catalogId,
+      cardHeight,
+      8000);
+
+    if (png == null || png.Length == 0)
+      return null;
+
+    return Convert.ToBase64String(png);
+  }
+
+  //
   // Batched framed rendering
   //
 
