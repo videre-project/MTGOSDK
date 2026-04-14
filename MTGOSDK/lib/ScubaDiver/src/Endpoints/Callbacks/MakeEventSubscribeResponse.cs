@@ -26,6 +26,13 @@ public partial class Diver : IDisposable
   public int AssignCallbackToken() =>
     Interlocked.Increment(ref _nextAvailableCallbackToken);
 
+  //
+  // Callback diagnostics
+  //
+
+  internal static long s_callbacksSent;
+  internal static long s_lastCallbackQueueDelayTicks;
+
   /// <summary>
   /// Invokes a callback to the connected SDK client over TCP.
   /// </summary>
@@ -34,6 +41,11 @@ public partial class Diver : IDisposable
     DateTime timestamp,
     params object[] parameters)
   {
+    Interlocked.Increment(ref s_callbacksSent);
+    var queueDelay = DateTime.Now - timestamp;
+    Interlocked.Exchange(
+      ref s_lastCallbackQueueDelayTicks, queueDelay.Ticks);
+
     if (!_callbackTokens.TryGetValue(token, out var cts))
       return;
 

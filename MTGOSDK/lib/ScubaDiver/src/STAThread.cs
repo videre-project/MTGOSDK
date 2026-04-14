@@ -24,6 +24,16 @@ public static class STAThread
   private static readonly Thread s_staThread;
   private static readonly CancellationTokenSource s_cts = new();
 
+  //
+  // Diagnostics counters
+  //
+
+  internal static long s_totalOps;
+  internal static long s_dispatcherOps;
+  internal static int s_pendingOps;
+  internal static long s_totalDispatchTicks;
+  internal static long s_timeoutCount;
+
   static STAThread()
   {
     s_staThread = new Thread(STAThreadWorker)
@@ -86,6 +96,8 @@ public static class STAThread
   /// <exception cref="Exception">Rethrows any exception from the action.</exception>
   public static void Execute(Action action, TimeSpan? timeout = null)
   {
+    Interlocked.Increment(ref s_totalOps);
+
     var dispatcher = GetApplicationDispatcher();
     var waitTimeout = timeout ?? TimeSpan.FromSeconds(5);
 
@@ -99,12 +111,16 @@ public static class STAThread
     // Try to use the WPF Dispatcher first (for UI thread access)
     if (dispatcher != null)
     {
-      Log.Debug("[STAThread] Executing on WPF Dispatcher thread.");
+      Interlocked.Increment(ref s_dispatcherOps);
+      Interlocked.Increment(ref s_pendingOps);
+
       Exception caughtException = null;
       var completionEvent = new System.Threading.ManualResetEventSlim(false);
+      long dispatchStartTicks = 0;
 
       dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
       {
+        dispatchStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
           action();
@@ -115,6 +131,10 @@ public static class STAThread
         }
         finally
         {
+          var elapsed = System.Diagnostics.Stopwatch.GetTimestamp()
+                      - dispatchStartTicks;
+          Interlocked.Add(ref s_totalDispatchTicks, elapsed);
+          Interlocked.Decrement(ref s_pendingOps);
           completionEvent.Set();
         }
       }));
@@ -123,6 +143,8 @@ public static class STAThread
       // This ensures timeout is respected even if dispatcher is blocked
       if (!completionEvent.Wait(waitTimeout))
       {
+        Interlocked.Increment(ref s_timeoutCount);
+        Interlocked.Decrement(ref s_pendingOps);
         Log.Debug($"[STAThread] Dispatcher operation timed out after {waitTimeout.TotalSeconds} seconds.");
         throw new TimeoutException($"Dispatcher operation timed out after {waitTimeout.TotalSeconds} seconds. The WPF UI thread may be blocked.");
       }
