@@ -18,7 +18,11 @@ public class FileLogger(
 {
   public static readonly LineFormatter DefaultLineFormatter =
     new((timestamp, level, category, message) =>
-      $"{timestamp:O} [{level}] [{category}] {message}");
+    {
+      var mid = LogContext.MessageId.Value;
+      var tag = mid.HasValue ? $" [#{mid.Value}]" : "";
+      return $"{timestamp:O} [{level}] [{category}]{tag} {message}";
+    });
 
 #pragma warning disable CS8633
   public IDisposable BeginScope<TState>(TState state) => null;

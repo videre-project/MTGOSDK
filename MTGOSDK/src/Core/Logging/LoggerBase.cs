@@ -134,8 +134,10 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   public static void SetProviderInstance(ILoggerProvider provider)
   {
     if (provider != s_provider)
+    {
+      s_provider = provider;
       s_loggers.Clear();
-    s_provider = provider;
+    }
   }
 
   /// <summary>
@@ -144,8 +146,10 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   public static void SetFactoryInstance(ILoggerFactory factory)
   {
     if (factory != s_factory)
+    {
+      s_factory = factory;
       s_loggers.Clear();
-    s_factory = factory;
+    }
   }
 
   /// <summary>
