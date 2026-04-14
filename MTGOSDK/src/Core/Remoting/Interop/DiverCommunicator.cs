@@ -36,6 +36,53 @@ public class DiverCommunicator : IDisposable
   private static readonly AsyncLocal<bool> s_forceUIThread = new();
   private volatile bool _isDisposed = false;
 
+  //
+  // IPC diagnostics
+  //
+
+  internal sealed class EndpointMetrics
+  {
+    public long Count;
+    public long TotalTicks;
+    public long LastTicks;
+  }
+
+  private static readonly ConcurrentDictionary<string, EndpointMetrics>
+    s_ipcMetrics = new();
+  private static long s_totalRequests;
+  private static long s_callbacksReceived;
+  private static double s_lastCallbackLatencyMs;
+  private static double s_avgCallbackLatencyMs;
+  private static double s_peakCallbackLatencyMs;
+  private static long s_peakResetTicks = Stopwatch.GetTimestamp();
+
+  public static long TotalRequests => Interlocked.Read(ref s_totalRequests);
+  public static long CallbacksReceived =>
+    Interlocked.Read(ref s_callbacksReceived);
+  public static double LastCallbackLatencyMs => s_lastCallbackLatencyMs;
+  public static double AvgCallbackLatencyMs => s_avgCallbackLatencyMs;
+  public static double PeakCallbackLatencyMs => s_peakCallbackLatencyMs;
+
+  public static IReadOnlyDictionary<string, (long Count, double AvgMs, double LastMs)>
+    GetIpcMetrics()
+  {
+    var result = new Dictionary<string, (long, double, double)>();
+    foreach (var kvp in s_ipcMetrics)
+    {
+      long count = Interlocked.Read(ref kvp.Value.Count);
+      if (count == 0) continue;
+
+      double freq = Stopwatch.Frequency;
+      result[kvp.Key] = (
+        count,
+        (Interlocked.Read(ref kvp.Value.TotalTicks) / (double)count)
+          / freq * 1000.0,
+        Interlocked.Read(ref kvp.Value.LastTicks) / freq * 1000.0
+      );
+    }
+    return result;
+  }
+
   public static bool ForceUIThread
   {
     get => s_forceUIThread.Value;
@@ -74,6 +121,11 @@ public class DiverCommunicator : IDisposable
   }
 
   public bool IsConnected => _tcp.IsConnected;
+
+  /// <summary>
+  /// The number of IPC requests currently awaiting a response.
+  /// </summary>
+  public int PendingRequestCount => _tcp.PendingRequestCount;
 
   public bool Disconnect()
   {
@@ -120,6 +172,29 @@ public class DiverCommunicator : IDisposable
     if (endpoint == "/invoke_callback")
     {
       var request = MessagePackSerializer.Deserialize<CallbackInvocationRequest>(body);
+      Interlocked.Increment(ref s_callbacksReceived);
+
+      // Measure end-to-end callback delivery latency.
+      // Normalize to UTC before comparing — MessagePack serializes DateTime
+      // as UTC ticks, so the deserialized Kind may differ from DateTime.Now.
+      double latencyMs = (DateTime.UtcNow - request.Timestamp.ToUniversalTime())
+        .TotalMilliseconds;
+      s_lastCallbackLatencyMs = latencyMs;
+      s_avgCallbackLatencyMs = s_avgCallbackLatencyMs == 0
+        ? latencyMs
+        : s_avgCallbackLatencyMs * 0.9 + latencyMs * 0.1;
+
+      // Rolling 5-second peak: reset if window expired, otherwise keep max
+      long now = Stopwatch.GetTimestamp();
+      if ((now - s_peakResetTicks) / (double)Stopwatch.Frequency > 5.0)
+      {
+        s_peakCallbackLatencyMs = latencyMs;
+        s_peakResetTicks = now;
+      }
+      else if (latencyMs > s_peakCallbackLatencyMs)
+      {
+        s_peakCallbackLatencyMs = latencyMs;
+      }
 
       // Set the timestamp for the sender
       if (request.Parameters.Count > 0)
@@ -165,8 +240,22 @@ public class DiverCommunicator : IDisposable
   private T SendRequest<T>(string endpoint, object request = null)
   {
     EnsureConnected();
+    Interlocked.Increment(ref s_totalRequests);
+
     byte[] body = request != null ? MessagePackSerializer.Serialize(request) : null;
-    return _tcp.SendRequestAsync<T>("/" + endpoint, body).GetAwaiter().GetResult();
+    var sw = Stopwatch.StartNew();
+    try
+    {
+      return _tcp.SendRequestAsync<T>("/" + endpoint, body).GetAwaiter().GetResult();
+    }
+    finally
+    {
+      sw.Stop();
+      var m = s_ipcMetrics.GetOrAdd(endpoint, _ => new EndpointMetrics());
+      Interlocked.Increment(ref m.Count);
+      Interlocked.Add(ref m.TotalTicks, sw.ElapsedTicks);
+      Interlocked.Exchange(ref m.LastTicks, sw.ElapsedTicks);
+    }
   }
 
   /// <summary>
@@ -175,8 +264,22 @@ public class DiverCommunicator : IDisposable
   private void SendRequest(string endpoint, object request = null)
   {
     EnsureConnected();
+    Interlocked.Increment(ref s_totalRequests);
+
     byte[] body = request != null ? MessagePackSerializer.Serialize(request) : null;
-    _tcp.SendRequestAsync("/" + endpoint, body).GetAwaiter().GetResult();
+    var sw = Stopwatch.StartNew();
+    try
+    {
+      _tcp.SendRequestAsync("/" + endpoint, body).GetAwaiter().GetResult();
+    }
+    finally
+    {
+      sw.Stop();
+      var m = s_ipcMetrics.GetOrAdd(endpoint, _ => new EndpointMetrics());
+      Interlocked.Increment(ref m.Count);
+      Interlocked.Add(ref m.TotalTicks, sw.ElapsedTicks);
+      Interlocked.Exchange(ref m.LastTicks, sw.ElapsedTicks);
+    }
   }
 
   public HeapDump DumpHeap(string typeFilter = null, bool dumpHashcodes = true)
@@ -298,6 +401,42 @@ public class DiverCommunicator : IDisposable
       return false;
     }
   }
+
+  /// <summary>
+  /// Queries the Diver for its current diagnostics snapshot.
+  /// </summary>
+  public DiverDiagnostics GetDiverDiagnostics() =>
+    SendRequest<DiverDiagnostics>("diagnostics");
+
+  /// <summary>
+  /// Takes a heap snapshot, building type stats and reverse reference map.
+  /// </summary>
+  public HeapSnapshotResponse GetHeapSnapshot(int topN = 50) =>
+    SendRequest<HeapSnapshotResponse>("heap_snapshot",
+      new HeapSnapshotRequest { TopN = topN });
+
+  /// <summary>
+  /// Computes the retain chain for the largest instance of the given type
+  /// using batched reverse BFS (requires a prior heap snapshot).
+  /// </summary>
+  public RetainChainResponse GetRetainChain(string typeName, int maxDepth = 8) =>
+    SendRequest<RetainChainResponse>("retain_chain",
+      new RetainChainRequest { TypeName = typeName, MaxDepth = maxDepth });
+
+  /// <summary>
+  /// Returns the largest instances of the given type (from cached snapshot).
+  /// </summary>
+  public TypeInstancesResponse GetTypeInstances(string typeName, int maxCount = 20) =>
+    SendRequest<TypeInstancesResponse>("type_instances",
+      new TypeInstancesRequest { TypeName = typeName, MaxCount = maxCount });
+
+  /// <summary>
+  /// Analyzes which static root fields hold the most retained memory in the
+  /// process, via forward BFS with dominator approximation.
+  /// </summary>
+  public StaticHoldersResponse AnalyzeStaticHolders(int topN = 50) =>
+    SendRequest<StaticHoldersResponse>("static_holders",
+      new StaticHoldersRequest { TopN = topN });
 
   public ObjectOrRemoteAddress GetItem(ulong token, ObjectOrRemoteAddress key)
   {

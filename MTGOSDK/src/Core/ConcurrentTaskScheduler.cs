@@ -20,17 +20,17 @@ public class ConcurrentTaskScheduler : TaskScheduler
   private readonly int _minDegreeOfParallelism;
   private readonly int _maxDegreeOfParallelism;
   private readonly CancellationToken _cancellationToken;
-  
+
   private readonly ConcurrentQueue<Task> _tasks = new();
   private readonly ConcurrentDictionary<Task, bool> _dequeuedTasks = new();
   private readonly SemaphoreSlim _concurrencySemaphore;
-  
+
   // Signaling mechanism for immediate task pickup (replaces polling)
   private readonly AutoResetEvent _taskAvailable = new(false);
-  
+
   // Track active workers
   private int _activeWorkers = 0;
-  
+
   public ConcurrentTaskScheduler(
     int minDegreeOfParallelism,
     int maxDegreeOfParallelism,
@@ -40,7 +40,7 @@ public class ConcurrentTaskScheduler : TaskScheduler
     _maxDegreeOfParallelism = maxDegreeOfParallelism;
     _cancellationToken = cancellationToken;
     _concurrencySemaphore = new SemaphoreSlim(maxDegreeOfParallelism);
-    
+
     // Start reserved worker threads immediately
     for (int i = 0; i < minDegreeOfParallelism; i++)
     {
@@ -53,10 +53,10 @@ public class ConcurrentTaskScheduler : TaskScheduler
   protected override void QueueTask(Task task)
   {
     _tasks.Enqueue(task);
-    
+
     // Signal waiting workers that a task is available
     _taskAvailable.Set();
-    
+
     // Spawn additional worker if below max and we have pending work
     SpawnWorkerIfNeeded();
   }
@@ -73,7 +73,22 @@ public class ConcurrentTaskScheduler : TaskScheduler
 
   private void SpawnWorker(bool isReserved)
   {
-    ThreadPool.UnsafeQueueUserWorkItem(_ => ExecuteTaskLoop(isReserved), null);
+    if (isReserved)
+    {
+      // Use a dedicated thread for reserved workers so they don't consume
+      // ThreadPool threads. Occupying ThreadPool threads permanently can
+      // starve the host process (e.g. MTGO's game initialization).
+      var thread = new Thread(() => ExecuteTaskLoop(isReserved: true))
+      {
+        IsBackground = true,
+        Name = $"ConcurrentTaskScheduler-Reserved"
+      };
+      thread.Start();
+    }
+    else
+    {
+      ThreadPool.UnsafeQueueUserWorkItem(_ => ExecuteTaskLoop(isReserved: false), null);
+    }
   }
 
   private void ExecuteTaskLoop(bool isReserved)
@@ -84,9 +99,9 @@ public class ConcurrentTaskScheduler : TaskScheduler
       // No slot available, exit
       return;
     }
-    
+
     Interlocked.Increment(ref _activeWorkers);
-    
+
     try
     {
       while (!_cancellationToken.IsCancellationRequested)
@@ -108,7 +123,7 @@ public class ConcurrentTaskScheduler : TaskScheduler
           // Immediately try next task without waiting
           continue;
         }
-        
+
         // No tasks available
         if (isReserved)
         {
@@ -134,7 +149,7 @@ public class ConcurrentTaskScheduler : TaskScheduler
     // Only inline if we can acquire a concurrency slot
     if (!_concurrencySemaphore.Wait(0))
       return false;
-    
+
     try
     {
       if (previouslyQueued)
@@ -158,5 +173,10 @@ public class ConcurrentTaskScheduler : TaskScheduler
     // Logically dequeue by marking it
     return _dequeuedTasks.TryAdd(task, true);
   }
-}
 
+  /// <summary>
+  /// Returns a snapshot of the scheduler's current utilization.
+  /// </summary>
+  public (int Active, int Queued, int Max) GetMetrics() =>
+    (Volatile.Read(ref _activeWorkers), _tasks.Count, _maxDegreeOfParallelism);
+}

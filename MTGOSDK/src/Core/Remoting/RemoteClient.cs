@@ -12,6 +12,7 @@ using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Structs;
 using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Resources;
@@ -402,6 +403,94 @@ public sealed class RemoteClient : DLRWrapper
     Log.Debug("Focused MTGO window");
 
     return hr;
+  }
+
+  //
+  // Diagnostics
+  //
+
+  /// <summary>
+  /// Collects SDK-side diagnostics (thread pool, IPC metrics, callback latency).
+  /// No IPC calls — reads local counters only.
+  /// </summary>
+  public static object GetSdkDiagnostics()
+  {
+    var (active, queued, max) = SyncThread.GetPoolMetrics();
+    var ipcMetrics = DiverCommunicator.GetIpcMetrics();
+
+    // Convert to serializable form
+    var endpoints = new Dictionary<string, object>();
+    foreach (var kvp in ipcMetrics)
+    {
+      endpoints[kvp.Key] = new
+      {
+        Count = kvp.Value.Count,
+        AvgMs = Math.Round(kvp.Value.AvgMs, 2),
+        LastMs = Math.Round(kvp.Value.LastMs, 2),
+      };
+    }
+
+    return new
+    {
+      SyncThreadActive = active,
+      SyncThreadQueued = queued,
+      SyncThreadMax = max,
+      InFlightRequests = @client?.Communicator?.PendingRequestCount ?? 0,
+      TotalRequests = DiverCommunicator.TotalRequests,
+      Endpoints = endpoints,
+      CallbacksReceived = DiverCommunicator.CallbacksReceived,
+      LastCallbackLatencyMs =
+        Math.Round(DiverCommunicator.LastCallbackLatencyMs, 2),
+      AvgCallbackLatencyMs =
+        Math.Round(DiverCommunicator.AvgCallbackLatencyMs, 2),
+      PeakCallbackLatencyMs =
+        Math.Round(DiverCommunicator.PeakCallbackLatencyMs, 2),
+    };
+  }
+
+  /// <summary>
+  /// Queries the Diver (inside the MTGO process) for its diagnostics snapshot.
+  /// Costs one IPC round-trip.
+  /// </summary>
+  public static Interop.Interactions.Dumps.DiverDiagnostics GetDiverDiagnostics()
+  {
+    try { return @client?.Communicator?.GetDiverDiagnostics(); }
+    catch { return null; }
+  }
+
+  /// <summary>
+  /// Takes a heap snapshot, building type stats and reverse reference map.
+  /// </summary>
+  public static Interop.Interactions.Dumps.HeapSnapshotResponse GetHeapSnapshot(int topN = 50)
+  {
+    return @client?.Communicator?.GetHeapSnapshot(topN);
+  }
+
+  /// <summary>
+  /// Computes the retain chain for the largest instance of the given type.
+  /// </summary>
+  public static Interop.Interactions.Dumps.RetainChainResponse GetRetainChain(
+    string typeName, int maxDepth = 8)
+  {
+    return @client?.Communicator?.GetRetainChain(typeName, maxDepth);
+  }
+
+  /// <summary>
+  /// Returns the largest instances of the given type.
+  /// </summary>
+  public static Interop.Interactions.Dumps.TypeInstancesResponse GetTypeInstances(
+    string typeName, int maxCount = 20)
+  {
+    return @client?.Communicator?.GetTypeInstances(typeName, maxCount);
+  }
+
+  /// <summary>
+  /// Analyzes which static root fields hold the most retained memory.
+  /// </summary>
+  public static Interop.Interactions.Dumps.StaticHoldersResponse AnalyzeStaticHolders(
+    int topN = 50)
+  {
+    return @client?.Communicator?.AnalyzeStaticHolders(topN);
   }
 
   //
