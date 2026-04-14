@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections;
+
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
@@ -46,6 +48,59 @@ public class PropertyContainer : DLRWrapper<object>
     {
       _properties = GetProperties(
         propertyContainer?.ToString() ?? string.Empty, _propertyNames);
+
+      // Capture any sub-properties that weren't picked up by ToString()
+      // parsing, by accessing SubProperties directly on the remote object.
+      CaptureSubProperties(propertyContainer);
+    }
+  }
+
+  /// <summary>
+  /// Captures sub-property containers (e.g. COUNTERS_LIST) directly from a
+  /// remote PropertyContainer object via dynamic access. Acts as a fallback
+  /// for any sub-containers that ToString() parsing may have missed.
+  /// </summary>
+  private void CaptureSubProperties(dynamic container)
+  {
+    try
+    {
+      dynamic subDict = Try(
+        () => (object)container.SubProperties,
+        () => (object)container.SubPropertiesDictionary);
+      if (subDict == null) return;
+
+      foreach (dynamic entry in (IEnumerable)subDict)
+      {
+        dynamic key = entry.Key;
+        dynamic val = entry.Value;
+        if (key == null || val == null) continue;
+
+        var prop = (MagicProperty)(uint)(int)key;
+
+        // Skip if already captured by ToString() parsing
+        if (_properties.TryGetValue(prop, out var existing)
+            && existing is PropertyContainer)
+          continue;
+
+        // Store the MTGO name for this property
+        try
+        {
+          string enumName = key.ToString();
+          if (enumName != null && !uint.TryParse(enumName, out _))
+          {
+            _propertyNames[prop] = enumName;
+            s_globalNames[prop] = enumName;
+          }
+        }
+        catch { }
+
+        // Recursively snapshot the sub-container
+        _properties[prop] = new PropertyContainer(val);
+      }
+    }
+    catch
+    {
+      // Remote object access may fail; sub-properties are best-effort.
     }
   }
 
@@ -123,6 +178,15 @@ public class PropertyContainer : DLRWrapper<object>
     MagicProperty.GS_SPLITCARD_ID1,
     MagicProperty.ATTACHED_TO_ID,
     MagicProperty.CREATION_MODTIMESTAMP,
+    MagicProperty.SHOW_ATTACHED_TO,
+    MagicProperty.MUTATE_PARENT_ID,
+    MagicProperty.ENCODED_ON,
+    MagicProperty.REMOVED_FROM_GAME_BY_ID,
+    MagicProperty.IMPRINTED_CARD_ID0,
+    MagicProperty.PAIRED_WITH_ID,
+    MagicProperty.HAUNTED_THING,
+    MagicProperty.DRAW_ARROW_FROM_ID,
+    MagicProperty.CHOSEN_SOURCE,
   ];
 
   /// <summary>
@@ -142,6 +206,8 @@ public class PropertyContainer : DLRWrapper<object>
     MagicProperty.IS_REPLACEMENT_EFFECT,
     MagicProperty.IS_COMPANION,
     MagicProperty.IS_EMBLEM,
+    MagicProperty.IS_TOKEN,
+    MagicProperty.IS_LAND,
   ];
 
   /// <summary>
@@ -365,9 +431,15 @@ public class PropertyContainer : DLRWrapper<object>
 
       if (string.IsNullOrWhiteSpace(valueStr))
       {
-        if (index < lines.Length && lines[index].Trim() == "[")
+        // Skip blank lines between "=" and "[" (MTGO's ToString() emits
+        // an extra newline before sub-container brackets).
+        int peek = index;
+        while (peek < lines.Length && string.IsNullOrWhiteSpace(lines[peek]))
+          peek++;
+
+        if (peek < lines.Length && lines[peek].Trim() == "[")
         {
-          index++; // skip "["
+          index = peek + 1; // skip blank lines and "["
           var subProps = new Dictionary<MagicProperty, dynamic>();
           var subNameMap = new Dictionary<MagicProperty, string>();
           ParseContainer(lines, ref index, subProps, subNameMap);
@@ -411,8 +483,20 @@ public class PropertyContainer : DLRWrapper<object>
     }
   }
 
+  /// <summary>
+  /// Sets a property value in the local dictionary only (no remote IPC).
+  /// Used by processors that need to backfill properties not present in the
+  /// server's binary state (e.g. ACTION_TARGETID1..N from action messages).
+  /// </summary>
+  internal void SetLocal(MagicProperty property, dynamic value)
+  {
+    _properties[property] = value;
+  }
+
   public PropertyContainer? GetSubproperties(MagicProperty property) =>
-    _properties.TryGetValue(property, out var value) ? new(value) : null;
+    _properties.TryGetValue(property, out var value) && value is PropertyContainer sub
+      ? sub
+      : null;
 
   /// <summary>
   /// Checks if the container has a property.

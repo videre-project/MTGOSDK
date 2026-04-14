@@ -16,7 +16,7 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// Must run before PropertyChangeTracker so that combat order changes are
 /// detected via GameCardPartial.Equals.
 /// </summary>
-public sealed class CombatProcessor : IGameStateProcessor
+public sealed class CombatProcessor : IIntermediateTickProcessor
 {
   public void Initialize(Game game) { }
 

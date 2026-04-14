@@ -9,6 +9,7 @@ using System.Dynamic;
 using System.Linq;
 
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Users;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Partials;
@@ -23,13 +24,13 @@ public class GamePlayerPartial : DynamicObject
   private readonly int _playerIndex;
   private readonly string _name;
   private readonly List<Mana> _manaPool = new();
-  private readonly UserPartial _user;
+  internal User? _user;
   private readonly dynamic? _game;
 
   public int Id => _playerIndex;
   public string Name => _name;
-  public dynamic User => _user;
-  public dynamic m_user => _user;
+  public User User => _user!;
+  public dynamic m_user => User;
   public dynamic? Game => _game;
 
   // IGamePlayer-compatible properties
@@ -47,7 +48,6 @@ public class GamePlayerPartial : DynamicObject
   {
     _playerIndex = playerIndex;
     _name = name ?? $"Player{playerIndex}";
-    _user = new UserPartial(playerIndex, _name);
     _game = game;
     Life = 20; // Default starting life
   }
@@ -63,10 +63,10 @@ public class GamePlayerPartial : DynamicObject
         result = _name;
         return true;
       case "User":
-        result = _user;
+        result = User;
         return true;
       case "m_user":
-        result = _user;
+        result = User;
         return true;
       case "Game":
         result = _game;
@@ -102,6 +102,40 @@ public class GamePlayerPartial : DynamicObject
   }
 
   /// <summary>
+  /// Creates a detached copy of a player partial so current-tick updates do not
+  /// mutate previous snapshot state used for diffs.
+  /// </summary>
+  internal static GamePlayerPartial Clone(GamePlayerPartial source)
+  {
+    var clone = new GamePlayerPartial(source._playerIndex, source._name, source._game)
+    {
+      _user = source._user,
+      Life = source.Life,
+      HandCount = source.HandCount,
+      LibraryCount = source.LibraryCount,
+      GraveyardCount = source.GraveyardCount,
+      IsActivePlayer = source.IsActivePlayer,
+      HasPriority = source.HasPriority,
+      ChessClock = source.ChessClock,
+    };
+
+    clone._manaPool.Clear();
+    clone._manaPool.AddRange(source._manaPool);
+    return clone;
+  }
+
+  /// <summary>
+  /// Copies transient fields that may be produced by non-PlayerStatus elements
+  /// (e.g., ManaPool) so they are not lost when PlayerStatus reparses players.
+  /// </summary>
+  internal void CopyTransientStateFrom(GamePlayerPartial source)
+  {
+    _manaPool.Clear();
+    _manaPool.AddRange(source._manaPool);
+    HasPriority = source.HasPriority;
+  }
+
+  /// <summary>
   /// Parses all players from a PlayerStatusElement and the game instance.
   /// Returns a dictionary keyed by player index.
   /// </summary>
@@ -110,14 +144,18 @@ public class GamePlayerPartial : DynamicObject
     dynamic gameInstance)
   {
     var players = new Dictionary<int, GamePlayerPartial>();
-    dynamic game = null;
-    try { game = gameInstance.Game ?? gameInstance; } catch { }
+    dynamic game = gameInstance;
 
     try
     {
       int activePlayer = (int)(playerStatusElement.ActivePlayer ?? 0);
       int gamePlayerCount = 0;
-      try { gamePlayerCount = (int)game.Players.Count; } catch { }
+      try { gamePlayerCount = (int)game.Players.Count; }
+      catch (Exception ex)
+      {
+        MTGOSDK.Core.Logging.Log.Warning(ex,
+          "[GamePlayerPartial] Failed to get Players.Count: {Error}", ex.Message);
+      }
 
       // PlayerStatusElement exposes short[16] for counts, int[8] for time
       short[] lifes = playerStatusElement.Lifes;
@@ -130,18 +168,20 @@ public class GamePlayerPartial : DynamicObject
       int parseCount = gamePlayerCount > 0 ? gamePlayerCount : 16;
       parseCount = Math.Max(parseCount, activePlayer + 1);
 
-      // Get player names from the game instance
-      var playerNames = new string[parseCount];
+      // Get User objects from the game instance
+      var users = new User?[parseCount];
       for (int i = 0; i < Math.Min(parseCount, gamePlayerCount); i++)
       {
         try
         {
           dynamic player = game.Players[i];
-          playerNames[i] = (string)(player.Name ?? $"Player {i}");
+          users[i] = new User(player.User);
         }
-        catch
+        catch (Exception ex)
         {
-          playerNames[i] = $"Player {i}";
+          MTGOSDK.Core.Logging.Log.Warning(ex,
+            "[GamePlayerPartial] Failed to get player {Index} info: {Error}",
+            i, ex.Message);
         }
       }
 
@@ -157,10 +197,12 @@ public class GamePlayerPartial : DynamicObject
         if (life == 0 && handCount == 0 && libraryCount == 0 && i != activePlayer)
           continue;
 
+        var user = i < users.Length ? users[i] : null;
         var chessClock = TimeSpan.FromSeconds(i < timeLeft.Length ? timeLeft[i] : 0);
 
-        players[i] = new GamePlayerPartial(i, playerNames[i] ?? $"Player {i}", game)
+        players[i] = new GamePlayerPartial(i, user?.Name ?? $"Player {i}", game)
         {
+          _user = user,
           Life = life,
           HandCount = handCount,
           LibraryCount = libraryCount,
@@ -170,9 +212,10 @@ public class GamePlayerPartial : DynamicObject
         };
       }
     }
-    catch
+    catch (Exception ex)
     {
-      // Swallow parsing errors
+      MTGOSDK.Core.Logging.Log.Warning(ex,
+        "[GamePlayerPartial] Failed to parse player status element");
     }
 
     return players;
@@ -279,28 +322,6 @@ public class GamePlayerPartial : DynamicObject
 
   public static bool operator !=(GamePlayerPartial? left, GamePlayerPartial? right) =>
     !Equals(left, right);
-
-  public sealed class UserPartial(int id, string name) : DynamicObject
-  {
-    public int Id { get; } = id;
-    public string Name { get; } = name;
-
-    public override bool TryGetMember(GetMemberBinder binder, out object? result)
-    {
-      switch (binder.Name)
-      {
-        case "Id":
-          result = Id;
-          return true;
-        case "Name":
-          result = Name;
-          return true;
-        default:
-          result = null;
-          return true;
-      }
-    }
-  }
 
   public sealed class ManaPartial(int color, int amount) : DynamicObject
   {

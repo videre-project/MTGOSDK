@@ -17,7 +17,7 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// Tracks property changes for cards and players between snapshots.
 /// Uses the GameContext.CardAncestryMap to correlate card identities across ID changes.
 /// </summary>
-public sealed class PropertyChangeTracker : IGameStateProcessor
+public sealed class PropertyChangeTracker : IIntermediateTickProcessor
 {
   public void Process(GameContext context)
   {

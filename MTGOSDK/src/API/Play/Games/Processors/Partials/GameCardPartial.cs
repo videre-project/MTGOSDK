@@ -29,6 +29,19 @@ public class GameCardPartial(
 {
   private readonly int? _previousZoneId = previousZoneId;
 
+  // Cached resolved results — GameCardPartial is immutable after construction,
+  // so these are computed once and reused across Equals, GetHashCode, and
+  // downstream consumers (DiffCard, BuildGameCardModel, etc.).
+  private List<CardAbility>? _cachedAbilities;
+  private Dictionary<CardCounter, int>? _cachedCounters;
+  private string? _cachedTypeLine;
+
+  /// <summary>
+  /// The remote CardDefinition object for this card, if resolved.
+  /// Set by GameProcessor during materialization.
+  /// </summary>
+  internal dynamic? CardDefinition { get; set; }
+
   /// <summary>
   /// The internal property container for this card.
   /// </summary>
@@ -43,6 +56,8 @@ public class GameCardPartial(
     ["Id"]                  = MagicProperty.THINGNUMBER,
     ["CTN"]                 = MagicProperty.CARDTEXTURE_NUMBER,
     ["SourceId"]            = MagicProperty.SRC_THING_ID,
+    ["SplitChildId0"]       = MagicProperty.GS_SPLITCARD_ID0,
+    ["SplitChildId1"]       = MagicProperty.GS_SPLITCARD_ID1,
     ["Timestamp"]           = MagicProperty.CREATION_MODTIMESTAMP,
     ["Power"]               = MagicProperty.POWER,
     ["Toughness"]           = MagicProperty.TOUGHNESS,
@@ -152,6 +167,55 @@ public class GameCardPartial(
               ?? "";
         return true;
 
+      case "RulesText":
+      {
+        // Stack items (abilities) use ACTION_SPELL_TEXT_STRING for the
+        // specific mode/ability text. Permanents and cards in hand use
+        // the definition's full oracle text.
+        bool isStackAbility = GetBool(MagicProperty.IS_ACTIVATED_ABILITY)
+                           || GetBool(MagicProperty.IS_TRIGGERED_ABILITY);
+        if (isStackAbility)
+        {
+          result = (string?)(properties[MagicProperty.ACTION_SPELL_TEXT_STRING]
+                ?? properties[MagicProperty.EFFECT_NAME_STRING]
+                ?? properties[MagicProperty.REAL_ORACLETEXT_STRING])
+                ?? "";
+          return true;
+        }
+
+        // For all other cards, prefer definition oracle text
+        if (CardDefinition != null)
+        {
+          try
+          {
+            var defText = (string?)CardDefinition.RulesText;
+            if (!string.IsNullOrEmpty(defText))
+            {
+              result = defText;
+              return true;
+            }
+          }
+          catch { }
+        }
+
+        result = (string?)(properties[MagicProperty.REAL_ORACLETEXT_STRING]
+              ?? properties[MagicProperty.ACTION_SPELL_TEXT_STRING]
+              ?? properties[MagicProperty.EFFECT_NAME_STRING])
+              ?? "";
+        return true;
+      }
+
+      case "BlueText":
+      {
+        var bt = (string?)properties[MagicProperty.BLUETEXT_STRING0];
+        var abt = (string?)properties[MagicProperty.ABILITY_BLUETEXT_STRING0];
+        if (bt != null && abt != null)
+          result = bt + "\n" + abt;
+        else
+          result = bt ?? abt ?? "";
+        return true;
+      }
+
       case "GameInterface":
         result = game;
         return true;
@@ -180,7 +244,12 @@ public class GameCardPartial(
         return true;
 
       case "Counters":
-        result = ResolveCounters();
+        // Return a flat list matching the live MTGO object's format:
+        // each counter type repeated by its count (e.g. 3 +1/+1 counters
+        // → [PlusOnePlusOne, PlusOnePlusOne, PlusOnePlusOne]).
+        result = ResolveCounters()
+          .SelectMany(kvp => Enumerable.Repeat(kvp.Key, kvp.Value))
+          .ToList();
         return true;
 
       // Combat ordering (populated by GameProcessor cross-linking)
@@ -191,19 +260,31 @@ public class GameCardPartial(
         result = BlockingOrders.Select(p => p.Target).ToList();
         return true;
 
+      // Attachment / association resolution
+      case "AttachedToId":
+        result = ResolveAttachedToId();
+        return true;
+
+      case "Associations":
+        result = ResolveAssociations();
+        return true;
+
       // Complex members we intentionally omit
       case "Actions":
       case "PendingTargets":
-      case "Associations":
         result = null;
         return true;
 
       case "Definition":
-        result = new DefinitionPartial(properties, game);
+        result = CardDefinition ?? new DefinitionPartial(properties, game);
         return true;
 
       case "Abilities":
         result = ResolveAbilities();
+        return true;
+
+      case "TypeLine":
+        result = ResolveTypeLine();
         return true;
 
       case "TargetInformation":
@@ -231,6 +312,90 @@ public class GameCardPartial(
     (string?)(properties[MagicProperty.CARDNAME_STRING]
       ?? properties[MagicProperty.ALT_NAME_STRING])
       ?? string.Empty;
+
+  /// <summary>
+  /// Resolves the card ID this card is visually attached to, using MTGO's
+  /// priority chain: SHOW_ATTACHED_TO → ATTACHED_TO_ID → MUTATE_PARENT_ID → ENCODED_ON.
+  /// Returns 0 if not attached to anything.
+  /// </summary>
+  internal int ResolveAttachedToId()
+  {
+    int id = GetInt(MagicProperty.SHOW_ATTACHED_TO, 0);
+    if (id > 0) return id;
+    id = GetInt(MagicProperty.ATTACHED_TO_ID, 0);
+    if (id > 0) return id;
+    id = GetInt(MagicProperty.MUTATE_PARENT_ID, 0);
+    if (id > 0) return id;
+    id = GetInt(MagicProperty.ENCODED_ON, 0);
+    if (id > 0) return id;
+    return 0;
+  }
+
+  /// <summary>
+  /// Resolves all card associations from MagicProperty integer IDs.
+  /// Returns a map of association type name → list of target card IDs.
+  /// </summary>
+  public Dictionary<string, List<int>> ResolveAssociations()
+  {
+    var result = new Dictionary<string, List<int>>();
+
+    void AddIfPresent(MagicProperty prop, string assocName)
+    {
+      var val = GetInt(prop, 0);
+      if (val > 0)
+      {
+        if (!result.TryGetValue(assocName, out var list))
+          result[assocName] = list = new();
+        list.Add(val);
+      }
+    }
+
+    // Attachment (resolved via priority chain)
+    var attachedTo = ResolveAttachedToId();
+    if (attachedTo > 0)
+      result["AttachedTo"] = new List<int> { attachedTo };
+
+    AddIfPresent(MagicProperty.REMOVED_FROM_GAME_BY_ID, "RemovedFromGameBy");
+    AddIfPresent(MagicProperty.PAIRED_WITH_ID, "Soulbond");
+    AddIfPresent(MagicProperty.HAUNTED_THING, "HauntedTarget");
+    AddIfPresent(MagicProperty.CHOSEN_SOURCE, "ChosenSource");
+    AddIfPresent(MagicProperty.DRAW_ARROW_FROM_ID, "DrawArrowFrom");
+
+    // Loop-based: IMPRINTED_CARD_ID0..N
+    for (uint i = 0; i < 255; i++)
+    {
+      var val = GetInt((MagicProperty)((uint)MagicProperty.IMPRINTED_CARD_ID0 + i), 0);
+      if (val <= 0) continue;
+      if (!result.TryGetValue("ImprintedCard", out var list))
+        result["ImprintedCard"] = list = new();
+      list.Add(val);
+    }
+
+    // Loop-based: ACTION_TARGETID0..N (spell/ability targeting, both players)
+    // Parallel: ACTION_TARGETDIVIDE0..N (damage/value distribution per target)
+    //
+    for (uint i = 0; i < 255; i++)
+    {
+      var prop = (MagicProperty)((uint)MagicProperty.ACTION_TARGETID0 + i);
+      if (!properties.HasProperty(prop)) continue;
+      var val = GetInt(prop, 0);
+      if (val <= 0) continue;
+      if (!result.TryGetValue("ActionTarget", out var targetList))
+        result["ActionTarget"] = targetList = new();
+      targetList.Add(val);
+
+      var divideProp = (MagicProperty)((uint)MagicProperty.ACTION_TARGETDIVIDE0 + i);
+      var divideVal = GetInt(divideProp, 0);
+      if (divideVal > 0)
+      {
+        if (!result.TryGetValue("ActionTargetDivide", out var divideList))
+          result["ActionTargetDivide"] = divideList = new();
+        divideList.Add(divideVal);
+      }
+    }
+
+    return result;
+  }
 
   private int GetCurrentDungeonRoomValue()
   {
@@ -317,6 +482,24 @@ public class GameCardPartial(
     if (GetInt(MagicProperty.PROTECTOR, -1) != other.GetInt(MagicProperty.PROTECTOR, -1)) return false;
     if (GetInt(MagicProperty.OTHER_FACE, -1) != other.GetInt(MagicProperty.OTHER_FACE, -1)) return false;
 
+    // Attachment / association properties
+    if (GetInt(MagicProperty.SHOW_ATTACHED_TO, 0) != other.GetInt(MagicProperty.SHOW_ATTACHED_TO, 0)) return false;
+    if (GetInt(MagicProperty.ATTACHED_TO_ID, 0) != other.GetInt(MagicProperty.ATTACHED_TO_ID, 0)) return false;
+    if (GetInt(MagicProperty.REMOVED_FROM_GAME_BY_ID, 0) != other.GetInt(MagicProperty.REMOVED_FROM_GAME_BY_ID, 0)) return false;
+    if (GetInt(MagicProperty.MUTATE_PARENT_ID, 0) != other.GetInt(MagicProperty.MUTATE_PARENT_ID, 0)) return false;
+    if (GetInt(MagicProperty.ENCODED_ON, 0) != other.GetInt(MagicProperty.ENCODED_ON, 0)) return false;
+    if (GetInt(MagicProperty.PAIRED_WITH_ID, 0) != other.GetInt(MagicProperty.PAIRED_WITH_ID, 0)) return false;
+
+    // Indexed association properties (ACTION_TARGETID0..N, IMPRINTED_CARD_ID0..N)
+    var assocs = ResolveAssociations();
+    var otherAssocs = other.ResolveAssociations();
+    if (assocs.Count != otherAssocs.Count) return false;
+    foreach (var (key, list) in assocs)
+    {
+      if (!otherAssocs.TryGetValue(key, out var otherList)) return false;
+      if (!list.OrderBy(x => x).SequenceEqual(otherList.OrderBy(x => x))) return false;
+    }
+
     var abilities = ResolveAbilities().OrderBy(a => (int)a).ToArray();
     var otherAbilities = other.ResolveAbilities().OrderBy(a => (int)a).ToArray();
     if (!abilities.SequenceEqual(otherAbilities)) return false;
@@ -324,6 +507,8 @@ public class GameCardPartial(
     var counters = ResolveCounters();
     var otherCounters = other.ResolveCounters();
     if (!DictionariesEqual(counters, otherCounters)) return false;
+
+    if (ResolveTypeLine() != other.ResolveTypeLine()) return false;
 
     if (!GetAttackingOrderIds().SequenceEqual(other.GetAttackingOrderIds())) return false;
     if (!GetBlockingOrderIds().SequenceEqual(other.GetBlockingOrderIds())) return false;
@@ -371,6 +556,22 @@ public class GameCardPartial(
     hash.Add(GetInt(MagicProperty.PROTECTOR, -1));
     hash.Add(GetInt(MagicProperty.OTHER_FACE, -1));
 
+    // Attachment / association properties
+    hash.Add(GetInt(MagicProperty.SHOW_ATTACHED_TO, 0));
+    hash.Add(GetInt(MagicProperty.ATTACHED_TO_ID, 0));
+    hash.Add(GetInt(MagicProperty.REMOVED_FROM_GAME_BY_ID, 0));
+    hash.Add(GetInt(MagicProperty.MUTATE_PARENT_ID, 0));
+    hash.Add(GetInt(MagicProperty.ENCODED_ON, 0));
+    hash.Add(GetInt(MagicProperty.PAIRED_WITH_ID, 0));
+
+    // Indexed association properties (ACTION_TARGETID0..N, IMPRINTED_CARD_ID0..N)
+    foreach (var (key, list) in ResolveAssociations()
+      .OrderBy(kvp => kvp.Key, StringComparer.Ordinal))
+    {
+      hash.Add(key, StringComparer.Ordinal);
+      foreach (var id in list.OrderBy(x => x)) hash.Add(id);
+    }
+
     foreach (var ability in ResolveAbilities().OrderBy(a => (int)a))
       hash.Add((int)ability);
 
@@ -379,6 +580,8 @@ public class GameCardPartial(
       hash.Add((int)counter);
       hash.Add(value);
     }
+
+    hash.Add(ResolveTypeLine(), StringComparer.Ordinal);
 
     foreach (var id in GetAttackingOrderIds()) hash.Add(id);
     foreach (var id in GetBlockingOrderIds()) hash.Add(id);
@@ -480,6 +683,14 @@ public class GameCardPartial(
       : null;
 
   /// <summary>
+  /// Gets the raw player index for a player-typed property (OWNER,
+  /// CONTROLLER, PROTECTOR) without creating a GamePlayer wrapper.
+  /// Returns -1 if the property is not set or not an integer.
+  /// </summary>
+  public int GetPlayerIndex(MagicProperty property) =>
+    GetInt(property, -1);
+
+  /// <summary>
   /// Gets the shared <see cref="GamePlayer"/> wrapper for the owner.
   /// </summary>
   public GamePlayer GetOwnerWrapper() =>
@@ -549,6 +760,23 @@ public class GameCardPartial(
         {
           s_zoneCache.TryAdd(cacheKey, zone);
           return zone;
+        }
+      }
+      else
+      {
+        // OWNER not set — try each player in turn (handles cards freshly created
+        // with SourceId == -1 that carry no explicit owner, e.g. Revealed/Pile
+        // zone cards created by scry or pile-division effects).
+        int playerCount = (int)game.PlayersInServerOrder.Count;
+        for (int i = 0; i < playerCount; i++)
+        {
+          dynamic owner = game.PlayersInServerOrder[i];
+          zone = proxyCard.GetPlayerCardZone(uid, owner);
+          if (zone != null)
+          {
+            s_zoneCache.TryAdd(cacheKey, zone);
+            return zone;
+          }
         }
       }
 
@@ -659,9 +887,15 @@ public class GameCardPartial(
   /// </summary>
   private Dictionary<CardCounter, int> ResolveCounters()
   {
+    if (_cachedCounters != null) return _cachedCounters;
+
     var counters = new Dictionary<CardCounter, int>();
     var counterList = properties.GetSubproperties(MagicProperty.COUNTERS_LIST);
-    if (counterList == null) return counters;
+    if (counterList == null)
+    {
+      _cachedCounters = counters;
+      return _cachedCounters;
+    }
 
     const string suffix = "_COUNTERS";
 
@@ -688,7 +922,8 @@ public class GameCardPartial(
       }
     }
 
-    return counters;
+    _cachedCounters = counters;
+    return _cachedCounters;
   }
 
   //
@@ -701,6 +936,8 @@ public class GameCardPartial(
   /// </summary>
   private List<CardAbility> ResolveAbilities()
   {
+    if (_cachedAbilities != null) return _cachedAbilities;
+
     var abilities = new HashSet<CardAbility>();
 
     // 1. Resolve boolean keyword properties via dynamic name mapping
@@ -732,7 +969,232 @@ public class GameCardPartial(
     // Most are already covered by the boolean check if the value > 0,
     // but some might require specific property lookups if they don't follow the pattern.
 
-    return abilities.ToList();
+    _cachedAbilities = abilities.ToList();
+    return _cachedAbilities;
+  }
+
+  //
+  // Typeline resolution
+  //
+
+  /// <summary>
+  /// Ordered list of supertypes and card types for typeline construction,
+  /// matching MTGO's CardTypesPreferredOrder.
+  /// </summary>
+  private static readonly (MagicProperty prop, string name)[] s_typeOrder =
+  [
+    (MagicProperty.IS_LEGENDARY, "Legendary"),
+    (MagicProperty.IS_ENCHANT_WORLD, "World"),
+    (MagicProperty.IS_BASICLAND, "Basic"),
+    (MagicProperty.HAS_SNOW_TYPE, "Snow"),
+    (MagicProperty.IS_KINDRED, "Kindred"),
+    (MagicProperty.IS_ENCHANTMENT, "Enchantment"),
+    (MagicProperty.IS_ARTIFACT, "Artifact"),
+    (MagicProperty.IS_LAND, "Land"),
+    (MagicProperty.IS_CREATURE, "Creature"),
+    (MagicProperty.IS_PLANESWALKER, "Planeswalker"),
+    (MagicProperty.INSTANT, "Instant"),
+    (MagicProperty.SORCERY, "Sorcery"),
+    (MagicProperty.IS_BATTLE, "Battle"),
+    (MagicProperty.IS_CONSPIRACY, "Conspiracy"),
+    (MagicProperty.IS_PLANE, "Plane"),
+    (MagicProperty.IS_PHENOMENON, "Phenomenon"),
+    (MagicProperty.IS_VANGUARD, "Vanguard"),
+  ];
+
+  private static readonly (MagicProperty prop, string name)[] s_artifactSubtypes =
+  [
+    (MagicProperty.IS_ATTRACTION, "Attraction"),
+    (MagicProperty.IS_BLOOD, "Blood"),
+    (MagicProperty.IS_BOBBLEHEAD, "Bobblehead"),
+    (MagicProperty.IS_CLUE, "Clue"),
+    (MagicProperty.IS_EQUIPMENT, "Equipment"),
+    (MagicProperty.IS_FORTIFICATION, "Fortification"),
+    (MagicProperty.IS_FOOD, "Food"),
+    (MagicProperty.IS_GOLD, "Gold"),
+    (MagicProperty.IS_INCUBATOR, "Incubator"),
+    (MagicProperty.IS_JUNK, "Junk"),
+    (MagicProperty.IS_MAP, "Map"),
+    (MagicProperty.IS_POWERSTONE, "Powerstone"),
+    (MagicProperty.IS_TREASURE, "Treasure"),
+    (MagicProperty.IS_VEHICLE, "Vehicle"),
+    (MagicProperty.IS_SPACECRAFT, "Spacecraft"),
+    (MagicProperty.IS_TERMINUS, "Terminus"),
+    (MagicProperty.IS_STONE, "Stone"),
+  ];
+
+  private static readonly (MagicProperty prop, string name)[] s_enchantmentSubtypes =
+  [
+    (MagicProperty.IS_LOCAL_ENCHANTMENT, "Aura"),
+    (MagicProperty.IS_CARTOUCHE, "Cartouche"),
+    (MagicProperty.IS_SHARD, "Shard"),
+    (MagicProperty.IS_SAGA, "Saga"),
+    (MagicProperty.IS_CURSE, "Curse"),
+    (MagicProperty.IS_SHRINE, "Shrine"),
+    (MagicProperty.IS_CLASS, "Class"),
+    (MagicProperty.IS_RUNE, "Rune"),
+    (MagicProperty.IS_BACKGROUND, "Background"),
+    (MagicProperty.IS_CASE, "Case"),
+    (MagicProperty.IS_ROOM, "Room"),
+    (MagicProperty.IS_ROLE, "Role"),
+  ];
+
+  private static readonly (MagicProperty prop, string name)[] s_spellSubtypes =
+  [
+    (MagicProperty.IS_ARCANE, "Arcane"),
+    (MagicProperty.IS_TRAP, "Trap"),
+    (MagicProperty.IS_ADVENTURE, "Adventure"),
+    (MagicProperty.IS_LESSON, "Lesson"),
+    (MagicProperty.IS_OMEN, "Omen"),
+  ];
+
+  /// <summary>
+  /// Reconstructs the full typeline string from PropertyContainer booleans
+  /// and integer property ranges, mirroring MTGO's
+  /// MagicPropertyHelper.ConstructCardTypeText().
+  /// </summary>
+  private string ResolveTypeLine()
+  {
+    if (_cachedTypeLine != null) return _cachedTypeLine;
+
+    // 1. Build supertypes + card types in preferred order
+    var types = new List<string>();
+    foreach (var (prop, name) in s_typeOrder)
+    {
+      if (GetBool(prop)) types.Add(name);
+    }
+
+    // 2. Build subtypes
+    var subtypes = new List<string>();
+
+    if (GetBool(MagicProperty.IS_KINDRED))
+      AddIntRangeSubtypes(subtypes, MagicProperty.CREATURE_TYPEID0,
+        FormatCreatureType);
+
+    if (GetBool(MagicProperty.IS_ARTIFACT))
+      AddBooleanSubtypes(subtypes, s_artifactSubtypes);
+
+    if (GetBool(MagicProperty.IS_ENCHANTMENT))
+      AddBooleanSubtypes(subtypes, s_enchantmentSubtypes);
+
+    if (GetBool(MagicProperty.IS_LAND))
+      AddIntRangeSubtypes(subtypes, MagicProperty.LAND_TYPEID0,
+        FormatLandType);
+
+    if (GetBool(MagicProperty.IS_CREATURE))
+      AddIntRangeSubtypes(subtypes, MagicProperty.CREATURE_TYPEID0,
+        FormatCreatureType);
+
+    if (GetBool(MagicProperty.INSTANT) || GetBool(MagicProperty.SORCERY))
+      AddBooleanSubtypes(subtypes, s_spellSubtypes);
+
+    if (GetBool(MagicProperty.IS_PLANESWALKER))
+      AddIntRangeSubtypes(subtypes, MagicProperty.SUBTYPEID0,
+        FormatPlaneswalkerType);
+
+    if (GetBool(MagicProperty.IS_BATTLE))
+      AddIntRangeSubtypes(subtypes, MagicProperty.BATTLE_TYPEID0,
+        FormatBattleType);
+
+    // 3. Join types and subtypes
+    var typeLine = string.Join(" ", types);
+    if (subtypes.Count > 0)
+      typeLine += " \u2014 " + string.Join(" ", subtypes.Distinct());
+
+    _cachedTypeLine = typeLine;
+    return _cachedTypeLine;
+  }
+
+  /// <summary>
+  /// Iterates consecutive MagicProperty IDs starting from a base,
+  /// collecting integer values until one is missing.
+  /// Mirrors MTGO's ForEachInPropertyRange.
+  /// </summary>
+  private List<int> GetIntegerPropertyRange(MagicProperty baseProperty)
+  {
+    var values = new List<int>();
+    for (uint id = (uint)baseProperty; ; id++)
+    {
+      var val = properties[(MagicProperty)id];
+      if (val is not int intVal) break;
+      if (intVal <= 0) break;
+      values.Add(intVal);
+    }
+    return values;
+  }
+
+  private void AddIntRangeSubtypes(
+    List<string> subtypes,
+    MagicProperty baseProperty,
+    Func<int, string?> formatter)
+  {
+    foreach (int val in GetIntegerPropertyRange(baseProperty))
+    {
+      var name = formatter(val);
+      if (name != null) subtypes.Add(name);
+    }
+  }
+
+  private void AddBooleanSubtypes(
+    List<string> subtypes,
+    (MagicProperty prop, string name)[] subtypeFlags)
+  {
+    foreach (var (prop, name) in subtypeFlags)
+    {
+      if (GetBool(prop)) subtypes.Add(name);
+    }
+  }
+
+  /// <summary>
+  /// Formats an enum name by stripping a prefix and converting
+  /// SNAKE_CASE to Title Case.
+  /// </summary>
+  private static string FormatEnumName(string name, string prefix)
+  {
+    if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+      name = name[prefix.Length..];
+
+    return string.Concat(
+      name.Split('_')
+        .Where(s => s.Length > 0)
+        .Select(s => char.ToUpper(s[0]) + s[1..].ToLower())
+    );
+  }
+
+  private static string? FormatCreatureType(int value)
+  {
+    var ct = (WotC.MtGO.Client.Model.MagicCreatureType)value;
+    var name = ct.ToString();
+    // Skip if it didn't resolve to a named enum member
+    if (name == value.ToString()) return null;
+    return FormatEnumName(name, "CREATURETYPE_");
+  }
+
+  private static string? FormatLandType(int value)
+  {
+    var lt = (WotC.MtGO.Client.Model.MagicLandType)value;
+    var name = lt.ToString();
+    if (name == value.ToString()) return null;
+    var formatted = FormatEnumName(name, "LANDTYPE_");
+    // Special cases
+    if (formatted == "Urzas") return "Urza's";
+    return formatted;
+  }
+
+  private static string? FormatPlaneswalkerType(int value)
+  {
+    var pt = (WotC.MtGO.Client.Model.MagicPlaneswalkerType)value;
+    var name = pt.ToString();
+    if (name == value.ToString()) return null;
+    return FormatEnumName(name, "SUBTYPE_");
+  }
+
+  private static string? FormatBattleType(int value)
+  {
+    var bt = (WotC.MtGO.Client.Model.MagicBattleType)value;
+    var name = bt.ToString();
+    if (name == value.ToString()) return null;
+    return FormatEnumName(name, "BATTLETYPE_");
   }
 
   //

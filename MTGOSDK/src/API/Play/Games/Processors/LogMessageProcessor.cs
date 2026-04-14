@@ -46,7 +46,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor
   /// <summary>
   /// Maximum number of snapshots to keep in the sliding window.
   /// </summary>
-  private const int MaxSnapshotWindow = 3;
+  private const int MaxSnapshotWindow = 6;
 
   /// <summary>
   /// Maximum time delta (in seconds) for a valid correlation.
@@ -69,6 +69,13 @@ public sealed class LogMessageProcessor : IGameStateProcessor
   /// Buffer of uncorrelated log messages waiting for a matching snapshot.
   /// </summary>
   private readonly List<Message> _pendingMessages = new();
+
+  /// <summary>
+  /// Tracks messages already emitted to prevent duplicates from the real-time
+  /// hook and historical polling processing the same message.
+  /// </summary>
+  private readonly HashSet<(string? User, DateTime Timestamp, string Text)>
+    _emittedMessages = new();
 
   public void Initialize(Game game)
   {
@@ -136,18 +143,19 @@ public sealed class LogMessageProcessor : IGameStateProcessor
     // If so, it's a valid log message for the current game.
     if (source.LocalFileName != _localFileName) return;
 
-    // Try to correlate immediately if we have snapshots and a context
-    if (_snapshotWindow.Count > 0 && _lastContext != null)
+    // Dedup: both the real-time hook and historical polling can deliver the
+    // same message. Skip if we've already emitted or buffered this one.
+    var key = (message.User?.Name, message.Timestamp, message.Text);
+    lock (_emittedMessages)
     {
-      if (TryCorrelateMessage(message, out var snapshot, out var delta))
-      {
-        _lastContext.Emit(
-          new LogMessageCorrelatedEventArgs(snapshot, message, delta));
-        return;
-      }
+      if (!_emittedMessages.Add(key)) return;
     }
 
-    // Buffer the message until a snapshot arrives
+    // Always buffer — don't correlate immediately. During rapid state
+    // transitions (e.g., combat phases), the message often arrives before
+    // its associated snapshot enters the window. Deferring correlation to
+    // the next Process() call ensures the window contains the correct
+    // snapshot for "closest" matching.
     _pendingMessages.Add(message);
   }
 
@@ -236,7 +244,15 @@ public sealed class LogMessageProcessor : IGameStateProcessor
     s_OnLogMessage -= OnLogMessageReceived;
     _pendingMessages.Clear();
     _snapshotWindow.Clear();
+    _emittedMessages.Clear();
   }
+
+  /// <summary>
+  /// Ensures the static <c>OnLogMessage</c> hook is installed
+  /// so that log message detection is active.
+  /// </summary>
+  public static void EnsureHookInitialized() =>
+    s_OnLogMessage.EnsureInitialize();
 
   /// <summary>
   /// Event triggered when a game action in any active game is performed.

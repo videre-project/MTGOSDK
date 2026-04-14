@@ -4,9 +4,10 @@
 **/
 
 using System;
+using System.Collections.Concurrent;
+using System.Threading;
 
 using MTGOSDK.API.Play.Games.Processors.EventArgs;
-using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
@@ -18,16 +19,39 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The <see cref="GameProcessor"/> typically fires before
-/// the game's prompt-changed event, so this processor buffers
-/// the latest snapshot and emits a <see cref="PromptChangedEventArgs"/>
-/// through the centralized bus once the matching prompt arrives.
+/// The gameplay-status hook fires before <c>set_Prompt</c>, so prompts can
+/// arrive either before or after their matching snapshot is processed.
+/// Both sides buffer unmatched items in concurrent dictionaries:
+/// <see cref="_pendingPrompts"/> for early-arriving prompts and
+/// <see cref="_pendingSnapshots"/> for early-arriving snapshots.
+/// Whichever side completes the pair emits the correlated event.
 /// </para>
 /// </remarks>
 public sealed class PromptProcessor : IGameStateProcessor
 {
   private Game? _game;
-  private GameContext? _lastContext;
+  private int _gameId;
+
+  /// <summary>
+  /// Prompts buffered by nonce, awaiting their matching snapshot.
+  /// Written from the EventHookProxy thread, read from the drain loop.
+  /// </summary>
+  private readonly ConcurrentDictionary<int, GamePrompt> _pendingPrompts = new();
+
+  /// <summary>
+  /// Snapshots buffered by nonce, awaiting their matching prompt.
+  /// Written from the drain loop thread, read from the EventHookProxy thread.
+  /// </summary>
+  private readonly ConcurrentDictionary<int, (GameStateSnapshot Snapshot, GameContext Context)>
+    _pendingSnapshots = new();
+
+  /// <summary>
+  /// Signaled when all pending snapshots have been matched with their
+  /// prompts. Reset when a snapshot is buffered without a prompt match.
+  /// Used by <see cref="Game.WaitForPendingProcessing"/> to wait for
+  /// the <c>set_Prompt</c> IPC to deliver after the drain loop finishes.
+  /// </summary>
+  internal readonly ManualResetEventSlim PromptCorrelated = new(true);
 
   /// <summary>
   /// The most recent snapshot received from the processor pipeline.
@@ -42,44 +66,79 @@ public sealed class PromptProcessor : IGameStateProcessor
   public void Initialize(Game game)
   {
     _game = game;
+    _gameId = game.Id; // Cache — avoids IPC on every prompt event
     s_GamePromptChanged += OnGamePromptChanged;
+
+    // Seed the initial prompt (e.g. keep/mulligan) that was already set on
+    // the game before we subscribed to set_Prompt. Options are read lazily
+    // via IPC — the remote GamePrompt is pinned by the DRO and its
+    // m_options is never cleared (new object created per state update).
+    var currentPrompt = game.Prompt;
+    if (currentPrompt != null)
+    {
+      _pendingPrompts[currentPrompt.Nonce] = currentPrompt;
+    }
   }
 
   public void Process(GameContext context)
   {
-    _lastContext = context;
     LastSnapshot = context.Current;
+    int nonce = context.Current.Nonce;
 
-    // If we already have a prompt waiting, try to correlate immediately.
-    if (LastPrompt != null)
-      TryCorrelate(context);
+    // Prompt arrived before snapshot — correlate now.
+    if (_pendingPrompts.TryRemove(nonce, out var prompt))
+    {
+      LastPrompt = prompt;
+      context.Emit(new PromptChangedEventArgs(LastSnapshot, LastPrompt));
+    }
+    else
+    {
+      // Snapshot arrived before prompt — buffer for late correlation.
+      // Reset the signal so callers can wait for the set_Prompt IPC.
+      _pendingSnapshots[nonce] = (LastSnapshot, context);
+      PromptCorrelated.Reset();
+    }
   }
 
   private void OnGamePromptChanged(Game game, GamePrompt prompt)
   {
-    // Filter to only this game
-    if (game.Id != _game.Id) return;
-    LastPrompt = prompt;
+    // Filter to only this game. _gameId is cached from Initialize() to avoid
+    // IPC on the stored _game reference, which can become stale.
+    if (game.Id != _gameId) return;
 
-    // If we already have a snapshot waiting, try to correlate immediately.
-    if (LastSnapshot != null && _lastContext != null)
-      TryCorrelate(_lastContext);
-  }
+    int nonce = prompt.Nonce;
 
-  private void TryCorrelate(GameContext context)
-  {
-    if (LastSnapshot == null || LastPrompt == null) return;
-
-    if (LastSnapshot.Nonce == LastPrompt.Nonce)
+    // Snapshot was already processed — correlate now.
+    if (_pendingSnapshots.TryRemove(nonce, out var pending))
     {
-      context.Emit(new PromptChangedEventArgs(LastSnapshot, LastPrompt));
+      LastPrompt = prompt;
+      pending.Context.Emit(
+        new PromptChangedEventArgs(pending.Snapshot, LastPrompt));
+
+      // Signal that all pending snapshots have been matched.
+      if (_pendingSnapshots.IsEmpty)
+        PromptCorrelated.Set();
+    }
+    else
+    {
+      // Prompt arrived before snapshot — buffer for correlation in Process().
+      _pendingPrompts[nonce] = prompt;
     }
   }
 
   public void Dispose()
   {
     s_GamePromptChanged -= OnGamePromptChanged;
+    _pendingPrompts.Clear();
+    _pendingSnapshots.Clear();
   }
+
+  /// <summary>
+  /// Ensures the static <c>GamePromptChanged</c> hook is installed
+  /// so that prompt detection is active.
+  /// </summary>
+  public static void EnsureHookInitialized() =>
+    s_GamePromptChanged.EnsureInitialize();
 
   /// <summary>
   /// Event triggered when the current game prompt changes in any active game.
@@ -91,19 +150,10 @@ public sealed class PromptProcessor : IGameStateProcessor
       new((instance, args) =>
       {
         Game game = new(instance);
-        DateTime __timestamp = instance.__timestamp;
 
         dynamic prompt = args[0]; // IGamePrompt
-        GamePrompt gamePrompt = new(new
-        {
-          // DynamicRemoteObject properties
-          __timestamp,
-          // IGamePrompt properties
-          Text = prompt.Text,
-          Timestamp = prompt.Timestamp,
-          PromptedPlayer = prompt.PromptedPlayer,
-          Options = Map<GameAction>(prompt.Options),
-        });
+        prompt.__timestamp = instance.__timestamp;
+        GamePrompt gamePrompt = new(prompt);
 
         return (game, gamePrompt);
       })

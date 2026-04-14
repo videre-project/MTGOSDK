@@ -18,7 +18,7 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// Tracks zone changes between snapshots: departures, arrivals, same-ID moves,
 /// and server-chain / texture-match correlations.
 /// </summary>
-public sealed class ZoneChangeTracker : IGameStateProcessor
+public sealed class ZoneChangeTracker : IIntermediateTickProcessor
 {
   /// <summary>
   /// Accumulated old-ThingID → new-ThingID chain for the lifetime of the game.
@@ -61,6 +61,10 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
     foreach (var arr in arrived)
     {
       if (arr.SourceId == -1 || arr.SourceId == arr.Id) continue;
+      // Abilities are created fresh on the stack — their SourceId points to
+      // the source permanent, not a zone-chain predecessor. Don't let them
+      // trigger hidden-departure inference.
+      if (arr.IsTriggeredAbility || arr.IsActivatedAbility) continue;
 
       if (context.Current.HiddenCards.TryGetValue(arr.SourceId, out var hiddenCard))
         inferredHiddenDepartures[arr.SourceId] = hiddenCard;
@@ -73,6 +77,18 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
 
     foreach (var arr in arrived)
     {
+      // Abilities are created fresh on the stack — they don't move from any
+      // zone. Their SourceId may reference the source permanent's ThingID,
+      // which can collide with a real zone-change departure (e.g. an ETB
+      // trigger's SourceId matches the hand card that just moved to the
+      // battlefield). Skip correlation so abilities don't steal departure
+      // records from cards that genuinely changed zones.
+      if (arr.IsTriggeredAbility || arr.IsActivatedAbility)
+      {
+        unmatchedArrs.Add(arr);
+        continue;
+      }
+
       bool chained = false;
       if (arr.SourceId != -1 && arr.SourceId != arr.Id)
       {
@@ -89,7 +105,22 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
           context.CardAncestryMap[arr.Id] = arr.SourceId;
           if (dep != null) unmatchedDeps.Remove(dep);
 
+          // When chaining exclusively via prevHid (adventure/split SUBC arriving
+          // on Stack), find the parent card in unmatchedDeps via SplitChildId and
+          // use it as fromCard so the event reads "Spell (Moved) Hand → Stack".
+          // The parent departure is suppressed (consumed into the Moved pair).
+          GameCard? subcParent = null;
+          if (prevHid != null && dep == null && hid == null)
+          {
+            int subcId = arr.SourceId;
+            subcParent = unmatchedDeps.FirstOrDefault(
+              d => d.SplitChildId0 == subcId || d.SplitChildId1 == subcId);
+            if (subcParent != null)
+              unmatchedDeps.Remove(subcParent);
+          }
+
           string fromZone = dep != null ? ZoneName(dep.Zone)
+                          : subcParent != null ? ZoneName(subcParent.Zone)
                           : hid != null ? ZoneName(hid.Zone)
                           : prevHid != null ? ZoneName(prevHid.Zone)
                           : arr.PreviousZone != null ? ZoneName(arr.PreviousZone)
@@ -99,7 +130,9 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
           chainLogs.Add(
             $"  {symbol} {arr.Name}: {arr.SourceId} => {arr.Id}" +
             $" ({fromZone} -> {ZoneName(arr.Zone)}) (server chain)");
-            
+
+          var fromCard = dep ?? subcParent ?? hid ?? prevHid!;
+          moved.Add((fromCard, arr));
           chained = true;
         }
       }
@@ -116,7 +149,13 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
       .Where(d => !context.Current.HiddenCards.ContainsKey(d.Id))
       .ToList();
 
-    var candidates = unmatchedDeps.Concat(hiddenDepartures).ToList();
+    // Exclude abilities from texture-match candidates — their CTN is
+    // inherited from the source permanent and would falsely match against
+    // zone-changing copies of that permanent (e.g. a Brokers Hideout trigger
+    // on the Stack texture-matching the land entering the Graveyard).
+    var candidates = unmatchedDeps
+      .Where(d => !d.IsTriggeredAbility && !d.IsActivatedAbility)
+      .Concat(hiddenDepartures).ToList();
     if (candidates.Count > 0 && unmatchedArrs.Count > 0)
     {
       var byTexture = candidates
@@ -126,6 +165,9 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
 
       foreach (var arr in unmatchedArrs.ToList())
       {
+        // Abilities should never texture-match against departures either
+        if (arr.IsTriggeredAbility || arr.IsActivatedAbility) continue;
+
         if (arr.CTN > 0
             && byTexture.TryGetValue(arr.CTN, out var q)
             && q.Count > 0)
@@ -139,7 +181,7 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
           // This prevents mulligan mismatches without breaking Normal Play.
           //
           var dep = q.Peek();
-          bool isContradictory = arr.PreviousZone != null 
+          bool isContradictory = arr.PreviousZone != null
                               && arr.PreviousZone != CardZone.Nowhere
                               && arr.PreviousZone != arr.Zone
                               && dep.Zone != null
@@ -152,6 +194,9 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
           context.CardAncestryMap[arr.Id] = dep.Id;
           unmatchedArrs.Remove(arr);
           unmatchedDeps.Remove(dep);
+
+          // Promote to a Moved pair so it renders with from/to zones
+          moved.Add((dep, arr));
 
           string fromZone = ZoneName(dep.Zone);
           string symbol = IsHiddenZone(fromZone) ? "[+]" : "[=>]";
@@ -180,7 +225,7 @@ public sealed class ZoneChangeTracker : IGameStateProcessor
     {
       context.Emit(new ZoneChangeEventArgs
       {
-        Arrived = arrived,
+        Arrived = unmatchedArrs,
         Departed = unmatchedDeps,
         Moved = moved,
         ChainLogs = chainLogs,
