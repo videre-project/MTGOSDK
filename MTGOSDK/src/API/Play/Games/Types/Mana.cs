@@ -40,7 +40,7 @@ public sealed class Mana(dynamic manaItem) : DLRWrapper<IManaPoolItem>
   /// </summary>
   public string Symbol => ToSymbol(Color);
 
-  private static string ToSymbol(MagicColors color) => color switch
+  public static string ToSymbol(MagicColors color) => color switch
   {
     MagicColors.Invalid   => string.Empty,
 
