@@ -19,11 +19,26 @@ public static class LeagueManager
   private static readonly ILeaguesManager s_leagueManager =
     ObjectProvider.Get<ILeaguesManager>();
 
-  public static readonly dynamic leaguesById =
-    Unbind(s_leagueManager).m_leaguesById;
+  static LeagueManager()
+  {
+    ObjectCache.OnReset += delegate
+    {
+      leaguesById = null;
+      leaguesByToken = null;
+    };
+  }
 
-  private static readonly dynamic leaguesByToken =
-    Unbind(s_leagueManager).m_leaguesByToken;
+  public static dynamic leaguesById
+  {
+    get => field ??= Unbind(s_leagueManager).m_leaguesById;
+    set => field = value;
+  }
+
+  private static dynamic leaguesByToken
+  {
+    get => field ??= Unbind(s_leagueManager).m_leaguesByToken;
+    set => field = value;
+  }
 
   /// <summary>
   /// All currently queryable League events.

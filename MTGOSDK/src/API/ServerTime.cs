@@ -22,8 +22,16 @@ public static class ServerTime
   private static readonly IFlsClientSession s_flsClientSession =
     ObjectProvider.Get<IFlsClientSession>();
 
-  private static IServerTime s_serverTime =>
-    field ??= s_flsClientSession.ServerTime;
+  static ServerTime()
+  {
+    ObjectCache.OnReset += delegate { s_serverTime = null; };
+  }
+
+  private static IServerTime s_serverTime
+  {
+    get => field ??= s_flsClientSession.ServerTime;
+    set => field = value;
+  }
 
   //
   // IServerTime wrapper methods

@@ -27,15 +27,30 @@ public static class CollectionManager
   private static readonly ICardDataManager s_cardDataManager =
     ObjectProvider.Get<ICardDataManager>();
 
+  static CollectionManager()
+  {
+    ObjectCache.OnReset += delegate
+    {
+      s_cardIdToDefinitions = null;
+      s_cardNameToDefinitions = null;
+    };
+  }
+
   //
   // ICardDefinition wrapper methods
   //
 
-  private static dynamic s_cardIdToDefinitions =>
-    field ??= Unbind(s_cardDataManager).DigitalObjectsByCatId;
+  private static dynamic s_cardIdToDefinitions
+  {
+    get => field ??= Unbind(s_cardDataManager).DigitalObjectsByCatId;
+    set => field = value;
+  }
 
-  private static dynamic s_cardNameToDefinitions =>
-    field ??= Unbind(s_cardDataManager).NameToCardDefinitions;
+  private static dynamic s_cardNameToDefinitions
+  {
+    get => field ??= Unbind(s_cardDataManager).NameToCardDefinitions;
+    set => field = value;
+  }
 
   /// <summary>
   /// Returns a list of catalog ids for the given card name.

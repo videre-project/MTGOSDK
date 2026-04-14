@@ -34,6 +34,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   private readonly EventHook _hook;
 
   private readonly HookAction _hookAction;
+  private int _initializedGeneration = -1;
 
   // public delegate void HookProxy<I1, T1>(I1 instance, T1 args);
 
@@ -91,16 +92,24 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
   public void EnsureInitialize()
   {
+    // Short-circuit if already initialized for the current connection.
+    // _initializedGeneration is compared against RemoteClient.s_connectionGeneration
+    // which is incremented on each reconnect, so stale initialization is automatically
+    // detected across MTGO process restarts without requiring event subscriptions.
+    if (_initializedGeneration == RemoteClient.s_connectionGeneration) return;
+
     // If the method is not already hooked, hook it.
     if (!RemoteClient.MethodHasHook(_typeName, _methodName, _hookAction))
     {
       RemoteClient.HookMethod(_typeName, _methodName, _hookAction);
     }
+    _initializedGeneration = RemoteClient.s_connectionGeneration;
   }
 
   public override void Clear()
   {
     _eventHook = null;
+    _initializedGeneration = -1;
     if (!RemoteClient.IsInitialized) return;
 
     RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);

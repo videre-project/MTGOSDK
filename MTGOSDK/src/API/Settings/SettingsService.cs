@@ -28,14 +28,26 @@ public static class SettingsService
   private static readonly ISettings s_settingsService =
     ObjectProvider.Get<ISettings>();
 
+  static SettingsService()
+  {
+    ObjectCache.OnReset += delegate
+    {
+      UserSettings = null;
+      ApplicationSettings = null;
+    };
+  }
+
   /// <summary>
   /// The user level settings registered with the client.
   /// </summary>
   /// <remarks>
   /// Reads from the client's <c>user_settings</c> file.
   /// </remarks>
-  public static SettingsStore UserSettings =>
-    field ??= new(Unbind(s_settingsService).m_userSettingsStorage);
+  public static SettingsStore UserSettings
+  {
+    get => field ??= new(Unbind(s_settingsService).m_userSettingsStorage);
+    set => field = value;
+  }
 
   /// <summary>
   /// The machine level settings registered with the client.
@@ -43,8 +55,11 @@ public static class SettingsService
   /// <remarks>
   /// Reads from the client's <c>application_settings</c> file.
   /// </remarks>
-  public static SettingsStore ApplicationSettings =>
-    field ??= new(Unbind(s_settingsService).m_machineSettingsStorage);
+  public static SettingsStore ApplicationSettings
+  {
+    get => field ??= new(Unbind(s_settingsService).m_machineSettingsStorage);
+    set => field = value;
+  }
 
   /// <summary>
   /// Gets the remote key for the specified setting.

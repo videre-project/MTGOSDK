@@ -39,6 +39,14 @@ public sealed class RemoteClient : DLRWrapper
   private static bool _isDisposed = false;
   private static readonly object _disposeLock = new();
 
+  /// <summary>
+  /// Monotonically increasing counter that is incremented each time a new
+  /// remote connection is established. Used by <see cref="MTGOSDK.Core.Reflection.Proxy.EventHookProxy{I,T}"/>
+  /// to detect stale hook initialization across reconnects without requiring
+  /// event subscriptions.
+  /// </summary>
+  internal static int s_connectionGeneration = 0;
+
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
 
@@ -568,6 +576,7 @@ public sealed class RemoteClient : DLRWrapper
 
     // Prepare a fresh lazy for future initialization attempts.
     s_instance = new Lazy<RemoteClient>(() => new RemoteClient());
+    Interlocked.Increment(ref s_connectionGeneration);
     Log.Trace("RemoteClient disposed.");
   }
 

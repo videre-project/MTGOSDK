@@ -9,8 +9,9 @@ using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
+using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Types;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Filters;
@@ -34,6 +35,18 @@ public static class EventManager
   private static readonly IPlay s_playService =
     ObjectProvider.Get<IPlay>();
 
+  static EventManager()
+  {
+    // Clear cached field-backed properties when the remote client disconnects
+    // so they are re-resolved from the (reset) LazyRemoteObject on next access.
+    ObjectCache.OnReset += delegate
+    {
+      m_eventsById = null;
+      m_featuredEvents = null;
+      m_joinedEvents = null;
+    };
+  }
+
   //
   // IPlayerEvent wrapper properties
   //
@@ -41,8 +54,11 @@ public static class EventManager
   /// <summary>
   /// A dictionary of all events by their event ID.
   /// </summary>
-  private static dynamic m_eventsById =>
-    field ??= Unbind(s_playService).m_matchesAndTournamentsAndQueuesById;
+  private static dynamic m_eventsById
+  {
+    get => field ??= Unbind(s_playService).m_matchesAndTournamentsAndQueuesById;
+    set => field = value;
+  }
 
   private static dynamic m_sortedEventsById =>
     ((DynamicRemoteObject)m_eventsById.Values)
@@ -60,11 +76,14 @@ public static class EventManager
   public static IEnumerable<dynamic> Events =>
     Map<dynamic>(m_sortedEventsById, PlayerEventFactory);
 
-  private static dynamic m_featuredEvents =>
-    field ??= ((DynamicRemoteObject)
+  private static dynamic m_featuredEvents
+  {
+    get => field ??= ((DynamicRemoteObject)
         Unbind(s_playService).GetFeaturedFilterables())
           .Filter<IPlayerEvent>(e => e.MinimumPlayers > 2)
           .Sort<ITournament, DateTime>(e => e.ScheduledStartTime);
+    set => field = value;
+  }
 
   /// <summary>
   /// All currently scheduled tournaments queryable with GetEvent().
@@ -79,8 +98,11 @@ public static class EventManager
 
   public static int FeaturedEventsCount => m_featuredEvents.Count;
 
-  private static dynamic m_joinedEvents =>
-    field ??= Unbind(s_playService).JoinedEvents;
+  private static dynamic m_joinedEvents
+  {
+    get => field ??= Unbind(s_playService).JoinedEvents;
+    set => field = value;
+  }
 
   /// <summary>
   /// All joined events that the player is currently participating in.

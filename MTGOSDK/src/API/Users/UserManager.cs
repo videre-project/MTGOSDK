@@ -27,8 +27,16 @@ public static class UserManager
   private static readonly IUserManager s_userManager =
     ObjectProvider.Get<IUserManager>();
 
-  private static dynamic m_usersById =>
-    field ??= Unbind(s_userManager).m_usersById;
+  static UserManager()
+  {
+    ObjectCache.OnReset += delegate { m_usersById = null; };
+  }
+
+  private static dynamic m_usersById
+  {
+    get => field ??= Unbind(s_userManager).m_usersById;
+    set => field = value;
+  }
 
   /// <summary>
   /// Retrieves a user object from the client's UserManager.
