@@ -58,6 +58,8 @@
     <!-- MTGOSDK/lib/ScubaDiver -->
     <PackageVersion Include="System.IO.Pipelines"
                     Version="10.0.1" />
+    <PackageVersion Include="System.ValueTuple"
+            Version="4.6.1" />
     <PackageVersion Include="Lib.Harmony"
                     Version="2.4.1" />
     <!-- MTGOSDK.MSBuild -->

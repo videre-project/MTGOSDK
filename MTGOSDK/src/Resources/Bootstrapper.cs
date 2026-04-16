@@ -152,9 +152,17 @@ public static class Bootstrapper
     string harmonyPath = Path.Combine(tempDir, "0Harmony.dll");
     OverrideFileIfChanged(harmonyPath, harmonyResource);
 
+    // System.ValueTuple is not available in the MTGO process's GAC/probing paths.
+    // Extract it alongside the Diver so the AssemblyResolve handler in DllEntry
+    // can supply it when the CLR requests it after injection.
+    byte[] valueTupleResource = GetBinaryResource(@"Resources/System.ValueTuple.dll");
+    string valueTuplePath = Path.Combine(tempDir, "System.ValueTuple.dll");
+    OverrideFileIfChanged(valueTuplePath, valueTupleResource);
+
     // Verify all files are fully written before injection
     VerifyFileExists(diverPath, "Microsoft.Diagnostics.Runtime.dll");
     VerifyFileExists(harmonyPath, "0Harmony.dll");
+    VerifyFileExists(valueTuplePath, "System.ValueTuple.dll");
 
     var injector = new InjectorBase();
     injector.Inject(target, diverPath, "ScubaDiver.DllEntry", "EntryPoint", diverPort.ToString());

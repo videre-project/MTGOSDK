@@ -36,6 +36,28 @@
           DestinationFolder="$(SolutionDir)dist/$(Configuration)" />
   </Target>
 
+  <!--
+    System.ValueTuple is not copy-local on net48 — NuGet treats it as a framework
+    overlay and omits it from the build output. ILRepack therefore cannot
+    internalize it and leaves a dangling external reference in the merged DLL,
+    causing a FileNotFoundException when the Diver is injected into the MTGO process.
+
+    Copy the DLL from the NuGet package to the dist directory so it is picked up
+    by MTGOSDK's EmbedResources target, embedded as a resource, and extracted
+    alongside the Diver at injection time for the AssemblyResolve handler to find.
+  -->
+  <Target Name="PackSystemValueTuple"
+          AfterTargets="AfterBuild">
+    <ItemGroup>
+      <ValueTupleDll Include="$(PkgSystem_ValueTuple)\lib\net462\System.ValueTuple.dll"
+                     Condition="Exists('$(PkgSystem_ValueTuple)\lib\net462\System.ValueTuple.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ValueTupleDll)"
+          DestinationFolder="$(SolutionDir)dist/$(Configuration)"
+          SkipUnchangedFiles="true"
+          Condition="'@(ValueTupleDll)' != ''" />
+  </Target>
+
   <Target Name="BuildArtifactDirectory"
           AfterTargets="AfterBuild"
           Condition="'$(UseILRepack)' != 'true'">
@@ -46,6 +68,11 @@
   <ItemGroup>
     <PackageReference Include="System.Diagnostics.DiagnosticSource" />
     <PackageReference Include="System.IO.Pipelines" />
+    <!-- Referenced for $(PkgSystem_ValueTuple) path only; ExcludeAssets="runtime"
+         keeps it out of the build output (it is shipped via PackSystemValueTuple). -->
+    <PackageReference Include="System.ValueTuple"
+                      GeneratePathProperty="true"
+                      ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
                       PrivateAssets="All" />

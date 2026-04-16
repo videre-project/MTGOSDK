@@ -163,7 +163,9 @@ public sealed class RemoteClient : DLRWrapper
     List<Process> processList;
     try
     {
-      processList = new FileInfo(executablePath).GetLockingProcesses();
+      processList = new FileInfo(executablePath).GetLockingProcesses()
+        .Where(p => IsTargetProcess(p, executablePath, allowNameFallback: false))
+        .ToList();
     }
     catch
     {
@@ -174,10 +176,10 @@ public sealed class RemoteClient : DLRWrapper
     if (processList.Count == 0)
     {
       processList.AddRange(Process.GetProcessesByName("MTGO"));
-      if (processList.Count == 0)
-      {
-        processList.AddRange(Process.GetProcessesByName("MTGO.exe"));
-      }
+
+      processList = processList
+        .Where(p => IsTargetProcess(p, executablePath, allowNameFallback: true))
+        .ToList();
     }
 
     // If no processes were found, we want to indicate that our syscalls failed.
@@ -191,6 +193,8 @@ public sealed class RemoteClient : DLRWrapper
           Try<bool>(() =>
             p.Threads.Count > 0 &&
             p.StartTime != DateTime.MinValue))
+        // Ignore processes that have not loaded the CLR yet.
+        .Where(HasLoadedClr)
         .OrderByDescending(p => p.StartTime)
         .FirstOrDefault(),
       fallback: null);
@@ -199,6 +203,45 @@ public sealed class RemoteClient : DLRWrapper
       throw new NullReferenceException("MTGO client process not found.");
 
     return process;
+  }
+
+  private static bool IsTargetProcess(
+    Process process,
+    string executablePath,
+    bool allowNameFallback)
+  {
+    try
+    {
+      var processPath = process.MainModule?.FileName;
+
+      if (!string.IsNullOrEmpty(processPath))
+      {
+        return Path.GetFullPath(processPath)
+          .Equals(Path.GetFullPath(executablePath), StringComparison.InvariantCultureIgnoreCase);
+      }
+
+      if (!allowNameFallback)
+        return false;
+
+      return process.ProcessName.Equals("MTGO", StringComparison.InvariantCultureIgnoreCase);
+    }
+    catch
+    {
+      return false;
+    }
+  }
+
+  private static bool HasLoadedClr(Process process)
+  {
+    try
+    {
+      return process.GetModules().Any(module =>
+        module.szModule.Equals("mscoree.dll", StringComparison.InvariantCultureIgnoreCase));
+    }
+    catch
+    {
+      return false;
+    }
   }
 
   /// <summary>
@@ -334,7 +377,10 @@ public sealed class RemoteClient : DLRWrapper
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
-    MTGOProcess().WaitForInputIdle();
+    // MTGOProcess() is re-evaluated from scratch each call here (ClientProcess is
+    // not yet cached), so guard against a transient null between the HasStarted
+    // check above and this lookup.
+    Try(() => MTGOProcess().WaitForInputIdle());
     await WaitUntil(() => !string.IsNullOrEmpty(MTGOProcess().MainWindowTitle));
     if (!await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero))
     {
@@ -516,18 +562,44 @@ public sealed class RemoteClient : DLRWrapper
     using var activity = s_activitySource.StartActivity("RemoteClient.GetClientHandle");
     activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
 
-    bool _processHandleOverride = true;
+    void RefreshPort()
+    {
+      Port = Cast<ushort>(ClientProcess.Id + 1024);
+    }
+
     void RefreshClientProcess(bool throwOnFailure = false)
     {
-      ClientProcess = Retry(() => MTGOProcess(true),
-                            delay: 500, retries: 10, raise: throwOnFailure);
-      _processHandleOverride = false;
+      ClientProcess = Retry(() => MTGOProcess(false),
+                            delay: 500, retries: 20, raise: false);
+
+      if (ClientProcess is null)
+      {
+        Log.Warning("MTGO process not found during attach; attempting to launch MTGO.");
+        StartProcess().ConfigureAwait(false).GetAwaiter().GetResult();
+        ClientProcess = Retry(() => MTGOProcess(false),
+                              delay: 500, retries: 20, raise: false);
+      }
+
+      if (ClientProcess is null && throwOnFailure)
+      {
+        throw new ExternalErrorException(
+          "Unable to retrieve MTGO process. MTGO may have crashed during attach.");
+      }
+
+      if (ClientProcess is not null)
+      {
+        RefreshPort();
+      }
     }
+
+    static bool HasStableClrWindow(Process process) =>
+      Try(() => !process.HasExited && HasLoadedClr(process));
 
     if (ClientProcess is null) RefreshClientProcess(throwOnFailure: true);
 
     // Connect to the MTGO process using the specified or default port
-    if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id + 1024);
+    if (!Port.HasValue)
+      RefreshPort();
     Log.Trace("Connecting to MTGO process on port {Port}", Port.Value);
 
     // Suppress transient retry noise without flowing suppression to background tasks.
@@ -538,6 +610,15 @@ public sealed class RemoteClient : DLRWrapper
       {
         try
         {
+          if (ClientProcess is null)
+            throw new InvalidOperationException("No MTGO process is currently available.");
+
+          if (!Try(() => !ClientProcess.HasExited))
+            throw new InvalidOperationException("MTGO process exited before connection.");
+
+          if (!HasStableClrWindow(ClientProcess))
+            throw new InvalidOperationException("MTGO process CLR readiness is not yet stable.");
+
           return RemoteHandle.Connect(ClientProcess, Port.Value, _cts);
         }
         //
@@ -545,15 +626,20 @@ public sealed class RemoteClient : DLRWrapper
         // retry getting the MTGO process again unless the user has provided
         // an invalid process handle manually.
         //
-        catch (InvalidOperationException) when (!_processHandleOverride)
+        catch (InvalidOperationException ex)
         {
-          RefreshClientProcess(throwOnFailure: true);
-          _processHandleOverride = true;
+          int pid = Try(() => ClientProcess?.Id ?? -1);
+          Log.Debug(
+            "Attach attempt failed for PID {PID}: {Reason}. Refreshing MTGO process selection.",
+            pid,
+            ex.Message);
+          RefreshClientProcess(throwOnFailure: false);
+
           throw;
         }
       },
       // Retry connecting to avoid creating a race condition
-      delay: 500, retries: 10, raise: true); // 5s
+      delay: 750, retries: 6, raise: true);
     }
 
     // When the MTGO process exists, trigger the ProcessExited event

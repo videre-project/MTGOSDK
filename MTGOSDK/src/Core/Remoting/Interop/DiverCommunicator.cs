@@ -26,6 +26,9 @@ public class DiverCommunicator : IDisposable
 {
   private readonly TcpCommunicator _tcp;
   private int? _process_id = null;
+  private Exception? _lastError;
+
+  public Exception? LastError => _lastError;
 
   // Callback handling
   private readonly ConcurrentDictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
@@ -356,6 +359,7 @@ public class DiverCommunicator : IDisposable
   public bool RegisterClient(int? process_id = null)
   {
     _process_id = process_id ?? Process.GetCurrentProcess().Id;
+    _lastError = null;
 
     try
     {
@@ -363,8 +367,9 @@ public class DiverCommunicator : IDisposable
       SendRequest("register_client", request);
       return true;
     }
-    catch
+    catch (Exception ex)
     {
+      _lastError = ex;
       return false;
     }
   }

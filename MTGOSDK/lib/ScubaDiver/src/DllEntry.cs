@@ -19,6 +19,9 @@ namespace ScubaDiver;
 
 public class DllEntry
 {
+  private static readonly object s_resolveLock = new();
+  private static bool s_resolveInitialized;
+
   /// <summary>
   /// Resolve version-mismatched framework assemblies (e.g. System.ValueTuple)
   /// by finding an already-loaded assembly with a matching name. Registered
@@ -27,16 +30,51 @@ public class DllEntry
   /// </summary>
   static DllEntry()
   {
-    AppDomain.CurrentDomain.AssemblyResolve += ResolveFromLoadedAssemblies;
+    InitializeAssemblyResolve();
   }
 
-  private static Assembly ResolveFromLoadedAssemblies(object sender, ResolveEventArgs e)
+  private static void InitializeAssemblyResolve()
   {
-    var requestedName = new AssemblyName(e.Name).Name;
+    lock (s_resolveLock)
+    {
+      if (s_resolveInitialized)
+        return;
+
+      IndexAssemblyDirectory(AppDomain.CurrentDomain.BaseDirectory);
+      IndexAssemblyDirectory(Path.GetDirectoryName(typeof(DllEntry).Assembly.Location));
+      AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
+      s_resolveInitialized = true;
+    }
+  }
+
+  private static Assembly ResolveAssembly(object sender, ResolveEventArgs e)
+  {
+    var requestedAssembly = new AssemblyName(e.Name);
+    var requestedName = requestedAssembly.Name;
+
+    // Prefer assemblies shipped with the Diver payload over whatever the host
+    // process has loaded — this avoids host probing-policy differences and
+    // version conflicts with MTGO's own dependencies (e.g. System.ValueTuple).
+    if (s_localAssemblies.TryGetValue(requestedName, out string path) && File.Exists(path))
+    {
+      try
+      {
+        var fileAssembly = AssemblyName.GetAssemblyName(path);
+        if (AsmMatchesRequestedVersion(fileAssembly, requestedAssembly))
+          return Assembly.LoadFrom(path);
+      }
+      catch (IOException) { }
+      catch (BadImageFormatException) { }
+    }
+
+    // Fall back to already-loaded assemblies (handles version-mismatch redirects
+    // for framework assemblies not shipped with the Diver).
     foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
     {
-      if (asm.GetName().Name == requestedName) return asm;
+      if (AsmMatchesRequestedVersion(asm, requestedAssembly))
+        return asm;
     }
+
     return null;
   }
 
@@ -48,43 +86,67 @@ public class DllEntry
   private static readonly Dictionary<string, string> s_localAssemblies = new(
     StringComparer.OrdinalIgnoreCase);
 
-  private static void UseAssemblyLoadHook()
+  private static bool AsmMatchesRequestedVersion(Assembly assembly, AssemblyName requested)
   {
-    // Pre-scan the directory next to the Diver DLL and index every .dll
-    // by its file name (without extension). This lets the resolve handler
-    // skip file I/O and GetAssemblies() for assemblies we don't ship,
-    // which avoids taking CLR-internal locks that serialize assembly
-    // loading across all threads in the host process.
-    string diverDir = Path.GetDirectoryName(typeof(DllEntry).Assembly.Location);
-    if (diverDir != null)
+    return AsmMatchesRequestedVersion(assembly.GetName(), requested);
+  }
+
+  /// <summary>
+  /// Returns true when <paramref name="candidate"/> can satisfy a reference to
+  /// <paramref name="requested"/>: same name, matching public-key token (when
+  /// both are strong-named), and a version that is equal-or-newer within the
+  /// same major.minor line (e.g. 4.0.2.0 satisfies a request for 4.0.1.0).
+  /// </summary>
+  private static bool AsmMatchesRequestedVersion(AssemblyName candidate, AssemblyName requested)
+  {
+    if (!candidate.Name.Equals(requested.Name, StringComparison.OrdinalIgnoreCase))
+      return false;
+
+    byte[] requestedPkt = requested.GetPublicKeyToken();
+    byte[] candidatePkt = candidate.GetPublicKeyToken();
+    if (requestedPkt is { Length: > 0 } && candidatePkt is { Length: > 0 })
     {
-      foreach (string file in Directory.GetFiles(diverDir, "*.dll"))
-      {
-        string name = Path.GetFileNameWithoutExtension(file);
-        s_localAssemblies[name] = file;
-      }
+      if (!PublicKeyTokenEquals(requestedPkt, candidatePkt))
+        return false;
     }
 
-    AppDomain.CurrentDomain.AssemblyResolve += (s, e) =>
+    if (requested.Version == null || candidate.Version == null)
+      return true;
+
+    if (candidate.Version.Major != requested.Version.Major ||
+        candidate.Version.Minor != requested.Version.Minor)
+      return false;
+
+    return candidate.Version >= requested.Version;
+  }
+
+  private static bool PublicKeyTokenEquals(byte[] a, byte[] b)
+  {
+    if (a.Length != b.Length)
+      return false;
+
+    for (int i = 0; i < a.Length; i++)
     {
-      var requestedName = new AssemblyName(e.Name);
+      if (a[i] != b[i])
+        return false;
+    }
 
-      // Load from disk only for assemblies we ship next to the Diver DLL.
-      // The version-mismatch fallback (GetAssemblies scan) is handled by
-      // the static constructor's ResolveFromLoadedAssemblies handler.
-      if (s_localAssemblies.TryGetValue(requestedName.Name, out string path)
-          && File.Exists(path))
-      {
-        try
-        {
-          return Assembly.LoadFrom(path);
-        }
-        catch (IOException) { }
-        catch (BadImageFormatException) { }
-      }
+    return true;
+  }
 
-      return null;
-    };
+  private static void IndexAssemblyDirectory(string directory)
+  {
+    if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+      return;
+
+    // Pre-scan the directory and index every .dll by file name (without
+    // extension). This lets the resolve handler skip file I/O and
+    // GetAssemblies() for assemblies we don't ship.
+    foreach (string file in Directory.GetFiles(directory, "*.dll"))
+    {
+      string name = Path.GetFileNameWithoutExtension(file);
+      s_localAssemblies[name] = file;
+    }
   }
 
   private static void DiverHost(object pwzArgument)
@@ -132,9 +194,8 @@ public class DllEntry
 
   public static int EntryPoint(string pwzArgument)
   {
-    // Register the disk-loading hook for assemblies co-located with the Diver.
-    // The version-mismatch fallback is already active from the static constructor.
-    UseAssemblyLoadHook();
+    // Ensure resolve hooks are initialized before Diver startup.
+    InitializeAssemblyResolve();
 
     // The bootstrapper is expecting to call a C# function with this signature,
     // so we use it to start a new thread to host the diver in it's own thread.
