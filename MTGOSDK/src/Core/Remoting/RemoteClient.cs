@@ -137,8 +137,7 @@ public sealed class RemoteClient : DLRWrapper
   public static Process? MTGOProcess(bool throwOnFailure = false)
   {
     // If we already have a ClientProcess defined, return it.
-    if (!(_isDisposing || _isDisposed) &&
-        ClientProcess != null && HasLoadedClr(ClientProcess))
+    if (!(_isDisposing || _isDisposed) && ClientProcess != null)
       return ClientProcess;
 
     //
@@ -192,8 +191,6 @@ public sealed class RemoteClient : DLRWrapper
           Try<bool>(() =>
             p.Threads.Count > 0 &&
             p.StartTime != DateTime.MinValue))
-        // Ignore restart/update leftovers that have not loaded the CLR yet.
-        .Where(HasLoadedClr)
         .OrderByDescending(p => p.StartTime)
         .FirstOrDefault(),
       fallback: null);
@@ -202,19 +199,6 @@ public sealed class RemoteClient : DLRWrapper
       throw new NullReferenceException("MTGO client process not found.");
 
     return process;
-  }
-
-  private static bool HasLoadedClr(Process process)
-  {
-    try
-    {
-      return process.GetModules().Any(module =>
-        module.szModule.Equals("mscoree.dll", StringComparison.InvariantCultureIgnoreCase));
-    }
-    catch
-    {
-      return false;
-    }
   }
 
   /// <summary>
