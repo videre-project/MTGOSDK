@@ -69,12 +69,16 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// The log of messages in this channel.
   /// </summary>
-  public IList<Message> Messages => Map<IList, Message>(@base.Messages);
+  public IList<Message> Messages =>
+    Map<IList, Message>(
+      Try(() => @base.Messages,
+          () => Unbind(@base.MessageLog).m_chatLog,
+          () => new List<Message>()));
 
   /// <summary>
   /// The number of messages sent in this channel.
   /// </summary>
-  public int MessageCount => @base.Messages.Count;
+  public int MessageCount => Messages.Count;
 
   /// <summary>
   /// The users in this channel.
