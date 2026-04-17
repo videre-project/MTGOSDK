@@ -68,6 +68,11 @@ public partial class Diver : IDisposable
       {"/event_unsubscribe", _ => MakeEventUnsubscribeResponse()},
       {"/hook_method", _ => MakeHookMethodResponse()},
       {"/unhook_method", _ => MakeUnhookMethodResponse()},
+      {"/diagnostics", _ => MakeDiagnosticsResponse()},
+      {"/heap_snapshot", _ => MakeHeapSnapshotResponse()},
+      {"/retain_chain", _ => MakeRetainChainResponse()},
+      {"/type_instances", _ => MakeTypeInstancesResponse()},
+      {"/static_holders", _ => MakeStaticHoldersResponse()},
     };
 
     _remoteEventHandler = new ConcurrentDictionary<int, RegisteredEventHandlerInfo>();
@@ -77,11 +82,27 @@ public partial class Diver : IDisposable
   private static readonly ActivitySource s_activitySource = new("ScubaDiver");
   private TraceExporter _traceExporter;
 
+  //
+  // Diagnostics counters
+  //
+
+  internal sealed class EndpointMetrics
+  {
+    public long Count;
+    public long TotalTicks;  // Stopwatch ticks for avg calculation
+    public long LastTicks;
+  }
+
+  internal static readonly ConcurrentDictionary<string, EndpointMetrics>
+    s_endpointMetrics = new();
+
   public void Start(ushort listenPort)
   {
+#if DEBUG
     _traceExporter = new TraceExporter(
-        Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace", "trace_diver.json"), 
+        Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace", "trace_diver.json"),
         "ScubaDiver");
+#endif
 
     _runtime = new SnapshotRuntime();
 
@@ -145,14 +166,24 @@ public partial class Diver : IDisposable
 
     if (_tcpHandlers.TryGetValue(endpoint, out var handler))
     {
+      var sw = Stopwatch.StartNew();
       try
       {
-        return handler(_cachedRequestBody.Value);
+        var result = handler(_cachedRequestBody.Value);
+        return result;
       }
       catch (Exception ex)
       {
         activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
         return QuickError(ex.Message, ex.StackTrace);
+      }
+      finally
+      {
+        sw.Stop();
+        var m = s_endpointMetrics.GetOrAdd(endpoint, _ => new EndpointMetrics());
+        Interlocked.Increment(ref m.Count);
+        Interlocked.Add(ref m.TotalTicks, sw.ElapsedTicks);
+        Interlocked.Exchange(ref m.LastTicks, sw.ElapsedTicks);
       }
     }
     return QuickError($"Unknown endpoint: {endpoint}");

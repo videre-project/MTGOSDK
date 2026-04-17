@@ -33,7 +33,7 @@ public class GamePlayerResult(
   public GameResult Result { get; set; } = result;
 
   /// <summary>
-  /// The time remaining on the player's clock at the end of the game.
+  /// The total elapsed game time.
   /// </summary>
   public TimeSpan Clock { get; set; } = clock;
 

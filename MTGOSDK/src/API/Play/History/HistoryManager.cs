@@ -28,8 +28,8 @@ public static class HistoryManager
   /// <summary>
   /// Global manager for the player's game history.
   /// </summary>
-  private static readonly IGameHistoryManager s_gameHistoryManager =
-    ObjectProvider.Get<ISettings>().GameHistoryManager;
+  private static readonly ISettings s_settings =
+    ObjectProvider.Get<ISettings>();
 
   /// <summary>
   /// The MTGO client's ISO serializer for reading and writing binary objects.
@@ -37,17 +37,40 @@ public static class HistoryManager
   private static readonly IIsoSerializer s_isoSerializer =
     ObjectProvider.Get<IIsoSerializer>();
 
+  static HistoryManager()
+  {
+    ObjectCache.OnReset += delegate
+    {
+      s_gameHistoryManager = null;
+      s_loadIsoConfiguration = null;
+      s_serializationBinder = null;
+    };
+  }
+
+  private static dynamic s_gameHistoryManager
+  {
+    get => field ??= s_settings.GameHistoryManager;
+    set => field = value;
+  }
+
   /// <summary>
   /// The method used to load the ISO configuration for reading binary objects.
   /// </summary>
-  private static readonly dynamic s_loadIsoConfiguration =
-    Unbind(s_gameHistoryManager).LoadIsoConfigration;
+  private static dynamic s_loadIsoConfiguration
+  {
+    get => field ??= Unbind(s_gameHistoryManager).LoadIsoConfigration;
+    set => field = value;
+  }
 
   /// <summary>
   /// The serialization binder used to deserialize the game history file.
   /// </summary>
-  private static readonly dynamic s_serializationBinder =
-    RemoteClient.CreateInstance(new TypeProxy<HistoricalSerializationBinder>());
+  private static dynamic s_serializationBinder
+  {
+    get => field ??= RemoteClient.CreateInstance(
+      new TypeProxy<HistoricalSerializationBinder>());
+    set => field = value;
+  }
 
   /// <summary>
   /// The file name of the game history file.

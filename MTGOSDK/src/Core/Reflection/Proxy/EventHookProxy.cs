@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Reflection;
+
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Hooking;
@@ -32,6 +34,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   private readonly EventHook _hook;
 
   private readonly HookAction _hookAction;
+  private int _initializedGeneration = -1;
 
   // public delegate void HookProxy<I1, T1>(I1 instance, T1 args);
 
@@ -58,18 +61,55 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     });
   }
 
+  /// <summary>
+  /// Creates a new instance of the <see cref="EventHookProxy{I, T}"/> class using a method group.
+  /// </summary>
+  /// <param name="typeName">The name of the type to hook.</param>
+  /// <param name="method">The method to hook (method group).</param>
+  /// <param name="hook">The hook function to call when the method is invoked.</param>
+  public EventHookProxy(string typeName, MethodBase method, EventHook hook)
+  {
+    this._typeName = typeName;
+    this._methodName = method.Name;
+    this._hook = hook;
+
+    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
+    {
+      (dynamic, dynamic)? res = hook(instance, args);
+      if (res == null) return; // Skip if the hook returns null.
+
+      try
+      {
+        _eventHook?.Invoke(res?.Item1, res?.Item2);
+      }
+      catch (Exception e)
+      {
+        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
+        Log.Debug(e.StackTrace);
+      }
+    });
+  }
+
   public void EnsureInitialize()
   {
+    // Short-circuit if already initialized for the current connection.
+    // _initializedGeneration is compared against RemoteClient.s_connectionGeneration
+    // which is incremented on each reconnect, so stale initialization is automatically
+    // detected across MTGO process restarts without requiring event subscriptions.
+    if (_initializedGeneration == RemoteClient.s_connectionGeneration) return;
+
     // If the method is not already hooked, hook it.
     if (!RemoteClient.MethodHasHook(_typeName, _methodName, _hookAction))
     {
       RemoteClient.HookMethod(_typeName, _methodName, _hookAction);
     }
+    _initializedGeneration = RemoteClient.s_connectionGeneration;
   }
 
   public override void Clear()
   {
     _eventHook = null;
+    _initializedGeneration = -1;
     if (!RemoteClient.IsInitialized) return;
 
     RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);

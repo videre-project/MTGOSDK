@@ -3,7 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-
 namespace MTGOSDK.Core.Reflection;
 
 public delegate bool Filter<I>(dynamic t, I i);

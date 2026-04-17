@@ -18,7 +18,10 @@ public sealed class TargetSet(dynamic targetSet) : DLRWrapper<ITargetSet>
 
   internal CardAction Action = new(targetSet.Action);
 
-  internal CardAction.TargetSetChange Delta = null;
+  internal CardAction.TargetSetChange? Delta = null;
+
+  internal int Index => Unbind(Action).Targets.IndexOf(Unbind(this));
+
 
   //
   // ITargetSet wrapper properties
@@ -40,6 +43,9 @@ public sealed class TargetSet(dynamic targetSet) : DLRWrapper<ITargetSet>
 
   public List<Targetable> CurrentTargets { get; internal set; } =
     Map<IList, Targetable>(targetSet.CurrentTargets);
+
+  internal void UpdateTargets(IEnumerable<Targetable> targets) =>
+    CurrentTargets = targets.ToList();
 
   public ActionTargetRequirements TargetRequirements =>
     Cast<ActionTargetRequirements>(Unbind(this).TargetRequirements);

@@ -37,6 +37,14 @@ public sealed class Match(dynamic match) : Event
   //
 
   /// <summary>
+  /// The maximum number of games in this match (e.g. 3 for Bo3, 1 for Bo1).
+  /// </summary>
+  public int MaxGames =>
+    Try(() => (string)Unbind(this).MatchType?.MatchTypeCd, "") == "BES"
+      ? 3
+      : 1;
+
+  /// <summary>
   /// The state of the match (i.e. "Joined", "GameStarted", "Sideboarding", etc.)
   /// </summary>
   /// <remarks>

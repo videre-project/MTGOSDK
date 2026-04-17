@@ -35,7 +35,7 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// This is a string representation of the zone's enum value.
   /// If the zone is not a standard zone (or is unset), this will be null.
   /// </remarks>
-  public string? Name => Try(() => m_cardZone.ToString());
+  public string? Name => field ??= Try(() => m_cardZone.ToString());
 
   /// <summary>
   /// The number of cards in the zone.
@@ -58,7 +58,7 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
   /// <summary>
   /// The player this zone belongs to.
   /// </summary>
-  public GamePlayer Player => new(@base.Player);
+  public GamePlayer Player => field ??= new(@base.Player);
 
   //
   // ICardZone wrapper methods
@@ -68,6 +68,19 @@ public sealed class GameZone(dynamic cardZone) : DLRWrapper<ICardZone>
 
   public static implicit operator CardZone(GameZone zone) =>
     Try(() => zone?.Name != null ? zone?.Zone : null) ?? CardZone.Invalid;
+
+  public static bool operator ==(GameZone? left, GameZone? right) =>
+    ReferenceEquals((object?)left, (object?)right) ||
+    (left is not null && right is not null && left.Name == right.Name);
+
+  public static bool operator !=(GameZone? left, GameZone? right) =>
+    !(left == right);
+
+  public override bool Equals(object? obj) => 
+    obj is GameZone other && this == other;
+
+  public override int GetHashCode() =>
+    Name?.GetHashCode() ?? 0;
 
   //
   // ICardZone wrapper events

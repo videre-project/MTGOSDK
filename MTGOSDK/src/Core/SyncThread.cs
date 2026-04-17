@@ -23,10 +23,12 @@ public static class SyncThread
   // (DispatcherObject detection limits UI thread calls to ~0.5% of operations)
   private static readonly int s_minJobThreads = Math.Max(4, Environment.ProcessorCount);
   private static readonly int s_maxJobThreads = Environment.ProcessorCount * 2;
+
   private static readonly ConcurrentTaskScheduler s_taskScheduler =
     new(s_minJobThreads, s_maxJobThreads, s_cancellationToken);
 
   private static readonly TaskFactory s_taskFactory = new(s_taskScheduler);
+
   private static readonly ConcurrentDictionary<string, Task> s_groupTasks = new();
 
   private static readonly Timer s_cleanupTimer;
@@ -188,6 +190,12 @@ public static class SyncThread
 
     s_groupTasks[groupId] = newTask;
   }
+
+  /// <summary>
+  /// Returns a snapshot of the thread pool's current utilization.
+  /// </summary>
+  public static (int Active, int Queued, int Max) GetPoolMetrics() =>
+    s_taskScheduler.GetMetrics();
 
   public static void Stop()
   {

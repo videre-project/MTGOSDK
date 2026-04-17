@@ -131,21 +131,350 @@ public static class CollectionHelpers
   }
 
   /// <summary>
-  /// Gets the element type from a collection type.
+  /// Computes property-hash pairs for every ThingElement in a collection.
+  /// Executes fully in-process (injected into the remote target), so every
+  /// property access is a direct in-memory call with no IPC overhead.
   /// </summary>
-  private static Type GetElementType(Type collectionType)
+  /// <param name="collection">
+  /// The ThingElement collection (e.g. <c>GamePlayStatusMessageDetailed.ThingElements</c>).
+  /// </param>
+  /// <param name="excludedNamesCsv">
+  /// Runtime <c>MagicProperty</c> member names to EXCLUDE from the hash,
+  /// delimited by <c>|</c>. All other properties are included.
+  /// </param>
+  /// <returns>
+  /// Flat <c>int[]</c> of <c>[thingId₀, hash₀, thingId₁, hash₁, …]</c>.
+  /// </returns>
+  public static int[] ComputeThingSnapshotHashes(object collection, string excludedNamesCsv)
   {
-    // Try IEnumerable<T>
-    var enumerable = collectionType.GetInterfaces()
-      .Concat(new[] { collectionType }) // Include the type itself in case it's directly IEnumerable<T>
-      .FirstOrDefault(i => 
-        i.IsGenericType && 
-        i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
-    
-    if (enumerable != null)
-      return enumerable.GetGenericArguments()[0];
-    
-    // Fallback to object
-    return typeof(object);
+    var excludeSet = !string.IsNullOrWhiteSpace(excludedNamesCsv)
+      ? new HashSet<string>(excludedNamesCsv.Split(['|'], StringSplitOptions.RemoveEmptyEntries))
+      : new HashSet<string>();
+
+    // Pre-allocate with expected capacity (2 ints per element).
+    var items = collection as ICollection;
+    var results = new List<int>(items != null ? items.Count * 2 : 64);
+
+    // Reuse accessor cache across all elements (container types are homogeneous).
+    var accessorCache = new Dictionary<Type, AccessorSet>();
+
+    // Cache PropertyInfo for ThingElement.Properties (all elements share the same type).
+    PropertyInfo propsPiCached = null;
+    Type lastElementType = null;
+
+    foreach (var element in (IEnumerable)collection)
+    {
+      if (element == null)
+      {
+        results.Add(-1); // sentinel: null element
+        results.Add(-1);
+        continue;
+      }
+
+      // Cache the Properties PropertyInfo lookup by element type.
+      var elementType = element.GetType();
+      if (elementType != lastElementType)
+      {
+        propsPiCached = elementType
+          .GetProperty("Properties", BindingFlags.Instance | BindingFlags.NonPublic);
+        lastElementType = elementType;
+      }
+      if (propsPiCached == null)
+      {
+        results.Add(-2); // sentinel: no Properties property
+        results.Add(0);
+        continue;
+      }
+
+      var propsObj = propsPiCached.GetValue(element);
+      if (propsObj == null)
+      {
+        results.Add(-3); // sentinel: Properties returned null
+        results.Add(0);
+        continue;
+      }
+
+      int thingId = 0;
+      int hash = ComputeContainerHashExcluding(
+        propsObj, excludeSet, ref thingId, accessorCache);
+
+      results.Add(thingId);
+      results.Add(hash);
+    }
+
+    return results.ToArray();
+  }
+
+  /// <summary>
+  /// Gets a dictionary property from a PropertyContainer,
+  /// trying public accessor then private backing field.
+  /// </summary>
+  private static object GetDictProperty(
+    Type ct, object container, string publicName, string privateName)
+  {
+    const BindingFlags pub  = BindingFlags.Instance | BindingFlags.Public;
+    const BindingFlags priv = BindingFlags.Instance | BindingFlags.NonPublic;
+
+    var obj = ct.GetProperty(publicName, pub)?.GetValue(container);
+    if (obj != null) return obj;
+
+    return ct.GetProperty(privateName, priv)?.GetValue(container);
+  }
+
+  /// <summary>
+  /// Cached per-container-type accessor set (int, string, sub dictionaries).
+  /// All ThingElements share the same PropertyContainer type, so this is
+  /// resolved once and reused for every element in the snapshot.
+  /// </summary>
+  private sealed class AccessorSet
+  {
+    public DictTypeInfo IntInfo;
+    public DictTypeInfo StrInfo;
+    public DictTypeInfo SubInfo;
+
+    public object ThingNumberEnumKey;
+    public bool ThingNumberResolved;
+
+    /// <summary>
+    /// Pre-parsed exclusion enum keys per dictionary type.
+    /// </summary>
+    public HashSet<object> IntExcluded = new();
+    public HashSet<object> StrExcluded = new();
+    public HashSet<object> SubExcluded = new();
+  }
+
+  /// <summary>
+  /// Cached reflection info for a dictionary type (MethodInfo + enum key type).
+  /// </summary>
+  private sealed class DictTypeInfo
+  {
+    public MethodInfo TryGetValue;
+    public Type KeyType;
+
+    /// <summary>
+    /// Cached GetEnumerator method for iterating dictionary entries.
+    /// </summary>
+    public MethodInfo GetEnumerator;
+  }
+
+  /// <summary>
+  /// Resolves type info from a dictionary object. Called once per dict type.
+  /// </summary>
+  private static DictTypeInfo ResolveTypeInfo(object dictObj)
+  {
+    if (dictObj == null) return null;
+
+    var dictType = dictObj.GetType();
+    var tryGet = dictType.GetMethod("TryGetValue");
+    if (tryGet == null) return null;
+
+    // Discover enum key type from generic arguments
+    Type keyType = null;
+    if (dictType.IsGenericType)
+    {
+      keyType = dictType.GetGenericArguments()[0];
+    }
+    else
+    {
+      foreach (var iface in dictType.GetInterfaces())
+      {
+        if (!iface.IsGenericType) continue;
+        var gtd = iface.GetGenericTypeDefinition();
+        if (gtd == typeof(IDictionary<,>))
+        {
+          keyType = iface.GetGenericArguments()[0];
+          break;
+        }
+      }
+    }
+
+    if (keyType == null || !keyType.IsEnum) return null;
+
+    var getEnum = dictType.GetMethod("GetEnumerator");
+
+    return new DictTypeInfo { TryGetValue = tryGet, KeyType = keyType, GetEnumerator = getEnum };
+  }
+
+  /// <summary>
+  /// Builds or retrieves the AccessorSet for a container type, pre-parsing
+  /// exclusion enum keys from the exclude set once.
+  /// </summary>
+  private static AccessorSet GetOrCreateAccessorSet(
+    object container, HashSet<string> excludeSet, Dictionary<Type, AccessorSet> cache)
+  {
+    var ct = container.GetType();
+    if (cache.TryGetValue(ct, out var set))
+      return set;
+
+    set = new AccessorSet();
+
+    // Resolve type info for each dictionary kind
+    var intObj = GetDictProperty(ct, container, "IntegerProperties", "IntegerPropertiesDictionary");
+    set.IntInfo = ResolveTypeInfo(intObj);
+
+    var strObj = GetDictProperty(ct, container, "StringProperties", "StringPropertiesDictionary");
+    set.StrInfo = ResolveTypeInfo(strObj);
+
+    var subObj = GetDictProperty(ct, container, "SubProperties", "SubPropertiesDictionary");
+    set.SubInfo = ResolveTypeInfo(subObj);
+
+    // Pre-parse ThingNumber enum key
+    if (set.IntInfo != null)
+    {
+      try
+      {
+        set.ThingNumberEnumKey = Enum.Parse(set.IntInfo.KeyType, "THINGNUMBER", false);
+        set.ThingNumberResolved = true;
+      }
+      catch { set.ThingNumberResolved = false; }
+    }
+
+    // Pre-parse exclusion names into enum keys for each dict type
+    foreach (var name in excludeSet)
+    {
+      if (set.IntInfo != null)
+      {
+        try { set.IntExcluded.Add(Enum.Parse(set.IntInfo.KeyType, name, false)); }
+        catch { }
+      }
+      if (set.StrInfo != null)
+      {
+        try { set.StrExcluded.Add(Enum.Parse(set.StrInfo.KeyType, name, false)); }
+        catch { }
+      }
+      if (set.SubInfo != null)
+      {
+        try { set.SubExcluded.Add(Enum.Parse(set.SubInfo.KeyType, name, false)); }
+        catch { }
+      }
+    }
+
+    cache[ct] = set;
+    return set;
+  }
+
+  /// <summary>
+  /// Hashes a <c>PropertyContainer</c> by iterating ALL properties and
+  /// excluding those in <paramref name="excludeSet"/>.
+  /// Also extracts ThingNumber from integer properties.
+  /// </summary>
+  private static int ComputeContainerHashExcluding(
+    object container, HashSet<string> excludeSet, ref int thingId,
+    Dictionary<Type, AccessorSet> accessorCache)
+  {
+    int hash = 0;
+    var set = GetOrCreateAccessorSet(container, excludeSet, accessorCache);
+    var ct = container.GetType();
+
+    // Integer properties — iterate all, skip excluded
+    if (set.IntInfo != null)
+    {
+      var intObj = GetDictProperty(ct, container, "IntegerProperties", "IntegerPropertiesDictionary");
+      if (intObj != null)
+      {
+        // Extract ThingNumber first
+        if (set.ThingNumberResolved)
+        {
+          var args = new object[] { set.ThingNumberEnumKey, null };
+          if ((bool)set.IntInfo.TryGetValue.Invoke(intObj, args) && args[1] != null)
+            thingId = Convert.ToInt32(args[1]);
+        }
+
+        // Iterate all entries
+        foreach (var entry in (IEnumerable)intObj)
+        {
+          var entryType = entry.GetType();
+          var key = entryType.GetProperty("Key").GetValue(entry);
+          if (set.IntExcluded.Contains(key)) continue;
+
+          var val = entryType.GetProperty("Value").GetValue(entry);
+          if (val != null)
+            hash ^= unchecked(key.GetHashCode() * 397) ^ Convert.ToInt32(val);
+        }
+      }
+    }
+
+    // String properties — iterate all, skip excluded
+    if (set.StrInfo != null)
+    {
+      var strObj = GetDictProperty(ct, container, "StringProperties", "StringPropertiesDictionary");
+      if (strObj != null)
+      {
+        foreach (var entry in (IEnumerable)strObj)
+        {
+          var entryType = entry.GetType();
+          var key = entryType.GetProperty("Key").GetValue(entry);
+          if (set.StrExcluded.Contains(key)) continue;
+
+          var val = entryType.GetProperty("Value").GetValue(entry);
+          if (val != null)
+            hash ^= unchecked(key.GetHashCode() * 397) ^ val.GetHashCode();
+        }
+      }
+    }
+
+    // Sub-property containers (e.g. COUNTERS_LIST) — iterate all, skip excluded
+    if (set.SubInfo != null)
+    {
+      var subObj = GetDictProperty(ct, container, "SubProperties", "SubPropertiesDictionary");
+      if (subObj != null)
+      {
+        foreach (var entry in (IEnumerable)subObj)
+        {
+          var entryType = entry.GetType();
+          var key = entryType.GetProperty("Key").GetValue(entry);
+          if (set.SubExcluded.Contains(key)) continue;
+
+          var val = entryType.GetProperty("Value").GetValue(entry);
+          if (val != null)
+          {
+            int dummy = 0;
+            int subHash = ComputeContainerHashAll(val, ref dummy, accessorCache);
+            hash ^= unchecked(key.GetHashCode() * 397) ^ subHash;
+          }
+        }
+      }
+    }
+
+    return hash;
+  }
+
+  /// <summary>
+  /// Hashes a <c>PropertyContainer</c> with no exclusions (hash all).
+  /// Uses ToString().GetHashCode() for full coverage.
+  /// Used for recursive sub-containers (e.g. COUNTERS_LIST).
+  /// </summary>
+  private static int ComputeContainerHashAll(object container, ref int thingId,
+    Dictionary<Type, AccessorSet> accessorCache)
+  {
+    var ct = container.GetType();
+
+    // Still extract thingId via TryGetValue using cached type info
+    if (!accessorCache.TryGetValue(ct, out var set))
+    {
+      var intObj = GetDictProperty(ct, container, "IntegerProperties", "IntegerPropertiesDictionary");
+      var intInfo = ResolveTypeInfo(intObj);
+      if (intInfo != null)
+      {
+        object tnKey = null;
+        try { tnKey = Enum.Parse(intInfo.KeyType, "THINGNUMBER", false); } catch { }
+        set = new AccessorSet { IntInfo = intInfo, ThingNumberEnumKey = tnKey, ThingNumberResolved = tnKey != null };
+        accessorCache[ct] = set;
+      }
+    }
+
+    if (set?.IntInfo != null && set.ThingNumberResolved)
+    {
+      var intObj = GetDictProperty(ct, container, "IntegerProperties", "IntegerPropertiesDictionary");
+      if (intObj != null)
+      {
+        var args = new object[] { set.ThingNumberEnumKey, null };
+        if ((bool)set.IntInfo.TryGetValue.Invoke(intObj, args) && args[1] != null)
+          thingId = Convert.ToInt32(args[1]);
+      }
+    }
+
+    string text = container.ToString();
+    return text?.GetHashCode() ?? 0;
   }
 }

@@ -30,11 +30,19 @@ public static class ChannelManager
   private static readonly IChannelManager s_channelManager =
     ObjectProvider.Get<IChannelManager>();
 
+  static ChannelManager()
+  {
+    ObjectCache.OnReset += delegate { ChannelsByName = null; };
+  }
+
   /// <summary>
   /// A dictionary of all channels by their channel ID.
   /// </summary>
-  private static dynamic ChannelsByName =>
-    field ??= Unbind(s_channelManager).m_channelsByName;
+  private static dynamic ChannelsByName
+  {
+    get => field ??= Unbind(s_channelManager).m_channelsByName;
+    set => field = value;
+  }
 
   /// <summary>
   /// All currently queryable channels in the client.

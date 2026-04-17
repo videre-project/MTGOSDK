@@ -12,6 +12,7 @@ using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Structs;
 using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Resources;
@@ -38,6 +39,14 @@ public sealed class RemoteClient : DLRWrapper
   private static bool _isDisposing = false;
   private static bool _isDisposed = false;
   private static readonly object _disposeLock = new();
+
+  /// <summary>
+  /// Monotonically increasing counter that is incremented each time a new
+  /// remote connection is established. Used by <see cref="MTGOSDK.Core.Reflection.Proxy.EventHookProxy{I,T}"/>
+  /// to detect stale hook initialization across reconnects without requiring
+  /// event subscriptions.
+  /// </summary>
+  internal static int s_connectionGeneration = 0;
 
   public static RemoteClient @this => s_instance.Value;
   public static RemoteHandle @client => @this._clientHandle;
@@ -154,7 +163,9 @@ public sealed class RemoteClient : DLRWrapper
     List<Process> processList;
     try
     {
-      processList = new FileInfo(executablePath).GetLockingProcesses();
+      processList = new FileInfo(executablePath).GetLockingProcesses()
+        .Where(p => IsTargetProcess(p, executablePath, allowNameFallback: false))
+        .ToList();
     }
     catch
     {
@@ -165,10 +176,10 @@ public sealed class RemoteClient : DLRWrapper
     if (processList.Count == 0)
     {
       processList.AddRange(Process.GetProcessesByName("MTGO"));
-      if (processList.Count == 0)
-      {
-        processList.AddRange(Process.GetProcessesByName("MTGO.exe"));
-      }
+
+      processList = processList
+        .Where(p => IsTargetProcess(p, executablePath, allowNameFallback: true))
+        .ToList();
     }
 
     // If no processes were found, we want to indicate that our syscalls failed.
@@ -182,6 +193,8 @@ public sealed class RemoteClient : DLRWrapper
           Try<bool>(() =>
             p.Threads.Count > 0 &&
             p.StartTime != DateTime.MinValue))
+        // Ignore processes that have not loaded the CLR yet.
+        .Where(HasLoadedClr)
         .OrderByDescending(p => p.StartTime)
         .FirstOrDefault(),
       fallback: null);
@@ -190,6 +203,45 @@ public sealed class RemoteClient : DLRWrapper
       throw new NullReferenceException("MTGO client process not found.");
 
     return process;
+  }
+
+  private static bool IsTargetProcess(
+    Process process,
+    string executablePath,
+    bool allowNameFallback)
+  {
+    try
+    {
+      var processPath = process.MainModule?.FileName;
+
+      if (!string.IsNullOrEmpty(processPath))
+      {
+        return Path.GetFullPath(processPath)
+          .Equals(Path.GetFullPath(executablePath), StringComparison.InvariantCultureIgnoreCase);
+      }
+
+      if (!allowNameFallback)
+        return false;
+
+      return process.ProcessName.Equals("MTGO", StringComparison.InvariantCultureIgnoreCase);
+    }
+    catch
+    {
+      return false;
+    }
+  }
+
+  private static bool HasLoadedClr(Process process)
+  {
+    try
+    {
+      return process.GetModules().Any(module =>
+        module.szModule.Equals("mscoree.dll", StringComparison.InvariantCultureIgnoreCase));
+    }
+    catch
+    {
+      return false;
+    }
   }
 
   /// <summary>
@@ -325,7 +377,10 @@ public sealed class RemoteClient : DLRWrapper
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
-    MTGOProcess().WaitForInputIdle();
+    // MTGOProcess() is re-evaluated from scratch each call here (ClientProcess is
+    // not yet cached), so guard against a transient null between the HasStarted
+    // check above and this lookup.
+    Try(() => MTGOProcess().WaitForInputIdle());
     await WaitUntil(() => !string.IsNullOrEmpty(MTGOProcess().MainWindowTitle));
     if (!await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero))
     {
@@ -397,6 +452,94 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   //
+  // Diagnostics
+  //
+
+  /// <summary>
+  /// Collects SDK-side diagnostics (thread pool, IPC metrics, callback latency).
+  /// No IPC calls — reads local counters only.
+  /// </summary>
+  public static object GetSdkDiagnostics()
+  {
+    var (active, queued, max) = SyncThread.GetPoolMetrics();
+    var ipcMetrics = DiverCommunicator.GetIpcMetrics();
+
+    // Convert to serializable form
+    var endpoints = new Dictionary<string, object>();
+    foreach (var kvp in ipcMetrics)
+    {
+      endpoints[kvp.Key] = new
+      {
+        Count = kvp.Value.Count,
+        AvgMs = Math.Round(kvp.Value.AvgMs, 2),
+        LastMs = Math.Round(kvp.Value.LastMs, 2),
+      };
+    }
+
+    return new
+    {
+      SyncThreadActive = active,
+      SyncThreadQueued = queued,
+      SyncThreadMax = max,
+      InFlightRequests = @client?.Communicator?.PendingRequestCount ?? 0,
+      TotalRequests = DiverCommunicator.TotalRequests,
+      Endpoints = endpoints,
+      CallbacksReceived = DiverCommunicator.CallbacksReceived,
+      LastCallbackLatencyMs =
+        Math.Round(DiverCommunicator.LastCallbackLatencyMs, 2),
+      AvgCallbackLatencyMs =
+        Math.Round(DiverCommunicator.AvgCallbackLatencyMs, 2),
+      PeakCallbackLatencyMs =
+        Math.Round(DiverCommunicator.PeakCallbackLatencyMs, 2),
+    };
+  }
+
+  /// <summary>
+  /// Queries the Diver (inside the MTGO process) for its diagnostics snapshot.
+  /// Costs one IPC round-trip.
+  /// </summary>
+  public static Interop.Interactions.Dumps.DiverDiagnostics GetDiverDiagnostics()
+  {
+    try { return @client?.Communicator?.GetDiverDiagnostics(); }
+    catch { return null; }
+  }
+
+  /// <summary>
+  /// Takes a heap snapshot, building type stats and reverse reference map.
+  /// </summary>
+  public static Interop.Interactions.Dumps.HeapSnapshotResponse GetHeapSnapshot(int topN = 50)
+  {
+    return @client?.Communicator?.GetHeapSnapshot(topN);
+  }
+
+  /// <summary>
+  /// Computes the retain chain for the largest instance of the given type.
+  /// </summary>
+  public static Interop.Interactions.Dumps.RetainChainResponse GetRetainChain(
+    string typeName, int maxDepth = 8)
+  {
+    return @client?.Communicator?.GetRetainChain(typeName, maxDepth);
+  }
+
+  /// <summary>
+  /// Returns the largest instances of the given type.
+  /// </summary>
+  public static Interop.Interactions.Dumps.TypeInstancesResponse GetTypeInstances(
+    string typeName, int maxCount = 20)
+  {
+    return @client?.Communicator?.GetTypeInstances(typeName, maxCount);
+  }
+
+  /// <summary>
+  /// Analyzes which static root fields hold the most retained memory.
+  /// </summary>
+  public static Interop.Interactions.Dumps.StaticHoldersResponse AnalyzeStaticHolders(
+    int topN = 50)
+  {
+    return @client?.Communicator?.AnalyzeStaticHolders(topN);
+  }
+
+  //
   // Process and RemoteNET state management
   //
 
@@ -419,18 +562,44 @@ public sealed class RemoteClient : DLRWrapper
     using var activity = s_activitySource.StartActivity("RemoteClient.GetClientHandle");
     activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
 
-    bool _processHandleOverride = true;
+    void RefreshPort()
+    {
+      Port = Cast<ushort>(ClientProcess.Id + 1024);
+    }
+
     void RefreshClientProcess(bool throwOnFailure = false)
     {
-      ClientProcess = Retry(() => MTGOProcess(true),
-                            delay: 500, retries: 10, raise: throwOnFailure);
-      _processHandleOverride = false;
+      ClientProcess = Retry(() => MTGOProcess(false),
+                            delay: 500, retries: 20, raise: false);
+
+      if (ClientProcess is null)
+      {
+        Log.Warning("MTGO process not found during attach; attempting to launch MTGO.");
+        StartProcess().ConfigureAwait(false).GetAwaiter().GetResult();
+        ClientProcess = Retry(() => MTGOProcess(false),
+                              delay: 500, retries: 20, raise: false);
+      }
+
+      if (ClientProcess is null && throwOnFailure)
+      {
+        throw new ExternalErrorException(
+          "Unable to retrieve MTGO process. MTGO may have crashed during attach.");
+      }
+
+      if (ClientProcess is not null)
+      {
+        RefreshPort();
+      }
     }
+
+    static bool HasStableClrWindow(Process process) =>
+      Try(() => !process.HasExited && HasLoadedClr(process));
 
     if (ClientProcess is null) RefreshClientProcess(throwOnFailure: true);
 
     // Connect to the MTGO process using the specified or default port
-    if (!Port.HasValue) Port = Cast<ushort>(ClientProcess.Id + 1024);
+    if (!Port.HasValue)
+      RefreshPort();
     Log.Trace("Connecting to MTGO process on port {Port}", Port.Value);
 
     // Suppress transient retry noise without flowing suppression to background tasks.
@@ -441,6 +610,15 @@ public sealed class RemoteClient : DLRWrapper
       {
         try
         {
+          if (ClientProcess is null)
+            throw new InvalidOperationException("No MTGO process is currently available.");
+
+          if (!Try(() => !ClientProcess.HasExited))
+            throw new InvalidOperationException("MTGO process exited before connection.");
+
+          if (!HasStableClrWindow(ClientProcess))
+            throw new InvalidOperationException("MTGO process CLR readiness is not yet stable.");
+
           return RemoteHandle.Connect(ClientProcess, Port.Value, _cts);
         }
         //
@@ -448,15 +626,20 @@ public sealed class RemoteClient : DLRWrapper
         // retry getting the MTGO process again unless the user has provided
         // an invalid process handle manually.
         //
-        catch (InvalidOperationException) when (!_processHandleOverride)
+        catch (InvalidOperationException ex)
         {
-          RefreshClientProcess(throwOnFailure: true);
-          _processHandleOverride = true;
+          int pid = Try(() => ClientProcess?.Id ?? -1);
+          Log.Debug(
+            "Attach attempt failed for PID {PID}: {Reason}. Refreshing MTGO process selection.",
+            pid,
+            ex.Message);
+          RefreshClientProcess(throwOnFailure: false);
+
           throw;
         }
       },
       // Retry connecting to avoid creating a race condition
-      delay: 500, retries: 10, raise: true); // 5s
+      delay: 750, retries: 6, raise: true);
     }
 
     // When the MTGO process exists, trigger the ProcessExited event
@@ -568,6 +751,7 @@ public sealed class RemoteClient : DLRWrapper
 
     // Prepare a fresh lazy for future initialization attempts.
     s_instance = new Lazy<RemoteClient>(() => new RemoteClient());
+    Interlocked.Increment(ref s_connectionGeneration);
     Log.Trace("RemoteClient disposed.");
   }
 
@@ -966,6 +1150,22 @@ public sealed class RemoteClient : DLRWrapper
     propInfo.SetValue(dro, value);
   }
 
+  /// <summary>
+  /// Sets a remote field on a DynamicRemoteObject, finding it by name.
+  /// </summary>
+  public static void SetField(
+    DynamicRemoteObject dro,
+    string fieldName,
+    object value)
+  {
+    var fieldInfo = dro.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+    if (fieldInfo is null)
+      throw new MissingMemberException(
+          $"Field '{fieldName}' not found on remote object.");
+
+    fieldInfo.SetValue(dro, value);
+  }
+
   //
   // Reflection wrapper methods
   //
@@ -999,6 +1199,11 @@ public sealed class RemoteClient : DLRWrapper
           $"Method '{methodName}' not found on remote type '{queryPath}'.");
     }
   }
+
+  public static MethodInfo? GetMethod<T>(
+    string methodName,
+    Type[]? genericTypes = null) =>
+      GetMethod(typeof(T).FullName!, methodName, genericTypes);
 
   /// <summary>
   /// Invokes a static method on the target process.
@@ -1038,6 +1243,18 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   /// <summary>
+  /// Hooks a remote object's method using a Harmony callback with MethodBase for overload disambiguation.
+  /// </summary>
+  /// <param name="method">The method to hook (provides overload disambiguation).</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
+  public static void HookMethod(
+    MethodBase method,
+    HookAction callback)
+  {
+    @client.Harmony.Patch(method, prefix: callback);
+  }
+
+  /// <summary>
   /// Unhooks a remote object's method using a Harmony callback.
   /// </summary>
   /// <param name="queryPath">The query path to the remote object.</param>
@@ -1054,6 +1271,19 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   /// <summary>
+  /// Unhooks a remote object's method using a Harmony callback with MethodBase for overload disambiguation.
+  /// </summary>
+  /// <param name="method">The method to unhook (provides overload disambiguation).</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
+  /// <returns>True if the method was successfully unhooked.</returns>
+  public static bool UnhookMethod(
+    MethodBase method,
+    HookAction callback)
+  {
+    return @client.Harmony.UnhookMethod(method, callback);
+  }
+
+  /// <summary>
   /// Checks if a remote object's method has a Harmony callback.
   /// </summary>
   /// <param name="queryPath">The query path to the remote object.</param>
@@ -1066,6 +1296,19 @@ public sealed class RemoteClient : DLRWrapper
     HookAction callback)
   {
     MethodInfo method = GetInstanceMethod(queryPath, methodName);
+    return @client.Harmony.HasHook(method, callback);
+  }
+
+  /// <summary>
+  /// Checks if a remote object's method has a Harmony callback with MethodBase for overload disambiguation.
+  /// </summary>
+  /// <param name="method">The method to check (provides overload disambiguation).</param>
+  /// <param name="callback">The local Harmony callback to check.</param>
+  /// <returns>True if the method has the Harmony callback.</returns>
+  public static bool MethodHasHook(
+    MethodBase method,
+    HookAction callback)
+  {
     return @client.Harmony.HasHook(method, callback);
   }
 }

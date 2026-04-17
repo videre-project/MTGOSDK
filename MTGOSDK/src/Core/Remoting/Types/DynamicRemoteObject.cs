@@ -672,6 +672,50 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // Otherwise, defer to base for normal dynamic semantics
     return base.TryUnaryOperation(binder, out result);
   }
+
+  public override bool TryConvert(ConvertBinder binder, out object result)
+  {
+    if (binder.Type == typeof(bool) ||
+        binder.Type == typeof(int) ||
+        binder.Type == typeof(long) ||
+        binder.Type == typeof(double) ||
+        binder.Type == typeof(string) ||
+        binder.Type.IsEnum)
+    {
+      try
+      {
+        // Try to get the value as a primitive if it's boxed
+        var invokeResult = __ra.Communicator.InvokeMethod(
+          __ro.RemoteToken,
+          "System.Object",
+          "ToString",
+          Array.Empty<string>());
+        string strVal = (string)ProcessInvocationResult(invokeResult);
+        
+        if (binder.Type == typeof(string))
+        {
+          result = strVal;
+          return true;
+        }
+        
+        if (binder.Type.IsEnum)
+        {
+          result = Enum.Parse(binder.Type, strVal);
+          return true;
+        }
+
+        result = Convert.ChangeType(strVal, binder.Type);
+        return true;
+      }
+      catch
+      {
+        result = null;
+        return false;
+      }
+    }
+
+    return base.TryConvert(binder, out result);
+  }
   private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
 
   public override bool TryGetMember(GetMemberBinder binder, out object result)

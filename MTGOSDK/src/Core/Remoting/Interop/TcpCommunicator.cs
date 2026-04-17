@@ -46,6 +46,11 @@ public class TcpCommunicator : TcpPipelineBase
   /// </summary>
   public new bool IsConnected => _isConnected && _client?.Connected == true;
 
+  /// <summary>
+  /// The number of IPC requests currently in-flight (awaiting response).
+  /// </summary>
+  public int PendingRequestCount => _pendingRequests.Count;
+
   public TcpCommunicator(
     string hostname,
     int port,
@@ -110,6 +115,8 @@ public class TcpCommunicator : TcpPipelineBase
 
     _pendingRequests[requestId] = tcs;
 
+    // Tag all logs emitted during this request with the correlation ID
+    LogContext.MessageId.Value = requestId;
     try
     {
       // Use cancellation token
@@ -138,6 +145,7 @@ public class TcpCommunicator : TcpPipelineBase
     finally
     {
       _pendingRequests.TryRemove(requestId, out _);
+      LogContext.MessageId.Value = null;
     }
   }
 
@@ -228,7 +236,7 @@ public class TcpCommunicator : TcpPipelineBase
                 }
                 catch (Exception ex)
                 {
-                  Log.Error($"[TcpCommunicator] Callback handler error: {ex.Message}");
+                  Log.Error(ex, "[TcpCommunicator] Callback handler error");
                 }
               });
               break;
@@ -249,7 +257,7 @@ public class TcpCommunicator : TcpPipelineBase
     }
     catch (Exception ex)
     {
-      Log.Error($"[TcpCommunicator] Reader loop error: {ex.Message}");
+      Log.Error(ex, "[TcpCommunicator] Reader loop error");
     }
     finally
     {

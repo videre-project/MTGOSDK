@@ -293,24 +293,28 @@ public class RemoteHandle : DLRWrapper, IDisposable
           Bootstrapper.Inject(target, diverPort);
           break;
         }
-        catch (IOException e)
+        catch (Exception e)
         {
-          throw new Exception("Failed to inject diver.", e);
+          throw new InvalidOperationException("Failed to inject diver.", e);
         }
       case DiverState.Alive:
         // Skip injection as diver assembly is already bootstrapped
         IsReconnected = true;
         break;
       case DiverState.Corpse:
-        throw new Exception("Diver could not finish bootstrapping.");
+        throw new InvalidOperationException("Diver could not finish bootstrapping.");
       case DiverState.HollowSnapshot:
-        throw new Exception("Target process is empty. Did you attach to the correct process?");
+        throw new InvalidOperationException("Target process is empty. Did you attach to the correct process?");
     }
 
     // Now register our program as a "client" of the diver
     DiverCommunicator com = new DiverCommunicator(diverAddr, diverPort, cts);
     if (com.RegisterClient() == false)
-      throw new Exception("Registering as a client in the Diver failed.");
+    {
+      string details = com.LastError is null ? "<no transport exception captured>" : com.LastError.ToString();
+      throw new InvalidOperationException(
+        $"Registering as a client in the Diver failed. PID={target.Id}, Port={diverPort}. Transport error: {details}");
+    }
 
     return new RemoteHandle(target, com);
   }

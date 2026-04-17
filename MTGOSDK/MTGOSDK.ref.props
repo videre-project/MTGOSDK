@@ -41,6 +41,7 @@
     <Reference Include="DuelScene"                        Private="$(UseRef)" />
     <Reference Include="FlsClient"                        Private="$(UseRef)" />
     <Reference Include="GameDetails"                      Private="$(UseRef)" />
+    <Reference Include="Mtgo.Shared.Parser.Attributes"    Private="$(UseRef)" />
     <Reference Include="MTGOEnumStruct"                   Private="$(UseRef)" />
     <Reference Include="MTGOMessage"                      Private="$(UseRef)" />
     <Reference Include="WotC.Common.Client"               Private="$(UseRef)" />

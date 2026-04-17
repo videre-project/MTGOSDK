@@ -130,6 +130,13 @@ public static class JsonSerializableExtensions
       filteredProperties = new PropertyFilter(obj.GetType()).Properties;
     }
 
+    // Batch-hydrate primitive properties before serialization to minimize IPC calls.
+    // This converts N individual IPC calls into 1 batch call for remote objects.
+    if (obj is DLRWrapper wrapper)
+    {
+      wrapper.HydrateForSerialization(filteredProperties.Select(p => p.Name));
+    }
+
     // Create an ExpandoObject to store the serialized object.
     var expando = new ExpandoObject();
     var expandoDict = (IDictionary<string, object>)expando;

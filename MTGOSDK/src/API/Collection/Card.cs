@@ -38,7 +38,8 @@ public sealed class Card(dynamic card)
   /// <summary>
   /// The mana cost of the card.
   /// </summary>
-  public string ManaCost => field ??= @base.ManaCost;
+  public string ManaCost =>
+    field ??= MtgoTextNormalizer.NormalizeManaCost(@base.ManaCost);
 
   /// <summary>
   /// The card's converted mana cost (or mana value).
@@ -48,7 +49,8 @@ public sealed class Card(dynamic card)
   /// <summary>
   /// The card's oracle text.
   /// </summary>
-  public string RulesText => field ??= @base.RulesText;
+  public string RulesText =>
+    field ??= MtgoTextNormalizer.NormalizeText(@base.RulesText);
 
   /// <summary>
   /// A list of the card's types.

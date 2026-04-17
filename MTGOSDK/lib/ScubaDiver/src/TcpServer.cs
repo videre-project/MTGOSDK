@@ -41,6 +41,11 @@ public class TcpServer : IDisposable
   /// </summary>
   public int Port { get; }
 
+  /// <summary>
+  /// The number of currently connected clients.
+  /// </summary>
+  public int ClientCount => _clients.Count;
+
   public TcpServer(
     int port,
     Func<string, byte[], byte[]> requestHandler,
@@ -239,11 +244,20 @@ public class TcpServer : IDisposable
           {
             if (frame.Type == TcpMessageType.Request)
             {
-              // Dispatch to SyncThread for parallel processing
+              // Capture messageId for correlation inside the SyncThread lambda
+              var mid = frame.MessageId;
               _ = SyncThread.EnqueueAsync(async () =>
               {
-                await ProcessRequestAsync(frame.MessageId, frame.Endpoint, frame.Body, cancellationToken)
-                  .ConfigureAwait(false);
+                LogContext.MessageId.Value = mid;
+                try
+                {
+                  await ProcessRequestAsync(mid, frame.Endpoint, frame.Body, cancellationToken)
+                    .ConfigureAwait(false);
+                }
+                finally
+                {
+                  LogContext.MessageId.Value = null;
+                }
               });
             }
           }

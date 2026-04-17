@@ -12,6 +12,10 @@ namespace MTGOSDK.API.Play.Games;
 public enum PlayDrawResult
 {
   /// <summary>
+  /// The play/draw choice is not known.
+  /// </summary>
+  Unknown,
+  /// <summary>
   /// The player chose to play first.
   /// </summary>
   Play,

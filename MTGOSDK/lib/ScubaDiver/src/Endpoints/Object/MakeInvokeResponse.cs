@@ -128,22 +128,6 @@ public partial class Diver : IDisposable
         results = method.Invoke(instance, paramsArray);
       }
     }
-    catch (Exception ex) when (STAThread.RequiresSTAThread(ex) || 
-                               (ex.InnerException != null && STAThread.RequiresSTAThread(ex.InnerException)))
-    {
-      // Retry on STA/UI thread only for operations that actually need it
-      Log.Debug($"[Diver] Retrying Invoke on STA thread due to: {ex.InnerException?.Message ?? ex.Message}");
-      activity?.AddEvent(new ActivityEvent("STA_Retry"));
-      try
-      {
-        results = STAThread.Execute(() => method.Invoke(instance, paramsArray));
-      }
-      catch (Exception retryEx)
-      {
-        activity?.SetStatus(ActivityStatusCode.Error, retryEx.Message);
-        return QuickError($"Invocation caused exception (after STA retry): {retryEx}");
-      }
-    }
     catch (Exception e)
     {
       activity?.SetStatus(ActivityStatusCode.Error, e.Message);
@@ -159,7 +143,8 @@ public partial class Diver : IDisposable
     {
       returnValue = ObjectOrRemoteAddress.Null;
     }
-    else if (results.GetType().IsPrimitiveEtc())
+    else if (results.GetType().IsPrimitiveEtc()
+          || results.GetType().IsPrimitiveEtcArray())
     {
       returnValue = ObjectOrRemoteAddress.FromObj(results);
     }

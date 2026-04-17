@@ -27,15 +27,30 @@ public static class CollectionManager
   private static readonly ICardDataManager s_cardDataManager =
     ObjectProvider.Get<ICardDataManager>();
 
+  static CollectionManager()
+  {
+    ObjectCache.OnReset += delegate
+    {
+      s_cardIdToDefinitions = null;
+      s_cardNameToDefinitions = null;
+    };
+  }
+
   //
   // ICardDefinition wrapper methods
   //
 
-  private static dynamic s_cardIdToDefinitions =>
-    field ??= Unbind(s_cardDataManager).DigitalObjectsByCatId;
+  private static dynamic s_cardIdToDefinitions
+  {
+    get => field ??= Unbind(s_cardDataManager).DigitalObjectsByCatId;
+    set => field = value;
+  }
 
-  private static dynamic s_cardNameToDefinitions =>
-    field ??= Unbind(s_cardDataManager).NameToCardDefinitions;
+  private static dynamic s_cardNameToDefinitions
+  {
+    get => field ??= Unbind(s_cardDataManager).NameToCardDefinitions;
+    set => field = value;
+  }
 
   /// <summary>
   /// Returns a list of catalog ids for the given card name.
@@ -92,6 +107,20 @@ public static class CollectionManager
   /// <returns>A list of card objects.</returns>
   public static IEnumerable<Card> GetCards(string cardName) =>
     Map<IEnumerable, int, Card>(GetCardIds(cardName), GetCard);
+
+  /// <summary>
+  /// Returns a card object by the given card texture number (CTN).
+  /// </summary>
+  /// <param name="textureId">The card texture number to look up.</param>
+  /// <returns>A new card object.</returns>
+  /// <exception cref="KeyNotFoundException">
+  /// Thrown if no card is found with the given texture number.
+  /// </exception>
+  public static Card GetCardByTextureId(int textureId) =>
+    new(
+      Unbind(s_cardDataManager).GetCardDefinitionForTextureNumber(textureId, true)
+        ?? throw new KeyNotFoundException(
+          $"No card found with texture number #{textureId}."));
 
   //
   // ICardSet wrapper methods

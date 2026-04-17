@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.API.Users;
+using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection;
 
 using WotC.MtGO.Client.Model;
@@ -20,11 +21,19 @@ using static MTGOSDK.API.Events;
 public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
 {
   /// <summary>
+  /// Whether this player is backed by a local GamePlayerPartial.
+  /// </summary>
+  private readonly bool _isPartial = gamePlayer is GamePlayerPartial;
+
+  /// <summary>
   /// Stores an internal reference to the IGamePlayer object.
   /// </summary>
-  internal override dynamic obj => Bind<IGamePlayer>(gamePlayer);
+  internal override dynamic obj =>
+    gamePlayer is GamePlayerPartial partial
+      ? partial
+      : Bind<IGamePlayer>(gamePlayer);
 
-  internal Game GameInterface => new(@base.Game);
+  internal Game GameInterface => _isPartial ? null! : new(@base.Game);
 
   internal IUser m_user => Bind<IUser>(Unbind(gamePlayer).m_user);
 
@@ -32,19 +41,32 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   // IGamePlayer wrapper properties
   //
 
-  public string Name => m_user.Name;
+  public string Name => field ??= _isPartial
+    ? (string)Unbind(gamePlayer).Name
+    : m_user.Name;
 
   /// <summary>
   /// The User object for the player.
   /// </summary>
   [NonSerializable]
-  public User User => new(Unbind(this).User.Id);
+  public User User => field ??= _isPartial
+    ? ((GamePlayerPartial)gamePlayer).User
+    : new(Unbind(this).User.Id);
 
   /// <summary>
   /// The amount of time left on the player's clock.
   /// </summary>
-  public TimeSpan ChessClock =>
-    Cast<TimeSpan>(Unbind(this).ChessClock);
+  public TimeSpan ChessClock => Cast<TimeSpan>(Unbind(this).ChessClock);
+
+  /// <summary>
+  /// The user's Login ID, captured from the game's IGamePlayer.User.
+  /// </summary>
+  public int UserId => User.Id;
+
+  /// <summary>
+  /// The catalog ID of the player's avatar card definition.
+  /// </summary>
+  public int AvatarId => Try<int>(() => Unbind(User).AvatarId);
 
   /// <summary>
   /// The amount of life the player has.
@@ -69,19 +91,16 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   /// <summary>
   /// Whether the player is currently taking their turn.
   /// </summary>
-  [NonSerializable]
   public bool IsActivePlayer => @base.IsActivePlayer;
 
   /// <summary>
   /// Whether the player has priority.
   /// </summary>
-  [NonSerializable]
   public bool HasPriority => @base.HasPriority;
 
   /// <summary>
   /// The player's mana pool.
   /// </summary>
-  [NonSerializable]
   public IEnumerable<Mana> ManaPool => Map<Mana>(@base.ManaPool);
 
   //

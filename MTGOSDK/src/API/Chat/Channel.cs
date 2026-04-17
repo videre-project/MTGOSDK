@@ -26,10 +26,6 @@ public sealed class Channel(dynamic chatChannel)
   /// </summary>
   internal override dynamic obj => Bind<IChatChannel>(chatChannel);
 
-  private dynamic ChatLog =>
-    field ??= Try(() => Unbind(@base.MessageLog).m_chatLog,
-                  () => new List<Message>());
-
   /// <summary>
   /// The ChatSessionViewModel of the channel.
   /// </summary>
@@ -73,12 +69,12 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// The log of messages in this channel.
   /// </summary>
-  public IList<Message> Messages => Map<IList, Message>(ChatLog, proxy: true);
+  public IList<Message> Messages => Map<IList, Message>(@base.Messages);
 
   /// <summary>
   /// The number of messages sent in this channel.
   /// </summary>
-  public int MessageCount => ChatLog.Count;
+  public int MessageCount => @base.Messages.Count;
 
   /// <summary>
   /// The users in this channel.
@@ -121,7 +117,9 @@ public sealed class Channel(dynamic chatChannel)
   /// <summary>
   /// The local file name of the chat log.
   /// </summary>
-  public string LocalFileName => m_historicalChatChannel.LocalFileName;
+  public string LocalFileName =>
+    Try(() => m_historicalChatChannel.LocalFileName,
+        () => Unbind(this).LocalFileName);
 
   //
   // IChatChannel wrapper events

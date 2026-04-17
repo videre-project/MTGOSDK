@@ -4,11 +4,15 @@
 **/
 
 using System.Collections;
+using System.Reflection;
 
 using MTGOSDK.API.Collection;
+using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting;
 
 using WotC.MtGO.Client.Model.Play;
+using WotC.MtGO.Client.Model.Play.InProgressGameEvent;
 
 
 namespace MTGOSDK.API.Play.Games;
@@ -20,21 +24,85 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// <summary>
   /// Stores an internal reference to the IGameCard object.
   /// </summary>
-  internal override dynamic obj => Bind<IGameCard>(gameCard);
+  internal override dynamic obj =>
+    gameCard is GameCardPartial partial
+      ? partial
+      : Bind<IGameCard>(gameCard);
 
-  private struct OrderedCombatParticipant(dynamic orderedCombatParticipant)
+  public readonly struct OrderedCombatParticipant(int order, GameCard target)
   {
-    public int Order = orderedCombatParticipant.Order;
-    public GameCard Target = new(orderedCombatParticipant.Target);
+    public readonly int Order = order;
+    public readonly GameCard Target = target;
   }
 
   internal Game GameInterface => new(@base.GameInterface);
 
-  // DigitalMagicObject -> CardRelationshipData -> DuelSceneCardViewModel
-  // private readonly dynamic cardModel = gameCard.Tag.CardViewModel;
+  private static ICardZone? GetCardZone(
+    Game game,
+    GameCard card,
+    int? zoneId,
+    int? ownerId = null)
+  {
+    if (zoneId == null) return null;
 
-  [NonSerializable]
-  public bool IsDisposed => gameCard.Tag == null;
+    var zone = Unbind(card).GetSharedCardZone((uint)zoneId);
+    if (zone == null && ownerId != null)
+    {
+      dynamic owner = Unbind(game).PlayersInServerOrder[ownerId];
+      zone = Unbind(card).GetPlayerCardZone((uint)zoneId, owner);
+    }
+    if (zone == null) return null;
+
+    return Bind<ICardZone>(zone);
+  }
+
+  private static MethodInfo? s_gcCreateMethod;
+
+  public static GameCard Create(
+    Game game,
+    PropertyContainer properties,
+    int? previousZone = null)
+  {
+    //
+    // This tells MTGO to ignore tracking this card as part of its visual zone collections.
+    // This is necessary because we are creating these cards as static snapshots of the
+    // game state, and we don't want MTGO to try and manage them in its own collections
+    // as it may confuse the WPF binding system.
+    //
+    properties[MagicProperty.SPLITPARENT_ID] = -2;
+
+    // Create new GameCard object with state properties populated.
+    s_gcCreateMethod ??= RemoteClient.GetMethod<WotC.MtGO.Client.Model.Play.GameCard>("Create");
+    dynamic source = s_gcCreateMethod.Invoke(null, [-1, Unbind(game), Unbind(properties)]);
+    source.ResolvePropertiesButDeferUpdatingAssociations();
+    var gameCard = new GameCard(source);
+
+    RemoteClient.SetField(source, "m_zone", source.ActualZone);
+    if (previousZone != null)
+    {
+      int? ownerId = properties[MagicProperty.OWNER];
+      var prevZone = GetCardZone(game, gameCard, previousZone, ownerId);
+      RemoteClient.SetProperty(source, "PreviousZone", Unbind(prevZone));
+    }
+
+    return gameCard;
+  }
+
+  /// <summary>
+  /// Creates a GameCard backed by a local PropertyContainer snapshot.
+  /// No remote IPC call to MTGO.
+  /// </summary>
+  /// <param name="properties">The parsed MagicProperty dictionary.</param>
+  /// <param name="game">The raw MTGO Game object (for player/zone resolution).</param>
+  /// <param name="previousZoneId">Optional raw zone ID for PreviousZone resolution.</param>
+  public static GameCard FromProperties(
+    PropertyContainer properties,
+    dynamic game,
+    int? previousZoneId = null)
+  {
+    var snapshot = new GameCardPartial(properties, game, previousZoneId);
+    return new GameCard(snapshot);
+  }
 
   //
   // IGameCard wrapper properties
@@ -62,9 +130,32 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   public int SourceId => @base.SourceId;
 
   /// <summary>
+  /// For parent cards (adventure/split/MDFC), the game IDs of the SUBC children.
+  /// Returns 0 if no child is present at that index.
+  /// </summary>
+  public int SplitChildId0 => @base.SplitChildId0;
+  public int SplitChildId1 => @base.SplitChildId1;
+
+  /// <summary>
   /// The card name.
   /// </summary>
   public string Name => @base.Name;
+
+  /// <summary>
+  /// The rules text for this card or ability on the stack.
+  /// Uses MTGO's priority chain: ACTION_SPELL_TEXT_STRING,
+  /// then EFFECT_NAME_STRING, then REAL_ORACLETEXT_STRING.
+  /// </summary>
+  public string RulesText =>
+    field ??= MTGOSDK.API.MtgoTextNormalizer.NormalizeText(@base.RulesText);
+
+  /// <summary>
+  /// The "blue text" — granted abilities and effects text shown in blue
+  /// on the card in MTGO. Concatenation of BLUETEXT_STRING0 and
+  /// ABILITY_BLUETEXT_STRING0 properties.
+  /// </summary>
+  public string BlueText =>
+    field ??= MTGOSDK.API.MtgoTextNormalizer.NormalizeText(@base.BlueText);
 
   /// <summary>
   /// The associated card definition.
@@ -85,12 +176,18 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// <summary>
   /// The zone in which the card is currently located.
   /// </summary>
-  public GameZone? Zone => Optional<GameZone>(@base.Zone);
+  public GameZone? Zone =>
+    gameCard is GameCardPartial partial
+      ? partial.GetZoneWrapper()
+      : Optional<GameZone>(@base.Zone);
 
   // IsExiledOnBattlefield
   // IsMutatedOnBattlefield
   // IsAbilityOnTheStack
-  public GameZone? ActualZone => Optional<GameZone>(@base.ActualZone);
+  public GameZone? ActualZone =>
+    gameCard is GameCardPartial partialActual
+      ? partialActual.GetZoneWrapper()
+      : Optional<GameZone>(@base.ActualZone);
 
   /// <summary>
   /// The previous zone in which the card was located.
@@ -101,7 +198,10 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// previous zone, where the card's <c>Id</c> becomes the new <c>SourceId</c>
   /// to track the card's movement history.
   /// </remarks>
-  public GameZone? PreviousZone => Optional<GameZone>(@base.PreviousZone);
+  public GameZone? PreviousZone =>
+    gameCard is GameCardPartial partialPrevious
+      ? partialPrevious.GetPreviousZoneWrapper()
+      : Optional<GameZone>(@base.PreviousZone);
 
   public IList<CardAction> Actions =>
     Map<IList, CardAction>(@base.Actions);
@@ -112,26 +212,98 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   public IEnumerable<GameCardAssociation> Associations =>
     Map<GameCardAssociation>(@base.Associations);
 
-  public IEnumerable<GameCard> AttackingOrders =>
-    ((IEnumerable<OrderedCombatParticipant>)
-     Map<OrderedCombatParticipant>(Unbind(this).AttackingOrders))
-      .OrderBy(item => item.Order)
-      .Select(item => item.Target);
+  /// <summary>
+  /// The card ID this card is visually attached to (equipment target, aura
+  /// target, mutate parent, encoded host, or exile-under parent).
+  /// Returns 0 if not attached.
+  /// </summary>
+  /// <remarks>
+  /// Uses MTGO's priority chain: SHOW_ATTACHED_TO → ATTACHED_TO_ID →
+  /// MUTATE_PARENT_ID → ENCODED_ON.
+  /// </remarks>
+  public int AttachedToId =>
+    gameCard is GameCardPartial partial
+      ? partial.ResolveAttachedToId()
+      : @base.AttachedToId;
 
-  public IEnumerable<GameCard> BlockingOrders =>
-    ((IEnumerable<OrderedCombatParticipant>)
-     Map<OrderedCombatParticipant>(Unbind(this).BlockingOrders))
-      .OrderBy(item => item.Order)
-      .Select(item => item.Target);
+  public IEnumerable<GameCard> AttackingOrders
+  {
+    get
+    {
+      if (@base is GameCardPartial partial)
+        return partial.AttackingOrders.Select(p => p.Target);
+
+      var attackers = new List<OrderedCombatParticipant>();
+      foreach (var item in Unbind(this).AttackingOrders)
+      {
+        int order = item.Order;
+        GameCard target = new(item.Target);
+        attackers.Add(new OrderedCombatParticipant(order, target));
+      }
+
+      return attackers.OrderBy(a => a.Order).Select(a => a.Target);
+    }
+  }
+
+  public IEnumerable<GameCard> BlockingOrders
+  {
+    get
+    {
+      if (@base is GameCardPartial partial)
+        return partial.BlockingOrders.Select(p => p.Target);
+
+      var blockers = new List<OrderedCombatParticipant>();
+      foreach (var item in Unbind(this).BlockingOrders)
+      {
+        int order = item.Order;
+        GameCard target = new(item.Target);
+        blockers.Add(new OrderedCombatParticipant(order, target));
+      }
+
+      return blockers.OrderBy(b => b.Order).Select(b => b.Target);
+    }
+  }
+
+  public IEnumerable<CardAbility> Abilities =>
+    Map<IList, CardAbility>(Unbind(this).Abilities);
 
   public IEnumerable<CardCounter> Counters =>
     Map<IList, CardCounter>(Unbind(this).Counters);
 
-  public GamePlayer Owner => new(@base.Owner);
+  public string TypeLine => (string)Unbind(this).TypeLine;
 
-  public GamePlayer Controller => new(@base.Controller);
+  public GamePlayer Owner =>
+    gameCard is GameCardPartial partialOwner
+      ? partialOwner.GetOwnerWrapper()
+      : new(@base.Owner);
 
-  public GamePlayer? Protector => Optional<GamePlayer>(@base.Protector);
+  /// <summary>
+  /// The raw owner player index from the card's properties.
+  /// Avoids the GamePlayer wrapper chain which requires IPC that can fail.
+  /// </summary>
+  public int OwnerIndex =>
+    gameCard is GameCardPartial po
+      ? po.GetPlayerIndex(MagicProperty.OWNER)
+      : -1;
+
+  public GamePlayer Controller =>
+    gameCard is GameCardPartial partialController
+      ? partialController.GetControllerWrapper()
+      : new(@base.Controller);
+
+  /// <summary>
+  /// The raw controller player index from the card's properties.
+  /// Avoids the GamePlayer wrapper chain which requires IPC that can fail.
+  /// </summary>
+  public int ControllerIndex =>
+    gameCard is GameCardPartial pc
+      ? pc.GetPlayerIndex(MagicProperty.CONTROLLER)
+      : -1;
+
+  public GamePlayer? Protector =>
+    gameCard is GameCardPartial partialProtector
+      ? partialProtector.GetProtectorWrapper()
+      : Optional<GamePlayer>(@base.Protector);
 
   public GameCard? OtherFace => Optional<GameCard>(@base.OtherFace);
 
@@ -149,42 +321,39 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   public int CurrentChapter => @base.CurrentChapter;
 
-  public bool HasSummoningSickness => @base.HasSummoningSickness;
+  public bool HasSummoningSickness => (bool?)(@base.HasSummoningSickness) ?? false;
 
-  public bool IsNewlyControlled => @base.IsNewlyControlled;
+  public bool IsNewlyControlled => (bool?)(@base.IsNewlyControlled) ?? false;
 
-  public bool IsAttacking => @base.IsAttacking;
+  public bool IsAttacking => (bool?)(@base.IsAttacking) ?? false;
 
-  public bool IsBlocking => @base.IsBlocking;
+  public bool IsBlocking => (bool?)(@base.IsBlocking) ?? false;
 
-  public bool IsBlocked => @base.IsBlocked;
+  public bool IsBlocked => (bool?)(@base.IsBlocked) ?? false;
 
-  public bool IsTapped => @base.IsTapped;
+  public bool IsTapped => (bool?)(@base.IsTapped) ?? false;
 
-  public bool IsFlipped => @base.IsFlipped;
+  public bool IsFlipped => (bool?)(@base.IsFlipped) ?? false;
 
-  public bool IsCompanion => @base.IsCompanion;
+  public bool IsCompanion => (bool?)(@base.IsCompanion) ?? false;
 
-  public bool IsEmblem => @base.IsEmblem;
+  public bool IsEmblem => (bool?)(@base.IsEmblem) ?? false;
 
-  public bool IsActivatedAbility => @base.IsActivatedAbility;
+  public bool IsActivatedAbility => (bool?)(@base.IsActivatedAbility) ?? false;
 
-  public bool IsTriggeredAbility => @base.IsTriggeredAbility;
+  public bool IsTriggeredAbility => (bool?)(@base.IsTriggeredAbility) ?? false;
 
-  public bool IsDelayedTrigger => @base.IsDelayedTrigger;
+  public bool IsDelayedTrigger => (bool?)(@base.IsDelayedTrigger) ?? false;
 
-  public bool IsReplacementEffect => @base.IsReplacementEffect;
+  public bool IsReplacementEffect => (bool?)(@base.IsReplacementEffect) ?? false;
 
-  public bool IsYieldAbility => @base.IsYieldAbility;
+  public bool IsYieldAbility => (bool?)(@base.IsYieldAbility) ?? false;
 
-  public bool HasAutoTargets => @base.HasAutoTargets;
+  public bool HasAutoTargets => (bool?)(@base.HasAutoTargets) ?? false;
 
-  //
-  // DuelSceneCardViewModel properties
-  //
+  public bool IsToken => (bool?)(@base.IsToken) ?? false;
 
-  // public EventProxy ActionMouseEnterCommand =
-  //   new(/* DuelSceneCardViewModel */ cardModel, nameof(ActionMouseEnterCommand));
+  public bool IsLand => (bool?)(@base.IsLand) ?? false;
 
   //
   // IGameCard wrapper methods

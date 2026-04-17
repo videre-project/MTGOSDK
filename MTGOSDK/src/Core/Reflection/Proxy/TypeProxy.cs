@@ -4,6 +4,7 @@
 **/
 
 using System.Diagnostics;
+using System.Reflection;
 
 using MTGOSDK.Core.Reflection.Proxy.Builder;
 
@@ -107,7 +108,7 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   /// <param name="obj">The object to check</param>
   /// <returns>True if the object is a proxy</returns>
   public static bool IsProxy(dynamic? obj=null) =>
-    obj != null &&
+    obj is not null &&
     typeof(IProxy).IsAssignableFrom(obj.GetType()) &&
     TypeProxyBuilder.IsValidRuntimeType(obj);
 
@@ -170,6 +171,9 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   // /// Returns true if the remote object is cached and pinned in client memory.
   // /// </summary>
   // public bool IsCached => obj != null;
+
+  public IEnumerable<MethodBase> GetMethods() =>
+    Class.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
   public override string ToString() => Class.FullName
     ?? throw new TypeInitializationException(

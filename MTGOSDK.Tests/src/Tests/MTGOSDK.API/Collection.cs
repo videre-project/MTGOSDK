@@ -61,7 +61,7 @@ public class Collection : CollectionValidationFixture
       Is.True);
 
     Assert.That(card.Colors, Is.EqualTo("G"));
-    Assert.That(card.ManaCost, Is.EqualTo("4GG"));
+    Assert.That(card.ManaCost, Is.EqualTo("{4}{G}{G}"));
     Assert.That(card.ConvertedManaCost, Is.EqualTo(6));
     Assert.That(card.RulesText,
         Is.EqualTo("Trample @i(This creature can deal excess combat damage to the player or planeswalker it's attacking.)@i"));
