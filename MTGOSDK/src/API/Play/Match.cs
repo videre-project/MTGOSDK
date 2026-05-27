@@ -62,8 +62,16 @@ public sealed class Match(dynamic match) : Event
   /// <summary>
   /// Whether the match has been completed.
   /// </summary>
-  public bool IsComplete => Unbind(this).IsCompleted ||
-    State == (MatchState.MatchCompleted | MatchState.GameClosed);
+  public bool IsComplete
+  {
+    get
+    {
+      var state = State;
+      return Unbind(this).IsCompleted ||
+        (state.HasFlag(MatchState.MatchCompleted) &&
+         state.HasFlag(MatchState.GameClosed));
+    }
+  }
 
   /// <summary>
   /// The user who created the match.

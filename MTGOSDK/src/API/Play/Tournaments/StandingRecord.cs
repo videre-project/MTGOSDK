@@ -33,7 +33,7 @@ public sealed class StandingRecord(dynamic standingRecord)
   /// <summary>
   /// The user object of the player.
   /// </summary>
-  public User Player => new(@base.User.Name);
+  public User Player => new(@base.User);
 
   /// <summary>
   /// The number of points the player has earned.
@@ -50,28 +50,15 @@ public sealed class StandingRecord(dynamic standingRecord)
   {
     get
     {
-      int wins = 0;
-      int losses = 0;
-      int draws = 0;
+      // If we computed a record client-side, return that instead.
+      string record = Try(() => Unbind(this).Record, fallback: null);
+      if (record != null) return record;
 
-      int playerId = Unbind(@base.User).Id;
-      foreach (var match in this.PreviousMatches)
+      return ComputeRecord(new
       {
-        if (match.WinningPlayerIds.Contains(playerId) || match.HasBye)
-        {
-          wins++;
-        }
-        else if (match.LosingPlayerIds.Contains(playerId))
-        {
-          losses++;
-        }
-        else if (match.State.HasFlag(MatchState.MatchCompleted))
-        {
-          draws++;
-        }
-      }
-
-      return string.Format("{0}-{1}-{2}", wins, losses, draws);
+        User = new { Id = Unbind(this).User.Id },
+        PreviousMatches = PreviousMatches
+      });
     }
   }
 
@@ -96,4 +83,45 @@ public sealed class StandingRecord(dynamic standingRecord)
   // [NonSerializable]
   public IList<MatchStandingRecord> PreviousMatches =>
     Map<IList, MatchStandingRecord>(@base.PreviousMatches);
+
+  //
+  // IStandingRecord wrapper methods
+  //
+
+  public static string ComputeRecord(dynamic standingRecord)
+  {
+    int wins = 0;
+    int losses = 0;
+    int draws = 0;
+
+    int playerId = Unbind(standingRecord.User).Id;
+    foreach (var match in standingRecord.PreviousMatches)
+    {
+      if (!match.State.HasFlag(MatchState.MatchCompleted) && !match.HasBye)
+        continue;
+
+      if (match.WinningPlayerIds.Contains(playerId) || match.HasBye)
+      {
+        wins++;
+      }
+      else if (match.LosingPlayerIds.Contains(playerId))
+      {
+        losses++;
+      }
+      else
+      {
+        draws++;
+      }
+    }
+
+    return string.Format("{0}-{1}-{2}", wins, losses, draws);
+  }
+
+  public override string ToString()
+  {
+    return string.Format(
+      "{0}. {1} - {2} ({3} points, {4}% OMWP, {5}% GW, {6}% OGWP)",
+      Rank, Player, Record, Points, OpponentMatchWinPercentage, GameWinPercentage, OpponentGameWinPercentage
+    );
+  }
 }

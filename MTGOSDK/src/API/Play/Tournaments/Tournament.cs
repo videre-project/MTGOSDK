@@ -4,9 +4,13 @@
 **/
 
 using System.Collections;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
+using MTGOSDK.API.Users;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
-
+using MTGOSDK.Core.Remoting.Hooking;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
@@ -27,6 +31,11 @@ public sealed class Tournament(dynamic tournament) : Event
   internal override dynamic obj => Bind<ITournament>(tournament);
 
   private Queue m_queue => field ??= new(tournament);
+
+  private static readonly ConcurrentDictionary<int, StandingTable> s_standingTables = new();
+
+  private StandingTable m_standingTable =>
+    s_standingTables.GetOrAdd(Id, _ => new StandingTable());
 
   //
   // IQueueBasedEvent wrapper properties
@@ -49,6 +58,30 @@ public sealed class Tournament(dynamic tournament) : Event
   /// </summary>
   public EventStructure EventStructure =>
     field ??= new(m_queue, Unbind(this).TournamentStructure);
+
+  /// <summary>
+  /// The players who are no longer active in the tournament.
+  /// </summary>
+  public IEnumerable<User> EliminatedPlayers =>
+    Try(() => Map<User>(Unbind(this).EliminatedUsers).ToArray(),
+        fallback: Array.Empty<User>());
+
+  /// <summary>
+  /// The players still active in the tournament.
+  /// </summary>
+  public IEnumerable<User> ActivePlayers
+  {
+    get
+    {
+      var eliminatedNames = EliminatedPlayers
+        .Select(player => player.Name)
+        .ToHashSet(StringComparer.Ordinal);
+
+      return Players
+        .Where(player => !eliminatedNames.Contains(player.Name))
+        .ToArray();
+    }
+  }
 
   /// <summary>
   /// The time the event is scheduled to start.
@@ -181,7 +214,16 @@ public sealed class Tournament(dynamic tournament) : Event
   /// <summary>
   /// The current round of the tournament.
   /// </summary>
-  public int RoundNumber => @base.CurrentRoundNumber;
+  public int RoundNumber
+  {
+    get
+    {
+      int currentRoundNumber = Try(() => @base.CurrentRoundNumber, fallback: 0);
+      int currentRoundObjectNumber = Try(() => CurrentRound?.Number ?? 0, fallback: 0);
+
+      return Math.Max(currentRoundNumber, currentRoundObjectNumber);
+    }
+  }
 
   /// <summary>
   /// Whether the user has a bye in the current round.
@@ -203,6 +245,11 @@ public sealed class Tournament(dynamic tournament) : Event
   /// <summary>
   /// The tournament's detailed round information.
   /// </summary>
+  [NonSerializable]
+  public TournamentRound? CurrentRound =>
+    Try(() => Optional<TournamentRound>(Unbind(this).CurrentRound),
+        fallback: null);
+
   [NonSerializable]
   public IList<TournamentRound> Rounds =>
     Map<IList, TournamentRound>(@base.CurrentTournamentPart.Rounds);
@@ -240,22 +287,167 @@ public sealed class Tournament(dynamic tournament) : Event
       _ => 1
     };
 
+  /// <summary>
+  /// Computes a lightweight hash of the current round's in-progress match state.
+  /// </summary>
+  /// <param name="includeTournamentId">
+  /// Whether to include the tournament ID for globally unique hash keys.
+  /// </param>
+  /// <returns>
+  /// The round hash, or <c>null</c> when the current round state cannot be read.
+  /// </returns>
+  public int? GetRoundHash(bool includeTournamentId = false)
+  {
+    try
+    {
+      TournamentRound? round = CurrentRound;
+      if (round is null)
+      {
+        return null;
+      }
+
+      int[] matchHashes = round.GetRoundHashMatchHashes();
+      return ComputeRoundHash(
+        includeTournamentId ? Id : null,
+        round.Number,
+        matchHashes.Length,
+        matchHashes);
+    }
+    catch
+    {
+      return null;
+    }
+  }
+
+  private static int ComputeRoundHash(
+    int? tournamentId,
+    int roundNumber,
+    int matchCount,
+    IEnumerable<int> matchHashes)
+  {
+    var hc = new HashCode();
+    if (tournamentId.HasValue)
+    {
+      hc.Add(tournamentId.Value);
+    }
+
+    hc.Add(roundNumber);
+    hc.Add(matchCount);
+    foreach (int matchHash in matchHashes)
+    {
+      hc.Add(matchHash);
+    }
+
+    return hc.ToHashCode();
+  }
+
+  /// <summary>
+  /// Compute the live standings for the tournament, including match and game
+  /// win/loss/draw records.
+  /// </summary>
+  /// <remarks>
+  /// This method computes the standings based on the current match data for
+  /// each player, and applies the standard MTGO tie-breaking rules based on
+  /// match points, opponent match win percentage, game win percentage, and
+  /// opponent game win percentage.
+  /// <para>
+  /// This is necessary because the MTGO client does not compute or expose
+  /// match/game records or tie-breaking percentages until the end of the
+  /// round, which can lead to stale or inaccurate standings data during the
+  /// round.
+  /// </para>
+  /// </remarks>
+  /// <returns>
+  /// A list of <see cref="StandingRecord"/> objects, sorted by rank in
+  /// ascending order.
+  /// </returns>
+  /// <exception cref="InvalidOperationException">
+  /// Thrown if the tournament is not a Swiss or playoff tournament.
+  /// </exception>
+  public IList<StandingRecord> ComputeStandings()
+    => m_standingTable.ComputeStandings(this);
+
   //
   // ITournament wrapper events
   //
 
+  private static readonly ConcurrentDictionary<int, int[]> s_standingsHashTable = new();
+
+  private static int GetEventId(object tournament) =>
+    tournament is Event e
+      ? e.Id
+      : Try<int>(() => ((dynamic)tournament).EventId);
+
+  public EventHookWrapper<IList<StandingRecord>> OnStandingsChanged =
+    new EventHookWrapper<IList<StandingRecord>>(StandingsChanged, new((s, arr) =>
+    {
+      int tournamentId = s.Id;
+      if (tournamentId != GetEventId(tournament)) return false;
+
+      long totalStart = Stopwatch.GetTimestamp();
+      long phaseStart = Stopwatch.GetTimestamp();
+      var standings = ((Tournament)s).ComputeStandings();
+      double computeMs = Stopwatch.GetElapsedTime(phaseStart).TotalMilliseconds;
+
+      // Compute the hash for each standing
+      phaseStart = Stopwatch.GetTimestamp();
+      int[] newHashes = standings.Select(r => r.ToString().GetHashCode()).ToArray();
+      s_standingsHashTable.TryRemove(tournamentId, out int[] oldHashes);
+      oldHashes ??= Array.Empty<int>();
+      s_standingsHashTable.TryAdd(tournamentId, newHashes);
+
+      for (int i = 0; i < newHashes.Length; i++)
+      {
+        if (i >= oldHashes.Length || newHashes[i] != oldHashes[i])
+        {
+          arr.Add(standings[i]);
+        }
+      }
+      double deltaFingerprintMs = Stopwatch.GetElapsedTime(phaseStart).TotalMilliseconds;
+
+      Log.Information(
+        "[StandingsTelemetry] standings-changed tournament={TournamentId} " +
+        "standings={StandingsCount} emitted={DeltaCount} " +
+        "computeMs={ComputeMs:0.000} deltaFingerprintMs={DeltaFingerprintMs:0.000} " +
+        "totalMs={TotalMs:0.000}",
+        tournamentId,
+        standings.Count,
+        arr.Count,
+        computeMs,
+        deltaFingerprintMs,
+        Stopwatch.GetElapsedTime(totalStart).TotalMilliseconds);
+
+      return arr.Count > 0;
+    })).OnInitialize(() =>
+    {
+      // Construct the initial standings in a dummy Tournament object first.
+      var standings = new Tournament(tournament).ComputeStandings();
+
+      int[] newHashes = standings.Select(r => r.ToString().GetHashCode()).ToArray();
+      s_standingsHashTable.TryAdd(GetEventId(tournament), newHashes);
+    });
+
   public EventHookWrapper<TournamentRound> OnRoundChanged =
-    new(RoundChanged, new Filter<TournamentRound>((s, _) => s.Id == tournament.Id));
+    new(RoundChanged, new Filter<TournamentRound>((s, _) => s.Id == GetEventId(tournament)));
 
   public EventHookWrapper<TournamentState> OnStateChanged =
-    new(StateChanged, new Filter<TournamentState>((s, _) => s.Id == tournament.Id));
-
-  public EventHookWrapper OnStandingsChanged =
-    new(StandingsChanged, new Filter<dynamic>((s, _) => s.Id == tournament.Id));
+    new(StateChanged, new Filter<TournamentState>((s, _) => s.Id == GetEventId(tournament)));
 
   //
   // ITournament static events
   //
+
+  public static EventHookProxy<Tournament, IList<StandingRecord>> StandingsChanged =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Play.TournamentEvent.Tournament>(),
+      "OnStandingsChanged",
+      new((instance, args) =>
+      {
+        Tournament tournament = new(instance);
+        return (tournament, new List<StandingRecord>());
+      }),
+      HarmonyPatchPosition.Postfix
+    );
 
   public static EventHookProxy<Tournament, TournamentRound> RoundChanged =
     new(
@@ -286,14 +478,10 @@ public sealed class Tournament(dynamic tournament) : Event
       })
     );
 
-  public static EventHookProxy<Tournament, dynamic> StandingsChanged =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Play.TournamentEvent.Tournament>(),
-      "OnTournamentStateChanged",
-      new((instance, _) =>
-      {
-        Tournament tournament = new(instance);
-        return (tournament, null);
-      })
-    );
+  public static void EnsureHooksInitialized()
+  {
+    StandingsChanged.EnsureInitialize();
+    RoundChanged.EnsureInitialize();
+    StateChanged.EnsureInitialize();
+  }
 }
