@@ -300,9 +300,10 @@ public static class EventManager
       default:
         throw new InvalidOperationException($"Unknown event type: {eventType}");
     }
+#if DEBUG
     Log.Trace("Created new {Type} object for '{EventObject}'.",
         eventObject.GetType().Name, eventObject);
-
+#endif
     return eventObject;
   }
 
