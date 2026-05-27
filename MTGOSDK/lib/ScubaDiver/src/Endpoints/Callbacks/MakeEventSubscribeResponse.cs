@@ -5,6 +5,7 @@
 **/
 
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 
@@ -21,6 +22,97 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
+  private static MethodInfo? ResolveEventAccessor(
+    EventInfo eventObj,
+    Type targetType,
+    bool isAdd)
+  {
+    var accessor = isAdd
+      ? eventObj.GetAddMethod(nonPublic: true)
+      : eventObj.GetRemoveMethod(nonPublic: true);
+
+    if (accessor != null && !accessor.IsAbstract)
+      return accessor;
+
+    // Interface events can surface abstract accessors; map them to the
+    // concrete implementation on the runtime target type.
+    if (accessor?.DeclaringType?.IsInterface == true)
+    {
+      var map = targetType.GetInterfaceMap(accessor.DeclaringType);
+      var idx = Array.IndexOf(map.InterfaceMethods, accessor);
+      if (idx >= 0)
+        return map.TargetMethods[idx];
+    }
+
+    return null;
+  }
+
+  private static void AddEventHandlerCompat(
+    EventInfo eventObj,
+    object target,
+    Delegate handler)
+  {
+    var addMethod = ResolveEventAccessor(eventObj, target.GetType(), isAdd: true)
+      ?? throw new InvalidOperationException(
+        $"Cannot add handler for event '{eventObj.Name}' on type '{target.GetType().FullName}'.");
+
+    addMethod.Invoke(target, [handler]);
+  }
+
+  private static void RemoveEventHandlerCompat(
+    EventInfo eventObj,
+    object target,
+    Delegate handler)
+  {
+    var removeMethod = ResolveEventAccessor(eventObj, target.GetType(), isAdd: false)
+      ?? throw new InvalidOperationException(
+        $"Cannot remove handler for event '{eventObj.Name}' on type '{target.GetType().FullName}'.");
+
+    removeMethod.Invoke(target, [handler]);
+  }
+
+  private static EventInfo ResolveEventInfo(Type resolvedType, string eventName)
+  {
+    const BindingFlags allInstanceEvents =
+      BindingFlags.Instance |
+      BindingFlags.Static |
+      BindingFlags.Public |
+      BindingFlags.NonPublic |
+      BindingFlags.FlattenHierarchy;
+
+    // Fast path for common public event lookup.
+    var eventObj = resolvedType.GetEvent(eventName);
+    if (eventObj != null)
+      return eventObj;
+
+    // Fallback for explicit/non-public event implementations.
+    eventObj = resolvedType
+      .GetEvents(allInstanceEvents)
+      .FirstOrDefault(e =>
+        string.Equals(e.Name, eventName, StringComparison.Ordinal) ||
+        e.Name.EndsWith($".{eventName}", StringComparison.Ordinal));
+    if (eventObj != null)
+      return eventObj;
+
+    // Final fallback: event declared on an implemented interface.
+    foreach (var iface in resolvedType.GetInterfaces())
+    {
+      eventObj = iface.GetEvent(eventName);
+      if (eventObj != null)
+        return eventObj;
+
+      eventObj = iface
+        .GetEvents()
+        .FirstOrDefault(e =>
+          string.Equals(e.Name, eventName, StringComparison.Ordinal) ||
+          e.Name.EndsWith($".{eventName}", StringComparison.Ordinal));
+      if (eventObj != null)
+        return eventObj;
+    }
+
+    return null;
+  }
+
   private int _nextAvailableCallbackToken;
 
   public int AssignCallbackToken() =>
@@ -101,7 +193,7 @@ public partial class Diver : IDisposable
     if (string.IsNullOrEmpty(eventName))
       return QuickError("Missing parameter 'EventName'");
 
-    EventInfo eventObj = resolvedType.GetEvent(eventName);
+    EventInfo eventObj = ResolveEventInfo(resolvedType, eventName);
     if (eventObj == null)
       return QuickError("Failed to find event in type");
 
@@ -132,7 +224,7 @@ public partial class Diver : IDisposable
       Delegate my_delegate = Delegate.CreateDelegate(eventDelegateType, wrapperInstance, "Handle");
 
       Log.Debug($"[Diver] Adding event handler to event {eventName}...");
-      eventObj.AddEventHandler(target, my_delegate);
+      AddEventHandlerCompat(eventObj, target, my_delegate);
       Log.Debug($"[Diver] Added event handler to event {eventName}!");
 
       _remoteEventHandler[token] = new RegisteredEventHandlerInfo()

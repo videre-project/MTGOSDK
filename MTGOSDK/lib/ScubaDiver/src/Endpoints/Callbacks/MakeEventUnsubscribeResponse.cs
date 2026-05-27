@@ -26,7 +26,7 @@ public partial class Diver : IDisposable
 
     if (_remoteEventHandler.TryRemove(token, out RegisteredEventHandlerInfo eventInfo))
     {
-      eventInfo.EventInfo.RemoveEventHandler(eventInfo.Target, eventInfo.RegisteredProxy);
+      RemoveEventHandlerCompat(eventInfo.EventInfo, eventInfo.Target, eventInfo.RegisteredProxy);
       return s_okResponse;
     }
     return QuickError("Unknown token for event callback subscription");

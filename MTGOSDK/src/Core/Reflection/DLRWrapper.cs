@@ -1398,8 +1398,13 @@ public abstract class DLRWrapper : SerializableBase
 /// object to derived classes with the <c>@base</c> property.
 /// </remarks>
 /// <typeparam name="I">The interface type to wrap.</typeparam>
-public class DLRWrapper<I>(): DLRWrapper where I : class
+public class DLRWrapper<I>: DLRWrapper where I : class
 {
+  public DLRWrapper() : base()
+  {
+    InitializeEventWrappers();
+  }
+
   /// <summary>
   /// Initializes a new instance of the <see cref="DLRWrapper{I}"/> class,
   /// executing any given factory function before any derived class constructors.
@@ -1502,16 +1507,30 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
   // Proxy methods for event and method binding.
   //
 
+  protected void InitializeEventWrappers()
+  {
+    IEnumerable<FieldInfo> fields = this.GetType()
+      .GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+      .Where(f => IsEventProxyFieldType(f.FieldType));
+
+    foreach (FieldInfo field in fields)
+    {
+      if (field.GetValue(this) is IOwnerAwareEventProxy ownerAwareProxy)
+        ownerAwareProxy.AttachOwner(this);
+    }
+  }
+
   public virtual void ClearEvents()
   {
     // Clear all event proxy fields in the current instance of the class.
     IEnumerable<FieldInfo> fields = this.GetType()
       .GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-      .Where(f => f.FieldType.IsSubclassOf(typeof(EventProxyBase<,>)));
+      .Where(f => IsEventProxyFieldType(f.FieldType));
+
     foreach (FieldInfo field in fields)
     {
-      EventProxyBase<I, dynamic> proxy = (EventProxyBase<I, dynamic>)field.GetValue(this);
-      proxy.Clear();
+      if (field.GetValue(this) is IDisposable proxy)
+        proxy.Dispose();
     }
 
     // Get all event fields in the current instance of the class.
@@ -1527,6 +1546,20 @@ public class DLRWrapper<I>(): DLRWrapper where I : class
           field.SetValue(this, (Delegate?)Delegate.Remove(del, handler));
       }
     }
+  }
+
+  private static bool IsEventProxyFieldType(Type fieldType)
+  {
+    for (Type? current = fieldType; current != null; current = current.BaseType)
+    {
+      if (current.IsGenericType &&
+          current.GetGenericTypeDefinition() == typeof(EventProxyBase<,>))
+      {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   //

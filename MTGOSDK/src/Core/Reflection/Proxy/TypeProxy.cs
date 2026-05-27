@@ -175,6 +175,10 @@ public class TypeProxy<T>(Type? @type=null) where T : class
   public IEnumerable<MethodBase> GetMethods() =>
     Class.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
+  public IEnumerable<FieldInfo> GetFields() =>
+    // Get fields from the class and all base classes, excluding System.Object
+    Class.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+
   public override string ToString() => Class.FullName
     ?? throw new TypeInitializationException(
         $"The Proxied type is not a valid type.", innerException: null);

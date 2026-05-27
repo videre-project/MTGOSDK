@@ -98,4 +98,20 @@ public abstract class Event : DLRWrapper<IPlayerEvent>
   //
 
   public override string ToString() => $"{Description} #{Id}";
+
+  //
+  // IPlayerEvent wrapper events
+  //
+
+  /// <summary>
+  /// Event triggered when the event's joined-user collection changes.
+  /// </summary>
+  /// <remarks>
+  /// Emits a <see cref="MTGOSDK.Core.Remoting.Interop.RemotePropertyChangedEventArgs"/> object.
+  /// </remarks>
+  public PropertyChangeWrapper<Event, int> OnTotalPlayersChanged = new(
+    null!, // (this)
+    nameof(OnTotalPlayersChanged),
+    $"{nameof(IPlayerEvent.JoinedUsers)}.Count",
+    static (Event e) => e.TotalPlayers);
 }
