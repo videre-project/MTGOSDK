@@ -213,7 +213,7 @@ public sealed class RemoteClient : DLRWrapper
   {
     try
     {
-      var processPath = process.MainModule?.FileName;
+      var processPath = Try(() => process.MainModule?.FileName, fallback: null);
 
       if (!string.IsNullOrEmpty(processPath))
       {
@@ -378,10 +378,7 @@ public sealed class RemoteClient : DLRWrapper
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
-    // MTGOProcess() is re-evaluated from scratch each call here (ClientProcess is
-    // not yet cached), so guard against a transient null between the HasStarted
-    // check above and this lookup.
-    Try(() => MTGOProcess().WaitForInputIdle());
+    MTGOProcess().WaitForInputIdle();
     await WaitUntil(() => !string.IsNullOrEmpty(MTGOProcess().MainWindowTitle));
     if (!await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero))
     {
