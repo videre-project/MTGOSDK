@@ -70,6 +70,15 @@
       <ResourceFiles Include="$(SolutionDir)dist/$(Configuration)/$(RuntimeIdentifier)/*.*"
                      Condition="'$(RuntimeIdentifier)' != ''" />
     </ItemGroup>
+    <PropertyGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
+      <SystemValueTupleDistDll>$(SolutionDir)dist/$(Configuration)/System.ValueTuple.dll</SystemValueTupleDistDll>
+      <SystemValueTuplePayloadDll>$(NuGetPackageRoot)system.valuetuple\4.5.0\lib\net461\System.ValueTuple.dll</SystemValueTuplePayloadDll>
+    </PropertyGroup>
+    <Error Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)' And !Exists('$(SystemValueTupleDistDll)') And !Exists('$(SystemValueTuplePayloadDll)')"
+           Text="System.ValueTuple payload not found. Restore the System.ValueTuple 4.5.0 PackageDownload before embedding MTGOSDK resources." />
+    <ItemGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)' And !Exists('$(SystemValueTupleDistDll)') And Exists('$(SystemValueTuplePayloadDll)')">
+      <ResourceFiles Include="$(SystemValueTuplePayloadDll)" />
+    </ItemGroup>
     <!-- Embed all resource files into the MTGOSDK assembly -->
     <ItemGroup Condition="'@(ResourceFiles)' != ''">
       <EmbeddedResource Include="@(ResourceFiles)"

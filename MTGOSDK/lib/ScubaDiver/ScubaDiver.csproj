@@ -23,6 +23,8 @@
     <ILRepackTarget>Microsoft.Diagnostics.Runtime</ILRepackTarget>
     <HarmonyAssembly>bin/$(Configuration)/$(_MTGOSDKCoreTFM)/$(RuntimeIdentifier)/0Harmony.dll</HarmonyAssembly>
     <ILRepackOutput>$(SolutionDir)dist/$(Configuration)/$(RuntimeIdentifier)/$(ILRepackTarget).dll</ILRepackOutput>
+    <SystemValueTuplePayloadVersion>4.5.0</SystemValueTuplePayloadVersion>
+    <SystemValueTuplePayloadDll>$(NuGetPackageRoot)system.valuetuple\$(SystemValueTuplePayloadVersion)\lib\net461\System.ValueTuple.dll</SystemValueTuplePayloadDll>
   </PropertyGroup>
 
   <!-- Export the Harmony assembly to the output directory for packing -->
@@ -47,15 +49,13 @@
     alongside the Diver at injection time for the AssemblyResolve handler to find.
   -->
   <Target Name="PackSystemValueTuple"
-          AfterTargets="AfterBuild">
-    <ItemGroup>
-      <ValueTupleDll Include="$(PkgSystem_ValueTuple)\lib\net462\System.ValueTuple.dll"
-                     Condition="Exists('$(PkgSystem_ValueTuple)\lib\net462\System.ValueTuple.dll')" />
-    </ItemGroup>
-    <Copy SourceFiles="@(ValueTupleDll)"
+          AfterTargets="ResolveReferences"
+          BeforeTargets="AfterBuild">
+    <Error Condition="!Exists('$(SystemValueTuplePayloadDll)')"
+           Text="System.ValueTuple payload not found at $(SystemValueTuplePayloadDll). Restore the System.ValueTuple $(SystemValueTuplePayloadVersion) PackageDownload before building ScubaDiver." />
+    <Copy SourceFiles="$(SystemValueTuplePayloadDll)"
           DestinationFolder="$(SolutionDir)dist/$(Configuration)"
-          SkipUnchangedFiles="true"
-          Condition="'@(ValueTupleDll)' != ''" />
+          SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="BuildArtifactDirectory"
@@ -73,6 +73,7 @@
     <PackageReference Include="System.ValueTuple"
                       GeneratePathProperty="true"
                       ExcludeAssets="runtime" />
+    <PackageDownload Include="System.ValueTuple" Version="[4.5.0]" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
                       PrivateAssets="All" />
