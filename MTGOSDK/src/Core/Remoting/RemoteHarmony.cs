@@ -225,4 +225,18 @@ public class RemoteHarmony
 
     return hooks.ContainsKey(callback);
   }
+
+  public bool HasHook(
+    MethodBase methodToHook,
+    HookAction callback,
+    HarmonyPatchPosition position)
+  {
+    if (!_callbacksToProxies.TryGetValue(methodToHook, out MethodHooks hooks))
+    {
+      return false;
+    }
+
+    return hooks.TryGetValue(callback, out PositionedLocalHook hook) &&
+      hook.Position == position;
+  }
 }

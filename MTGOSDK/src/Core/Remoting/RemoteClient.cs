@@ -12,6 +12,7 @@ using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Structs;
 using MTGOSDK.Core.Remoting.Types;
@@ -1238,8 +1239,24 @@ public sealed class RemoteClient : DLRWrapper
     string methodName,
     HookAction callback)
   {
+    HookMethod(queryPath, methodName, callback, HarmonyPatchPosition.Prefix);
+  }
+
+  /// <summary>
+  /// Hooks a remote object's method using a Harmony callback at the specified patch position.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="methodName">The name of the method to hook.</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
+  /// <param name="position">The Harmony patch position for the callback.</param>
+  public static void HookMethod(
+    string queryPath,
+    string methodName,
+    HookAction callback,
+    HarmonyPatchPosition position)
+  {
     MethodInfo method = GetInstanceMethod(queryPath, methodName);
-    @client.Harmony.Patch(method, prefix: callback);
+    @client.Harmony.HookMethod(method, position, callback);
   }
 
   /// <summary>
@@ -1251,7 +1268,21 @@ public sealed class RemoteClient : DLRWrapper
     MethodBase method,
     HookAction callback)
   {
-    @client.Harmony.Patch(method, prefix: callback);
+    HookMethod(method, callback, HarmonyPatchPosition.Prefix);
+  }
+
+  /// <summary>
+  /// Hooks a remote object's method using a Harmony callback with MethodBase for overload disambiguation.
+  /// </summary>
+  /// <param name="method">The method to hook (provides overload disambiguation).</param>
+  /// <param name="callback">The local Harmony callback to use.</param>
+  /// <param name="position">The Harmony patch position for the callback.</param>
+  public static void HookMethod(
+    MethodBase method,
+    HookAction callback,
+    HarmonyPatchPosition position)
+  {
+    @client.Harmony.HookMethod(method, position, callback);
   }
 
   /// <summary>
@@ -1295,8 +1326,25 @@ public sealed class RemoteClient : DLRWrapper
     string methodName,
     HookAction callback)
   {
+    return MethodHasHook(queryPath, methodName, callback, HarmonyPatchPosition.Prefix);
+  }
+
+  /// <summary>
+  /// Checks if a remote object's method has a Harmony callback at the specified patch position.
+  /// </summary>
+  /// <param name="queryPath">The query path to the remote object.</param>
+  /// <param name="methodName">The name of the method to check.</param>
+  /// <param name="callback">The local Harmony callback to check.</param>
+  /// <param name="position">The Harmony patch position to check.</param>
+  /// <returns>True if the method has the Harmony callback at the specified position.</returns>
+  public static bool MethodHasHook(
+    string queryPath,
+    string methodName,
+    HookAction callback,
+    HarmonyPatchPosition position)
+  {
     MethodInfo method = GetInstanceMethod(queryPath, methodName);
-    return @client.Harmony.HasHook(method, callback);
+    return @client.Harmony.HasHook(method, callback, position);
   }
 
   /// <summary>
@@ -1309,6 +1357,21 @@ public sealed class RemoteClient : DLRWrapper
     MethodBase method,
     HookAction callback)
   {
-    return @client.Harmony.HasHook(method, callback);
+    return MethodHasHook(method, callback, HarmonyPatchPosition.Prefix);
+  }
+
+  /// <summary>
+  /// Checks if a remote object's method has a Harmony callback at the specified patch position.
+  /// </summary>
+  /// <param name="method">The method to check (provides overload disambiguation).</param>
+  /// <param name="callback">The local Harmony callback to check.</param>
+  /// <param name="position">The Harmony patch position to check.</param>
+  /// <returns>True if the method has the Harmony callback at the specified position.</returns>
+  public static bool MethodHasHook(
+    MethodBase method,
+    HookAction callback,
+    HarmonyPatchPosition position)
+  {
+    return @client.Harmony.HasHook(method, callback, position);
   }
 }

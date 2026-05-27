@@ -48,8 +48,11 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
 
   public override string Name => name;
 
+  private bool _isInitialized;
+
   public static EventProxy<I,T> operator +(EventProxy<I,T> e, Delegate c)
   {
+    e.DoInitialize();
     var d = e.ProxyTypedDelegate(c);
     e.EventSubscribe(e.Name, d);
     e._delegates.Add(d);

@@ -32,17 +32,24 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   private readonly string _typeName;
   private readonly string _methodName;
   private readonly EventHook _hook;
+  private readonly HarmonyPatchPosition _position;
 
   private readonly HookAction _hookAction;
   private int _initializedGeneration = -1;
+  private readonly object _gate = new();
 
   // public delegate void HookProxy<I1, T1>(I1 instance, T1 args);
 
-  public EventHookProxy(string typeName, string methodName, EventHook hook)
+  public EventHookProxy(
+    string typeName,
+    string methodName,
+    EventHook hook,
+    HarmonyPatchPosition position = HarmonyPatchPosition.Prefix)
   {
     this._typeName = typeName;
     this._methodName = methodName;
     this._hook = hook;
+    this._position = position;
 
     this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
     {
@@ -67,11 +74,17 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   /// <param name="typeName">The name of the type to hook.</param>
   /// <param name="method">The method to hook (method group).</param>
   /// <param name="hook">The hook function to call when the method is invoked.</param>
-  public EventHookProxy(string typeName, MethodBase method, EventHook hook)
+  /// <param name="position">The Harmony patch position for the hook.</param>
+  public EventHookProxy(
+    string typeName,
+    MethodBase method,
+    EventHook hook,
+    HarmonyPatchPosition position = HarmonyPatchPosition.Prefix)
   {
     this._typeName = typeName;
     this._methodName = method.Name;
     this._hook = hook;
+    this._position = position;
 
     this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
     {
@@ -92,27 +105,34 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
   public void EnsureInitialize()
   {
-    // Short-circuit if already initialized for the current connection.
-    // _initializedGeneration is compared against RemoteClient.s_connectionGeneration
-    // which is incremented on each reconnect, so stale initialization is automatically
-    // detected across MTGO process restarts without requiring event subscriptions.
-    if (_initializedGeneration == RemoteClient.s_connectionGeneration) return;
-
-    // If the method is not already hooked, hook it.
-    if (!RemoteClient.MethodHasHook(_typeName, _methodName, _hookAction))
+    lock (_gate)
     {
-      RemoteClient.HookMethod(_typeName, _methodName, _hookAction);
+      if (_initializedGeneration == -1)
+      {
+        DoInitialize();
+      }
+
+      // Verify the hook still exists even within the same remote connection.
+      // Long-running MTGO sessions can invalidate remote hook state without a
+      // full reconnect, while our managed subscribers remain attached.
+      if (!RemoteClient.MethodHasHook(_typeName, _methodName, _hookAction, _position))
+      {
+        RemoteClient.HookMethod(_typeName, _methodName, _hookAction, _position);
+      }
+      _initializedGeneration = RemoteClient.s_connectionGeneration;
     }
-    _initializedGeneration = RemoteClient.s_connectionGeneration;
   }
 
   public override void Clear()
   {
-    _eventHook = null;
-    _initializedGeneration = -1;
-    if (!RemoteClient.IsInitialized) return;
+    lock (_gate)
+    {
+      _eventHook = null;
+      _initializedGeneration = -1;
+      if (!RemoteClient.IsInitialized) return;
 
-    RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);
+      RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);
+    }
   }
 
   //
@@ -123,24 +143,31 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
   public static EventHookProxy<I,T> operator +(EventHookProxy<I,T> e, Delegate c)
   {
-    // e._eventHook += (HookProxy<I,T>)e.ProxyTypedDelegate(c);
-    e._eventHook += (Action<I,T>)c;
+    lock (e._gate)
+    {
+      // e._eventHook += (HookProxy<I,T>)e.ProxyTypedDelegate(c);
+      e._eventHook += (Action<I,T>)c;
 
-    // If the method is not already hooked, hook it.
-    e.EnsureInitialize();
+      // If the method is not already hooked, hook it.
+      e.EnsureInitialize();
+    }
 
     return e;
   }
 
   public static EventHookProxy<I,T> operator -(EventHookProxy<I,T> e, Delegate c)
   {
-    // e._eventHook -= (HookProxy<I,T>)e.ProxyTypedDelegate(c);
-    e._eventHook -= (Action<I,T>)c;
-
-    // If there are no more subscribers, remove the hook.
-    if (e._eventHook == null && RemoteClient.IsInitialized)
+    lock (e._gate)
     {
-      RemoteClient.UnhookMethod(e._typeName, e._methodName, e._hookAction);
+      // e._eventHook -= (HookProxy<I,T>)e.ProxyTypedDelegate(c);
+      e._eventHook -= (Action<I,T>)c;
+
+      // If there are no more subscribers, remove the hook.
+      if (e._eventHook == null && RemoteClient.IsInitialized)
+      {
+        RemoteClient.UnhookMethod(e._typeName, e._methodName, e._hookAction);
+        e._initializedGeneration = -1;
+      }
     }
 
     return e;
@@ -155,5 +182,5 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   }
 
   public static implicit operator EventHookProxy<dynamic, T>(EventHookProxy<I, T> e) =>
-    new EventHookProxy<dynamic, T>(e._typeName, e._methodName, e._hook);
+    new EventHookProxy<dynamic, T>(e._typeName, e._methodName, e._hook, e._position);
 }

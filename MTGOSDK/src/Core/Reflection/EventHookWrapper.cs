@@ -41,6 +41,7 @@ public class EventHookWrapper<I>(
   {
     if (e._instanceHandler == null)
     {
+      e.DoInitialize();
       e._instanceHook ??= new Action<dynamic, I>((t, i) =>
       {
         if (!e._hook(t, i)) return;
