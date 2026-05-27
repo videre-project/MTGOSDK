@@ -50,9 +50,9 @@ public partial class Diver : IDisposable
     Log.Debug($"[Diver] Iterating collection with {schema.Length} paths, max={maxItems}");
 
     // First pass: collect all items and their values into column lists
-    var columnLists = new List<string?>[schema.Length];
+    var columnLists = new List<string>[schema.Length];
     for (int c = 0; c < schema.Length; c++)
-      columnLists[c] = new List<string?>();
+      columnLists[c] = new List<string>();
 
     int count = 0;
     foreach (var item in enumerable)
@@ -69,6 +69,17 @@ public partial class Diver : IDisposable
       {
         try
         {
+          if (TryResolveNestedCollectionPath(
+            item,
+            schema[c],
+            out string nestedJson,
+            out string nestedTypeName))
+          {
+            columnLists[c].Add(nestedJson);
+            schemaTypes[c] ??= nestedTypeName;
+            continue;
+          }
+
           var (value, type) = ResolveMemberPath(item, schema[c]);
 
           if (value == null)
@@ -106,7 +117,7 @@ public partial class Diver : IDisposable
     }
 
     // Convert column lists to arrays
-    var columns = new string?[schema.Length][];
+    var columns = new string[schema.Length][];
     for (int c = 0; c < schema.Length; c++)
       columns[c] = columnLists[c].ToArray();
 
@@ -127,6 +138,60 @@ public partial class Diver : IDisposable
     };
 
     return WrapSuccess(response);
+  }
+
+  /// <summary>
+  /// Resolves a projected nested collection path such as
+  /// <c>OpponentResults[].LoginID</c> into one JSON array value for the parent
+  /// collection item.
+  /// </summary>
+  private bool TryResolveNestedCollectionPath(
+    object item,
+    string path,
+    out string json,
+    out string typeName)
+  {
+    json = null;
+    typeName = null;
+
+    const string marker = "[].";
+    int markerIndex = path.IndexOf(marker, StringComparison.Ordinal);
+    if (markerIndex < 0)
+    {
+      return false;
+    }
+
+    string collectionPath = path.Substring(0, markerIndex);
+    string itemPath = path.Substring(markerIndex + marker.Length);
+    var (collectionValue, _) = ResolveMemberPath(item, collectionPath);
+    if (collectionValue is not IEnumerable enumerable || collectionValue is string)
+    {
+      json = "[]";
+      typeName = "System.Text.Json.JsonElement[]";
+      return true;
+    }
+
+    var values = new List<object>();
+    foreach (var child in enumerable)
+    {
+      var (value, _) = ResolveMemberPath(child, itemPath);
+      values.Add(NormalizeNestedCollectionValue(value));
+    }
+
+    json = System.Text.Json.JsonSerializer.Serialize(values);
+    typeName = "System.Text.Json.JsonElement[]";
+    return true;
+  }
+
+  private static object NormalizeNestedCollectionValue(object value)
+  {
+    if (value == null) return null;
+
+    var type = value.GetType();
+    if (type.IsEnum) return value.ToString();
+    if (type.IsPrimitiveEtc() || type.IsStringCoercible()) return value;
+
+    return value.ToString();
   }
 
   /// <summary>

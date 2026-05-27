@@ -477,4 +477,157 @@ public static class CollectionHelpers
     string text = container.ToString();
     return text?.GetHashCode() ?? 0;
   }
+
+  /// <summary>
+  /// Computes a hash for each item in a collection using its reflected properties.
+  /// </summary>
+  /// <param name="collection">The collection to hash.</param>
+  /// <returns>An array of hash codes corresponding to each item.</returns>
+  public static int[] ComputeHashList(IEnumerable collection)
+  {
+    var results = new List<int>();
+    var propertyCache = new Dictionary<Type, Dictionary<string, PropertyInfo>>();
+
+    string[] propertiesToHash = null!;
+    foreach (var item in collection)
+    {
+      if (item == null)
+      {
+        results.Add(-1);
+        continue;
+      }
+
+      // If our properties to hash are not yet determined, infer them from the first item.
+      if (propertiesToHash == null)
+      {
+        var type1 = item.GetType();
+        var props1 = type1.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        propertyCache[type1] = props1.ToDictionary(p => p.Name, p => p);
+        propertiesToHash = props1.Select(p => p.Name).ToArray();
+      }
+
+      int hash;
+      var type = item.GetType();
+      if (!propertyCache.TryGetValue(type, out var props))
+      {
+        props = new Dictionary<string, PropertyInfo>();
+        foreach (var propName in propertiesToHash)
+        {
+          var prop = type.GetProperty(propName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+          if (prop != null)
+            props.Add(propName, prop);
+        }
+        propertyCache[type] = props;
+      }
+
+      var hc = new HashCode();
+      foreach (var kvp in props)
+      {
+        var val = kvp.Value.GetValue(item);
+        hc.Add(val);
+      }
+      hash = hc.ToHashCode();
+
+      results.Add(hash);
+    }
+
+    return results.ToArray();
+  }
+
+  /// <summary>
+  /// Computes a hash for each item in a collection using selected property paths.
+  /// </summary>
+  /// <param name="collection">The collection to hash.</param>
+  /// <param name="propertyPathsCsv">
+  /// Comma- or pipe-separated property paths to include, such as
+  /// <c>MatchId|Status|IsCompleted|CurrentGame.Id</c>.
+  /// </param>
+  /// <returns>An array of hash codes corresponding to each item.</returns>
+  public static int[] ComputeHashList(
+    IEnumerable collection,
+    string propertyPathsCsv)
+  {
+    var propertyPaths = propertyPathsCsv
+      .Split(new[] { ',', '|' }, StringSplitOptions.RemoveEmptyEntries)
+      .Select(path => path.Trim())
+      .Where(path => path.Length > 0)
+      .ToArray();
+    if (propertyPaths.Length == 0)
+    {
+      return ComputeHashList(collection);
+    }
+
+    var results = new List<int>();
+    var memberCache = new Dictionary<(Type Type, string Name), MemberInfo?>();
+
+    foreach (var item in collection)
+    {
+      if (item == null)
+      {
+        results.Add(-1);
+        continue;
+      }
+
+      var hc = new HashCode();
+      foreach (string propertyPath in propertyPaths)
+      {
+        hc.Add(GetPropertyPathValue(item, propertyPath, memberCache));
+      }
+
+      results.Add(hc.ToHashCode());
+    }
+
+    return results.ToArray();
+  }
+
+  private static object? GetPropertyPathValue(
+    object item,
+    string propertyPath,
+    Dictionary<(Type Type, string Name), MemberInfo?> memberCache)
+  {
+    object? current = item;
+    foreach (string memberName in propertyPath
+               .Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries)
+               .Select(name => name.Trim())
+               .Where(name => name.Length > 0))
+    {
+      if (current is null)
+      {
+        return null;
+      }
+
+      Type currentType = current.GetType();
+      MemberInfo? member = GetHashMember(currentType, memberName, memberCache);
+      current = member switch
+      {
+        PropertyInfo property => property.GetValue(current),
+        FieldInfo field => field.GetValue(current),
+        _ => throw new MissingMemberException(
+          currentType.FullName,
+          memberName)
+      };
+    }
+
+    return current;
+  }
+
+  private static MemberInfo? GetHashMember(
+    Type type,
+    string memberName,
+    Dictionary<(Type Type, string Name), MemberInfo?> memberCache)
+  {
+    var key = (type, memberName);
+    if (memberCache.TryGetValue(key, out var cachedMember))
+    {
+      return cachedMember;
+    }
+
+    const BindingFlags flags =
+      BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+    MemberInfo? member =
+      type.GetProperty(memberName, flags) ??
+      (MemberInfo?)type.GetField(memberName, flags);
+    memberCache[key] = member;
+    return member;
+  }
 }

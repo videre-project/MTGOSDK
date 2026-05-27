@@ -1138,6 +1138,31 @@ public sealed class RemoteClient : DLRWrapper
     return arrayObject.Dynamify();
   }
 
+  // Invokes CollectionHelpers.ComputeHashList in the remote process to get stable hashes for each element in the array.
+  public static int[] GetArrayHash(dynamic arrayDro)
+  {
+    return InvokeComputeHashList(arrayDro);
+  }
+
+  public static int[] GetArrayHash(
+    dynamic arrayDro,
+    string propertyPathsCsv)
+  {
+    return InvokeComputeHashList(arrayDro, propertyPathsCsv);
+  }
+
+  private static int[] InvokeComputeHashList(params object[] args)
+  {
+    var remoteType = GetInstanceType(new TypeProxy(typeof(CollectionHelpers)));
+    var remoteMethod = remoteType
+      .GetMethods(BindingFlags.Public | BindingFlags.Static)
+      .Single(method =>
+        method.Name == nameof(CollectionHelpers.ComputeHashList) &&
+        method.GetParameters().Length == args.Length);
+
+    return (int[])remoteMethod.Invoke(null, args);
+  }
+
   public static void SetProperty(
     DynamicRemoteObject dro,
     string propertyName,
