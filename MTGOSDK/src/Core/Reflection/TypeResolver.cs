@@ -7,6 +7,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 
+using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -69,6 +70,47 @@ public class TypeResolver()
     }
 
     return resolvedType;
+  }
+
+  public Type Resolve(RemoteHandle app, string assemblyName, string typeFullName)
+  {
+    Type resolvedType = Resolve(assemblyName, typeFullName);
+    if (resolvedType is RemoteType remoteType &&
+        !ReferenceEquals(remoteType.App, app))
+    {
+      return null;
+    }
+
+    return resolvedType;
+  }
+
+  public RemoteType ResolveRemoteType(RemoteHandle app, string typeFullName)
+  {
+    RemoteType match = null;
+
+    foreach (var kvp in _cache)
+    {
+      if (kvp.Key.Item2 != typeFullName ||
+          kvp.Value is not RemoteType type ||
+          !ReferenceEquals(type.App, app) ||
+          type.SourceTypeDump is null)
+      {
+        continue;
+      }
+
+      if (match is null)
+      {
+        match = type;
+        continue;
+      }
+
+      if (!ReferenceEquals(match, type))
+      {
+        return null;
+      }
+    }
+
+    return match;
   }
 
   public void ClearCache()

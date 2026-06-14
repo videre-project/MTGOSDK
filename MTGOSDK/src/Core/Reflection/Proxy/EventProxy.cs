@@ -31,15 +31,28 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
   private void EventUnsubscribe(string eventName, Delegate callback) =>
     @ro.EventUnsubscribe(eventName, callback);
 
-  private readonly List<Delegate> _delegates = new();
+  private readonly List<(Delegate Original, Delegate Proxy)> _delegates = new();
 
   public override void Clear()
   {
-    foreach (var d in _delegates)
-    {
-      EventUnsubscribe(Name, d);
-    }
+    var proxies = _delegates.Select(d => d.Proxy).ToArray();
     _delegates.Clear();
+
+    Exception? failure = null;
+    foreach (var d in proxies)
+    {
+      try
+      {
+        EventUnsubscribe(Name, d);
+      }
+      catch (Exception ex)
+      {
+        failure ??= ex;
+      }
+    }
+
+    if (failure is not null)
+      throw failure;
   }
 
   //
@@ -55,14 +68,18 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
     e.DoInitialize();
     var d = e.ProxyTypedDelegate(c);
     e.EventSubscribe(e.Name, d);
-    e._delegates.Add(d);
+    e._delegates.Add((c, d));
     return e;
   }
 
   public static EventProxy<I,T> operator -(EventProxy<I,T> e, Delegate c)
   {
-    var d = e.ProxyTypedDelegate(c);
-    e._delegates.Remove(d);
+    var index = e._delegates.FindIndex(d => d.Original == c);
+    if (index < 0)
+      return e;
+
+    var d = e._delegates[index].Proxy;
+    e._delegates.RemoveAt(index);
     e.EventUnsubscribe(e.Name, d);
     return e;
   }

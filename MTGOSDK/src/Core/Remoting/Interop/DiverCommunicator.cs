@@ -621,13 +621,35 @@ public class DiverCommunicator : IDisposable
 
   public void EventUnsubscribe(LocalEventCallback callback)
   {
-    if (!_eventHandlersToToken.TryRemove(callback, out int token))
+    if (!TryRemoveEventCallback(callback, out int token))
       throw new Exception("EventUnsubscribe: callback not found");
-
-    _tokensToEventHandlers.TryRemove(token, out _);
 
     var request = new EventUnsubscriptionRequest { Token = token };
     SendRequest("event_unsubscribe", request);
+  }
+
+  private bool TryRemoveEventCallback(LocalEventCallback callback, out int token)
+  {
+    if (_eventHandlersToToken.TryRemove(callback, out token))
+    {
+      _tokensToEventHandlers.TryRemove(token, out _);
+      return true;
+    }
+
+    foreach (var entry in _tokensToEventHandlers)
+    {
+      if (entry.Value != callback)
+        continue;
+
+      if (_tokensToEventHandlers.TryRemove(entry.Key, out _))
+      {
+        token = entry.Key;
+        _eventHandlersToToken.TryRemove(callback, out _);
+        return true;
+      }
+    }
+
+    return false;
   }
 
   public bool HookMethod(
@@ -653,13 +675,35 @@ public class DiverCommunicator : IDisposable
 
   public void UnhookMethod(LocalHookCallback callback)
   {
-    if (!_hookCallbacksToTokens.TryRemove(callback, out int token))
+    if (!TryRemoveHookCallback(callback, out int token))
       throw new Exception("UnhookMethod: callback not found");
-
-    _tokensToHookCallbacks.TryRemove(token, out _);
 
     var request = new HookUnsubscriptionRequest { Token = token };
     SendRequest("unhook_method", request);
+  }
+
+  private bool TryRemoveHookCallback(LocalHookCallback callback, out int token)
+  {
+    if (_hookCallbacksToTokens.TryRemove(callback, out token))
+    {
+      _tokensToHookCallbacks.TryRemove(token, out _);
+      return true;
+    }
+
+    foreach (var entry in _tokensToHookCallbacks)
+    {
+      if (entry.Value != callback)
+        continue;
+
+      if (_tokensToHookCallbacks.TryRemove(entry.Key, out _))
+      {
+        token = entry.Key;
+        _hookCallbacksToTokens.TryRemove(callback, out _);
+        return true;
+      }
+    }
+
+    return false;
   }
 
   public delegate void LocalEventCallback(ObjectOrRemoteAddress[] args);

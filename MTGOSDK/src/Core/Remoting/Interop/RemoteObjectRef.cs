@@ -278,7 +278,9 @@ internal class RemoteObjectRef
     string eventName,
     DiverCommunicator.LocalEventCallback callbackProxy)
   {
-    ThrowIfReleased();
+    // Event registrations are tracked by callback token inside the communicator.
+    // Even if this object ref has already been released, we still need to clear
+    // the communicator callback maps and ask Diver to remove the subscription.
     _communicator.EventUnsubscribe(callbackProxy);
   }
 

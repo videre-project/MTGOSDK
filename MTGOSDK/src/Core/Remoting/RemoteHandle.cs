@@ -22,22 +22,51 @@ public class RemoteHandle : DLRWrapper, IDisposable
 {
   internal class RemoteObjectsCollection
   {
-    // Lock-free cache using ConcurrentDictionary for better concurrent performance
-    private readonly ConcurrentDictionary<ulong, Lazy<WeakReference<RemoteObject>>> _pinnedAddressesToRemoteObjects;
+    // Lock-free cache using ConcurrentDictionary for better concurrent performance.
+    // Store the weak reference directly: a Lazy factory closes over the newly
+    // created RemoteObject and keeps it strongly rooted until the cache entry is
+    // removed.
+    private readonly ConcurrentDictionary<ulong, WeakReference<RemoteObject>> _pinnedAddressesToRemoteObjects;
 
     // Cache for RemoteObjectRef to ensure refs are shared across RemoteObject recreations
     // This prevents multiple refs to the same Diver token from unpinning prematurely
     private readonly ConcurrentDictionary<ulong, WeakReference<RemoteObjectRef>> _pinnedAddressesToRefs;
+
+    private const int CacheSweepInterval = 256;
+    private int _cacheSweepCounter;
 
     private readonly RemoteHandle _app;
 
     public RemoteObjectsCollection(RemoteHandle app)
     {
       _app = app;
-      _pinnedAddressesToRemoteObjects = new ConcurrentDictionary<ulong, Lazy<WeakReference<RemoteObject>>>();
+      _pinnedAddressesToRemoteObjects = new ConcurrentDictionary<ulong, WeakReference<RemoteObject>>();
       _pinnedAddressesToRefs = new ConcurrentDictionary<ulong, WeakReference<RemoteObjectRef>>();
     }
 
+    private void SweepStaleCacheEntries()
+    {
+      if (Interlocked.Increment(ref _cacheSweepCounter) % CacheSweepInterval != 0)
+        return;
+
+      foreach (var entry in _pinnedAddressesToRemoteObjects)
+      {
+        if (!entry.Value.TryGetTarget(out var remoteObject) ||
+            !remoteObject.IsValid)
+        {
+          _pinnedAddressesToRemoteObjects.TryRemove(entry.Key, out _);
+        }
+      }
+
+      foreach (var entry in _pinnedAddressesToRefs)
+      {
+        if (!entry.Value.TryGetTarget(out var remoteObjectRef) ||
+            !remoteObjectRef.IsValid)
+        {
+          _pinnedAddressesToRefs.TryRemove(entry.Key, out _);
+        }
+      }
+    }
 
      private RemoteObject GetRemoteObjectUncached(
       ulong remoteAddress,
@@ -62,8 +91,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
           od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
 
           // Check if we have a cached RemoteType with its SourceTypeDump.
-          Type cachedType = TypeResolver.Instance.Resolve(null, od.Type);
-          if (cachedType is RemoteType rt && rt.SourceTypeDump != null)
+          RemoteType rt = TypeResolver.Instance.ResolveRemoteType(_app, od.Type);
+          if (rt != null)
           {
             td = rt.SourceTypeDump;
             return; // Use TypeDump from cached RemoteType
@@ -85,6 +114,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
       // Cache the ref for future reuse (use PinnedAddress from ObjectDump)
       _pinnedAddressesToRefs[od.PinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
+      SweepStaleCacheEntries();
 
       var remoteObject = new RemoteObject(objRef, _app);
 
@@ -116,8 +146,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
         try
         {
           // Check if we have a cached RemoteType with its SourceTypeDump.
-          Type cachedType = TypeResolver.Instance.Resolve(null, typeName);
-          if (cachedType is RemoteType rt && rt.SourceTypeDump != null)
+          RemoteType rt = TypeResolver.Instance.ResolveRemoteType(_app, typeName);
+          if (rt != null)
           {
             td = rt.SourceTypeDump;
             return;
@@ -139,6 +169,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
       // Cache the ref for future reuse
       _pinnedAddressesToRefs[pinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
+      SweepStaleCacheEntries();
 
       var remoteObject = new RemoteObject(objRef, _app);
 
@@ -156,9 +187,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
       for (int attempt = 0; attempt < maxRetries; attempt++)
       {
         // Fast path: try to get existing valid reference
-        if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var existingLazy))
+        if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var weakRef))
         {
-          var weakRef = existingLazy.Value;
           if (weakRef.TryGetTarget(out var ro) && ro.IsValid)
           {
             ro.AddReference();
@@ -172,12 +202,10 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
         // Slow path: create new object and try to add it
         var newRo = GetRemoteObjectUncached(address, typeName, hashcode);
-        var newLazy = new Lazy<WeakReference<RemoteObject>>(
-          () => new WeakReference<RemoteObject>(newRo),
-          LazyThreadSafetyMode.ExecutionAndPublication);
+        var newWeakRef = new WeakReference<RemoteObject>(newRo);
 
         // Try to add our new object
-        if (_pinnedAddressesToRemoteObjects.TryAdd(address, newLazy))
+        if (_pinnedAddressesToRemoteObjects.TryAdd(address, newWeakRef))
         {
           // We won - return our object
           return newRo;
@@ -204,9 +232,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
       for (int attempt = 0; attempt < maxRetries; attempt++)
       {
         // Fast path: try to get existing valid reference
-        if (_pinnedAddressesToRemoteObjects.TryGetValue(pinnedAddress, out var existingLazy))
+        if (_pinnedAddressesToRemoteObjects.TryGetValue(pinnedAddress, out var weakRef))
         {
-          var weakRef = existingLazy.Value;
           if (weakRef.TryGetTarget(out var ro) && ro.IsValid)
           {
             ro.AddReference();
@@ -220,12 +247,10 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
         // Slow path: create new object using lightweight constructor
         var newRo = GetRemoteObjectFromFieldUncached(pinnedAddress, typeName);
-        var newLazy = new Lazy<WeakReference<RemoteObject>>(
-          () => new WeakReference<RemoteObject>(newRo),
-          LazyThreadSafetyMode.ExecutionAndPublication);
+        var newWeakRef = new WeakReference<RemoteObject>(newRo);
 
         // Try to add our new object
-        if (_pinnedAddressesToRemoteObjects.TryAdd(pinnedAddress, newLazy))
+        if (_pinnedAddressesToRemoteObjects.TryAdd(pinnedAddress, newWeakRef))
         {
           return newRo;
         }
@@ -375,7 +400,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
     // as local reference assemblies only have stub methods.
     if (assembly != null)
     {
-      Type res = resolver.Resolve(assembly, typeFullName);
+      Type res = resolver.Resolve(this, assembly, typeFullName);
       if (res != null)
       {
         // Either found in cache or found locally.
@@ -396,16 +421,6 @@ public class RemoteHandle : DLRWrapper, IDisposable
         return res;
       }
     }
-    else
-    {
-      // Check cache first for already-dumped remote types, but skip local resolution
-      Type cached = resolver.Resolve(null, typeFullName);
-      if (cached is RemoteType)
-      {
-        return cached;
-      }
-    }
-
     // Dump the remote type. This takes much more time (includes
     // dumping of dependent types) and should be avoided as much as possible.
     RemoteTypesFactory rtf = new RemoteTypesFactory(resolver, Communicator);
@@ -426,7 +441,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
     var resolver = TypeResolver.Instance;
 
     // Check cache for an already-complete RemoteType (built from TypeDump)
-    Type cached = resolver.Resolve(typeDump.Assembly, typeDump.Type);
+    Type cached = resolver.Resolve(this, typeDump.Assembly, typeDump.Type);
     if (cached is RemoteType rt && rt.SourceTypeDump != null)
       return rt;
 

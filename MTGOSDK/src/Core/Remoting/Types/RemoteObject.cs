@@ -143,9 +143,15 @@ public class RemoteObject : IObjectReference
       callback.DynamicInvoke(droParameters);
     }
 
-    _eventCallbacksAndProxies[callback] = callbackProxy;
+    if (_eventCallbacksAndProxies.TryRemove(
+      callback,
+      out DiverCommunicator.LocalEventCallback existingCallbackProxy))
+    {
+      _ref.EventUnsubscribe(eventName, existingCallbackProxy);
+    }
 
     _ref.EventSubscribe(eventName, callbackProxy);
+    _eventCallbacksAndProxies[callback] = callbackProxy;
   }
 
   public void EventUnsubscribe(string eventName, Delegate callback)

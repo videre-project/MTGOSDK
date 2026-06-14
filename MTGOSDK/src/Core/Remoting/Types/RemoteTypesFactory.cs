@@ -34,7 +34,7 @@ public class RemoteTypesFactory(TypeResolver resolver,
     string assembly,
     string type)
   {
-    Type paramType = resolver.Resolve(assembly, type);
+    Type paramType = resolver.Resolve(app, assembly, type);
     if (paramType != null)
     {
       // Either found in cache or found locally.
@@ -80,7 +80,7 @@ public class RemoteTypesFactory(TypeResolver resolver,
 
   private Type Create(RemoteHandle app, string fullTypeName, string assembly)
   {
-    Type shortOutput = resolver.Resolve(assembly, fullTypeName);
+    Type shortOutput = resolver.Resolve(app, assembly, fullTypeName);
     if (shortOutput != null)
     {
       return shortOutput;
@@ -95,7 +95,7 @@ public class RemoteTypesFactory(TypeResolver resolver,
 
   public Type Create(RemoteHandle app, TypeDump typeDump)
   {
-    Type shortOutput = resolver.Resolve(typeDump.Assembly, typeDump.Type);
+    Type shortOutput = resolver.Resolve(app, typeDump.Assembly, typeDump.Type);
     if (shortOutput != null)
     {
       // If it's already a RemoteType, return it directly
