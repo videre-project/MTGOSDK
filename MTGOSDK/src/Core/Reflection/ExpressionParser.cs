@@ -30,30 +30,28 @@ public static class ExpressionParser
   public static (string PropertyName, ComparisonOperator Op, object Value) ParsePredicate<T>(
     Expression<Func<T, bool>> expression)
   {
-    if (expression.Body is not BinaryExpression binary)
+    if (StripConversions(expression.Body) is not BinaryExpression binary)
       throw new ArgumentException(
         "Expression must be a binary comparison (e.g., o => o.Foo > 0)", 
         nameof(expression));
 
-    // Get the comparison operator
-    var op = binary.NodeType switch
+    Expression left = StripConversions(binary.Left);
+    Expression right = StripConversions(binary.Right);
+    var op = ToComparisonOperator(binary.NodeType);
+
+    if (TryExtractPropertyName(left, out string propertyName))
     {
-      ExpressionType.Equal => ComparisonOperator.Equal,
-      ExpressionType.NotEqual => ComparisonOperator.NotEqual,
-      ExpressionType.GreaterThan => ComparisonOperator.GreaterThan,
-      ExpressionType.GreaterThanOrEqual => ComparisonOperator.GreaterThanOrEqual,
-      ExpressionType.LessThan => ComparisonOperator.LessThan,
-      ExpressionType.LessThanOrEqual => ComparisonOperator.LessThanOrEqual,
-      _ => throw new ArgumentException($"Unsupported comparison operator: {binary.NodeType}")
-    };
+      return (propertyName, op, ExtractValue(right));
+    }
 
-    // Extract property name from left side
-    string propertyName = ExtractPropertyName(binary.Left);
+    if (TryExtractPropertyName(right, out propertyName))
+    {
+      return (propertyName, Invert(op), ExtractValue(left));
+    }
 
-    // Extract value from right side
-    object value = ExtractValue(binary.Right);
-
-    return (propertyName, op, value);
+    throw new ArgumentException(
+      "Expression must compare a property access to a constant or captured value.",
+      nameof(expression));
   }
 
   /// <summary>
@@ -73,13 +71,13 @@ public static class ExpressionParser
   /// </summary>
   private static string ExtractPropertyName(Expression expression)
   {
-    return expression switch
-    {
-      MemberExpression member => member.Member.Name,
-      UnaryExpression { Operand: MemberExpression member } => member.Member.Name, // Handle boxing/conversion
-      _ => throw new ArgumentException(
-        $"Expected a property access expression, got: {expression.NodeType}")
-    };
+    expression = StripConversions(expression);
+
+    if (TryExtractPropertyName(expression, out string propertyName))
+      return propertyName;
+
+    throw new ArgumentException(
+      $"Expected a property access expression, got: {expression.NodeType}");
   }
 
   /// <summary>
@@ -87,24 +85,106 @@ public static class ExpressionParser
   /// </summary>
   private static object ExtractValue(Expression expression)
   {
-    return expression switch
+    expression = StripConversions(expression);
+
+    switch (expression)
     {
-      ConstantExpression constant => constant.Value,
-      UnaryExpression { Operand: ConstantExpression constant } => constant.Value, // Handle boxing
-      MemberExpression member => EvaluateMemberExpression(member), // Captured variable
-      _ => throw new ArgumentException(
-        $"Expected a constant or captured value, got: {expression.NodeType}")
-    };
+      case ConstantExpression constant:
+        return constant.Value;
+      case MemberExpression member:
+        return EvaluateExpression(member);
+      default:
+        return EvaluateExpression(expression);
+    }
   }
 
   /// <summary>
-  /// Evaluates a member expression to get the value of a captured variable.
+  /// Evaluates an expression to get the value of a constant expression.
   /// </summary>
-  private static object EvaluateMemberExpression(MemberExpression member)
+  private static object EvaluateExpression(Expression expression)
   {
-    // Compile and invoke to get the captured value
-    var objectMember = Expression.Convert(member, typeof(object));
-    var getterLambda = Expression.Lambda<Func<object>>(objectMember);
-    return getterLambda.Compile()();
+    try
+    {
+      var objectValue = Expression.Convert(expression, typeof(object));
+      var getterLambda = Expression.Lambda<Func<object>>(objectValue);
+      return getterLambda.Compile()();
+    }
+    catch (Exception ex)
+    {
+      throw new ArgumentException(
+        $"Expected a constant or captured value, got: {expression.NodeType}",
+        ex);
+    }
+  }
+
+  private static Expression StripConversions(Expression expression)
+  {
+    while (expression is UnaryExpression unary &&
+           (unary.NodeType == ExpressionType.Convert ||
+            unary.NodeType == ExpressionType.ConvertChecked ||
+            unary.NodeType == ExpressionType.Quote))
+    {
+      expression = unary.Operand;
+    }
+
+    return expression;
+  }
+
+  private static bool TryExtractPropertyName(
+    Expression expression,
+    out string propertyName)
+  {
+    Stack<string> members = new();
+    Expression current = StripConversions(expression);
+
+    while (current is MemberExpression member)
+    {
+      members.Push(member.Member.Name);
+
+      if (member.Expression == null)
+      {
+        propertyName = string.Empty;
+        return false;
+      }
+
+      current = StripConversions(member.Expression);
+    }
+
+    if (current is ParameterExpression && members.Count > 0)
+    {
+      propertyName = string.Join(".", members);
+      return true;
+    }
+
+    propertyName = string.Empty;
+    return false;
+  }
+
+  private static ComparisonOperator ToComparisonOperator(ExpressionType type)
+  {
+    return type switch
+    {
+      ExpressionType.Equal => ComparisonOperator.Equal,
+      ExpressionType.NotEqual => ComparisonOperator.NotEqual,
+      ExpressionType.GreaterThan => ComparisonOperator.GreaterThan,
+      ExpressionType.GreaterThanOrEqual => ComparisonOperator.GreaterThanOrEqual,
+      ExpressionType.LessThan => ComparisonOperator.LessThan,
+      ExpressionType.LessThanOrEqual => ComparisonOperator.LessThanOrEqual,
+      _ => throw new ArgumentException($"Unsupported comparison operator: {type}")
+    };
+  }
+
+  private static ComparisonOperator Invert(ComparisonOperator op)
+  {
+    return op switch
+    {
+      ComparisonOperator.Equal => ComparisonOperator.Equal,
+      ComparisonOperator.NotEqual => ComparisonOperator.NotEqual,
+      ComparisonOperator.GreaterThan => ComparisonOperator.LessThan,
+      ComparisonOperator.GreaterThanOrEqual => ComparisonOperator.LessThanOrEqual,
+      ComparisonOperator.LessThan => ComparisonOperator.GreaterThan,
+      ComparisonOperator.LessThanOrEqual => ComparisonOperator.GreaterThanOrEqual,
+      _ => throw new ArgumentException($"Unsupported comparison operator: {op}")
+    };
   }
 }
