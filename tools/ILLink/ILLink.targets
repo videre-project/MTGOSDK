@@ -21,6 +21,8 @@
       <_LinkInputAssemblies Include="%(ReferenceCopyLocalPaths.Identity)"
                             Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == '' Or
                                         $(CopyLocalLockFileAssemblies) == 'true'" />
+      <_ILLinkKeepMetadata Include="$(ILLinkKeepMetadata)"
+                           Condition="'$(ILLinkKeepMetadata)' != ''" />
     </ItemGroup>
 
     <!-- Run ILLink task on the input assemblies -->
@@ -29,6 +31,7 @@
             ReferenceAssemblyPaths="@(ReferencePath)"
             RootAssemblyNames="$(AssemblyName)"
             OutputDirectory="$(ILLinkOutputDir)"
+            KeepMetadata="@(_ILLinkKeepMetadata)"
             ExtraArgs="$(ILLinkArgs)"
             ToolExe="$(_DotNetHostFileName)"
             ToolPath="$(_DotNetHostDirectory)"

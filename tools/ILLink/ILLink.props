@@ -12,6 +12,9 @@
     <ILLinkArgs>$(ILLinkArgs) --action link</ILLinkArgs>
     <!-- Ignore all unresolved types and members -->
     <ILLinkArgs>$(ILLinkArgs) --skip-unresolved true</ILLinkArgs>
+    <!-- Match the SDK trimmer default: keep parameter names and related
+         metadata so public APIs remain source-compatible for named args. -->
+    <ILLinkKeepMetadata Condition="'$(ILLinkKeepMetadata)' == ''">all</ILLinkKeepMetadata>
   </PropertyGroup>
   <PropertyGroup Condition="Exists('$(ILLinkDescriptorsFile)')">
     <!-- Specify types and members to preserve -->
