@@ -10,8 +10,8 @@ namespace MTGOSDK.Core.Reflection.Proxy;
 public abstract class EventProxyBase<I, T>
     : DLRWrapper<EventHandler>, IDisposable
 {
-  private Action _initializer;
-  private bool _isInitialized = false;
+  private Action? _initializer;
+  private bool _isInitialized;
 
   public virtual string Name { get; }
 
@@ -21,15 +21,26 @@ public abstract class EventProxyBase<I, T>
 
   public dynamic OnInitialize(Action initializer)
   {
+    if (_isInitialized)
+    {
+      initializer();
+      return this;
+    }
+
     _initializer += initializer;
     return this;
   }
 
   public void DoInitialize()
   {
+    if (_isInitialized)
+      return;
+
     _initializer?.Invoke();
     _isInitialized = true;
   }
+
+  protected void ResetInitialize() => _isInitialized = false;
 
   public Delegate ProxyTypedDelegate(Delegate c) =>
     new Action<dynamic, dynamic>((dynamic obj, dynamic args) =>

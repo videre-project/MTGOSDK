@@ -33,6 +33,7 @@ public class EventHookWrapper<I>(
   {
     _instanceHandler = null;
     _handler -= _instanceHook;
+    ResetInitialize();
   }
 
   ~EventHookWrapper() => Dispose();
@@ -61,6 +62,7 @@ public class EventHookWrapper<I>(
     if (e._instanceHandler == null)
     {
       e._handler -= e._instanceHook;
+      e.ResetInitialize();
     }
 
     return e;

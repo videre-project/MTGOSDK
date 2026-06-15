@@ -972,7 +972,7 @@ public sealed class GameProcessor
   /// <para>
   /// MTGO's message pump processes <c>HandleRevealedCard</c> before the paired
   /// <c>HandleGamePlayStatus</c> on the same thread, but both hook callbacks are
-  /// dispatched to <see cref="SyncThread"/> without a group ID — a concurrent
+  /// dispatched to <see cref="MTGOSDK.Core.SyncThread"/> without a group ID — a concurrent
   /// thread pool with no ordering guarantee. In practice the reveal IPC almost
   /// always arrives first (the messages fire microseconds apart), but on rare
   /// occasions the reveal may land one snapshot tick late. This is acceptable

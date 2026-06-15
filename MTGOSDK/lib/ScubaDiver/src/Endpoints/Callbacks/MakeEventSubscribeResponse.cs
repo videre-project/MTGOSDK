@@ -22,7 +22,7 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
-  private static MethodInfo? ResolveEventAccessor(
+  private static MethodInfo ResolveEventAccessor(
     EventInfo eventObj,
     Type targetType,
     bool isAdd)

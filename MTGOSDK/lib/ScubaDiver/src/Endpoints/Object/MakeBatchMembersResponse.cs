@@ -39,7 +39,7 @@ public partial class Diver : IDisposable
     var validPaths = paths.Where(p => !string.IsNullOrEmpty(p)).ToArray();
     var schema = new string[validPaths.Length];
     var schemaTypes = new string[validPaths.Length];
-    var values = new string?[validPaths.Length];
+    var values = new string[validPaths.Length];
 
     for (int i = 0; i < validPaths.Length; i++)
     {

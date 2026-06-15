@@ -37,6 +37,7 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
   {
     var proxies = _delegates.Select(d => d.Proxy).ToArray();
     _delegates.Clear();
+    ResetInitialize();
 
     Exception? failure = null;
     foreach (var d in proxies)
@@ -61,8 +62,6 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
 
   public override string Name => name;
 
-  private bool _isInitialized;
-
   public static EventProxy<I,T> operator +(EventProxy<I,T> e, Delegate c)
   {
     e.DoInitialize();
@@ -80,6 +79,8 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
 
     var d = e._delegates[index].Proxy;
     e._delegates.RemoveAt(index);
+    if (e._delegates.Count == 0)
+      e.ResetInitialize();
     e.EventUnsubscribe(e.Name, d);
     return e;
   }

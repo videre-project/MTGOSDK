@@ -129,6 +129,7 @@ public sealed class PropertyChangeWrapper<DLRWrapper_T, TValue>
     {
       _instanceHandler = null;
       StopTrackingLocked();
+      ResetInitialize();
     }
   }
 
@@ -173,7 +174,10 @@ public sealed class PropertyChangeWrapper<DLRWrapper_T, TValue>
       e._instanceHandler -= (Action<PropertyValueChangedEventArgs<TValue>>)c;
 
       if (e._instanceHandler is null)
+      {
         e.StopTrackingLocked();
+        e.ResetInitialize();
+      }
     }
 
     return e;
