@@ -217,6 +217,7 @@
     <!-- Query all existing package versions in the feed -->
     <PropertyGroup>
       <FeedPackagePath>$(FeedOutputPath)\$(MSBuildProjectName.ToLower())</FeedPackagePath>
+      <CurrentPackageVersionPath>$(MSBuildProjectName.ToLower())\$(PackageVersion)</CurrentPackageVersionPath>
     </PropertyGroup>
     <ItemGroup>
       <_SDKPackagePaths Include="$(FeedPackagePath)\**\*.nupkg" />
@@ -230,8 +231,9 @@
 
     <!-- Clean the local feed of old package versions -->
     <RemoveDir Directories="@(_SDKPackagePaths->'$(FeedOutputPath)\%(VersionPath)');
-                            @(_SDKPackagePaths->'$(NuGetPackageRoot)\%(VersionPath)')"
-               Condition="Exists($(FeedPackagePath))" />
+                            @(_SDKPackagePaths->'$(NuGetPackageRoot)\%(VersionPath)');
+                            $(FeedOutputPath)\$(CurrentPackageVersionPath);
+                            $(NuGetPackageRoot)\$(CurrentPackageVersionPath)" />
 
     <!-- Add the built package to the local feed -->
     <PropertyGroup>
