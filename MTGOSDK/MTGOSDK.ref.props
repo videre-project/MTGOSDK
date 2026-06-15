@@ -60,6 +60,10 @@
     internalized in the final package, and can again be trimmed by ILLink
     when the package is used by a self-contained application.
   -->
+  <PropertyGroup Condition="'$(PublishTrimmed)' == 'true' And
+                            '$(UseILLinkTrim)' == 'true'">
+    <ILLinkCopyAssemblies>$(ILLinkCopyAssemblies);$(AssemblyName);MTGOSDK.Core;MTGOSDK.Win32</ILLinkCopyAssemblies>
+  </PropertyGroup>
   <Import Project="$(ToolsDir)\ILLink\ILLink.targets"
           Condition="'$(PublishTrimmed)' == 'true' And
                      '$(UseILLinkTrim)' == 'true'" />

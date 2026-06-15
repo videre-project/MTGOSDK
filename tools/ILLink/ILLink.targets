@@ -23,6 +23,8 @@
                                         $(CopyLocalLockFileAssemblies) == 'true'" />
       <_ILLinkKeepMetadata Include="$(ILLinkKeepMetadata)"
                            Condition="'$(ILLinkKeepMetadata)' != ''" />
+      <_ILLinkCopyAssembly Include="$(ILLinkCopyAssemblies)"
+                           Condition="'$(ILLinkCopyAssemblies)' != ''" />
     </ItemGroup>
 
     <!-- Run ILLink task on the input assemblies -->
@@ -32,7 +34,7 @@
             RootAssemblyNames="$(AssemblyName)"
             OutputDirectory="$(ILLinkOutputDir)"
             KeepMetadata="@(_ILLinkKeepMetadata)"
-            ExtraArgs="$(ILLinkArgs)"
+            ExtraArgs="$(ILLinkArgs) @(_ILLinkCopyAssembly->'--action copy %(Identity)', ' ')"
             ToolExe="$(_DotNetHostFileName)"
             ToolPath="$(_DotNetHostDirectory)"
             NoWarn="$(NoWarn)"
