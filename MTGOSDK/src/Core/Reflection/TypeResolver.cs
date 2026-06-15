@@ -26,6 +26,8 @@ public class TypeResolver()
   // whole class a singleton
   public static TypeResolver Instance = new TypeResolver();
 
+  public int Count => _cache.Count;
+
   public void RegisterType(Type type)
     => RegisterType(type.Assembly.GetName().Name, type.FullName, type);
 

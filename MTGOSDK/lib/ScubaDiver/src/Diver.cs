@@ -1,4 +1,4 @@
-/** @file
+﻿/** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
@@ -80,7 +80,9 @@ public partial class Diver : IDisposable
   }
 
   private static readonly ActivitySource s_activitySource = new("ScubaDiver");
+#if MTGOSDK_TRACING
   private TraceExporter _traceExporter;
+#endif
 
   //
   // Diagnostics counters
@@ -98,7 +100,7 @@ public partial class Diver : IDisposable
 
   public void Start(ushort listenPort)
   {
-#if DEBUG
+#if MTGOSDK_TRACING
     _traceExporter = new TraceExporter(
         Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace", "trace_diver.json"),
         "ScubaDiver");
@@ -122,7 +124,7 @@ public partial class Diver : IDisposable
   /// </summary>
   private byte[] HandleTcpRequest(string endpoint, byte[] body)
   {
-#if DEBUG
+#if MTGOSDK_TRACING
     // Unwrap the TracedRequest
     TracedRequest tracedReq;
     try 
@@ -159,7 +161,7 @@ public partial class Diver : IDisposable
     // Set the actual request body in thread-local storage
     _cachedRequestBody.Value = tracedReq.Body;
 #else
-    // In Release mode, tracing is disabled to improve performance
+    // Tracing is disabled unless MTGOSDK_TRACING is defined
     Activity activity = null;
     _cachedRequestBody.Value = body;
 #endif
@@ -230,6 +232,9 @@ public partial class Diver : IDisposable
     _cts.Dispose();
     _tcpServer?.Dispose();
     _runtime?.Dispose();
+#if MTGOSDK_TRACING
+    _traceExporter?.Dispose();
+#endif
     _clientCallbacks.Clear();
     STAThread.Stop();
 

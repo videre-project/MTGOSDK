@@ -1,0 +1,61 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-windows;$(_MTGOSDKCoreTFM)</TargetFrameworks>
+    <AssemblyName>MTGOSDK.Core</AssemblyName>
+    <RootNamespace>MTGOSDK</RootNamespace>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);
+      CS1591;
+      CS8597;CS8600;CS8602;CS8603;CS8604;CS8625;CS8629;CS8767;CS9113;IDE0065;
+      CS8601;CS8605;CS8608;CS8610;CS8618;CS8619;CS8620;CS8765;
+    </NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <EnableMTGOSDKTracing Condition="'$(EnableMTGOSDKTracing)' == ''">false</EnableMTGOSDKTracing>
+    <DefineConstants Condition="'$(EnableMTGOSDKTracing)' == 'true'">$(DefineConstants);MTGOSDK_TRACING</DefineConstants>
+  </PropertyGroup>
+
+  <Import Project="..\MTGOSDK.Core.props" />
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>MTGOSDK</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Core\**\*.cs"
+             Link="src\Core\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\Resources\Bootstrapper.cs"
+             Link="src\Resources\Bootstrapper.cs" />
+    <Compile Include="..\..\src\GlobalUsings.cs"
+             Link="src\GlobalUsings.cs" />
+    <Compile Include="..\..\src\GlobalEvents.cs"
+             Link="src\GlobalEvents.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CSharp" />
+    <PackageReference Include="Microsoft.Diagnostics.Runtime" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="ImpromptuInterface" />
+    <PackageReference Include="MessagePack"
+                      GeneratePathProperty="true" />
+    <PackageReference Include="MessagePack.Annotations"
+                      GeneratePathProperty="true" />
+    <PackageReference Include="System.IO.Pipelines" />
+    <PackageReference Include="System.Threading.Channels" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
+                      PrivateAssets="All" />
+    <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
+  </ItemGroup>
+
+</Project>

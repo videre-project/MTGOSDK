@@ -8,6 +8,9 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IsPackable>false</IsPackable>
     <UseILRepack>true</UseILRepack>
+    <ILRepackUnion>true</ILRepackUnion>
+    <EnableMTGOSDKTracing Condition="'$(EnableMTGOSDKTracing)' == ''">false</EnableMTGOSDKTracing>
+    <DefineConstants Condition="'$(EnableMTGOSDKTracing)' == 'true'">$(DefineConstants);MTGOSDK_TRACING</DefineConstants>
   </PropertyGroup>
 
   <!-- ILLink trimmer -->
@@ -80,7 +83,8 @@
     <PackageReference Include="MessagePack" />
     <PackageReference Include="MessagePack.Annotations" />
     <PackageReference Include="Lib.Harmony" />
-    <ProjectReference Include="$(SolutionDir)\MTGOSDK\MTGOSDK.csproj" />
+    <ProjectReference Include="$(SolutionDir)\MTGOSDK\lib\MTGOSDK.Core\MTGOSDK.Core.csproj"
+                      SetTargetFramework="TargetFramework=$(_MTGOSDKCoreTFM)" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
   </ItemGroup>
 

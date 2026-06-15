@@ -20,6 +20,16 @@ namespace MTGOSDK.Core.Remoting;
 
 public class RemoteHandle : DLRWrapper, IDisposable
 {
+  public sealed class RemoteObjectCacheDiagnostics
+  {
+    public int RemoteObjectEntries { get; set; }
+    public int RemoteObjectLiveEntries { get; set; }
+    public int RemoteObjectStaleEntries { get; set; }
+    public int RemoteObjectRefEntries { get; set; }
+    public int RemoteObjectRefLiveEntries { get; set; }
+    public int RemoteObjectRefStaleEntries { get; set; }
+  }
+
   internal class RemoteObjectsCollection
   {
     // Lock-free cache using ConcurrentDictionary for better concurrent performance.
@@ -66,6 +76,43 @@ public class RemoteHandle : DLRWrapper, IDisposable
           _pinnedAddressesToRefs.TryRemove(entry.Key, out _);
         }
       }
+    }
+
+    public RemoteObjectCacheDiagnostics GetDiagnostics()
+    {
+      var diagnostics = new RemoteObjectCacheDiagnostics
+      {
+        RemoteObjectEntries = _pinnedAddressesToRemoteObjects.Count,
+        RemoteObjectRefEntries = _pinnedAddressesToRefs.Count,
+      };
+
+      foreach (var entry in _pinnedAddressesToRemoteObjects)
+      {
+        if (entry.Value.TryGetTarget(out var remoteObject) &&
+            remoteObject.IsValid)
+        {
+          diagnostics.RemoteObjectLiveEntries++;
+        }
+        else
+        {
+          diagnostics.RemoteObjectStaleEntries++;
+        }
+      }
+
+      foreach (var entry in _pinnedAddressesToRefs)
+      {
+        if (entry.Value.TryGetTarget(out var remoteObjectRef) &&
+            remoteObjectRef.IsValid)
+        {
+          diagnostics.RemoteObjectRefLiveEntries++;
+        }
+        else
+        {
+          diagnostics.RemoteObjectRefStaleEntries++;
+        }
+      }
+
+      return diagnostics;
     }
 
      private RemoteObject GetRemoteObjectUncached(
@@ -487,6 +534,9 @@ public class RemoteHandle : DLRWrapper, IDisposable
   {
     return _remoteObjects.GetRemoteObjectFromField(pinnedAddress, typeName);
   }
+
+  public RemoteObjectCacheDiagnostics GetRemoteObjectCacheDiagnostics() =>
+    _remoteObjects.GetDiagnostics();
 
   //
   // IDisposable

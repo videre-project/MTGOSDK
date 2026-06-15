@@ -24,8 +24,34 @@ using MTGOSDK.Win32.Utilities;
 
 namespace MTGOSDK.Core.Remoting;
 
-using static MTGOSDK.Resources.EmbeddedResources;
 using static MTGOSDK.Win32.Constants;
+
+public sealed class IpcEndpointDiagnostics
+{
+  public long Count { get; set; }
+  public double AvgMs { get; set; }
+  public double LastMs { get; set; }
+}
+
+public sealed class SdkDiagnosticsSnapshot
+{
+  public int SyncThreadActive { get; set; }
+  public int SyncThreadQueued { get; set; }
+  public int SyncThreadMax { get; set; }
+  public int InFlightRequests { get; set; }
+  public long TotalRequests { get; set; }
+  public IReadOnlyDictionary<string, IpcEndpointDiagnostics> Endpoints { get; set; } =
+    new Dictionary<string, IpcEndpointDiagnostics>();
+  public long CallbacksReceived { get; set; }
+  public double LastCallbackLatencyMs { get; set; }
+  public double AvgCallbackLatencyMs { get; set; }
+  public double PeakCallbackLatencyMs { get; set; }
+  public DiverCommunicator.CallbackMapDiagnostics? CallbackMaps { get; set; }
+  public RemoteHandle.RemoteObjectCacheDiagnostics? RemoteObjectCache { get; set; }
+  public RemoteHarmony.HarmonyDiagnostics? Harmony { get; set; }
+  public int TypeResolverCacheCount { get; set; }
+  public int PropertyChangeRouterRegistrations { get; set; }
+}
 
 /// <summary>
 /// A singleton class that manages the connection to the MTGO client process.
@@ -83,14 +109,14 @@ public sealed class RemoteClient : DLRWrapper
   /// </summary>
   public static ushort? Port = null;
 
-#if DEBUG
+#if MTGOSDK_TRACING
   private TraceExporter _traceExporter;
-#endif
   private static string _traceDir;
+#endif
 
   private RemoteClient()
   {
-#if DEBUG
+#if MTGOSDK_TRACING
     // Initialize trace exporter
     try
     {
@@ -294,9 +320,9 @@ public sealed class RemoteClient : DLRWrapper
   /// </summary>
   public static async Task InstallOrUpdate()
   {
-    byte[] launcherResource = GetBinaryResource(@"Resources\Launcher.exe");
+    byte[] launcherResource = Bootstrapper.GetBinaryResource(@"Resources\Launcher.exe");
     string launcherPath = Path.Combine(Bootstrapper.AppDataDir, "Launcher.exe");
-    OverrideFileIfChanged(launcherPath, launcherResource);
+    Bootstrapper.OverrideFileIfChanged(launcherPath, launcherResource);
 
     // Check if there are any updates first before starting MTGO.
     // This will also create a new MTGO installation if one does not exist.
@@ -455,18 +481,19 @@ public sealed class RemoteClient : DLRWrapper
 
   /// <summary>
   /// Collects SDK-side diagnostics (thread pool, IPC metrics, callback latency).
-  /// No IPC calls — reads local counters only.
+  /// No IPC calls - reads local counters only.
   /// </summary>
   public static object GetSdkDiagnostics()
   {
     var (active, queued, max) = SyncThread.GetPoolMetrics();
     var ipcMetrics = DiverCommunicator.GetIpcMetrics();
+    RemoteHandle? handle = IsInitialized ? @client : null;
 
     // Convert to serializable form
-    var endpoints = new Dictionary<string, object>();
+    var endpoints = new Dictionary<string, IpcEndpointDiagnostics>();
     foreach (var kvp in ipcMetrics)
     {
-      endpoints[kvp.Key] = new
+      endpoints[kvp.Key] = new IpcEndpointDiagnostics
       {
         Count = kvp.Value.Count,
         AvgMs = Math.Round(kvp.Value.AvgMs, 2),
@@ -474,12 +501,12 @@ public sealed class RemoteClient : DLRWrapper
       };
     }
 
-    return new
+    return new SdkDiagnosticsSnapshot
     {
       SyncThreadActive = active,
       SyncThreadQueued = queued,
       SyncThreadMax = max,
-      InFlightRequests = @client?.Communicator?.PendingRequestCount ?? 0,
+      InFlightRequests = handle?.Communicator?.PendingRequestCount ?? 0,
       TotalRequests = DiverCommunicator.TotalRequests,
       Endpoints = endpoints,
       CallbacksReceived = DiverCommunicator.CallbacksReceived,
@@ -489,6 +516,11 @@ public sealed class RemoteClient : DLRWrapper
         Math.Round(DiverCommunicator.AvgCallbackLatencyMs, 2),
       PeakCallbackLatencyMs =
         Math.Round(DiverCommunicator.PeakCallbackLatencyMs, 2),
+      CallbackMaps = handle?.Communicator?.GetCallbackMapDiagnostics(),
+      RemoteObjectCache = handle?.GetRemoteObjectCacheDiagnostics(),
+      Harmony = handle?.Harmony?.GetDiagnostics(),
+      TypeResolverCacheCount = TypeResolver.Instance.Count,
+      PropertyChangeRouterRegistrations = PropertyChangeRouter.Shared.Count,
     };
   }
 
@@ -711,9 +743,8 @@ public sealed class RemoteClient : DLRWrapper
     });
 
     // Best-effort cleanup; swallow any individual errors.
-#if DEBUG
+#if MTGOSDK_TRACING
     Try(() => @this._traceExporter?.Dispose()); // Flush SDK trace file
-#endif
 
     // Merge SDK + Diver trace files into a single combined trace
     try
@@ -724,6 +755,7 @@ public sealed class RemoteClient : DLRWrapper
     {
       Log.Error("[MergeTraceFiles] Exception: {Exception}", ex);
     }
+#endif
 
     Try(@client.Dispose);
 
@@ -756,6 +788,7 @@ public sealed class RemoteClient : DLRWrapper
   /// <summary>
   /// Merges SDK and Diver trace files into a single combined trace file.
   /// </summary>
+#if MTGOSDK_TRACING
   private static void MergeTraceFiles()
   {
     Log.Debug("[MergeTraceFiles] Starting merge...");
@@ -843,6 +876,7 @@ public sealed class RemoteClient : DLRWrapper
       Log.Warning("[MergeTraceFiles] Failed to write combined trace: {Message}", ex.Message);
     }
   }
+#endif
 
   /// <summary>
   /// Event raised when the target process has exited.

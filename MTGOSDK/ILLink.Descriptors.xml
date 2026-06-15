@@ -1,5 +1,12 @@
 <linker>
   <!--
+    MTGOSDK.Core is merged into the public MTGOSDK package. Preserve it before
+    the public SDK ILRepack step so package consumers keep the same surface as
+    source/project-reference consumers.
+  -->
+  <assembly fullname="MTGOSDK.Core" preserve="all" />
+
+  <!--
     MTGOSDK.API Static References (preserve members):
   -->
   <assembly fullname="Core">

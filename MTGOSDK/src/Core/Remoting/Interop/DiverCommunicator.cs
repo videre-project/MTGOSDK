@@ -24,6 +24,14 @@ namespace MTGOSDK.Core.Remoting.Interop;
 /// </summary>
 public class DiverCommunicator : IDisposable
 {
+  public sealed class CallbackMapDiagnostics
+  {
+    public int EventTokenEntries { get; set; }
+    public int EventCallbackEntries { get; set; }
+    public int HookTokenEntries { get; set; }
+    public int HookCallbackEntries { get; set; }
+  }
+
   private readonly TcpCommunicator _tcp;
   private int? _process_id = null;
   private Exception? _lastError;
@@ -85,6 +93,14 @@ public class DiverCommunicator : IDisposable
     }
     return result;
   }
+
+  public CallbackMapDiagnostics GetCallbackMapDiagnostics() => new()
+  {
+    EventTokenEntries = _tokensToEventHandlers.Count,
+    EventCallbackEntries = _eventHandlersToToken.Count,
+    HookTokenEntries = _tokensToHookCallbacks.Count,
+    HookCallbackEntries = _hookCallbacksToTokens.Count,
+  };
 
   public static bool ForceUIThread
   {

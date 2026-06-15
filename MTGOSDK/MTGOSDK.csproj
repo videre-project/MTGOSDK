@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net10.0-windows;$(_MTGOSDKCoreTFM)</TargetFrameworks>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -16,17 +16,20 @@
     <!-- Emit source generator output to disk for debugging -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(DistDir)\$(Configuration)\$(TargetFramework)\Generated</CompilerGeneratedFilesOutputPath>
+    <EnableMTGOSDKTracing Condition="'$(EnableMTGOSDKTracing)' == ''">false</EnableMTGOSDKTracing>
+    <DefineConstants Condition="'$(EnableMTGOSDKTracing)' == 'true'">$(DefineConstants);MTGOSDK_TRACING</DefineConstants>
   </PropertyGroup>
 
   <!-- Import MTGOSDK package properties -->
   <Import Project="MTGOSDK.pkg.props" />
 
+  <!-- Separate MTGOSDK.Core assembly for Diver injection -->
+  <Import Project="lib\MTGOSDK.Core.props" />
+
   <!-- Bundle MTGOSDK reference assemblies -->
-  <Import Project="MTGOSDK.ref.props"
-          Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'" />
+  <Import Project="MTGOSDK.ref.props" />
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CSharp" />
     <PackageReference Include="Microsoft.Diagnostics.Runtime" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="ImpromptuInterface" />
@@ -34,10 +37,7 @@
                       GeneratePathProperty="true" />
     <PackageReference Include="MessagePack.Annotations"
                       GeneratePathProperty="true" />
-    <PackageReference Include="System.IO.Pipelines" />
-    <PackageReference Include="System.Threading.Channels" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
-    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
     <!-- Reference assemblies for .NET Framework TFM -->
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies"
                       PrivateAssets="All" />
@@ -50,21 +50,6 @@
   </ItemGroup>
 
   <!-- Import MTGOSDK Resources for embedding manifest and resource files -->
-  <ImportGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
-    <Import Project="lib\MTGOSDK.Resources.props" />
-    <Import Project="lib\MTGOSDK.Resources.targets" />
-  </ImportGroup>
-
-  <!--
-    WPF reference assemblies for the injected net48 target.
-    
-    PresentationCore and WindowsBase are available from MTGO's GAC at
-    runtime, so they are marked Private="false" to avoid being copied.
-  -->
-  <ItemGroup Condition="'$(TargetFramework)' == '$(_MTGOSDKCoreTFM)'">
-    <Reference Include="PresentationCore"      Private="false" />
-    <Reference Include="PresentationFramework" Private="false" />
-    <Reference Include="WindowsBase"           Private="false" />
-  </ItemGroup>
+  <Import Project="lib\MTGOSDK.Resources.targets" />
 
 </Project>

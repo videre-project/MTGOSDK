@@ -18,16 +18,28 @@
                       PrivateAssets="All" />
   </ItemGroup>
 
-  <Target Name="Repack" AfterTargets="Build">
+  <PropertyGroup>
+    <_RepackedILRepackMSBuild>$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\repack\ILRepack.MSBuild.dll</_RepackedILRepackMSBuild>
+  </PropertyGroup>
+
+  <Target Name="Repack"
+          AfterTargets="Build"
+          Inputs="$(TargetPath);$(TargetDir)ILRepack.dll"
+          Outputs="$(_RepackedILRepackMSBuild)">
     <PropertyGroup>
       <ILRepackCommand>"$(ILRepack)"</ILRepackCommand>
       <ILRepackCommand Condition="'$(OS)' != 'Windows_NT'">wine $(ILRepackCommand)</ILRepackCommand>
     </PropertyGroup>
-    <Exec Command="$(ILRepackCommand) /out:ILRepack.MSBuild.dll ILRepack.MSBuild.dll ILRepack.dll"
+    <MakeDir Directories="$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\repack" />
+    <Exec Command="$(ILRepackCommand) /out:&quot;$(_RepackedILRepackMSBuild)&quot; &quot;$(TargetPath)&quot; &quot;$(TargetDir)ILRepack.dll&quot;"
           WorkingDirectory="$(OutDir)"
           ConsoleToMSBuild="True"/>
+    <Copy SourceFiles="$(_RepackedILRepackMSBuild)"
+          DestinationFiles="$(TargetPath)"
+          SkipUnchangedFiles="true"
+          OverwriteReadOnlyFiles="true"/>
     <!-- Copy to the solution-level dist/ directory -->
-    <Copy SourceFiles="$(OutDir)\ILRepack.MSBuild.dll"
+    <Copy SourceFiles="$(_RepackedILRepackMSBuild)"
           DestinationFolder="$(SolutionDir)dist\tools\ILRepack"
           SkipUnchangedFiles="true"
           OverwriteReadOnlyFiles="true"/>

@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ILRepack.MSBuild", "tools\I
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MTGOSDK.SourceGenerators", "MTGOSDK\lib\MTGOSDK.SourceGenerators\MTGOSDK.SourceGenerators.csproj", "{95DEF7E2-ED1A-49F6-85EF-09584249BCD2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MTGOSDK.Core", "MTGOSDK\lib\MTGOSDK.Core\MTGOSDK.Core.csproj", "{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -219,6 +221,22 @@ Global
 		{95DEF7E2-ED1A-49F6-85EF-09584249BCD2}.Release|x64.Build.0 = Release|Any CPU
 		{95DEF7E2-ED1A-49F6-85EF-09584249BCD2}.Release|x86.ActiveCfg = Release|Any CPU
 		{95DEF7E2-ED1A-49F6-85EF-09584249BCD2}.Release|x86.Build.0 = Release|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Debug|Mixed.ActiveCfg = Debug|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Debug|Mixed.Build.0 = Debug|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Debug|x64.Build.0 = Debug|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Debug|x86.Build.0 = Debug|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Release|Mixed.ActiveCfg = Release|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Release|Mixed.Build.0 = Release|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Release|x64.ActiveCfg = Release|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Release|x64.Build.0 = Release|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Release|x86.ActiveCfg = Release|Any CPU
+		{4074FF7D-C907-43FB-A0D5-B68270DFB7AA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

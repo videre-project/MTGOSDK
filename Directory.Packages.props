@@ -42,9 +42,9 @@
     <PackageVersion Include="ImpromptuInterface"
                     Version="8.0.6" />
     <PackageVersion Include="MessagePack"
-                    Version="3.1.4" />
+                    Version="3.1.7" />
     <PackageVersion Include="MessagePack.Annotations"
-                    Version="3.1.4" />
+                    Version="3.1.7" />
     <!-- MTGOSDK.Core -->
     <PackageVersion Include="System.Reflection.Emit.ILGeneration"
                     Version="4.7.0" />
@@ -92,8 +92,7 @@
                     Version="5.4.16" />
     <!-- tools/ILLink -->
     <PackageVersion Include="Microsoft.NET.ILLink.Tasks"
-                    Version="8.0.15"
-                    Condition="'$(UseILLinkTrim)' == 'true'" />
+                    Version="8.0.15" />
     <!-- tools/ILRepack -->
     <PackageVersion Include="ILRepack"
                     Version="2.0.44" />
@@ -120,7 +119,8 @@
   </ItemGroup>
 
   <!-- For the .NET SDK and Standard TFM, provide the ILLink.Tasks package -->
-  <ItemGroup Condition="'$(UseILLinkTrim)' == 'true'">
+  <ItemGroup Condition="'$(UseILLinkTrim)' == 'true' Or
+                        '$(MSBuildProjectName)' == 'MTGOSDK'">
     <PackageReference Include="Microsoft.NET.ILLink.Tasks"
                       PrivateAssets="all" />
   </ItemGroup>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="ILRepack.MSBuild.props" />
 
@@ -14,8 +14,7 @@
   <!-- Merge the main assembly with any copied reference assemblies -->
   <Target Name="ComputeInputAssemblies"
           AfterTargets="AfterBuild"
-          Condition="'$(OutputFilesModified)' == 'true' And
-                     '$(UseILRepack)' == 'true'">
+          Condition="'$(UseILRepack)' == 'true'">
     <!-- Identify the main assembly and all referenced assemblies -->
     <ItemGroup>
       <InputAssemblies Remove="@(InputAssemblies)" />
@@ -23,12 +22,17 @@
                        Condition="'$(MergeNugetDependencies)' == 'false'" />
       <InputAssemblies Include="$(OutputPath)*.dll"
                        Condition="'$(MergeNugetDependencies)' != 'false'" />
+      <InputAssemblies Include="$(OutputPath)MTGOSDK.Core.dll"
+                       Condition="'$(MergeNugetDependencies)' == 'false' And Exists('$(OutputPath)MTGOSDK.Core.dll')" />
       <InputAssemblies Include="@(ReferenceAssemblies->'$(OutputPath)%(Filename).dll')"
                        Condition="Exists('$(OutputPath)%(Filename).dll') And
                                   '$(UseReferenceAssemblies)' == 'true'" />
     </ItemGroup>
-    <PropertyGroup Condition="'$(ILRepackOutput)' == ''">
-      <ILRepackOutput>$(OutputPath)$(ILRepackTarget).dll</ILRepackOutput>
+    <PropertyGroup>
+      <ILRepackFinalOutput Condition="'$(ILRepackFinalOutput)' == '' And '$(ILRepackOutput)' == ''">$(OutputPath)$(ILRepackTarget).dll</ILRepackFinalOutput>
+      <ILRepackOutput Condition="'$(ILRepackOutput)' == ''">$(IntermediateOutputPath)ilrepack\$(ILRepackTarget).dll</ILRepackOutput>
+      <ILRepackFinalOutput Condition="'$(ILRepackFinalOutput)' == ''">$(ILRepackOutput)</ILRepackFinalOutput>
+      <_ILRepackOutputDir>$([System.IO.Path]::GetDirectoryName('$(ILRepackOutput)'))</_ILRepackOutputDir>
     </PropertyGroup>
   </Target>
 
@@ -36,6 +40,8 @@
   <UsingTask TaskName="ILRepack" AssemblyFile="$(_ILRepackTaskPath)" />
   <Target Name="MergeReferenceAssemblies"
           AfterTargets="ComputeInputAssemblies"
+          Inputs="@(InputAssemblies)"
+          Outputs="$(ILRepackOutput)"
           Condition="@(InputAssemblies) != '' And
                      '$(UseILRepack)' == 'true'">
     <!-- Build library paths including NuGet package locations -->
@@ -50,9 +56,11 @@
       <_WpfRefTfm Condition="$(TargetFramework.Contains('-'))">$([System.String]::Copy('$(TargetFramework)').Split('-')[0])</_WpfRefTfm>
       <_ILRepackLibPaths Condition="'$(PkgMicrosoft_WindowsDesktop_App_Ref)' != '' And !Exists('$(PkgMicrosoft_WindowsDesktop_App_Ref)/ref/$(TargetFramework)')">$(_ILRepackLibPaths);$(PkgMicrosoft_WindowsDesktop_App_Ref)/ref/$(_WpfRefTfm)</_ILRepackLibPaths>
     </PropertyGroup>
+    <MakeDir Directories="$(_ILRepackOutputDir)"
+             Condition="'$(_ILRepackOutputDir)' != ''" />
     <!-- Merge all reference assemblies into the main assembly -->
     <ILRepack
-      Union="true"
+      Union="$(ILRepackUnion)"
       LibraryPath="$(_ILRepackLibPaths)"
       OutputFile="$(ILRepackOutput)"
       InputAssemblies="@(InputAssemblies)"
@@ -62,6 +70,11 @@
       Parallel="true"
       LogFile="$(LogDir)\ILRepack-$(AssemblyName).log"
     />
+
+    <Copy SourceFiles="$(ILRepackOutput)"
+          DestinationFiles="$(ILRepackFinalOutput)"
+          SkipUnchangedFiles="true"
+          Condition="'$(ILRepackFinalOutput)' != '$(ILRepackOutput)'" />
 
     <!-- Delete all copied reference assemblies in the output directory -->
     <Delete Files="@(InputAssemblies)"
@@ -86,7 +99,7 @@
                        Condition="Exists('$(OutputPath)%(Filename).dll')" />
     </ItemGroup>
     <Delete Files="@(InputAssemblies)"
-            Condition="'%(Filename)' != '$(AssemblyName)' Or
+            Condition="'%(Filename)' != '$(AssemblyName)' And
                        '%(Filename)' != '$(ILRepackTarget)'" />
   </Target>
 

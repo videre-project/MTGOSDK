@@ -5,6 +5,7 @@
 **/
 
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Reflection;
 
 using MTGOSDK.Core.Remoting.Hooking;
@@ -18,6 +19,13 @@ public delegate void HookAction(HookContext context, dynamic instance, dynamic[]
 
 public class RemoteHarmony
 {
+  public sealed class HarmonyDiagnostics
+  {
+    public int MethodEntries { get; set; }
+    public int CallbackEntries { get; set; }
+    public int WrappedHookEntries { get; set; }
+  }
+
   private readonly RemoteHandle _app;
 
   private readonly ConcurrentDictionary<MethodBase, MethodHooks> _callbacksToProxies;
@@ -238,5 +246,24 @@ public class RemoteHarmony
 
     return hooks.TryGetValue(callback, out PositionedLocalHook hook) &&
       hook.Position == position;
+  }
+
+  internal HarmonyDiagnostics GetDiagnostics()
+  {
+    var diagnostics = new HarmonyDiagnostics
+    {
+      MethodEntries = _callbacksToProxies.Count,
+    };
+
+    foreach (var hooks in _callbacksToProxies.Values)
+    {
+      diagnostics.CallbackEntries += hooks.Count;
+      diagnostics.WrappedHookEntries += hooks.Values
+        .Select(hook => hook.WrappedHookAction)
+        .Distinct()
+        .Count();
+    }
+
+    return diagnostics;
   }
 }

@@ -1,19 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
-  <PropertyGroup>
-    <DefineConstants>$(DefineConstants);MTGOSDKCORE</DefineConstants>
-    <DefaultItemExcludes>$(DefaultItemExcludes);src\API\**</DefaultItemExcludes>
-    <!-- Only use MTGOSDK.Core for local builds; exclude from publishing -->
+  <!-- MTGOSDK consumes Core as a separate private assembly in default Debug builds. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'MTGOSDK'">
+    <MTGOSDKCoreProject>$(MSBuildThisFileDirectory)MTGOSDK.Core\MTGOSDK.Core.csproj</MTGOSDKCoreProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'MTGOSDK'">
+    <Compile Remove="src\Core\**\*.cs" />
+    <Compile Remove="src\GlobalEvents.cs" />
+    <Compile Remove="src\Resources\Bootstrapper.cs" />
+    <ProjectReference Include="$(MTGOSDKCoreProject)"
+                      SetTargetFramework="TargetFramework=net10.0-windows" />
+  </ItemGroup>
+  <UsingTask TaskName="RemoveNuspecDependency"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll"
+             Condition="'$(MSBuildProjectName)' == 'MTGOSDK'">
+    <ParameterGroup>
+      <PackageFile ParameterType="System.String" Required="true" />
+      <DependencyId ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.Text" />
+      <Using Namespace="System.Xml.Linq" />
+      <Code Type="Fragment" Language="cs">
+<![CDATA[
+        if (!File.Exists(PackageFile)) {
+          return true;
+        }
+
+        using (ZipArchive archive = ZipFile.Open(PackageFile, ZipArchiveMode.Update)) {
+          ZipArchiveEntry entry = archive.Entries
+            .FirstOrDefault(e => e.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+          if (entry == null) {
+            return true;
+          }
+
+          XDocument document;
+          using (Stream stream = entry.Open()) {
+            document = XDocument.Load(stream);
+          }
+
+          XNamespace ns = document.Root != null ? document.Root.Name.Namespace : XNamespace.None;
+          var dependencies = document
+            .Descendants(ns + "dependency")
+            .Where(e => string.Equals((string)e.Attribute("id"), DependencyId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+          if (dependencies.Count == 0) {
+            return true;
+          }
+
+          foreach (var dependency in dependencies) {
+            dependency.Remove();
+          }
+
+          string entryName = entry.FullName;
+          entry.Delete();
+
+          ZipArchiveEntry updatedEntry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+          using (Stream stream = updatedEntry.Open())
+          using (var writer = new StreamWriter(stream, new UTF8Encoding(false))) {
+            document.Save(writer);
+          }
+
+          Log.LogMessage(
+            Microsoft.Build.Framework.MessageImportance.High,
+            "Removed {0} internal dependency '{1}' from {2}.",
+            dependencies.Count,
+            DependencyId,
+            PackageFile);
+        }
+]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="RemoveInternalCorePackageDependency"
+          AfterTargets="GenerateNuspec"
+          Condition="'$(MSBuildProjectName)' == 'MTGOSDK' And
+                     '$(UseILRepack)' == 'true' And
+                     Exists('$(PackageOutputPath)\$(PackageId).$(PackageVersion).nupkg')">
+    <RemoveNuspecDependency PackageFile="$(PackageOutputPath)\$(PackageId).$(PackageVersion).nupkg"
+                            DependencyId="MTGOSDK.Core" />
+  </Target>
+
+  <!-- The net48 Core build is the payload used by ScubaDiver injection. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'MTGOSDK.Core'">
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IncludeContentInPack>false</IncludeContentInPack>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <None Include="$(MSBuildProjectDirectory\app.config" />
-  </ItemGroup>
-  <ItemGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'MTGOSDK.Core' And '$(TargetFramework)' == '$(_MTGOSDKCoreTFM)'">
+    <DefineConstants>$(DefineConstants);MTGOSDKCORE</DefineConstants>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'MTGOSDK.Core' And '$(TargetFramework)' == '$(_MTGOSDKCoreTFM)'">
+    <Reference Include="PresentationCore"      Private="false" />
+    <Reference Include="PresentationFramework" Private="false" />
+    <Reference Include="WindowsBase"           Private="false" />
     <Reference Include="System" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Numerics" />
@@ -21,7 +112,7 @@
   </ItemGroup>
 
   <!-- Compatibility layers for MTGOSDK.Core on non-netstandard platforms -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'MTGOSDK.Core'">
     <PackageReference Include="System.Reflection.Emit.ILGeneration"
                       PrivateAssets="All" />
     <PackageReference Include="System.Reflection.Emit.Lightweight"

@@ -13,13 +13,16 @@
   </PropertyGroup>
 
   <!-- Publishing Configuration -->
-  <PropertyGroup Condition="'$(TargetFramework)' != '$(_MTGOSDKCoreTFM)'">
-    <PublishSingleFile>true</PublishSingleFile>
-    <PublishTrimmed>true</PublishTrimmed>
-    <UseILLinkTrim>true</UseILLinkTrim>
-    <UseILRepack>true</UseILRepack>
+  <PropertyGroup>
+    <UsePackagePipeline Condition="'$(UsePackagePipeline)' == '' And '$(Configuration)' != 'Debug'">true</UsePackagePipeline>
+    <UsePackagePipeline Condition="'$(UsePackagePipeline)' == ''">false</UsePackagePipeline>
+
+    <PublishSingleFile Condition="'$(PublishSingleFile)' == ''">$(UsePackagePipeline)</PublishSingleFile>
+    <PublishTrimmed Condition="'$(PublishTrimmed)' == ''">$(UsePackagePipeline)</PublishTrimmed>
+    <UseILLinkTrim Condition="'$(UseILLinkTrim)' == ''">$(UsePackagePipeline)</UseILLinkTrim>
+    <UseILRepack Condition="'$(UseILRepack)' == ''">$(UsePackagePipeline)</UseILRepack>
     <SelfContained>false</SelfContained>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>$(UsePackagePipeline)</GeneratePackageOnBuild>
     <MergeNugetDependencies>false</MergeNugetDependencies>
   </PropertyGroup>
   <ItemGroup>
@@ -34,10 +37,5 @@
   <PropertyGroup>
     <DefaultItemExcludes>$(DefaultItemExcludes);lib\**</DefaultItemExcludes>
   </PropertyGroup>
-
-  <!-- Internal: MTGOSDK.Core Project Properties -->
-  <Import Project="lib\MTGOSDK.Core.props"
-          Condition="'$(TargetFramework)' == '$(_MTGOSDKCoreTFM)'" />
-  <Import Project="lib\MTGOSDK.Core.targets" />
 
 </Project>

@@ -1,4 +1,4 @@
-/** @file
+﻿/** @file
   Copyright (c) 2021, Xappy.
   Copyright (c) 2024, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
@@ -11,11 +11,9 @@ using System.Net.Sockets;
 
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Win32.Extensions;
-using MTGOSDK.Win32.Injection;
 
 
 namespace MTGOSDK.Resources;
-using static MTGOSDK.Resources.EmbeddedResources;
 
 public enum DiverState
 {
@@ -24,16 +22,29 @@ public enum DiverState
   Corpse,
   HollowSnapshot
 }
+public interface IBootstrapperRuntime
+{
+  byte[] GetBinaryResource(string name);
+
+  void OverrideFileIfChanged(string filePath, byte[] data);
+
+  void Inject(Process target, ushort diverPort);
+}
 
 public static class Bootstrapper
 {
+  private static IBootstrapperRuntime? s_runtime;
+
   public static string AppDataDir =>
     Path.Combine(
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
       ExtractDir
     );
 
-  public static string ExtractDir = typeof(Bootstrapper).Assembly.GetName().Name;
+  public static string ExtractDir = "MTGOSDK";
+
+  public static void Configure(IBootstrapperRuntime runtime) =>
+    s_runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
   public static DiverState QueryStatus(
     Process target,
@@ -91,81 +102,17 @@ public static class Bootstrapper
     return DiverState.NoDiver;
   }
 
-  /// <summary>
-  /// Verifies that a file exists on disk, with retry logic for non-deterministic
-  /// file availability issues that can occur after extraction.
-  /// </summary>
-  private static void VerifyFileExists(string filePath, string fileName)
-  {
-    const int maxRetries = 10;
-    const int delayMs = 50;
+  public static byte[] GetBinaryResource(string name) =>
+    GetRuntime().GetBinaryResource(name);
 
-    for (int i = 0; i < maxRetries; i++)
-    {
-      if (File.Exists(filePath))
-      {
-        // Verify file is not empty (indicates incomplete write)
-        var fileInfo = new FileInfo(filePath);
-        if (fileInfo.Length > 0)
-          return;
-      }
-      Thread.Sleep(delayMs);
-    }
+  public static void OverrideFileIfChanged(string filePath, byte[] data) =>
+    GetRuntime().OverrideFileIfChanged(filePath, data);
 
-    throw new FileNotFoundException(
-      $"Failed to verify {fileName} exists after extraction. " +
-      $"Path: {filePath}");
-  }
+  public static void Inject(Process target, ushort diverPort) =>
+    GetRuntime().Inject(target, diverPort);
 
-  public static void Inject(Process target, ushort diverPort)
-  {
-#if !MTGOSDKCORE
-    // Create the extraction directory if it doesn't exist
-    DirectoryInfo AppDataDirInfo = new DirectoryInfo(AppDataDir);
-    if (!AppDataDirInfo.Exists) AppDataDirInfo.Create();
-
-    // Create a random temporary directory to be deleted when the process exits
-    string tempDir = Path.Combine(AppDataDir, Path.GetRandomFileName());
-    Directory.CreateDirectory(tempDir);
-    AppDomain.CurrentDomain.ProcessExit += delegate
-    {
-      try
-      {
-        Directory.Delete(tempDir, true);
-      }
-      catch (UnauthorizedAccessException)
-      {
-        // Given we had permissions to write this directory, we assume this
-        // is caused by a file lock from the MTGO process (if it's still running).
-      }
-    };
-
-    // Get the .NET diver assembly to inject into the target process
-    byte[] diverResource = GetBinaryResource(@"Resources/Microsoft.Diagnostics.Runtime.dll");
-    string diverPath = Path.Combine(tempDir, "Microsoft.Diagnostics.Runtime.dll");
-
-    // Check if injector or bootstrap resources differ from copies on disk
-    OverrideFileIfChanged(diverPath, diverResource);
-
-    // Update all diver dependencies
-    byte[] harmonyResource = GetBinaryResource(@"Resources/0Harmony.dll");
-    string harmonyPath = Path.Combine(tempDir, "0Harmony.dll");
-    OverrideFileIfChanged(harmonyPath, harmonyResource);
-
-    // System.ValueTuple is not available in the MTGO process's GAC/probing paths.
-    // Extract it alongside the Diver so the AssemblyResolve handler in DllEntry
-    // can supply it when the CLR requests it after injection.
-    byte[] valueTupleResource = GetBinaryResource(@"Resources/System.ValueTuple.dll");
-    string valueTuplePath = Path.Combine(tempDir, "System.ValueTuple.dll");
-    OverrideFileIfChanged(valueTuplePath, valueTupleResource);
-
-    // Verify all files are fully written before injection
-    VerifyFileExists(diverPath, "Microsoft.Diagnostics.Runtime.dll");
-    VerifyFileExists(harmonyPath, "0Harmony.dll");
-    VerifyFileExists(valueTuplePath, "System.ValueTuple.dll");
-
-    var injector = new InjectorBase();
-    injector.Inject(target, diverPath, "ScubaDiver.DllEntry", "EntryPoint", diverPort.ToString());
-#endif
-  }
+  private static IBootstrapperRuntime GetRuntime() =>
+    s_runtime ?? throw new InvalidOperationException(
+      "MTGOSDK bootstrapper runtime has not been configured. " +
+      "Reference the MTGOSDK assembly before using resource extraction or injection APIs.");
 }
