@@ -636,9 +636,14 @@ public abstract class DLRWrapper : SerializableBase
 
         // Populate the wrapper's interface proxy cache with batch data
         // This makes @base return the CachingRemoteProxy for property access
-        // Pass pathPrefix for fallback access and inverted path map for interface->remote lookup
-        // The path map goes interface name -> remote path (opposite of reversePathMap)
+        // Pass pathPrefix for fallback access and inverted path map for interface->remote lookup.
+        // Only include paths that were actually batch fetched. Complex wrapper
+        // properties such as TradePost.Poster may have dotted remote paths like
+        // Poster.Name in the registry, but those are not valid member names for
+        // dynamic fallback access to the underlying DRO.
+        var batchFetchedPaths = sourcePaths.ToHashSet();
         var interfaceToRemotePath = reversePathMap
+          .Where(kvp => batchFetchedPaths.Contains(kvp.Key))
           .ToDictionary(kvp => kvp.Value, kvp => kvp.Key);
         var cachingProxy = new Proxy.CachingRemoteProxy(
           itemDro, propertyValues, pathPrefix, interfaceToRemotePath);

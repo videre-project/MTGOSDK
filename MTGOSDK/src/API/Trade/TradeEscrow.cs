@@ -56,11 +56,18 @@ public class TradeEscrow(dynamic tradeEscow) : DLRWrapper<ITradeEscrow>
   /// <summary>
   /// The other user being traded with.
   /// </summary>
-  public User TradePartner => new(@base.RemoteParticipant.Name);
+  [NonSerializable]
+  public User TradePartner => new(this.TradePartnerName);
+
+  /// <summary>
+  /// The display name of the other user being traded with.
+  /// </summary>
+  public string TradePartnerName => @base.RemoteParticipant.Name;
 
   /// <summary>
   /// The other user's collection.
   /// </summary>
+  [NonSerializable]
   public ItemCollection PartnerCollection => new(@base.RemoteParticipantCollection);
 
   /// <summary>
@@ -71,6 +78,7 @@ public class TradeEscrow(dynamic tradeEscow) : DLRWrapper<ITradeEscrow>
   /// <summary>
   /// The current user's collection.
   /// </summary>
+  [NonSerializable]
   public ItemCollection Collection => new(@base.LocalUserCollection);
 
   /// <summary>
@@ -81,11 +89,13 @@ public class TradeEscrow(dynamic tradeEscow) : DLRWrapper<ITradeEscrow>
   /// <summary>
   /// The current binder used for the trade.
   /// </summary>
+  [NonSerializable]
   public Binder ActiveBinder => new(@base.ActiveBinder);
 
   /// <summary>
   /// A collection of all tradeable items in the active binder.
   /// </summary>
+  [NonSerializable]
   public IEnumerable<CollectionItem> TradeableItems =>
     Map<CollectionItem>(
       Filter(ActiveBinder.Items,

@@ -33,8 +33,14 @@ public class TradePost(dynamic tradePost) : DLRWrapper<ITradePost>
   /// <summary>
   /// The poster of the trade post.
   /// </summary>
+  [NonSerializable]
   public User Poster => new(@base.Poster.Name);
   // public User? Poster => Optional<User>(@base.Poster?.Name);
+
+  /// <summary>
+  /// The display name of the poster of the trade post.
+  /// </summary>
+  public string PosterName => @base.Poster.Name;
 
   /// <summary>
   /// The format or type of the trade post.

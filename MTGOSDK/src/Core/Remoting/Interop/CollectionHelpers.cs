@@ -35,6 +35,16 @@ public enum ComparisonOperator
 public static class CollectionHelpers
 {
   /// <summary>
+  /// Counts items in a collection in the remote process.
+  /// </summary>
+  public static int Count(object collection)
+  {
+    return collection is ICollection items
+      ? items.Count
+      : ((IEnumerable)collection).Cast<object>().Count();
+  }
+
+  /// <summary>
   /// Filters a collection by comparing a property value against a given value.
   /// </summary>
   /// <param name="collection">The collection to filter.</param>
@@ -85,10 +95,87 @@ public static class CollectionHelpers
   }
 
   /// <summary>
+  /// Filters a collection by comparing an enum-like property by name.
+  /// </summary>
+  public static List<object> WherePropertyEnumName(
+    object collection,
+    string propertyName,
+    string enumName)
+  {
+    var result = new List<object>();
+    var propertyCache = new Dictionary<Type, PropertyInfo>();
+
+    foreach (var item in (IEnumerable)collection)
+    {
+      if (item is null) continue;
+
+      var type = item.GetType();
+      if (!propertyCache.TryGetValue(type, out var property))
+      {
+         property = type.GetProperty(propertyName)
+          ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
+         propertyCache[type] = property;
+      }
+
+      var propValue = property.GetValue(item);
+      if (string.Equals(propValue?.ToString(), enumName, StringComparison.OrdinalIgnoreCase))
+        result.Add(item);
+    }
+
+    return result;
+  }
+
+  /// <summary>
+  /// Filters a collection by testing whether a string property contains a value.
+  /// Supports dotted property paths such as <c>Poster.Name</c>.
+  /// </summary>
+  public static List<object> WherePropertyStringContains(
+    object collection,
+    string propertyPath,
+    string value,
+    bool ignoreCase = true)
+  {
+    var result = new List<object>();
+    var comparison = ignoreCase
+      ? StringComparison.OrdinalIgnoreCase
+      : StringComparison.Ordinal;
+
+    foreach (var item in (IEnumerable)collection)
+    {
+      if (item is null) continue;
+
+      var propValue = GetPropertyPathValue(item, propertyPath)?.ToString();
+      if (propValue?.IndexOf(value, comparison) >= 0)
+        result.Add(item);
+    }
+
+    return result;
+  }
+
+  private static object? GetPropertyPathValue(
+    object item,
+    string propertyPath)
+  {
+    object? current = item;
+    foreach (var segment in propertyPath.Split('.'))
+    {
+      if (current is null) return null;
+
+      var property = current.GetType().GetProperty(segment)
+        ?? throw new ArgumentException(
+          $"Property '{segment}' not found on type '{current.GetType().Name}'");
+
+      current = property.GetValue(current);
+    }
+
+    return current;
+  }
+
+  /// <summary>
   /// Orders a collection by a property value.
   /// </summary>
   /// <param name="collection">The collection to sort.</param>
-  /// <param name="propertyName">The name of the property to sort by.</param>
+  /// <param name="propertyName">The name or dotted path of the property to sort by.</param>
   /// <param name="descending">Whether to sort in descending order.</param>
   /// <returns>A sorted list.</returns>
   public static List<object> OrderByProperty(
@@ -102,21 +189,10 @@ public static class CollectionHelpers
       return items;
     
     var comparer = Comparer<object>.Default;
-    var propertyCache = new Dictionary<Type, PropertyInfo>();
-    
-    // Helper to get property value from an item's actual runtime type
     object GetPropertyValue(object item)
     {
       if (item is null) return 0; // Treat nulls as default/min value? Or handle gracefully.
-      
-      var type = item.GetType();
-      if (!propertyCache.TryGetValue(type, out var prop))
-      {
-        prop = type.GetProperty(propertyName)
-          ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
-        propertyCache[type] = prop;
-      }
-      return prop.GetValue(item);
+      return GetPropertyPathValue(item, propertyName);
     }
     
     items.Sort((a, b) =>

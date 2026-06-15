@@ -23,7 +23,10 @@ public class TradePartner(dynamic tradePartner)
   // IPreviousTradePartner wrapper properties
   //
 
-  public User Poster => new(@base.User.Name);
+  [NonSerializable]
+  public User Poster => new(this.PosterName);
 
-	public DateTime LastTradeTime => @base.LastTradeTime;
+  public string PosterName => @base.User.Name;
+
+  public DateTime LastTradeTime => @base.LastTradeTime;
 }

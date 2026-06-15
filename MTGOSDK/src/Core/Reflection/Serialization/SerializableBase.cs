@@ -139,10 +139,6 @@ public abstract class SerializableBase : IJsonSerializable
       {
         if (sourceProps.TryGetValue(ifaceProp.Name, out var sourceProp))
         {
-          // Skip properties marked with [NonSerializable]
-          if (sourceProp.GetCustomAttribute<NonSerializableAttribute>() != null)
-            continue;
-            
           // Pre-compile the getter for this property
           GetOrCompileGetter(sourceProp);
           // Determine if type conversion is needed (optimization: skip conversion call when types match)

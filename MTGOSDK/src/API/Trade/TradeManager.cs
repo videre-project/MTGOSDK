@@ -5,8 +5,15 @@
 
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
+using MTGOSDK.API.Trade.Enums;
+using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Types;
+
 using WotC.MtGO.Client.Model.Trade;
 using WotC.MtGO.Client.Model.Trade.Interfaces;
+
+using ApiTradePostFormat = MTGOSDK.API.Trade.Enums.TradePostFormat;
 
 
 namespace MTGOSDK.API.Trade;
@@ -66,6 +73,142 @@ public static class TradeManager
                         post => Try<bool>(() => post.Poster != null));
 
   //
+  // Batch serialization methods
+  //
+
+  /// <summary>
+  /// Serializes marketplace trade posts using cross-post batch fetching.
+  /// </summary>
+  /// <typeparam name="TInterface">The interface type to serialize trade posts as.</typeparam>
+  /// <param name="maxItems">Maximum number of items to serialize (0 = no limit).</param>
+  /// <param name="format">Optional trade post format to filter on before serialization.</param>
+  /// <param name="posterNameSearch">Optional poster name substring to filter on before serialization.</param>
+  /// <param name="messageSearch">Optional message substring to filter on before serialization.</param>
+  /// <returns>Enumerable of serialized posts implementing TInterface.</returns>
+  /// <remarks>
+  /// This method uses a single IPC call to fetch all posts' primitive
+  /// properties, avoiding live per-item enumeration of the marketplace
+  /// collection.
+  /// </remarks>
+  public static IEnumerable<TInterface> SerializePostsAs<TInterface>(
+    int maxItems = 0,
+    ApiTradePostFormat? format = null,
+    string? posterNameSearch = null,
+    string? messageSearch = null)
+    where TInterface : class
+  {
+    DynamicRemoteObject posts = SortPostsByPosterName(
+      GetFilteredPosts(
+        format,
+        posterNameSearch,
+        messageSearch));
+
+    return SerializeDroAs<TInterface, TradePost>(
+      posts,
+      "",
+      maxItems);
+  }
+
+  public static int CountPosts(
+    ApiTradePostFormat? format = null,
+    string? posterNameSearch = null,
+    string? messageSearch = null)
+  {
+    DynamicRemoteObject posts = GetFilteredPosts(
+      format,
+      posterNameSearch,
+      messageSearch);
+
+    return RemoteClient.InvokeMethod(
+      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
+      "Count",
+      args: new object[] { posts }
+    );
+  }
+
+  private static DynamicRemoteObject GetFilteredPosts(
+    ApiTradePostFormat? format,
+    string? posterNameSearch,
+    string? messageSearch)
+  {
+    DynamicRemoteObject allPosts = (DynamicRemoteObject)Unbind(s_marketplace).AllPosts;
+    DynamicRemoteObject posts = format switch
+    {
+      ApiTradePostFormat.Message =>
+        FilterPostsByFormat(allPosts, ApiTradePostFormat.Message),
+      ApiTradePostFormat.OfferedWantedList =>
+        FilterPostsByFormat(allPosts, ApiTradePostFormat.OfferedWantedList),
+      _ => allPosts
+    };
+    if (!string.IsNullOrWhiteSpace(posterNameSearch))
+      posts = FilterPostsByPosterName(posts, posterNameSearch.Trim());
+    if (!string.IsNullOrWhiteSpace(messageSearch))
+      posts = FilterPostsByMessage(posts, messageSearch.Trim());
+
+    return posts;
+  }
+
+  private static DynamicRemoteObject FilterPostsByFormat(
+    DynamicRemoteObject posts,
+    ApiTradePostFormat format)
+  {
+    return RemoteClient.InvokeMethod(
+      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
+      "WherePropertyEnumName",
+      args: new object[] { posts, "Format", format.ToString() }
+    );
+  }
+
+  private static DynamicRemoteObject FilterPostsByPosterName(
+    DynamicRemoteObject posts,
+    string posterNameSearch)
+  {
+    return RemoteClient.InvokeMethod(
+      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
+      "WherePropertyStringContains",
+      args: new object[] { posts, "Poster.Name", posterNameSearch, true }
+    );
+  }
+
+  private static DynamicRemoteObject FilterPostsByMessage(
+    DynamicRemoteObject posts,
+    string messageSearch)
+  {
+    return RemoteClient.InvokeMethod(
+      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
+      "WherePropertyStringContains",
+      args: new object[] { posts, "RawMessage", messageSearch, true }
+    );
+  }
+
+  private static DynamicRemoteObject SortPostsByPosterName(
+    DynamicRemoteObject posts)
+  {
+    return RemoteClient.InvokeMethod(
+      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
+      "OrderByProperty",
+      args: new object[] { posts, "Poster.Name", false }
+    );
+  }
+
+  /// <summary>
+  /// Async variant of <see cref="SerializePostsAs{TInterface}"/> that does not block
+  /// a thread pool thread while waiting for the batch IPC response.
+  /// </summary>
+  public static Task<IList<TInterface>> SerializePostsAsAsync<TInterface>(
+    int maxItems = 0,
+    ApiTradePostFormat? format = null,
+    string? posterNameSearch = null,
+    string? messageSearch = null)
+    where TInterface : class
+    => Task.FromResult<IList<TInterface>>(
+      SerializePostsAs<TInterface>(
+        maxItems,
+        format,
+        posterNameSearch,
+        messageSearch).ToList());
+
+  //
   // ITrade wrapper properties
   //
 
@@ -84,6 +227,20 @@ public static class TradeManager
   //
   // ITradeManager wrapper events
   //
+
+  public static EventHookProxy<DateTime> MarketplaceUpdated =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Trade.Marketplace>(),
+      "OnMiniUserMarketplaceList",
+      new((instance, args) =>
+      {
+        var msg = args[0];
+        if (Try<bool>(() => msg.MarketPlaceUsers == null)) return null;
+
+        return instance.__timestamp;
+      }),
+      HarmonyPatchPosition.Postfix
+    );
 
   /// <summary>
   /// An event that is raised when a trade is started.

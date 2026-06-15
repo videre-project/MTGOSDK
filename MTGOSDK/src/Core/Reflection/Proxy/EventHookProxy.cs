@@ -13,6 +13,7 @@ using MTGOSDK.Core.Remoting.Hooking;
 namespace MTGOSDK.Core.Reflection.Proxy;
 
 public delegate (dynamic, dynamic)? EventHook(dynamic instance, dynamic[] args);
+public delegate dynamic? EventValueHook(dynamic instance, dynamic[] args);
 
 /// <summary>
 /// A wrapper for hooking dynamic objects to create custom events at runtime.
@@ -129,6 +130,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     {
       _eventHook = null;
       _initializedGeneration = -1;
+      ResetInitialize();
       if (!RemoteClient.IsInitialized) return;
 
       RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);
@@ -167,6 +169,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
       {
         RemoteClient.UnhookMethod(e._typeName, e._methodName, e._hookAction);
         e._initializedGeneration = -1;
+        e.ResetInitialize();
       }
     }
 
@@ -183,4 +186,168 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
   public static implicit operator EventHookProxy<dynamic, T>(EventHookProxy<I, T> e) =>
     new EventHookProxy<dynamic, T>(e._typeName, e._methodName, e._hook, e._position);
+}
+
+/// <summary>
+/// A wrapper for hooking dynamic objects to create single-value custom events at runtime.
+/// </summary>
+/// <typeparam name="T">The type of the event value to wrap.</typeparam>
+/// <remarks>
+/// This class exposes a "+" and "-" operator overload for subscribing and
+/// unsubscribing to events. This allows for a natural syntax for event
+/// subscription and unsubscription.
+/// </remarks>
+public class EventHookProxy<T> : EventProxyBase<dynamic, T>
+{
+  private event Action<T> _eventHook;
+
+  private readonly string _typeName;
+  private readonly string _methodName;
+  private readonly EventValueHook _hook;
+  private readonly HarmonyPatchPosition _position;
+
+  private readonly HookAction _hookAction;
+  private int _initializedGeneration = -1;
+  private readonly object _gate = new();
+
+  public EventHookProxy(
+    string typeName,
+    string methodName,
+    EventValueHook hook,
+    HarmonyPatchPosition position = HarmonyPatchPosition.Prefix)
+  {
+    this._typeName = typeName;
+    this._methodName = methodName;
+    this._hook = hook;
+    this._position = position;
+
+    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
+    {
+      dynamic? res = hook(instance, args);
+      if (res == null) return; // Skip if the hook returns null.
+
+      try
+      {
+        _eventHook?.Invoke((T)res);
+      }
+      catch (Exception e)
+      {
+        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
+        Log.Debug(e.StackTrace);
+      }
+    });
+  }
+
+  /// <summary>
+  /// Creates a new instance of the <see cref="EventHookProxy{T}"/> class using a method group.
+  /// </summary>
+  /// <param name="typeName">The name of the type to hook.</param>
+  /// <param name="method">The method to hook (method group).</param>
+  /// <param name="hook">The hook function to call when the method is invoked.</param>
+  /// <param name="position">The Harmony patch position for the hook.</param>
+  public EventHookProxy(
+    string typeName,
+    MethodBase method,
+    EventValueHook hook,
+    HarmonyPatchPosition position = HarmonyPatchPosition.Prefix)
+  {
+    this._typeName = typeName;
+    this._methodName = method.Name;
+    this._hook = hook;
+    this._position = position;
+
+    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
+    {
+      dynamic? res = hook(instance, args);
+      if (res == null) return; // Skip if the hook returns null.
+
+      try
+      {
+        _eventHook?.Invoke((T)res);
+      }
+      catch (Exception e)
+      {
+        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
+        Log.Debug(e.StackTrace);
+      }
+    });
+  }
+
+  public void EnsureInitialize()
+  {
+    lock (_gate)
+    {
+      if (_initializedGeneration == -1)
+      {
+        DoInitialize();
+      }
+
+      // Verify the hook still exists even within the same remote connection.
+      // Long-running MTGO sessions can invalidate remote hook state without a
+      // full reconnect, while our managed subscribers remain attached.
+      if (!RemoteClient.MethodHasHook(_typeName, _methodName, _hookAction, _position))
+      {
+        RemoteClient.HookMethod(_typeName, _methodName, _hookAction, _position);
+      }
+      _initializedGeneration = RemoteClient.s_connectionGeneration;
+    }
+  }
+
+  public override void Clear()
+  {
+    lock (_gate)
+    {
+      _eventHook = null;
+      _initializedGeneration = -1;
+      ResetInitialize();
+      if (!RemoteClient.IsInitialized) return;
+
+      RemoteClient.UnhookMethod(_typeName, _methodName, _hookAction);
+    }
+  }
+
+  //
+  // EventHandler wrapper methods.
+  //
+
+  public override string Name => _methodName;
+
+  public static EventHookProxy<T> operator +(EventHookProxy<T> e, Delegate c)
+  {
+    lock (e._gate)
+    {
+      e._eventHook += (Action<T>)c;
+
+      // If the method is not already hooked, hook it.
+      e.EnsureInitialize();
+    }
+
+    return e;
+  }
+
+  public static EventHookProxy<T> operator -(EventHookProxy<T> e, Delegate c)
+  {
+    lock (e._gate)
+    {
+      e._eventHook -= (Action<T>)c;
+
+      // If there are no more subscribers, remove the hook.
+      if (e._eventHook == null && RemoteClient.IsInitialized)
+      {
+        RemoteClient.UnhookMethod(e._typeName, e._methodName, e._hookAction);
+        e._initializedGeneration = -1;
+        e.ResetInitialize();
+      }
+    }
+
+    return e;
+  }
+
+  ~EventHookProxy()
+  {
+    if (_eventHook != null)
+    {
+      this.Clear();
+    }
+  }
 }
