@@ -27,8 +27,7 @@ public static class GCTimer
       if (_disposed) return;
       _disposed = true;
 
-      // Stop the timer and cancel any GC notifications
-      Stop();
+      Start();
       GC.SuppressFinalize(this);
     }
   }
@@ -46,6 +45,8 @@ public static class GCTimer
   /// Starts the GC timer and enables GC notifications by default.
   static GCTimer()
   {
+    s_timer = new Timer(GCCallback, null, DefaultCleanupInterval, DefaultCleanupInterval);
+
     try
     {
       GC.RegisterForFullGCNotification(80, 80);
@@ -127,9 +128,6 @@ public static class GCTimer
     }
     finally { s_gcRegionLock.ExitUpgradeableReadLock(); }
 
-    // If GC notifications are available, the timer is already running
-    if (s_gcNotificationsAvailable) return;
-
     if (s_timer == null)
     {
       s_timer = new(GCCallback, null, TimeSpan.Zero, DefaultCleanupInterval);
@@ -165,10 +163,6 @@ public static class GCTimer
     }
     finally { s_gcRegionLock.ExitUpgradeableReadLock(); }
 
-    if (s_gcNotificationsAvailable)
-    {
-      s_gcListenerCts.Cancel();
-    }
     s_timer?.Change(Timeout.Infinite, Timeout.Infinite);
   }
 
@@ -200,7 +194,11 @@ public static class GCTimer
       GC.CancelFullGCNotification();
       s_gcNotificationsAvailable = false;
       s_gcListenerCts.Cancel();
-      s_timer = new Timer(GCCallback, null, Timeout.Infinite, Timeout.Infinite);
     }
+
+    if (s_timer == null)
+      s_timer = new Timer(GCCallback, null, DefaultCleanupInterval, DefaultCleanupInterval);
+    else
+      s_timer.Change(DefaultCleanupInterval, DefaultCleanupInterval);
   }
 }

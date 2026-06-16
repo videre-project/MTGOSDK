@@ -327,7 +327,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   /// Holds strong references to child DROs returned from property/method access.
   /// This prevents children from being GC'd (and unpinned) while the parent is alive.
   /// </summary>
-  private List<DynamicRemoteObject>? __childRefs;
+  private Dictionary<ulong, DynamicRemoteObject>? __childRefs;
 
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
@@ -393,11 +393,15 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     var dro = ro.Dynamify() as DynamicRemoteObject;
     dro.__timestamp = oora.Timestamp;
 
-    // Track child DRO to prevent premature GC while parent is alive
-    __childRefs ??= new List<DynamicRemoteObject>();
-    __childRefs.Add(dro);
+    TrackChildReference(oora.RemoteAddress, dro);
 
     return dro;
+  }
+
+  private void TrackChildReference(ulong remoteAddress, DynamicRemoteObject dro)
+  {
+    __childRefs ??= new Dictionary<ulong, DynamicRemoteObject>();
+    __childRefs[remoteAddress] = dro;
   }
 
   /// <summary>
@@ -1050,9 +1054,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         var dro = remoteObject.Dynamify() as DynamicRemoteObject;
         dro.__timestamp = item.Timestamp;
 
-        // Track child DRO to prevent premature GC while parent is alive
-        __childRefs ??= new List<DynamicRemoteObject>();
-        __childRefs.Add(dro);
+        TrackChildReference(item.RemoteAddress, dro);
 
         return dro;
       }

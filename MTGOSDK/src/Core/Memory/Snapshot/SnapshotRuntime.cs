@@ -56,7 +56,8 @@ public class SnapshotRuntime : IDisposable
   /// <summary>
   /// Maps tokens to pinned objects (logical pinning - strong references keep objects alive).
   /// </summary>
-  private readonly ConcurrentDictionary<ulong, object> _pinnedObjects = new();
+  private readonly ConcurrentDictionary<ulong, PinnedObjectEntry> _pinnedObjects = new();
+  private readonly object _pinnedObjectsLock = new();
 
   /// <summary>
   /// Reverse lookup from object to its token.
@@ -64,6 +65,15 @@ public class SnapshotRuntime : IDisposable
   private readonly ConditionalWeakTable<object, BoxedToken> _objectToToken = new();
 
   private record BoxedToken(ulong Token);
+
+  private sealed class PinnedObjectEntry(object instance)
+  {
+    private int _refCount;
+
+    public object Instance { get; } = instance;
+    public int AddReference() => ++_refCount;
+    public int ReleaseReference() => --_refCount;
+  }
 
   /// <summary>
   /// The number of objects currently pinned (held by strong references).
@@ -147,38 +157,63 @@ public class SnapshotRuntime : IDisposable
 
   public bool TryGetPinnedObject(ulong token, out object instance)
   {
-    bool found = _pinnedObjects.TryGetValue(token, out instance);
+    bool found = _pinnedObjects.TryGetValue(token, out var entry);
+    instance = found ? entry.Instance : null;
     Log.Debug($"[SnapshotRuntime] TryGetPinnedObject(token={token}) => found={found}, poolSize={_pinnedObjects.Count}");
     return found;
   }
 
   public ulong PinObject(object instance)
   {
-    // ConditionalWeakTable.GetValue is thread-safe and guarantees the factory
-    // is called exactly once per key, making this lock-free and correct.
-    var boxedToken = _objectToToken.GetValue(instance, obj =>
+    lock (_pinnedObjectsLock)
     {
-      var token = (ulong) Interlocked.Increment(ref _nextToken);
-      _pinnedObjects[token] = obj;
-      Log.Debug($"[SnapshotRuntime] PinObject: NEW token={token} for type={obj?.GetType().Name}, poolSize={_pinnedObjects.Count}");
-      return new BoxedToken(token);
-    });
-    Log.Debug($"[SnapshotRuntime] PinObject: returning token={boxedToken.Token}");
-    return boxedToken.Token;
+      var boxedToken = _objectToToken.GetValue(instance, obj =>
+      {
+        var token = (ulong) Interlocked.Increment(ref _nextToken);
+        _pinnedObjects[token] = new PinnedObjectEntry(obj);
+        Log.Debug($"[SnapshotRuntime] PinObject: NEW token={token} for type={obj?.GetType().Name}, poolSize={_pinnedObjects.Count}");
+        return new BoxedToken(token);
+      });
+
+      if (!_pinnedObjects.TryGetValue(boxedToken.Token, out var entry))
+      {
+        entry = new PinnedObjectEntry(instance);
+        _pinnedObjects[boxedToken.Token] = entry;
+      }
+
+      int refCount = entry.AddReference();
+      Log.Debug($"[SnapshotRuntime] PinObject: returning token={boxedToken.Token}, refCount={refCount}");
+      return boxedToken.Token;
+    }
   }
 
   public bool UnpinObject(ulong token)
   {
-    Log.Debug($"[SnapshotRuntime] UnpinObject(token={token})");
-    if (!_pinnedObjects.TryRemove(token, out var obj))
+    lock (_pinnedObjectsLock)
     {
-      Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} NOT FOUND in pool");
-      return false;
-    }
+      Log.Debug($"[SnapshotRuntime] UnpinObject(token={token})");
+      if (!_pinnedObjects.TryGetValue(token, out var entry))
+      {
+        Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} NOT FOUND in pool");
+        return false;
+      }
 
-    _objectToToken.Remove(obj);
-    Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} REMOVED, poolSize={_pinnedObjects.Count}");
-    return true;
+      int refCount = entry.ReleaseReference();
+      if (refCount > 0)
+      {
+        Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} decremented, refCount={refCount}, poolSize={_pinnedObjects.Count}");
+        return true;
+      }
+
+      if (!_pinnedObjects.TryRemove(token, out _))
+      {
+        return false;
+      }
+
+      _objectToToken.Remove(entry.Instance);
+      Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} REMOVED, poolSize={_pinnedObjects.Count}");
+      return true;
+    }
   }
 
   /// <summary>
@@ -187,7 +222,13 @@ public class SnapshotRuntime : IDisposable
   /// </summary>
   public void QueueUnpinObject(ulong token) => UnpinObject(token);
 
-  public void UnpinAllObjects() => _pinnedObjects.Clear();
+  public void UnpinAllObjects()
+  {
+    lock (_pinnedObjectsLock)
+    {
+      _pinnedObjects.Clear();
+    }
+  }
 
   //
   // IL.Emit runtime converter methods

@@ -41,6 +41,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
     // Cache for RemoteObjectRef to ensure refs are shared across RemoteObject recreations
     // This prevents multiple refs to the same Diver token from unpinning prematurely
     private readonly ConcurrentDictionary<ulong, WeakReference<RemoteObjectRef>> _pinnedAddressesToRefs;
+    private const int RemoteObjectRefLockStripes = 64;
+    private readonly object[] _remoteObjectRefLocks = CreateRemoteObjectRefLockStripes();
 
     private const int CacheSweepInterval = 256;
     private int _cacheSweepCounter;
@@ -54,9 +56,10 @@ public class RemoteHandle : DLRWrapper, IDisposable
       _pinnedAddressesToRefs = new ConcurrentDictionary<ulong, WeakReference<RemoteObjectRef>>();
     }
 
-    private void SweepStaleCacheEntries()
+    private void SweepStaleCacheEntries(bool force = false)
     {
-      if (Interlocked.Increment(ref _cacheSweepCounter) % CacheSweepInterval != 0)
+      if (!force &&
+          Interlocked.Increment(ref _cacheSweepCounter) % CacheSweepInterval != 0)
         return;
 
       foreach (var entry in _pinnedAddressesToRemoteObjects)
@@ -80,6 +83,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
     public RemoteObjectCacheDiagnostics GetDiagnostics()
     {
+      SweepStaleCacheEntries(force: true);
+
       var diagnostics = new RemoteObjectCacheDiagnostics
       {
         RemoteObjectEntries = _pinnedAddressesToRemoteObjects.Count,
@@ -115,17 +120,67 @@ public class RemoteHandle : DLRWrapper, IDisposable
       return diagnostics;
     }
 
-     private RemoteObject GetRemoteObjectUncached(
+    public void Clear()
+    {
+      _pinnedAddressesToRemoteObjects.Clear();
+      _pinnedAddressesToRefs.Clear();
+    }
+
+    private static object[] CreateRemoteObjectRefLockStripes()
+    {
+      var locks = new object[RemoteObjectRefLockStripes];
+      for (int i = 0; i < locks.Length; i++)
+      {
+        locks[i] = new object();
+      }
+      return locks;
+    }
+
+    private object GetRemoteObjectRefLock(ulong pinnedAddress) =>
+      _remoteObjectRefLocks[(int) (pinnedAddress % (ulong) _remoteObjectRefLocks.Length)];
+
+    private bool TryGetLiveRemoteObjectRef(
+      ulong pinnedAddress,
+      out RemoteObjectRef remoteObjectRef)
+    {
+      remoteObjectRef = null!;
+      if (_pinnedAddressesToRefs.TryGetValue(pinnedAddress, out var weakRef) &&
+          weakRef.TryGetTarget(out var existingRef) &&
+          existingRef.IsValid)
+      {
+        remoteObjectRef = existingRef;
+        return true;
+      }
+
+      return false;
+    }
+
+    private RemoteObject PublishRemoteObjectRef(
+      ulong pinnedAddress,
+      Func<RemoteObjectRef> createRef)
+    {
+      lock (GetRemoteObjectRefLock(pinnedAddress))
+      {
+        if (TryGetLiveRemoteObjectRef(pinnedAddress, out var existingRef))
+        {
+          return new RemoteObject(existingRef, _app);
+        }
+
+        RemoteObjectRef objRef = createRef();
+        _pinnedAddressesToRefs[pinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
+        SweepStaleCacheEntries();
+
+        return new RemoteObject(objRef, _app);
+      }
+    }
+
+    private RemoteObject GetRemoteObjectUncached(
       ulong remoteAddress,
       string typeName,
       int? hashCode = null)
     {
-      // Check if we have a cached ref for this token
-      if (_pinnedAddressesToRefs.TryGetValue(remoteAddress, out var weakRef) &&
-          weakRef.TryGetTarget(out var existingRef) &&
-          existingRef.IsValid)
+      if (TryGetLiveRemoteObjectRef(remoteAddress, out var existingRef))
       {
-        // Reuse existing ref
         return new RemoteObject(existingRef, _app);
       }
 
@@ -157,15 +212,11 @@ public class RemoteHandle : DLRWrapper, IDisposable
         }
       }, delay: 10, raise: true);
 
-      var objRef = new RemoteObjectRef(od, td, _app.Communicator);
-
-      // Cache the ref for future reuse (use PinnedAddress from ObjectDump)
-      _pinnedAddressesToRefs[od.PinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
-      SweepStaleCacheEntries();
-
-      var remoteObject = new RemoteObject(objRef, _app);
-
-      return remoteObject;
+      // The requested heap address may differ from Diver's stable pin token.
+      // Publish by the returned token so every local wrapper shares one ref.
+      return PublishRemoteObjectRef(
+        od.PinnedAddress,
+        () => new RemoteObjectRef(od, td, _app.Communicator));
     }
 
 
@@ -178,12 +229,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
       ulong pinnedAddress,
       string typeName)
     {
-      // Check if we have a cached ref for this token (prevents duplicate refs leading to premature unpin)
-      if (_pinnedAddressesToRefs.TryGetValue(pinnedAddress, out var weakRef) &&
-          weakRef.TryGetTarget(out var existingRef) &&
-          existingRef.IsValid)
+      if (TryGetLiveRemoteObjectRef(pinnedAddress, out var existingRef))
       {
-        // Reuse existing ref
         return new RemoteObject(existingRef, _app);
       }
 
@@ -211,16 +258,9 @@ public class RemoteHandle : DLRWrapper, IDisposable
         }
       }, delay: 10, raise: true);
 
-      // Use lightweight constructor - no /object call needed
-      var objRef = new RemoteObjectRef(pinnedAddress, typeName, td, _app.Communicator);
-
-      // Cache the ref for future reuse
-      _pinnedAddressesToRefs[pinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
-      SweepStaleCacheEntries();
-
-      var remoteObject = new RemoteObject(objRef, _app);
-
-      return remoteObject;
+      return PublishRemoteObjectRef(
+        pinnedAddress,
+        () => new RemoteObjectRef(pinnedAddress, typeName, td, _app.Communicator));
     }
 
 
@@ -258,8 +298,10 @@ public class RemoteHandle : DLRWrapper, IDisposable
           return newRo;
         }
 
-        // Lost race - suppress unpin on discarded object
-        newRo.SuppressUnpin();
+        // Lost the cache race. Release this wrapper's reference; if it owns a
+        // duplicate pin, it will be unpinned, and if it shares a ref, the winner
+        // remains valid through the ref count.
+        newRo.ReleaseReference();
       }
 
       // Exhausted retries - create object directly without caching
@@ -302,8 +344,10 @@ public class RemoteHandle : DLRWrapper, IDisposable
           return newRo;
         }
 
-        // Lost race - suppress unpin on discarded object
-        newRo.SuppressUnpin();
+        // Lost the cache race. Release this wrapper's reference; if it owns a
+        // duplicate pin, it will be unpinned, and if it shares a ref, the winner
+        // remains valid through the ref count.
+        newRo.ReleaseReference();
       }
 
       // Exhausted retries - create object directly without caching
@@ -543,6 +587,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
   //
   public void Dispose()
   {
+    _remoteObjects.Clear();
     _communicator?.Disconnect();
     _communicator = null;
     _procWithDiver = null;

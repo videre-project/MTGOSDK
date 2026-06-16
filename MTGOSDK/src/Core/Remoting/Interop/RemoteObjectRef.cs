@@ -58,6 +58,7 @@ internal class RemoteObjectRef
   /// </summary>
   private int _state; // 0 = active, 1 = released
   private int _refCount;
+  private readonly object _lifetimeLock = new();
 
   private void ThrowIfReleased()
   {
@@ -70,10 +71,13 @@ internal class RemoteObjectRef
 
   internal void AddReference()
   {
-    if (Volatile.Read(ref _state) != 0)
-      throw new ObjectDisposedException(
-          "Cannot use RemoteObjectRef object after `Release` have been called");
-    Interlocked.Increment(ref _refCount);
+    lock (_lifetimeLock)
+    {
+      if (Volatile.Read(ref _state) != 0)
+        throw new ObjectDisposedException(
+            "Cannot use RemoteObjectRef object after `Release` have been called");
+      _refCount++;
+    }
   }
 
   /// <summary>
@@ -82,22 +86,44 @@ internal class RemoteObjectRef
   /// <param name="useJitter">Whether to apply jitter to the release delay.</param>
   internal void ReleaseReference(bool useJitter = false)
   {
-    if (Volatile.Read(ref _state) != 0) return; // Already released
+    bool releaseRemote = false;
+    lock (_lifetimeLock)
+    {
+      if (Volatile.Read(ref _state) != 0) return; // Already released
 
-    int newCount = Interlocked.Decrement(ref _refCount);
-    if (newCount == 0)
+      _refCount--;
+      if (_refCount <= 0)
+      {
+        _refCount = 0;
+        Volatile.Write(ref _state, 1);
+        releaseRemote = true;
+      }
+    }
+
+    if (releaseRemote)
     {
       // Last reference released, proceed with unpinning
-      RemoteRelease(useJitter);
+      RemoteReleaseCore(useJitter);
     }
   }
 
   public void ForceRelease()
   {
-    // Atomically transition to released state; only proceed if we were the one to set it
-    if (Interlocked.Exchange(ref _state, 1) != 0) return;
-    Volatile.Write(ref _refCount, 0);
-    RemoteRelease(false);
+    bool releaseRemote = false;
+    lock (_lifetimeLock)
+    {
+      if (Volatile.Read(ref _state) == 0)
+      {
+        Volatile.Write(ref _refCount, 0);
+        Volatile.Write(ref _state, 1);
+        releaseRemote = true;
+      }
+    }
+
+    if (releaseRemote)
+    {
+      RemoteReleaseCore(false);
+    }
   }
 
   /// <summary>
@@ -106,9 +132,12 @@ internal class RemoteObjectRef
   /// </summary>
   public void SuppressUnpin()
   {
-    // Just mark as released locally without calling remote unpin
-    Interlocked.Exchange(ref _state, 1);
-    Volatile.Write(ref _refCount, 0);
+    lock (_lifetimeLock)
+    {
+      // Just mark as released locally without calling remote unpin
+      Volatile.Write(ref _state, 1);
+      Volatile.Write(ref _refCount, 0);
+    }
   }
 
   private static readonly Random _random = new Random();
@@ -122,13 +151,27 @@ internal class RemoteObjectRef
   /// </summary>
   public void RemoteRelease(bool useJitter = false)
   {
-    // Check if already released to avoid redundant calls
-    if (Volatile.Read(ref _state) != 0) return;
+    bool releaseRemote = false;
+    lock (_lifetimeLock)
+    {
+      if (Volatile.Read(ref _state) != 0) return;
 
+      Volatile.Write(ref _state, 1);
+      Volatile.Write(ref _refCount, 0);
+      releaseRemote = true;
+    }
+
+    if (releaseRemote)
+    {
+      RemoteReleaseCore(useJitter);
+    }
+  }
+
+  private void RemoteReleaseCore(bool useJitter)
+  {
     // Guard against disconnected communicator
     if (_communicator is null || !_communicator.IsConnected)
     {
-      Volatile.Write(ref _state, 1);
       return;
     }
 
@@ -165,10 +208,6 @@ internal class RemoteObjectRef
     catch (Exception ex)
     {
       Log.Error(ex, "Failed to release remote object");
-    }
-    finally
-    {
-      Volatile.Write(ref _state, 1);
     }
   }
 

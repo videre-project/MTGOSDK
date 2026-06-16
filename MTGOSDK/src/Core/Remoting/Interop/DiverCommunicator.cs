@@ -640,8 +640,19 @@ public class DiverCommunicator : IDisposable
     if (!TryRemoveEventCallback(callback, out int token))
       throw new Exception("EventUnsubscribe: callback not found");
 
+    if (_isDisposed)
+      return;
+
     var request = new EventUnsubscriptionRequest { Token = token };
-    SendRequest("event_unsubscribe", request);
+    try
+    {
+      SendRequest("event_unsubscribe", request);
+    }
+    catch (ObjectDisposedException ex) when (IsRemoteShutdown(ex))
+    {
+      // The local callback maps have already been cleaned up. Once MTGO/Diver
+      // is gone, there is no remote subscription left to remove.
+    }
   }
 
   private bool TryRemoveEventCallback(LocalEventCallback callback, out int token)
@@ -694,9 +705,25 @@ public class DiverCommunicator : IDisposable
     if (!TryRemoveHookCallback(callback, out int token))
       throw new Exception("UnhookMethod: callback not found");
 
+    if (_isDisposed)
+      return;
+
     var request = new HookUnsubscriptionRequest { Token = token };
-    SendRequest("unhook_method", request);
+    try
+    {
+      SendRequest("unhook_method", request);
+    }
+    catch (ObjectDisposedException ex) when (IsRemoteShutdown(ex))
+    {
+      // The local callback maps have already been cleaned up. Once MTGO/Diver
+      // is gone, there is no remote hook left to remove.
+    }
   }
+
+  private bool IsRemoteShutdown(ObjectDisposedException ex) =>
+    _isDisposed ||
+    ex.ObjectName == nameof(DiverCommunicator) ||
+    ex.Message.Contains("MTGO process has closed", StringComparison.OrdinalIgnoreCase);
 
   private bool TryRemoveHookCallback(LocalHookCallback callback, out int token)
   {

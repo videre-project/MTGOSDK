@@ -38,10 +38,9 @@ public class RemoteHarmony
     public HookAction HookAction { get; set; }
     public LocalHookCallback WrappedHookAction { get; set; }
     public HarmonyPatchPosition Position { get; private set; }
-    public PositionedLocalHook(HookAction action, LocalHookCallback callback, HarmonyPatchPosition pos)
+    public PositionedLocalHook(HookAction action, HarmonyPatchPosition pos)
     {
       HookAction = action;
-      WrappedHookAction = callback;
       Position = pos;
     }
   }
@@ -62,56 +61,60 @@ public class RemoteHarmony
   {
     // Get or create MethodHooks object for the given method
     MethodHooks methodHooks = _callbacksToProxies.GetOrAdd(methodToHook, _ => new MethodHooks());
-    bool hasHooks = methodHooks.Count > 0;
 
-    // Handle multiple hooks on the same method
-    LocalHookCallback wrappedHook = null!;
-    if (hasHooks)
+    lock (methodHooks)
     {
-      // Enumerate all method hooks registered to find any matches based on position
-      var existingHook = methodHooks.Values.FirstOrDefault(hook => hook.Position == pos);
-      if (existingHook != null)
+      bool hasHooks = methodHooks.Count > 0;
+
+      if (methodHooks.TryGetValue(hookAction, out PositionedLocalHook registeredHook))
       {
-        // Merge the HookedAction delegate and re-wrap it
-        HookAction mergedHook = Delegate.Combine(existingHook.HookAction, hookAction) as HookAction;
-        wrappedHook = WrapCallback(mergedHook);
-
-        // Update the existing entry
-        existingHook.HookAction = mergedHook;
-        existingHook.WrappedHookAction = wrappedHook;
-
-        // Create a new entry that references the existing one
-        methodHooks.TryAdd(hookAction, existingHook);
+        if (registeredHook.Position != pos)
+        {
+          throw new InvalidOperationException("Hook already exists on another patch type.");
+        }
 
         return true;
       }
-    }
 
-    // Wrapping the callback which uses `dynamic`s in a callback that handles `ObjectOrRemoteAddresses`
-    // and converts them to DROs
-    if (!methodHooks.ContainsKey(hookAction))
-    {
-      wrappedHook = WrapCallback(hookAction);
-      methodHooks.TryAdd(hookAction, new PositionedLocalHook(hookAction, wrappedHook, pos));
-    }
-    else
-    {
-      throw new InvalidOperationException("Hook already exists on another patch type.");
-    }
+      // Handle multiple hooks on the same method
+      if (hasHooks)
+      {
+        // Enumerate all method hooks registered to find any matches based on position
+        var existingHook = methodHooks.Values.FirstOrDefault(hook => hook.Position == pos);
+        if (existingHook != null)
+        {
+          // Keep the existing registered callback token stable and update the
+          // delegate it dispatches. Replacing WrappedHookAction here would strand
+          // the old callback token in the communicator/Diver maps.
+          HookAction mergedHook = Delegate.Combine(existingHook.HookAction, hookAction) as HookAction;
+          existingHook.HookAction = mergedHook;
+          methodHooks.TryAdd(hookAction, existingHook);
 
-    var parametersTypeFullNames = methodToHook.GetParameters()
-      .Select(prm => prm.ParameterType.FullName)
-      .ToList();
+          return true;
+        }
+      }
 
-    return _app.Communicator.HookMethod(
-        methodToHook.DeclaringType.FullName,
-        methodToHook.Name,
-        pos,
-        wrappedHook,
-        parametersTypeFullNames);
+      // Wrapping the callback which uses `dynamic`s in a callback that handles `ObjectOrRemoteAddresses`
+      // and converts them to DROs
+      var positionedHook = new PositionedLocalHook(hookAction, pos);
+      LocalHookCallback wrappedHook = WrapCallback(positionedHook);
+      positionedHook.WrappedHookAction = wrappedHook;
+      methodHooks.TryAdd(hookAction, positionedHook);
+
+      var parametersTypeFullNames = methodToHook.GetParameters()
+        .Select(prm => prm.ParameterType.FullName)
+        .ToList();
+
+      return _app.Communicator.HookMethod(
+          methodToHook.DeclaringType.FullName,
+          methodToHook.Name,
+          pos,
+          wrappedHook,
+          parametersTypeFullNames);
+    }
   }
 
-  private LocalHookCallback WrapCallback(HookAction callback)
+  private LocalHookCallback WrapCallback(PositionedLocalHook hook)
   {
     LocalHookCallback hookProxy = (HookContext context, ObjectOrRemoteAddress instance, ObjectOrRemoteAddress[] args) =>
     {
@@ -161,7 +164,7 @@ public class RemoteHarmony
       }
 
       // Call the callback with the proxied parameters (using DynamicRemoteObjects)
-      callback.DynamicInvoke(context, droInstance, decodedParameters);
+      hook.HookAction.DynamicInvoke(context, droInstance, decodedParameters);
     };
     return hookProxy;
   }
@@ -202,26 +205,36 @@ public class RemoteHarmony
       return false;
     }
 
-    // Check if there are multiple delegates in the callback's invocation list
-    if (positionedHookWrapper.HookAction.GetInvocationList().Length > 1)
+    lock (hooks)
     {
-      // Remove the delegate from the invocation list
-      var previousHook = Delegate.Remove(positionedHookWrapper.HookAction, callback) as HookAction;
-      positionedHookWrapper.HookAction = previousHook;
-    }
-    // Otherwise, remove the entire hook
-    else
-    {
-      _app.Communicator.UnhookMethod(positionedHookWrapper.WrappedHookAction);
-    }
+      try
+      {
+        // Check if there are multiple delegates in the callback's invocation list
+        if (positionedHookWrapper.HookAction.GetInvocationList().Length > 1)
+        {
+          // Remove the delegate from the invocation list. The registered wrapper
+          // remains the same and will dispatch the updated HookAction.
+          var previousHook = Delegate.Remove(positionedHookWrapper.HookAction, callback) as HookAction;
+          positionedHookWrapper.HookAction = previousHook;
+        }
+        // Otherwise, remove the entire hook
+        else
+        {
+          _app.Communicator.UnhookMethod(positionedHookWrapper.WrappedHookAction);
+        }
+      }
+      finally
+      {
+        hooks.TryRemove(callback, out _);
+        if (hooks.Count == 0)
+        {
+          // It was the last hook for this method, need to remove the inner dict
+          _callbacksToProxies.TryRemove(methodToHook, out _);
+        }
+      }
 
-    hooks.TryRemove(callback, out _);
-    if (hooks.Count == 0)
-    {
-      // It was the last hook for this method, need to remove the inner dict
-      _callbacksToProxies.TryRemove(methodToHook, out _);
+      return true;
     }
-    return true;
   }
 
   public bool HasHook(MethodBase methodToHook, HookAction callback)
