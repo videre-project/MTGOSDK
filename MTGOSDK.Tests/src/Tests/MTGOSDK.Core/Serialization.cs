@@ -4,6 +4,8 @@
 **/
 
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json.Serialization;
 
 using MTGOSDK.Core.Reflection.Attributes;
 using MTGOSDK.Core.Reflection.Serialization;
@@ -27,6 +29,30 @@ public class Serialization
     public string HiddenValue => "hidden";
   }
 
+  [NonSerializable]
+  private sealed class RemovedProbe
+  {
+  }
+
+  [NonSerializable]
+  private sealed class StringifiedProbe
+  {
+    public override string ToString() => "stringified";
+  }
+
+  private sealed class ContractProbe
+  {
+    [JsonPropertyName("explicit_hidden")]
+    [NonSerializable]
+    public string HiddenValue => "hidden";
+
+    public RemovedProbe RemovedValue => new();
+
+    public StringifiedProbe StringifiedValue => new();
+
+    public List<StringifiedProbe> StringifiedValues => [];
+  }
+
   [Test]
   public void Test_NonSerializable_DefaultSerialization_CanBeOverriddenByInterface()
   {
@@ -42,5 +68,24 @@ public class Serialization
     var projected = probe.SerializeAs<ISerializableProbe>();
     Assert.That(projected.PublicValue, Is.EqualTo("public"));
     Assert.That(projected.HiddenValue, Is.EqualTo("hidden"));
+  }
+
+  [Test]
+  public void Test_NonSerializableJsonContract_ReportsRuntimeSerializationShape()
+  {
+    var directives = NonSerializableJsonContract
+      .GetPropertyDirectives(typeof(ContractProbe))
+      .ToDictionary(directive => directive.PropertyNames[0]);
+
+    Assert.That(directives["explicit_hidden"].Action,
+                Is.EqualTo(NonSerializableJsonPropertyAction.Remove));
+    Assert.That(directives["explicit_hidden"].PropertyNames,
+                Contains.Item(nameof(ContractProbe.HiddenValue)));
+    Assert.That(directives[nameof(ContractProbe.RemovedValue)].Action,
+                Is.EqualTo(NonSerializableJsonPropertyAction.Remove));
+    Assert.That(directives[nameof(ContractProbe.StringifiedValue)].Action,
+                Is.EqualTo(NonSerializableJsonPropertyAction.Stringify));
+    Assert.That(directives[nameof(ContractProbe.StringifiedValues)].Action,
+                Is.EqualTo(NonSerializableJsonPropertyAction.StringifyEnumerable));
   }
 }
