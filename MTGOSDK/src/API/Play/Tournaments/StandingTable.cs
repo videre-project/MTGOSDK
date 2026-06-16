@@ -17,10 +17,7 @@ namespace MTGOSDK.API.Play.Tournaments;
 internal sealed class StandingTable
 {
   private const int PlayoffCut = 8;
-
-  // Temporary verification: MTGO's documented floor is .3300, but observed
-  // ordering/display deltas line up with a one-third contribution.
-  private const float MinimumWinPercentage = 1f / 3f;
+  private const float MinimumWinPercentage = 0.33333f;
   private const float PercentageTolerance = 0.0005f;
   private static readonly string[] s_roundResultBatchPaths =
   [
