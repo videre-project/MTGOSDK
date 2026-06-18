@@ -18,6 +18,7 @@ on:
 
 env:
   WORKSPACE_PATH: D:\workspace
+  DOTNET_CONFIGURATION: Release
 
 permissions:
   contents: read
@@ -56,7 +57,7 @@ jobs:
 
       # Build the SDK
       - name: Build SDK Solution
-        run: dotnet build
+        run: dotnet build --configuration $env:DOTNET_CONFIGURATION
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
 
