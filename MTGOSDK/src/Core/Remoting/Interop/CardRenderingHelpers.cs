@@ -438,10 +438,9 @@ public static class CardRenderingHelpers
 
   /// <summary>
   /// If the card definition's <c>FrontFace</c> resolves to a different card
-  /// (e.g. adventure sub-cards), returns a shallow clone with the internal
-  /// state patched so that <c>FrontFace</c> returns the clone itself.
-  /// The original singleton in <c>CardDataManager</c> is never modified.
-  /// Returns the original object unchanged if no patching is needed.
+  /// (e.g. adventure sub-cards or back faces), returns a shallow clone with
+  /// the internal state patched so that <c>FrontFace</c> returns the clone
+  /// itself.
   /// </summary>
   /// <remarks>
   /// <c>FrontFace</c> checks <c>HiddenSubcard is CardDefinitionHiddenSubcard
@@ -474,14 +473,24 @@ public static class CardRenderingHelpers
       if (cloneMethod == null) return cardDef;
       var clone = cloneMethod.Invoke(cardDef, null);
 
-      // Set m_hiddenSubcard to the clone itself.  The HiddenSubcard property
-      // returns the cached value (bypassing re-resolution).  Since the clone
+      // Set m_hiddenSubcard to the clone itself. The HiddenSubcard property
+      // returns the cached value (bypassing re-resolution). Since the clone
       // is a CardDefinition (not CardDefinitionHiddenSubcard), the FrontFace
-      // pattern match fails → returns `this`.
+      // pattern match fails and returns `this`.
       var hiddenSubcardField = clone.GetType().GetField("m_hiddenSubcard",
         BindingFlags.NonPublic | BindingFlags.Instance);
-      if (hiddenSubcardField == null) return cardDef;
-      hiddenSubcardField.SetValue(clone, clone);
+      hiddenSubcardField?.SetValue(clone, clone);
+
+      // Back-face definitions resolve FrontFace through their cached
+      // m_otherFaceCard. The original definition may cache the front face
+      // there, which causes render callers to coalesce the requested back-face
+      // catalog ID back into the front. Patch only clones whose cache is
+      // already populated so ordinary/adventure cards do not gain a fake
+      // other-face relationship.
+      var otherFaceField = clone.GetType().GetField("m_otherFaceCard",
+        BindingFlags.NonPublic | BindingFlags.Instance);
+      if (otherFaceField?.GetValue(clone) != null)
+        otherFaceField.SetValue(clone, clone);
 
       return clone;
     }
@@ -1257,6 +1266,8 @@ public static class CardRenderingHelpers
       if (!found || args[1] == null) return Array.Empty<byte>();
       cardDef = args[1];
     }
+
+    cardDef = CloneCardDefIfNeeded(cardDef, catalogId);
 
     // ── Pre-load art resource ──────────────────────────────────────────────
     Uri artUri = null;

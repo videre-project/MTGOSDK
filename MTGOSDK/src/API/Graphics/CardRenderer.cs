@@ -89,7 +89,7 @@ public static class CardRenderer
   /// <summary>
   /// Renders a single card by catalog ID as a base64-encoded PNG string.
   /// Uses the WPF card export pipeline directly, bypassing the CGVM which
-  /// coalesces adventure/split sub-cards into their parent.
+  /// coalesces adventure, split, and back-face sub-cards into their parent.
   /// </summary>
   /// <param name="catalogId">Catalog ID to render.</param>
   /// <param name="cardHeight">Card height in pixels. Default: 300.</param>
@@ -210,7 +210,9 @@ public static class CardRenderer
 
   /// <summary>
   /// Renders a set of cards (identified by catalog ID) as fully-framed card
-  /// images and returns each as a base64-encoded PNG string.
+  /// images and returns each as a base64-encoded PNG string. Catalog IDs are
+  /// treated literally, including sub-card and back-face IDs when MTGO exposes
+  /// them as separate definitions.
   /// </summary>
   public static string[] RenderCards(
     int[] catalogIds,
