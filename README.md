@@ -160,7 +160,7 @@ This will also pick up changes to dependent **MTGOSDK.MSBuild** and **MTGOSDK.Wi
 
 ## Docker Development Environment
 
-The project's Docker infrastructure is managed in a standalone repository: [mtgo-oci](https://github.com/videre-project/mtgo-oci).
+The project's Docker infrastructure is managed in a standalone repository: [mtgo-docker](https://github.com/videre-project/mtgo-docker).
 
 This provides a tiered architecture for creating a consistent environment for running the MTGO client and developing with the SDK on Linux or macOS.
 
