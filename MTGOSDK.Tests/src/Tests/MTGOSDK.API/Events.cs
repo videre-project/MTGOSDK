@@ -85,7 +85,7 @@ public class Events : EventValidationFixture
   public void Test_Events<T>() where T : Event
   {
     // For testing, we'll restrict testing to small-sized events.
-    T eventObj = GetEvent<T>(e =>
+    T? eventObj = GetEvent<T>(e =>
     {
       // Filter out mid-size events that don't contain an event description.
       if (e.Description == string.Empty || e.TotalPlayers > 32)
@@ -104,6 +104,8 @@ public class Events : EventValidationFixture
 
       return true;
     });
+    if (eventObj is null)
+      Assert.Ignore($"Unable to find a current {typeof(T).Name} event to validate.");
 
     switch (typeof(T).Name)
     {
@@ -140,7 +142,7 @@ public class Events : EventValidationFixture
 
 public abstract class EventValidationFixture : BaseFixture
 {
-  public T GetEvent<T>(Predicate predicate = null!) where T : class
+  public T? GetEvent<T>(Predicate predicate = null!) where T : class
   {
     dynamic eventObj = null!;
     switch (typeof(T).Name)
@@ -157,7 +159,7 @@ public abstract class EventValidationFixture : BaseFixture
     }
     Log.Trace("Retrieved event: {0}", eventObj);
 
-    return (eventObj as T)!;
+    return eventObj as T;
   }
 
   public void ValidateEvent<T>(T? eventObj) where T : Event

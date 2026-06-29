@@ -19,6 +19,8 @@ public abstract class BaseFixture : Shared
   private static readonly string s_testResultsPath =
     Path.Combine(Directory.GetCurrentDirectory(), ".testresults");
 
+  private static readonly object s_testResultsLock = new();
+
   static BaseFixture()
   {
     // Delete the test results file if it already exists
@@ -70,7 +72,10 @@ public abstract class BaseFixture : Shared
 
     // Append a new line to the test results file containing the test name and result
     string result = (TestResult!.Value ? "Success" : "Failure") + $" - Took {Duration.TotalSeconds:F2} seconds";
-    File.AppendAllText(s_testResultsPath, $"{TestName}: {result}{Environment.NewLine}");
+    lock (s_testResultsLock)
+    {
+      File.AppendAllText(s_testResultsPath, $"{TestName}: {result}{Environment.NewLine}");
+    }
 
     Mark(result);
   }
