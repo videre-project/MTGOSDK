@@ -45,6 +45,35 @@ public static class CollectionHelpers
   }
 
   /// <summary>
+  /// Filters a collection to items whose runtime type is assignable to a type.
+  /// </summary>
+  /// <param name="collection">The collection to filter.</param>
+  /// <param name="typeFullName">The full name of the required type.</param>
+  /// <returns>A list of assignable items.</returns>
+  public static List<object> WhereAssignableTo(
+    object collection,
+    string typeFullName)
+  {
+    var result = new List<object>();
+
+    foreach (var item in (IEnumerable)collection)
+    {
+      if (item is null) continue;
+
+      var type = item.GetType();
+      if (IsAssignableTo(type, typeFullName))
+        result.Add(item);
+    }
+
+    return result;
+  }
+
+  private static bool IsAssignableTo(Type type, string typeFullName) =>
+    type.FullName == typeFullName ||
+    type.GetInterfaces().Any(i => i.FullName == typeFullName) ||
+    (type.BaseType is not null && IsAssignableTo(type.BaseType, typeFullName));
+
+  /// <summary>
   /// Filters a collection by comparing a property value against a given value.
   /// </summary>
   /// <param name="collection">The collection to filter.</param>

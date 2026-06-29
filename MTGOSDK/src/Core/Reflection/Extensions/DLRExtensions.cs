@@ -14,6 +14,22 @@ namespace MTGOSDK.Core.Reflection.Extensions;
 public static class DLRExtensions
 {
   /// <summary>
+  /// Filters a remote collection to items assignable to the specified type.
+  /// </summary>
+  /// <typeparam name="T">The required runtime type or interface.</typeparam>
+  /// <param name="collection">The remote collection to filter.</param>
+  /// <returns>An enumerable of assignable items.</returns>
+  public static DynamicRemoteObject WhereAssignableTo<T>(
+    this DynamicRemoteObject collection)
+  {
+    return RemoteClient.InvokeMethod(
+      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
+      "WhereAssignableTo",
+      args: new object[] { collection, typeof(T).FullName }
+    );
+  }
+
+  /// <summary>
   /// Filters a remote collection using an expression-based predicate.
   /// The predicate is parsed and executed on the remote side for performance.
   /// </summary>

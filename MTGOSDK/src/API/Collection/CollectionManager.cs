@@ -5,6 +5,7 @@
 
 using System.Collections;
 
+using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
 
@@ -186,13 +187,16 @@ public static class CollectionManager
   //
 
   public static IEnumerable<Binder> Binders =>
-    Map<Binder>(Unbind(s_collectionGroupingManager).BinderFolder.Contents);
+    Map<Binder>(
+      ((DynamicRemoteObject)
+        Unbind(s_collectionGroupingManager).BinderFolder.Contents)
+          .WhereAssignableTo<IBinder>());
 
   /// <summary>
   /// The last used binder for trading.
   /// </summary>
   public static Binder? LastUsedBinder =>
-    Retry(() => new Binder(s_collectionGroupingManager.LastUsedBinder));
+    Optional<Binder>(s_collectionGroupingManager.LastUsedBinder);
 
   /// <summary>
   /// The user's wish list.
@@ -221,7 +225,7 @@ public static class CollectionManager
     Map<Deck>(
       ((DynamicRemoteObject)
         Unbind(s_collectionGroupingManager).m_groupingsById.Values)
-          .Filter<ICardGrouping>(e => e.Format != null)
+          .WhereAssignableTo<IDeck>()
     );
 
   /// <summary>
@@ -241,7 +245,8 @@ public static class CollectionManager
     new(
       ((DynamicRemoteObject)
        Unbind(s_collectionGroupingManager).m_groupingsById.Values)
-        .Filter<ICardGrouping>(e => e.Name == name)[0]
+        .WhereAssignableTo<IDeck>()
+        .Filter<IDeck>(e => e.Name == name)[0]
     );
 
   // IDeck ImportTextDeck(FileInfo textFileToImport, string name, IPlayFormat format, IVisualResource deckBoxImage, IDeckFolder location);
