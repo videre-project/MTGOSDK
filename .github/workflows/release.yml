@@ -8,6 +8,10 @@ on:
       - completed
 
 permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: write
   statuses: write
 
 jobs:
@@ -44,13 +48,6 @@ jobs:
           path: ${{ github.workspace }}/publish
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Create .env file for integration tests
-      - name: Create .env file
-        run: |
-          echo "NUGET_API_KEY=${{ secrets.NUGET_API_KEY }}" > .env
-          echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> .env
-        shell: powershell
-
       - name: Download publish.ps1 script
         shell: powershell
         run: |
@@ -65,9 +62,15 @@ jobs:
             exit 1
           }
 
+      - name: NuGet Login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Publish Packages
         env:
-          NUGET_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: powershell
         run: |
