@@ -499,8 +499,8 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
           _ => true
         }
       ),
-      delay: 500,  // in ms
-      retries: 60, // or 30 seconds
+      delay:   500, // in ms
+      retries: 600, // or 5 minutes
       ct
     );
   }

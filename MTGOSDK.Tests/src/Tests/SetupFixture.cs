@@ -70,7 +70,7 @@ public class SetupFixture : Shared
     s_logger.Log(formattedMessage);
   }
 
-  [OneTimeSetUp, CancelAfter(/* 5 min */ 300_000)]
+  [OneTimeSetUp, CancelAfter(/* 10 min */ 600_000)]
   public virtual async Task RunBeforeAnyTests()
   {
     Write($"{nameof(SetupFixture)}.{nameof(RunBeforeAnyTests)}");
