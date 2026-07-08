@@ -90,7 +90,7 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
     RegexOptions.Multiline)]
   private static partial Regex ParseQuantitiesAndIdsRegex();
 
-  private static IEnumerable<(int, int, string)> ParseItems(string debugData)
+  private static IEnumerable<(string Name, int Quantity, int CatalogId)> ParseItems(string debugData)
   {
     var regex = ParseQuantitiesAndIdsRegex();
     var matches = regex.Matches(debugData);
@@ -103,7 +103,7 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
             match.Groups[3].Success &&
             match.Groups[3].Value?.Trim() is string name)
         {
-          yield return (id, qty, name);
+          yield return (name, qty, id);
         }
       }
       else
@@ -123,9 +123,12 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
   /// overhead of the <see cref="CollectionManager"/> retrieving all the cards.
   /// </remarks>
   public IList<CardQuantityPair> GetFrozenCollection =>
-    Map<IList, CardQuantityPair>(
-      ParseItems(@base.DebugData()),
-      Lambda(item => new CardQuantityPair(item.Item1, item.Item2, item.Item3)));
+    ParseItems((string)@base.DebugData())
+      .Select(item => new CardQuantityPair(
+        item.Name,
+        item.Quantity,
+        item.CatalogId))
+      .ToArray();
 
   //
   // Batch serialization methods

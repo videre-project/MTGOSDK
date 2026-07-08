@@ -306,9 +306,12 @@ This works by parsing the collection's debug string representation:
 private static partial Regex ParseQuantitiesAndIdsRegex();
 
 public IList<CardQuantityPair> GetFrozenCollection =>
-  Map<IList, CardQuantityPair>(
-    ParseItems(@base.DebugData()),
-    Lambda(item => new CardQuantityPair(item.Item1, item.Item2, item.Item3)));
+  ParseItems((string)@base.DebugData())
+    .Select(item => new CardQuantityPair(
+      item.Name,
+      item.Quantity,
+      item.CatalogId))
+    .ToArray();
 ```
 
 MTGO's debug data format includes quantity, ID, and name for each item. Regex parsing extracts these without invoking any property accessors on individual items. The result is a collection of partial `CardQuantityPair` objects with just these three fields populated.
