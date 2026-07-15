@@ -447,10 +447,12 @@ public sealed class GameProcessor
     var current = new Dictionary<int, GameCard>();
     var currentHashes = new Dictionary<int, int>();
     var currentIneligibleHashes = new Dictionary<int, int>();
+    var playerProperties = new Dictionary<int, PropertyContainer>();
     int hashHits = 0;
     int ineligibleSkips = 0;
 
     var indicesToMaterialize = new List<int>();
+    var playerIndicesToMaterialize = new List<int>();
     {
       int dataPairs = rawHashes.Length / 2;
 
@@ -466,6 +468,7 @@ public sealed class GameProcessor
         if (IsPlayerThing(thingId))
         {
           currentIneligibleHashes[thingId] = currHash;
+          playerIndicesToMaterialize.Add(i);
           ineligibleSkips++;
           continue;
         }
@@ -489,6 +492,19 @@ public sealed class GameProcessor
         }
 
         indicesToMaterialize.Add(i);
+      }
+    }
+
+    if (playerIndicesToMaterialize.Count > 0)
+    {
+      dynamic thingElements = message.ThingElements;
+      foreach (int idx in playerIndicesToMaterialize)
+      {
+        dynamic thing = thingElements[idx];
+        PropertyContainer properties = new(thing.Properties);
+        int playerIndex = properties[MagicProperty.THINGNUMBER] ?? -1;
+        if (playerIndex >= 0 && IsPlayerThing(playerIndex))
+          playerProperties[playerIndex] = properties;
       }
     }
 
@@ -663,6 +679,11 @@ public sealed class GameProcessor
         }
       }
     }
+
+    GamePlayerPartial.ApplyMessageState(
+      playerPartials,
+      playerProperties,
+      (int)message.PriorityPlayer);
 
     // Convert GamePlayerPartial to GamePlayer wrappers
     var players = new Dictionary<int, GamePlayer>(playerPartials.Count);

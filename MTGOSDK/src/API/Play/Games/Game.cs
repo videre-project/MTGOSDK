@@ -310,11 +310,11 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   {
     if (_processor == null) return true;
 
-    // Phase 1: Wait for the drain loop to process all pending hooks.
+    // Wait for the drain loop to process all pending hooks.
     if (!_processor.WaitForPendingDrain(timeout))
       return false;
 
-    // Phase 2: Wait for prompt correlation. After the drain loop processes
+    // Wait for prompt correlation. After the drain loop processes
     // a snapshot, the set_Prompt IPC may still be in flight. The
     // PromptProcessor signals PromptCorrelated when the prompt arrives and
     // the pending snapshot is matched.

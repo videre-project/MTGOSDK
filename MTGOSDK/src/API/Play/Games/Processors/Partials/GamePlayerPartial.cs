@@ -21,8 +21,11 @@ namespace MTGOSDK.API.Play.Games.Processors.Partials;
 /// </summary>
 public class GamePlayerPartial : DynamicObject
 {
+  private const int ClockTicksPerSecond = 64;
+
   private readonly int _playerIndex;
   private readonly string _name;
+  private readonly Dictionary<string, int> _counters = new();
   private readonly List<Mana> _manaPool = new();
   internal User? _user;
   private readonly dynamic? _game;
@@ -42,6 +45,7 @@ public class GamePlayerPartial : DynamicObject
   public bool HasPriority { get; internal set; }
   public TimeSpan ChessClock { get; internal set; }
 
+  public IReadOnlyDictionary<string, int> Counters => _counters;
   public IReadOnlyList<Mana> ManaPool => _manaPool;
 
   public GamePlayerPartial(int playerIndex, string name = "", dynamic? game = null)
@@ -92,6 +96,9 @@ public class GamePlayerPartial : DynamicObject
       case "ChessClock":
         result = ChessClock;
         return true;
+      case "Counters":
+        result = Counters;
+        return true;
       case "ManaPool":
         result = _manaPool;
         return true;
@@ -119,6 +126,8 @@ public class GamePlayerPartial : DynamicObject
       ChessClock = source.ChessClock,
     };
 
+    foreach (var (name, count) in source._counters)
+      clone._counters[name] = count;
     clone._manaPool.Clear();
     clone._manaPool.AddRange(source._manaPool);
     return clone;
@@ -132,7 +141,6 @@ public class GamePlayerPartial : DynamicObject
   {
     _manaPool.Clear();
     _manaPool.AddRange(source._manaPool);
-    HasPriority = source.HasPriority;
   }
 
   /// <summary>
@@ -150,7 +158,7 @@ public class GamePlayerPartial : DynamicObject
     {
       int activePlayer = (int)(playerStatusElement.ActivePlayer ?? 0);
       int gamePlayerCount = 0;
-      try { gamePlayerCount = (int)game.Players.Count; }
+      try { gamePlayerCount = (int)game.PlayersInServerOrder.Count; }
       catch (Exception ex)
       {
         MTGOSDK.Core.Logging.Log.Warning(ex,
@@ -168,13 +176,13 @@ public class GamePlayerPartial : DynamicObject
       int parseCount = gamePlayerCount > 0 ? gamePlayerCount : 16;
       parseCount = Math.Max(parseCount, activePlayer + 1);
 
-      // Get User objects from the game instance
+      // Player status and card ownership are indexed in server order.
       var users = new User?[parseCount];
       for (int i = 0; i < Math.Min(parseCount, gamePlayerCount); i++)
       {
         try
         {
-          dynamic player = game.Players[i];
+          dynamic player = game.PlayersInServerOrder[i];
           users[i] = new User(player.User);
         }
         catch (Exception ex)
@@ -198,7 +206,8 @@ public class GamePlayerPartial : DynamicObject
           continue;
 
         var user = i < users.Length ? users[i] : null;
-        var chessClock = TimeSpan.FromSeconds(i < timeLeft.Length ? timeLeft[i] : 0);
+        var chessClock = TimeSpan.FromSeconds(
+          (i < timeLeft.Length ? timeLeft[i] : 0) / ClockTicksPerSecond);
 
         players[i] = new GamePlayerPartial(i, user?.Name ?? $"Player {i}", game)
         {
@@ -220,6 +229,90 @@ public class GamePlayerPartial : DynamicObject
 
     return players;
   }
+
+  /// <summary>
+  /// Applies player state serialized outside PlayerStatusElement in the same
+  /// gameplay-status message.
+  /// </summary>
+  internal static void ApplyMessageState(
+    Dictionary<int, GamePlayerPartial> players,
+    IReadOnlyDictionary<int, PropertyContainer> playerProperties,
+    int priorityPlayer)
+  {
+    foreach (var (playerIndex, partial) in players)
+    {
+      partial.HasPriority = playerIndex == priorityPlayer;
+      if (!playerProperties.TryGetValue(playerIndex, out var properties))
+        continue;
+
+      partial._counters.Clear();
+      foreach (var (name, count) in ResolveCounters(properties))
+        partial._counters[name] = count;
+    }
+  }
+
+  internal static IReadOnlyDictionary<string, int> ResolveCounters(
+    PropertyContainer properties)
+  {
+    var counters = new Dictionary<string, int>(StringComparer.Ordinal);
+    var counterList = properties.GetSubpropertiesByName("COUNTERS_LIST");
+    if (counterList != null)
+    {
+      foreach (var (property, value) in counterList.AllProperties)
+      {
+        var propertyName = counterList.GetPropertyName(property);
+        var counterName = propertyName.EndsWith(
+          "_COUNTERS", StringComparison.Ordinal)
+            ? propertyName[..^"_COUNTERS".Length]
+            : propertyName;
+        AddCounter(counters, counterName, value);
+      }
+    }
+
+    AddNamedCounter(
+      counters, properties, "N_TIMES_TEMPTED", "RING_TEMPTATION");
+    AddNamedCounter(counters, properties, "PLAYER_SPEED", "SPEED");
+    return counters;
+  }
+
+  private static void AddNamedCounter(
+    Dictionary<string, int> counters,
+    PropertyContainer properties,
+    string propertyName,
+    string counterName)
+  {
+    foreach (var (property, value) in properties.AllProperties)
+    {
+      if (string.Equals(
+            properties.GetPropertyName(property),
+            propertyName,
+            StringComparison.Ordinal))
+      {
+        AddCounter(counters, counterName, value);
+        return;
+      }
+    }
+  }
+
+  private static void AddCounter(
+    Dictionary<string, int> counters,
+    string propertyName,
+    object value)
+  {
+    try
+    {
+      int count = Convert.ToInt32(value);
+      if (count > 0)
+        counters[FormatCounterName(propertyName)] = count;
+    }
+    catch { }
+  }
+
+  private static string FormatCounterName(string propertyName) =>
+    string.Join(' ', propertyName
+      .Split('_', StringSplitOptions.RemoveEmptyEntries)
+      .Select(word =>
+        char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
 
   /// <summary>
   /// Updates a player's mana pool from a ManaPoolElement.
@@ -284,6 +377,12 @@ public class GamePlayerPartial : DynamicObject
         || !string.Equals(_name, other._name, StringComparison.Ordinal))
       return false;
 
+    if (_counters.Count != other._counters.Count ||
+        _counters.Any(counter =>
+          !other._counters.TryGetValue(counter.Key, out var value) ||
+          value != counter.Value))
+      return false;
+
     // Compare mana pools
     if (_manaPool.Count != other._manaPool.Count) return false;
     for (int i = 0; i < _manaPool.Count; i++)
@@ -309,6 +408,12 @@ public class GamePlayerPartial : DynamicObject
     hash.Add(HasPriority);
     hash.Add(ChessClock);
     hash.Add(_name, StringComparer.Ordinal);
+    foreach (var (name, count) in _counters.OrderBy(
+               counter => counter.Key, StringComparer.Ordinal))
+    {
+      hash.Add(name, StringComparer.Ordinal);
+      hash.Add(count);
+    }
     foreach (var item in _manaPool)
     {
       hash.Add(item.ID);

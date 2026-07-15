@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Generic;
+
 using MTGOSDK.API.Users;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection;
@@ -97,6 +99,20 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   /// Whether the player has priority.
   /// </summary>
   public bool HasPriority => @base.HasPriority;
+
+  /// <summary>
+  /// The player's game counters keyed by display name.
+  /// </summary>
+  /// <remarks>
+  /// Most counters are automapped based on the COUNTERS_LIST container,
+  /// though there are some exceptions that we vendor in GamePlayerPartial.
+  /// See <see cref="GamePlayerPartial.ResolveCounters(PropertyContainer)"/>.
+  /// </remarks>
+  public IReadOnlyDictionary<string, int> Counters =>
+    gamePlayer is GamePlayerPartial partial
+      ? partial.Counters
+      : GamePlayerPartial.ResolveCounters(
+          new PropertyContainer(Unbind(gamePlayer).Properties));
 
   /// <summary>
   /// The player's mana pool.

@@ -499,6 +499,24 @@ public class PropertyContainer : DLRWrapper<object>
       : null;
 
   /// <summary>
+  /// Gets a sub-property container by its MTGO property name.
+  /// </summary>
+  internal PropertyContainer? GetSubpropertiesByName(string propertyName)
+  {
+    foreach (var (property, value) in _properties)
+    {
+      if (value is PropertyContainer subproperties &&
+          string.Equals(
+            GetPropertyName(property),
+            propertyName,
+            StringComparison.Ordinal))
+        return subproperties;
+    }
+
+    return null;
+  }
+
+  /// <summary>
   /// Checks if the container has a property.
   /// </summary>
   public bool HasProperty(MagicProperty property) =>

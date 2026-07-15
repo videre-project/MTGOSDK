@@ -890,7 +890,7 @@ public class GameCardPartial(
     if (_cachedCounters != null) return _cachedCounters;
 
     var counters = new Dictionary<CardCounter, int>();
-    var counterList = properties.GetSubproperties(MagicProperty.COUNTERS_LIST);
+    var counterList = properties.GetSubpropertiesByName("COUNTERS_LIST");
     if (counterList == null)
     {
       _cachedCounters = counters;
