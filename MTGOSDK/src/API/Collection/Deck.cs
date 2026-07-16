@@ -13,7 +13,7 @@ using MTGOSDK.API.Play;
 namespace MTGOSDK.API.Collection;
 using static MTGOSDK.API.Events;
 
-public sealed class Deck(dynamic deck) : CardGrouping<Deck>
+public sealed class Deck(dynamic deck) : CardGrouping
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
@@ -127,6 +127,14 @@ public sealed class Deck(dynamic deck) : CardGrouping<Deck>
   /// <returns>An iterator of CardQuantityPair objects.</returns>
   public IEnumerable<CardQuantityPair> GetCards(DeckRegion region) =>
     Map<CardQuantityPair>(Unbind(this).GetRegionCards(GetRegionRef(region)));
+
+  public override IReadOnlyList<CardGroupingItemSnapshot> GetItemSnapshot() =>
+    Regions
+      .Distinct()
+      .SelectMany(region => SnapshotItems(
+        (object)Unbind(this).GetRegionCards(GetRegionRef(region)),
+        region))
+      .ToArray();
 
   // public void AddCards(...) => AddCardsToRegion(...)
   // public void RemoveCards(...) => RemoveCardsFromRegion(...)

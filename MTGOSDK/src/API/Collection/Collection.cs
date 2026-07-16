@@ -9,8 +9,7 @@ using WotC.MtGO.Client.Model.Collection;
 namespace MTGOSDK.API.Collection;
 using static MTGOSDK.API.Events;
 
-public sealed class Collection(ICollectionGrouping collection)
-    : CardGrouping<Collection>
+public sealed class Collection(ICollectionGrouping collection) : CardGrouping
 {
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
@@ -24,6 +23,16 @@ public sealed class Collection(ICollectionGrouping collection)
   internal override dynamic obj => collection;
 
   public Collection() : this(CollectionManager.GetCollection()) { }
+
+  public override IReadOnlyList<CardGroupingItemSnapshot> GetItemSnapshot() =>
+    GetFrozenCollection
+      .Where(item => item.Quantity > 0)
+      .Select(item => new CardGroupingItemSnapshot(
+        item.Id,
+        DeckRegion.NotSet,
+        0,
+        item.Quantity))
+      .ToArray();
 
   //
   // ICardGrouping wrapper events

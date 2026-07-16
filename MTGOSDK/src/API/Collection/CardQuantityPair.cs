@@ -18,6 +18,14 @@ public class CardQuantityPair(dynamic cardQuantityPair)
   /// </summary>
   internal override dynamic obj => cardQuantityPair;
 
+  private readonly int m_quantity = 0;
+
+  internal CardQuantityPair(dynamic cardQuantityPair, int quantity)
+    : this(new CardQuantityPair(cardQuantityPair))
+  {
+    m_quantity = quantity;
+  }
+
   /// <summary>
   /// Stores the values of the ICardQuantityPair object while deferring the
   /// creation of the Card object until it is needed.
@@ -51,5 +59,8 @@ public class CardQuantityPair(dynamic cardQuantityPair)
 
   public Card Card => field ??= new(@base.CardDefinition);
 
-  public int Quantity => @base.Quantity;
+  public uint Annotation =>
+    Cast<uint>(Unbind(this).Annotation.EnumValue);
+
+  public int Quantity => m_quantity != 0 ? m_quantity : @base.Quantity;
 }

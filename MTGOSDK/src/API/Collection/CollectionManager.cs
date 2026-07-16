@@ -9,7 +9,9 @@ using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
+using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Types;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
@@ -252,19 +254,164 @@ public static class CollectionManager
   // IDeck ImportTextDeck(FileInfo textFileToImport, string name, IPlayFormat format, IVisualResource deckBoxImage, IDeckFolder location);
   // IDeck CreateNewDeck(string name, IPlayFormat format, IVisualResource deckBoxImage = null, IDeckFolder location = null, IEnumerable<ICardDefinition> initialCards = null);
 
+  public static readonly Func<dynamic, CardGrouping> CardGroupingFactory =
+    new(FromCardGrouping);
+
+  private static CardGrouping FromCardGrouping(dynamic cardGrouping)
+  {
+    CardGroupingType groupingType = Cast<CardGroupingType>(
+      cardGrouping.GroupingType.EnumValue);
+    var groupingObject = new CardGrouping(cardGrouping);
+
+    // Map each event type to its corresponding wrapper class.
+    switch (groupingType)
+    {
+      case CardGroupingType.Deck:
+        groupingObject = new Deck(groupingObject);
+        break;
+      case CardGroupingType.Binder:
+      case CardGroupingType.Wishlist:
+      case CardGroupingType.MegaBinder:
+        groupingObject = new Binder(groupingObject);
+        break;
+      default:
+        throw new InvalidOperationException($"Unknown grouping type: {groupingType}");
+    }
+#if DEBUG
+    Log.Trace("Created new {Type} object for '{GroupingObject}'.",
+        groupingObject.GetType().Name, groupingObject);
+#endif
+    return groupingObject;
+  }
+
   //
   // ICollectionGroupingManager wrapper events
   //
 
-  public static EventProxy LastUsedBinderChanged =
-    new(s_collectionGroupingManager, nameof(LastUsedBinderChanged));
+  /// <summary>
+  /// Event triggered when the items in the user's collection change.
+  /// </summary>
+  public static EventHookProxy<Collection, IList<CardQuantityPair>> CollectionItemsChanged =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Core.Collection.CollectionGroupingManager>(),
+      "Collection_ItemsAddedOrRemoved",
+      new((_, args) =>
+      {
+        var collection = Collection; // Get the current collection instance
 
-  public static EventProxy DeckCreatedOrImported =
-    new(s_collectionGroupingManager, nameof(DeckCreatedOrImported));
+        var changeSet = new List<CardQuantityPair>();
+        var e = args[1]; // CardGroupingItemsChangedEventArgs
+        if (e.ItemsAdded != null)
+        {
+          changeSet.AddRange(Map<CardQuantityPair>(e.ItemsAdded));
+        }
+        if (e.ItemsRemoved != null)
+        {
+          changeSet.AddRange(Map(e.ItemsRemoved, Lambda<CardQuantityPair>(c => new(c, -c.Quantity))));
+        }
+        if (e.ItemsModified != null)
+        {
+          changeSet.AddRange(Map<CardQuantityPair>(e.ItemsModified));
+        }
 
-  public static EventProxy DeckFolderDeleted =
-    new(s_collectionGroupingManager, nameof(DeckFolderDeleted));
+        return (collection, changeSet); // Return a tuple of (Collection, IList<CardQuantityPair>)
+      }),
+      HarmonyPatchPosition.Postfix
+    );
 
-  public static EventProxy DeckDeleted =
-    new(s_collectionGroupingManager, nameof(DeckDeleted));
+  /// <summary>
+  /// Event triggered when the items in a card grouping (deck or binder) change.
+  /// </summary>
+  public static EventHookProxy<CardGrouping, IList<CardQuantityPair>> CardGroupingItemsChanged =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Core.Collection.CollectionGroupingManager>(),
+      "CardGrouping_ItemsAddedOrRemoved",
+      new((instance, args) =>
+      {
+        var grouping = FromCardGrouping(args[0]); // Deck or Binder object
+
+        var changeSet = new List<CardQuantityPair>();
+        var e = args[1]; // CardGroupingItemsChangedEventArgs
+        if (e.ItemsAdded != null)
+        {
+          changeSet.AddRange(Map<CardQuantityPair>(e.ItemsAdded));
+        }
+        if (e.ItemsRemoved != null)
+        {
+          changeSet.AddRange(Map(e.ItemsRemoved, Lambda<CardQuantityPair>(c => new(c, -c.Quantity))));
+        }
+        if (e.ItemsModified != null)
+        {
+          changeSet.AddRange(Map<CardQuantityPair>(e.ItemsModified));
+        }
+
+        return (grouping, changeSet); // Return a tuple of (CardGrouping, IList<CardQuantityPair>)
+      }),
+      HarmonyPatchPosition.Postfix
+    );
+
+  /// <summary>
+  /// Event triggered when a property of a card grouping (deck or binder) changes.
+  /// </summary>
+  public static EventHookProxy<CardGrouping, string> CardGroupingPropertyChanged =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Core.Collection.CollectionGroupingManager>(),
+      "CardGrouping_PropertyChanged",
+      new((_, args) =>
+      {
+        var grouping = FromCardGrouping(args[0]); // Deck or Binder object
+        var propertyName = args[1].PropertyName;
+        switch (propertyName)
+        {
+          case "Format":
+          case "Image":
+          case "Name":
+          case "NetDeckId":
+            return (grouping, propertyName);
+          default:
+            return null; // Ignore other property changes
+        }
+      }),
+      HarmonyPatchPosition.Postfix
+    );
+
+  public static EventHookProxy<CardGrouping, DateTime> LastUsedBinderChanged =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Core.Collection.OnlineCollectionDataManager>(),
+      "SetLastUsedBinderAndUpdateServer",
+      new((instance, args) =>
+      {
+        int netDeckId = args[0];
+        var grouping = FromCardGrouping(instance.m_groupingsFromCacheById[netDeckId]);
+
+        return (grouping, instance.__timestamp);
+      }),
+      HarmonyPatchPosition.Postfix
+    );
+
+  public static EventHookProxy<CardGrouping, DateTime> DeckCreatedOrImported =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Core.Collection.CollectionGroupingManager>(),
+      "RegisterGrouping",
+      new((instance, args) =>
+      {
+        var grouping = FromCardGrouping(args[0]);
+
+        return (grouping, instance.__timestamp);
+      }),
+      HarmonyPatchPosition.Postfix
+    );
+
+  public static EventHookProxy<CardGrouping, DateTime> DeleteGrouping =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Core.Collection.CollectionGroupingManager>(),
+      "DeleteGrouping",
+      new((instance, args) =>
+      {
+        var grouping = FromCardGrouping(args[0]);
+
+        return (grouping, instance.__timestamp);
+      }),
+      HarmonyPatchPosition.Postfix
+    );
 }
