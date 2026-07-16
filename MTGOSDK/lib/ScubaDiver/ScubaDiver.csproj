@@ -24,21 +24,29 @@
   <Import Project="$(_ILRepackTargetsPath)" />
   <PropertyGroup>
     <ILRepackTarget>Microsoft.Diagnostics.Runtime</ILRepackTarget>
-    <HarmonyAssembly>bin/$(Configuration)/$(_MTGOSDKCoreTFM)/$(RuntimeIdentifier)/0Harmony.dll</HarmonyAssembly>
     <ILRepackOutput>$(SolutionDir)dist/$(Configuration)/$(RuntimeIdentifier)/$(ILRepackTarget).dll</ILRepackOutput>
+    <UnmergedArtifactOutput>$(SolutionDir)dist/$(Configuration)/unmerged/$(AssemblyName).dll</UnmergedArtifactOutput>
     <SystemValueTuplePayloadVersion>4.5.0</SystemValueTuplePayloadVersion>
     <SystemValueTuplePayloadDll>$(NuGetPackageRoot)system.valuetuple\$(SystemValueTuplePayloadVersion)\lib\net461\System.ValueTuple.dll</SystemValueTuplePayloadDll>
   </PropertyGroup>
 
-  <!-- Export the Harmony assembly to the output directory for packing -->
-  <Target Name="PackHarmonyLib"
+  <!-- Ensure Harmony is internalized into the single ClrMD injection payload. -->
+  <Target Name="ValidateHarmonyMergeInput"
           AfterTargets="ComputeInputAssemblies"
-          BeforeTargets="MergeReferenceAssemblies">
+          BeforeTargets="MergeReferenceAssemblies"
+          Condition="'$(UseILRepack)' == 'true'">
     <ItemGroup>
-      <InputAssemblies Remove="$(HarmonyAssembly)" />
+      <HarmonyInputAssemblies Include="@(InputAssemblies)"
+                              Condition="'%(InputAssemblies.Filename)' == '0Harmony'" />
     </ItemGroup>
-    <Copy SourceFiles="$(HarmonyAssembly)"
-          DestinationFolder="$(SolutionDir)dist/$(Configuration)" />
+    <Error Condition="'@(HarmonyInputAssemblies)' == ''"
+           Text="Harmony was not included in the ScubaDiver ILRepack inputs. Restore Lib.Harmony before building ScubaDiver." />
+  </Target>
+
+  <!-- Remove payloads produced by older builds that shipped Harmony separately. -->
+  <Target Name="RemoveLegacyHarmonyPayload"
+          AfterTargets="MergeReferenceAssemblies;BuildArtifactDirectory">
+    <Delete Files="$(SolutionDir)dist/$(Configuration)/0Harmony.dll" />
   </Target>
 
   <!--
@@ -64,8 +72,9 @@
   <Target Name="BuildArtifactDirectory"
           AfterTargets="AfterBuild"
           Condition="'$(UseILRepack)' != 'true'">
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(UnmergedArtifactOutput)'))" />
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"
-          DestinationFiles="$(ILRepackOutput)" />
+          DestinationFiles="$(UnmergedArtifactOutput)" />
   </Target>
 
   <ItemGroup>

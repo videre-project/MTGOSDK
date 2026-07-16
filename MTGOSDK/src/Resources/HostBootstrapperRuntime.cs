@@ -5,6 +5,9 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 
 using MTGOSDK.Win32.Injection;
@@ -51,11 +54,6 @@ internal sealed class HostBootstrapperRuntime : IBootstrapperRuntime
     // Check if injector or bootstrap resources differ from copies on disk
     OverrideFileIfChanged(diverPath, diverResource);
 
-    // Update all diver dependencies
-    byte[] harmonyResource = GetBinaryResource(@"Resources/0Harmony.dll");
-    string harmonyPath = Path.Combine(tempDir, "0Harmony.dll");
-    OverrideFileIfChanged(harmonyPath, harmonyResource);
-
     // System.ValueTuple is not available in the MTGO process's GAC/probing paths.
     // Extract it alongside the Diver so the AssemblyResolve handler in DllEntry
     // can supply it when the CLR requests it after injection.
@@ -64,8 +62,7 @@ internal sealed class HostBootstrapperRuntime : IBootstrapperRuntime
     OverrideFileIfChanged(valueTuplePath, valueTupleResource);
 
     // Verify all files are fully written before injection
-    VerifyFileExists(diverPath, "Microsoft.Diagnostics.Runtime.dll");
-    VerifyFileExists(harmonyPath, "0Harmony.dll");
+    VerifyDiverPayload(diverPath);
     VerifyFileExists(valueTuplePath, "System.ValueTuple.dll");
 
     var injector = new InjectorBase();
@@ -96,6 +93,70 @@ internal sealed class HostBootstrapperRuntime : IBootstrapperRuntime
     throw new FileNotFoundException(
       $"Failed to verify {fileName} exists after extraction. " +
       $"Path: {filePath}");
+  }
+
+  private static void VerifyDiverPayload(string filePath)
+  {
+    const string expectedAssemblyName = "Microsoft.Diagnostics.Runtime";
+
+    VerifyFileExists(filePath, expectedAssemblyName + ".dll");
+
+    string? assemblyName;
+    try
+    {
+      assemblyName = AssemblyName.GetAssemblyName(filePath).Name;
+    }
+    catch (Exception e) when (
+      e is BadImageFormatException ||
+      e is FileLoadException ||
+      e is FileNotFoundException)
+    {
+      throw new InvalidDataException(
+        $"The ScubaDiver payload at '{filePath}' is not a valid managed assembly.",
+        e);
+    }
+
+    if (!string.Equals(
+      assemblyName,
+      expectedAssemblyName,
+      StringComparison.Ordinal))
+    {
+      throw new InvalidDataException(
+        "The ScubaDiver payload is not the merged injection assembly. " +
+        $"Expected '{expectedAssemblyName}', found '{assemblyName ?? "<unknown>"}'. " +
+        "Build ScubaDiver with UseILRepack=true before running MTGOSDK.");
+    }
+
+    if (!ContainsTypeDefinition(filePath, "HarmonyLib", "Harmony"))
+    {
+      throw new InvalidDataException(
+        "The ScubaDiver payload does not contain the merged Harmony runtime. " +
+        "Build ScubaDiver with UseILRepack=true before running MTGOSDK.");
+    }
+  }
+
+  private static bool ContainsTypeDefinition(
+    string filePath,
+    string @namespace,
+    string name)
+  {
+    using FileStream stream = File.OpenRead(filePath);
+    using PEReader peReader = new(stream);
+    if (!peReader.HasMetadata)
+      return false;
+
+    MetadataReader metadata = peReader.GetMetadataReader();
+    foreach (TypeDefinitionHandle handle in metadata.TypeDefinitions)
+    {
+      TypeDefinition type = metadata.GetTypeDefinition(handle);
+      if (metadata.StringComparer.Equals(type.Namespace, @namespace) &&
+          metadata.StringComparer.Equals(type.Name, name))
+      {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
 

@@ -1,6 +1,55 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
+  <UsingTask TaskName="ValidateManagedAssemblyName"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <AssemblyPath ParameterType="System.String" Required="true" />
+      <ExpectedName ParameterType="System.String" Required="true" />
+      <RequiredTypeName ParameterType="System.String" Required="false" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Reflection" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        if (!File.Exists(AssemblyPath))
+        {
+          Log.LogError($"Managed assembly not found: {AssemblyPath}");
+        }
+        else
+        {
+          try
+          {
+            string actualName = AssemblyName.GetAssemblyName(AssemblyPath).Name;
+            if (!string.Equals(actualName, ExpectedName, StringComparison.Ordinal))
+            {
+              Log.LogError(
+                $"Invalid managed assembly at {AssemblyPath}: " +
+                $"expected identity '{ExpectedName}', found '{actualName}'.");
+            }
+
+            if (!string.IsNullOrEmpty(RequiredTypeName))
+            {
+              Assembly assembly = Assembly.Load(File.ReadAllBytes(AssemblyPath));
+              if (assembly.GetType(RequiredTypeName, throwOnError: false) == null)
+              {
+                Log.LogError(
+                  $"Invalid managed assembly at {AssemblyPath}: " +
+                  $"required merged type '{RequiredTypeName}' was not found.");
+              }
+            }
+          }
+          catch (Exception ex)
+          {
+            Log.LogError($"Failed to validate managed assembly '{AssemblyPath}': {ex.Message}");
+          }
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
   <UsingTask TaskName="DownloadMTGOManifest" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
     <ParameterGroup>
       <OutputFile ParameterType="System.String" Required="true" />
@@ -71,6 +120,13 @@
   <Target Name="EmbedResources"
           BeforeTargets="CoreCompile;AssignTargetPaths"
           DependsOnTargets="CollectResourceProjects;GenerateMTGOManifest">
+    <PropertyGroup>
+      <DiverPayloadPath>$(SolutionDir)dist/$(Configuration)/Microsoft.Diagnostics.Runtime.dll</DiverPayloadPath>
+    </PropertyGroup>
+    <ValidateManagedAssemblyName
+      AssemblyPath="$(DiverPayloadPath)"
+      ExpectedName="Microsoft.Diagnostics.Runtime"
+      RequiredTypeName="HarmonyLib.Harmony" />
     <!-- Embed the MTGO manifest for verifying assembly compatibility -->
     <ItemGroup>
       <EmbeddedResource Include="$(MTGOManifestPath)"
@@ -83,6 +139,7 @@
       <ResourceFiles Include="$(SolutionDir)dist/$(Configuration)/*.*" />
       <ResourceFiles Include="$(SolutionDir)dist/$(Configuration)/$(RuntimeIdentifier)/*.*"
                      Condition="'$(RuntimeIdentifier)' != ''" />
+      <ResourceFiles Remove="$(SolutionDir)dist/$(Configuration)/0Harmony.dll" />
     </ItemGroup>
     <PropertyGroup>
       <SystemValueTupleDistDll>$(SolutionDir)dist/$(Configuration)/System.ValueTuple.dll</SystemValueTupleDistDll>
