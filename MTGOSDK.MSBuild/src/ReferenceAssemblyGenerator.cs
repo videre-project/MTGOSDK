@@ -108,7 +108,7 @@ public static class ReferenceAssemblyGenerator
           {
             // Zero out the RVA field (first 4 bytes of the MethodDef row)
             int rowOffset = methodDefOffset + (metadata.GetRowNumber(handle) - 1) * methodDefRowSize;
-            logger.Log(JetBrains.Refasmer.LogLevel.Warning, $"Stripping RVA 0x{method.RelativeVirtualAddress:X} from method {metadata.GetString(method.Name)} (Attribs: {method.Attributes}, Impl: {method.ImplAttributes})");
+            logger.Log(JetBrains.Refasmer.LogLevel.Trace, $"Stripping RVA 0x{method.RelativeVirtualAddress:X} from method {metadata.GetString(method.Name)} (Attribs: {method.Attributes}, Impl: {method.ImplAttributes})");
             for (int i = 0; i < 4; i++)
               asm[rowOffset + i] = 0;
           }
@@ -133,9 +133,11 @@ public static class ReferenceAssemblyGenerator
     {
       var importance = logLevel switch
       {
+        LogLevel.Critical => Microsoft.Build.Framework.MessageImportance.High,
         LogLevel.Error => Microsoft.Build.Framework.MessageImportance.High,
         LogLevel.Warning => Microsoft.Build.Framework.MessageImportance.High,
-        _ => Microsoft.Build.Framework.MessageImportance.Normal
+        LogLevel.Information => Microsoft.Build.Framework.MessageImportance.Normal,
+        _ => Microsoft.Build.Framework.MessageImportance.Low
       };
       _log.LogMessage(importance, message);
     }
