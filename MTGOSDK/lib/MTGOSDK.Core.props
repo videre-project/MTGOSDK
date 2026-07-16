@@ -11,7 +11,11 @@
     <Compile Remove="src\GlobalEvents.cs" />
     <Compile Remove="src\Resources\Bootstrapper.cs" />
     <ProjectReference Include="$(MTGOSDKCoreProject)"
-                      SetTargetFramework="TargetFramework=net10.0-windows" />
+                      SetTargetFramework="TargetFramework=net10.0-windows">
+      <!-- Core is merged into MTGOSDK in package-pipeline builds and must not
+           also flow to ProjectReference consumers as a separate assembly. -->
+      <PrivateAssets Condition="'$(UseILRepack)' == 'true'">all</PrivateAssets>
+    </ProjectReference>
   </ItemGroup>
   <UsingTask TaskName="RemoveNuspecDependency"
              TaskFactory="RoslynCodeTaskFactory"

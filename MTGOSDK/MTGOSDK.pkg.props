@@ -21,6 +21,11 @@
     <PublishTrimmed Condition="'$(PublishTrimmed)' == ''">$(UsePackagePipeline)</PublishTrimmed>
     <UseILLinkTrim Condition="'$(UseILLinkTrim)' == ''">$(UsePackagePipeline)</UseILLinkTrim>
     <UseILRepack Condition="'$(UseILRepack)' == ''">$(UsePackagePipeline)</UseILRepack>
+    <!--
+      ProjectReference consumers must compile against the post-ILRepack
+      assembly because merging changes the assembly identity of public types.
+    -->
+    <ProduceReferenceAssembly Condition="'$(UseILRepack)' == 'true'">false</ProduceReferenceAssembly>
     <SelfContained>false</SelfContained>
     <GeneratePackageOnBuild>$(UsePackagePipeline)</GeneratePackageOnBuild>
     <MergeNugetDependencies>false</MergeNugetDependencies>

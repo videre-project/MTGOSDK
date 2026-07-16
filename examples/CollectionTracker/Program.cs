@@ -29,7 +29,7 @@ foreach (var format in decks)
 }
 
 // Retrieves the main collection grouping from the CollectionManager.
-CardGrouping<Collection> collection = CollectionManager.Collection
+Collection collection = CollectionManager.Collection
   ?? throw new InvalidOperationException("Collection not loaded.");
 
 Console.WriteLine($"\nCollection ({collection.ItemCount} items)");

@@ -98,11 +98,11 @@ public class Collection : CollectionValidationFixture
 
 public abstract class CollectionValidationFixture : BaseFixture
 {
-  private void ValidateCardGrouping<T>(CardGrouping<T> grouping) where T : class
+  private void ValidateCardGrouping(CardGrouping grouping)
   {
     // If the grouping is another view of the collection, it will not have an id
     bool isCollectionView =
-      typeof(T) == typeof(MTGOSDK.API.Collection.Collection) ||
+      grouping.GetType() == typeof(MTGOSDK.API.Collection.Collection) ||
       grouping.Name == "Full Trade List";
 
     // ICardGrouping properties
@@ -157,13 +157,13 @@ public abstract class CollectionValidationFixture : BaseFixture
   public void ValidateCollection(MTGOSDK.API.Collection.Collection collection)
   {
     // ICardGrouping properties
-    ValidateCardGrouping<MTGOSDK.API.Collection.Collection>(collection);
+    ValidateCardGrouping(collection);
   }
 
   public void ValidateBinder(Binder binder)
   {
     // ICardGrouping properties
-    ValidateCardGrouping<Binder>(binder);
+    ValidateCardGrouping(binder);
 
     // IBinder properties
     Assert.That(binder.IsLastUsedBinder,
@@ -177,7 +177,7 @@ public abstract class CollectionValidationFixture : BaseFixture
   public void ValidateDeck(Deck deck)
   {
     // ICardGrouping properties
-    ValidateCardGrouping<Deck>(deck);
+    ValidateCardGrouping(deck);
 
     // IDeck properties
     Assert.That(deck.Regions, Is.Not.Empty);

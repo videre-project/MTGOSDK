@@ -9,7 +9,7 @@ using WotC.MtGO.Client.Model.Collection;
 namespace MTGOSDK.API.Collection;
 using static MTGOSDK.API.Events;
 
-public sealed class Binder(dynamic binder) : CardGrouping<Binder>
+public sealed class Binder(dynamic binder) : CardGrouping
 {
   /// <summary>
   /// Stores an internal reference to the IBinder object.

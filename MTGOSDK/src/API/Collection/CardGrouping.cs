@@ -3,9 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using RegexMatch = System.Text.RegularExpressions.Match;
 
@@ -20,6 +18,11 @@ using WotC.MtGO.Client.Model.Collection;
 
 namespace MTGOSDK.API.Collection;
 
+public class CardGrouping(dynamic cardGrouping = null!) : CardGrouping<dynamic>
+{
+  internal override dynamic obj => Bind<ICardGrouping>(cardGrouping);
+}
+
 public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
 {
   //
@@ -30,6 +33,17 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
   /// The unique identifier for this grouping.
   /// </summary>
   public int Id => @base.NetDeckId;
+
+  /// <summary>
+  /// The server-assigned identity for this grouping.
+  /// </summary>
+  public int NetDeckId => @base.NetDeckId;
+
+  /// <summary>
+  /// The MTGO domain type for this grouping.
+  /// </summary>
+  public CardGroupingType GroupingType =>
+    Cast<CardGroupingType>(Unbind(this).GroupingType.EnumValue);
 
   /// <summary>
   /// The user-defined name for this grouping.
@@ -128,6 +142,34 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
         item.Name,
         item.Quantity,
         item.CatalogId))
+      .ToArray();
+
+  /// <summary>
+  /// Returns an immutable catalog-only snapshot of this grouping's items.
+  /// </summary>
+  public virtual IReadOnlyList<CardGroupingItemSnapshot> GetItemSnapshot() =>
+    SnapshotItems(Unbind(this).Items, DeckRegion.NotSet);
+
+  /// <summary>
+  /// Fetches the replay-relevant item fields for a remote grouping collection
+  /// in one batch request.
+  /// </summary>
+  protected static IReadOnlyList<CardGroupingItemSnapshot> SnapshotItems(
+    dynamic items,
+    DeckRegion region) =>
+    SerializeDroAs<ICardGroupingItemSnapshot>(
+      (DynamicRemoteObject)items,
+      [
+        nameof(ICardGroupingItemSnapshot.CatalogId),
+        "Annotation.EnumValue",
+        nameof(ICardGroupingItemSnapshot.Quantity)
+      ])
+      .Where(item => item.Quantity > 0)
+      .Select(item => new CardGroupingItemSnapshot(
+        item.CatalogId,
+        region,
+        item.Annotation,
+        item.Quantity))
       .ToArray();
 
   //
