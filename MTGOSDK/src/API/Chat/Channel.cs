@@ -44,12 +44,12 @@ public sealed class Channel(dynamic chatChannel)
   /// The channel's ID.
   /// </summary>
   [Default(-1)]
-  public int Id => @base.Id;
+  public int Id => Unbind(this).Id;
 
   /// <summary>
   /// The channel's name.
   /// </summary>
-  public string Name => @base.Name;
+  public string Name => Try(() => Unbind(this).Name, () => Unbind(this).Title);
 
   /// <summary>
   /// The parent channel's ID.
@@ -134,4 +134,34 @@ public sealed class Channel(dynamic chatChannel)
 
   public EventProxy<ChannelStateEventArgs> ChannelStateChanged =
     new(/* IChannel */ chatChannel, nameof(ChannelStateChanged));
+
+  public EventHookWrapper<Message> OnMessageReceived =
+    new(MessageReceived, new((s,_) => s.LocalFileName == chatChannel.LocalFileName));
+
+  //
+  // IChatChannel static events
+  //
+
+  /// <summary>
+  /// Event triggered when a message is appended to any channel in the client.
+  /// </summary>
+  public static EventHookProxy<Channel, Message> MessageReceived =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Chat.LoggableChatChannel>(),
+      typeof(WotC.MtGO.Client.Model.Chat.LoggableChatChannel).GetMethod(
+        "SendMessage",
+        [typeof(string), typeof(string)])!,
+      new((instance, args) =>
+      {
+        var message = new Message(new
+        {
+          Message = args[0],
+          FromUser = Optional<User>(args[1],
+                                    Lambda<bool>(o => !string.IsNullOrEmpty(o))),
+          Timestamp = instance.__timestamp,
+        });
+
+        return (new Channel(instance), message);
+      })
+    );
 }

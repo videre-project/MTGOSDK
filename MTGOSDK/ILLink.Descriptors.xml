@@ -167,7 +167,12 @@
   </assembly>
   <assembly fullname="WotC.MtGO.Client.Model.Chat">
     <namespace fullname="WotC.MtGO.Client.Model.Chat">
-      <type fullname="HistoricalChatChannel" preserve="nothing" />
+      <type fullname="LoggableChatChannel" preserve="nothing" />
+    </namespace>
+  </assembly>
+  <assembly fullname="WotC.MtGO.Client.Model.Trade">
+    <namespace fullname="WotC.MtGO.Client.Model.Trade">
+      <type fullname="TradeManager" preserve="nothing" />
     </namespace>
   </assembly>
   <assembly fullname="WotC.MtGO.Client.Model.Play">

@@ -21,7 +21,8 @@ public sealed class Message(dynamic chatMessage) : DLRWrapper<IChatMessage>
   /// <summary>
   /// Indicates whether the message has no real user object.
   /// </summary>
-  private bool IsUserMessage => Try<bool>(() => chatMessage.FromUser.Id != -1);
+  private bool IsUserMessage =>
+    Try<bool>(() => chatMessage.FromUser.Id != -1);
 
   //
   // IChatMessage wrapper properties
@@ -30,7 +31,8 @@ public sealed class Message(dynamic chatMessage) : DLRWrapper<IChatMessage>
   /// <summary>
   /// The user who sent the message.
   /// </summary>
-  public User? User => field ??= Optional<User>(@base.FromUser, IsUserMessage);
+  public User? User =>
+    field ??= Optional<User>(@base.FromUser, IsUserMessage);
 
   /// <summary>
   /// The timestamp of when the message was sent.
