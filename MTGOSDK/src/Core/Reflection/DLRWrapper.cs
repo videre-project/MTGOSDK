@@ -311,6 +311,39 @@ public abstract class DLRWrapper : SerializableBase
   }
 
   /// <summary>
+  /// Converts a value returned by MTGO's remoting layer to the requested type.
+  /// </summary>
+  /// <remarks>
+  /// Depending on the client build and the path by which a value was read,
+  /// enum-like values may arrive either as the enum itself or as a remote
+  /// wrapper exposing an <c>EnumValue</c> member.
+  /// <para/>
+  /// This method handles enum <c>.EnumValue</c> dereferencing automatically.
+  /// </remarks>
+  /// <typeparam name="T">The type to cast to.</typeparam>
+  /// <param name="value">The value to cast.</param>
+  /// <returns>The casted value.</returns>
+  public static T CastRemoteValue<T>(dynamic value)
+  {
+    if (value == null)
+      throw new InvalidOperationException(
+        $"Unable to cast null to {typeof(T).Name}.");
+
+    // Unwrap a small number of layers to handle nested serialized values while
+    // avoiding an accidental infinite chain for malformed remote objects.
+    for (int i = 0; i < 2; i++)
+    {
+      if (!DynamicRemoteObject.TryGetDynamicMember(value, "EnumValue", out object enumValue) ||
+          enumValue == null || ReferenceEquals(enumValue, value))
+        break;
+
+      value = enumValue;
+    }
+
+    return Cast<T>(value);
+  }
+
+  /// <summary>
   /// A type wrapper function method for safely executing a lambda function.
   /// </summary>
   public static Func<dynamic> Lambda(Func<dynamic> lambda) => lambda;

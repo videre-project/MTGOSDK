@@ -75,7 +75,7 @@ public sealed class Deck(dynamic deck) : CardGrouping
   public IEnumerable<DeckRegion> Regions =>
     Map<DeckRegion>(
       Unbind(this).Regions,
-      Lambda<DeckRegion>(e => Cast<DeckRegion>(e.EnumValue)));
+      Lambda<DeckRegion>(e => CastRemoteValue<DeckRegion>(e)));
 
   /// <summary>
   /// The unique identifier for this deck used for matchmaking.

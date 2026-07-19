@@ -259,8 +259,8 @@ public static class CollectionManager
 
   private static CardGrouping FromCardGrouping(dynamic cardGrouping)
   {
-    CardGroupingType groupingType = Cast<CardGroupingType>(
-      cardGrouping.GroupingType.EnumValue);
+    CardGroupingType groupingType = CastRemoteValue<CardGroupingType>(
+      cardGrouping.GroupingType);
     var groupingObject = new CardGrouping(cardGrouping);
 
     // Map each event type to its corresponding wrapper class.

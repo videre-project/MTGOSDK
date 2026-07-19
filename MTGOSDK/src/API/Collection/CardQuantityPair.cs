@@ -60,7 +60,7 @@ public class CardQuantityPair(dynamic cardQuantityPair)
   public Card Card => field ??= new(@base.CardDefinition);
 
   public uint Annotation =>
-    Cast<uint>(Unbind(this).Annotation.EnumValue);
+    CastRemoteValue<uint>(Unbind(this).Annotation);
 
   public int Quantity => m_quantity != 0 ? m_quantity : @base.Quantity;
 }

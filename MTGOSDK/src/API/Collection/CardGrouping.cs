@@ -43,7 +43,7 @@ public abstract partial class CardGrouping<T> : DLRWrapper<ICardGrouping>
   /// The MTGO domain type for this grouping.
   /// </summary>
   public CardGroupingType GroupingType =>
-    Cast<CardGroupingType>(Unbind(this).GroupingType.EnumValue);
+    CastRemoteValue<CardGroupingType>(Unbind(this).GroupingType);
 
   /// <summary>
   /// The user-defined name for this grouping.
