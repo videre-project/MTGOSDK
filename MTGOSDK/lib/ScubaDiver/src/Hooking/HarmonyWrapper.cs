@@ -191,8 +191,10 @@ public class HarmonyWrapper
 
 #pragma warning disable IDE0051, CS4014
   // ReSharper disable UnusedMember.Local
-  private static void UnifiedHook_ctor(MethodBase __originalMethod) =>
-    SinglePrefixHook(__originalMethod, new object());
+  private static void UnifiedHook_ctor(
+    MethodBase __originalMethod,
+    object[] __args) =>
+      SinglePrefixHook(__originalMethod, new object(), __args);
   private static void UnifiedHook_0000000000(MethodBase __originalMethod, object __instance) =>
     SinglePrefixHook(__originalMethod, __instance);
   private static void UnifiedHook_1000000000(MethodBase __originalMethod, object __instance, object __0) =>
