@@ -84,7 +84,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor
 
     // Subscribe to static event with a filter that matches the game's log channel
     _localFileName = _channel.LocalFileName;
-    s_OnLogMessage += OnLogMessageReceived;
+    Channel.MessageReceived += OnLogMessageReceived;
 
     // Clear any pending messages that might have arrived during subscription
     _pendingMessages.Clear();
@@ -241,7 +241,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor
 
   public void Dispose()
   {
-    s_OnLogMessage -= OnLogMessageReceived;
+    Channel.MessageReceived -= OnLogMessageReceived;
     _pendingMessages.Clear();
     _snapshotWindow.Clear();
     _emittedMessages.Clear();
@@ -252,38 +252,5 @@ public sealed class LogMessageProcessor : IGameStateProcessor
   /// so that log message detection is active.
   /// </summary>
   public static void EnsureHookInitialized() =>
-    s_OnLogMessage.EnsureInitialize();
-
-  /// <summary>
-  /// Event triggered when a game action in any active game is performed.
-  /// </summary>
-  private static EventHookProxy<Channel, Message> s_OnLogMessage =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Chat.HistoricalChatChannel>(),
-      "AppendMessage",
-      new((instance, args) =>
-      {
-        DateTime timestamp = args[0];
-        string text = args[1];
-        string username = args[2];
-
-        User? fromUser = null;
-        if (!string.IsNullOrEmpty(username))
-        {
-          try { fromUser = Optional<User>(instance.GetUser(username)); }
-          catch { /* GetUser can fail for system messages */ }
-        }
-
-        Message message = new(new
-        {
-          __timestamp = instance.__timestamp,
-          Timestamp = timestamp,
-          Message = text,
-          FromUser = fromUser
-        });
-
-        return (new Channel(instance), message);
-      })
-    );
-
+    Channel.MessageReceived.EnsureInitialize();
 }
