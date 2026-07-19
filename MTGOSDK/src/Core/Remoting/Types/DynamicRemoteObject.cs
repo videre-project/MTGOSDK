@@ -327,7 +327,9 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   /// Holds strong references to child DROs returned from property/method access.
   /// This prevents children from being GC'd (and unpinned) while the parent is alive.
   /// </summary>
-  private Dictionary<ulong, DynamicRemoteObject>? __childRefs;
+  // Property serialization can fetch multiple remote children concurrently.
+  // Keep this cache concurrent so parallel SerializeAs calls cannot corrupt it.
+  private readonly ConcurrentDictionary<ulong, DynamicRemoteObject> __childRefs = new();
 
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
@@ -353,8 +355,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // disposed of and we don't want to keep a reference to it.
 
     // Clear child references first - they'll be GC'd and released separately
-    __childRefs?.Clear();
-    __childRefs = null;
+    __childRefs.Clear();
 
     if (__ro != null && __ro.IsValid)
     {
@@ -400,7 +401,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   private void TrackChildReference(ulong remoteAddress, DynamicRemoteObject dro)
   {
-    __childRefs ??= new Dictionary<ulong, DynamicRemoteObject>();
     __childRefs[remoteAddress] = dro;
   }
 

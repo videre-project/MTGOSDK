@@ -53,6 +53,16 @@ public static class GlobalEvents
       (_, a) => a[0] != null && a[0].Game != null,
       (_, a) => new dynamic[] { a[0].Game }),
     //
+    // MTGOSDK.API.Play.Tournaments
+    //
+    new GlobalEvent(
+      "WotC.MtGO.Client.Model.Play.TournamentEvent.Tournament",
+      "OnCurrentRoundChanged",
+      // MTGO raises this method with a null current round while clearing
+      // the active round (for example during an empty round sync).
+      // There is no round update to expose in that case.
+      (_, a) => a.Length > 1 && a[1] != null),
+    //
     // MTGOSDK.API.Play.Match
     //
     new GlobalEvent(
