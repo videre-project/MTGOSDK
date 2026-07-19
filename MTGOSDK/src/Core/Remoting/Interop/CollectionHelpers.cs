@@ -89,21 +89,13 @@ public static class CollectionHelpers
   {
     var comparer = Comparer<object>.Default;
     var result = new List<object>();
-    var propertyCache = new Dictionary<Type, PropertyInfo>();
+    var memberCache = new Dictionary<(Type Type, string Name), MemberInfo?>();
 
     foreach (var item in (IEnumerable)collection)
     {
       if (item is null) continue;
 
-      var type = item.GetType();
-      if (!propertyCache.TryGetValue(type, out var property))
-      {
-         property = type.GetProperty(propertyName)
-          ?? throw new ArgumentException($"Property '{propertyName}' not found on type '{type.Name}'");
-         propertyCache[type] = property;
-      }
-      
-      var propValue = property.GetValue(item);
+      var propValue = GetPropertyPathValue(item, propertyName, memberCache);
       int cmp = comparer.Compare(propValue, value);
       
       bool matches = (ComparisonOperator)operatorCode switch
@@ -120,6 +112,47 @@ public static class CollectionHelpers
       if (matches) result.Add(item);
     }
     
+    return result;
+  }
+
+  public static List<object> WherePropertyCompareProperty(
+    object collection,
+    string leftPropertyName,
+    int operatorCode,
+    string rightPropertyName)
+  {
+    var comparer = Comparer<object>.Default;
+    var result = new List<object>();
+    var memberCache = new Dictionary<(Type Type, string Name), MemberInfo?>();
+
+    foreach (var item in (IEnumerable)collection)
+    {
+      if (item is null) continue;
+
+      var leftValue = GetPropertyPathValue(
+        item,
+        leftPropertyName,
+        memberCache);
+      var rightValue = GetPropertyPathValue(
+        item,
+        rightPropertyName,
+        memberCache);
+      int cmp = comparer.Compare(leftValue, rightValue);
+
+      bool matches = (ComparisonOperator)operatorCode switch
+      {
+        ComparisonOperator.Equal => cmp == 0,
+        ComparisonOperator.NotEqual => cmp != 0,
+        ComparisonOperator.GreaterThan => cmp > 0,
+        ComparisonOperator.GreaterThanOrEqual => cmp >= 0,
+        ComparisonOperator.LessThan => cmp < 0,
+        ComparisonOperator.LessThanOrEqual => cmp <= 0,
+        _ => throw new ArgumentException($"Unknown operator: {operatorCode}")
+      };
+
+      if (matches) result.Add(item);
+    }
+
     return result;
   }
 

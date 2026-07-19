@@ -6,6 +6,7 @@
 using System.Linq.Expressions;
 
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -45,6 +46,25 @@ public static class DLRExtensions
     this DynamicRemoteObject collection,
     Expression<Func<T, bool>> predicate)
   {
+    if (ExpressionParser.TryParsePropertyComparison(
+          predicate,
+          out string leftPropertyName,
+          out ComparisonOperator propertyOp,
+          out string rightPropertyName))
+    {
+      return RemoteClient.InvokeMethod(
+        "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
+        "WherePropertyCompareProperty",
+        args: new object[]
+        {
+          collection,
+          leftPropertyName,
+          (int)propertyOp,
+          rightPropertyName
+        }
+      );
+    }
+
     var (propertyName, op, value) = ExpressionParser.ParsePredicate(predicate);
     
     return RemoteClient.InvokeMethod(

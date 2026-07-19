@@ -54,6 +54,30 @@ public static class ExpressionParser
       nameof(expression));
   }
 
+  public static bool TryParsePropertyComparison<T>(
+    Expression<Func<T, bool>> expression,
+    out string leftPropertyName,
+    out ComparisonOperator op,
+    out string rightPropertyName)
+  {
+    if (StripConversions(expression.Body) is BinaryExpression binary &&
+        TryExtractPropertyName(
+          StripConversions(binary.Left),
+          out leftPropertyName) &&
+        TryExtractPropertyName(
+          StripConversions(binary.Right),
+          out rightPropertyName))
+    {
+      op = ToComparisonOperator(binary.NodeType);
+      return true;
+    }
+
+    leftPropertyName = string.Empty;
+    rightPropertyName = string.Empty;
+    op = default;
+    return false;
+  }
+
   /// <summary>
   /// Parses a key selector expression for sorting.
   /// </summary>
