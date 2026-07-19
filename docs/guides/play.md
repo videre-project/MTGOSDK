@@ -52,10 +52,10 @@ foreach (var evt in EventManager.JoinedEvents)
       Console.WriteLine($"Match: {match.Id}, State: {match.State}");
       break;
     case Tournament tournament:
-      Console.WriteLine($"Tournament: {tournament.Id}, Round: {tournament.CurrentRound}");
+      Console.WriteLine($"Tournament: {tournament.Id}, Round: {tournament.RoundNumber}");
       break;
     case League league:
-      Console.WriteLine($"League: {league.Name}, Wins: {league.Score}");
+      Console.WriteLine($"League: {league.Name}, Wins: {league.Wins}");
       break;
   }
 }
@@ -68,11 +68,23 @@ This collection contains mixed types, so pattern matching is the cleanest way to
 When you know an event ID (from a notification, history record, or user input), you can retrieve it directly:
 
 ```csharp
-var match = EventManager.GetMatch(123456);
-var tournament = EventManager.GetTournament(789012);
+var evt = EventManager.GetEvent(123456);
+
+switch (evt)
+{
+  case Match match:
+    Console.WriteLine($"Match: {match.Id}, State: {match.State}");
+    break;
+  case Tournament tournament:
+    Console.WriteLine($"Tournament: {tournament.Id}, Round: {tournament.RoundNumber}");
+    break;
+  case League league:
+    Console.WriteLine($"League: {league.Name}, Wins: {league.Wins}");
+    break;
+}
 ```
 
-These methods return the event object if found, or null if the event doesn't exist or isn't accessible. Event IDs are unique across all event types, so you won't accidentally get a tournament when you meant to get a match.
+`EventManager.GetEvent(int)` returns a `dynamic` event object (or throws `KeyNotFoundException` if the event doesn't exist). Because the exact subtype isn't known until runtime, use pattern matching to handle each event type. You can also look up an event by its `Guid` token via `EventManager.GetEvent(Guid)`. Event IDs are unique across all event types, so a single lookup resolves to whichever event matches that ID.
 
 ---
 
@@ -83,15 +95,15 @@ Tournament objects provide detailed state about scheduled events. You can track 
 ### Basic Tournament Info
 
 ```csharp
-var tournament = EventManager.GetTournament(123456);
+Tournament tournament = EventManager.GetEvent(123456);
 
 Console.WriteLine($"{tournament.Description}");
-Console.WriteLine($"Round {tournament.CurrentRound} of {tournament.TotalRounds}");
+Console.WriteLine($"Round {tournament.RoundNumber} of {tournament.TotalRounds}");
 Console.WriteLine($"Players: {tournament.TotalPlayers}");
 Console.WriteLine($"State: {tournament.State}");
 ```
 
-The `Description` property contains the full tournament name as displayed in MTGO. `CurrentRound` increments as rounds complete, and `TotalRounds` tells you how many rounds the tournament will have (which depends on player count for Swiss events). The `State` property indicates whether the tournament is registering, in progress, or completed.
+The `Description` property contains the full tournament name as displayed in MTGO. `RoundNumber` increments as rounds complete, and `TotalRounds` tells you how many rounds the tournament will have (which depends on player count for Swiss events). The `State` property indicates whether the tournament is registering, in progress, or completed.
 
 ### Standings
 
@@ -102,11 +114,11 @@ foreach (var standing in tournament.Standings)
 {
   Console.WriteLine($"{standing.Rank}. {standing.Player.Name}");
   Console.WriteLine($"   Record: {standing.Record}");
-  Console.WriteLine($"   Points: {standing.Score}");
+  Console.WriteLine($"   Points: {standing.Points}");
 }
 ```
 
-Standings are ordered by rank, with `Rank` being the player's current position (1 is first place). The `Record` property is a formatted string like "2-0" showing wins and losses. The `Score` is the point total used for tiebreakers, which follows standard tournament rules (3 points per match win, etc.).
+Standings are ordered by rank, with `Rank` being the player's current position (1 is first place). The `Record` property is a formatted string like "2-0" showing wins and losses. The `Points` property is the point total used for tiebreakers, which follows standard tournament rules (3 points per match win, etc.).
 
 ### Match History Per Player
 
@@ -161,12 +173,11 @@ Leagues are asynchronous events that run continuously over days or weeks. Unlike
 foreach (var league in LeagueManager.OpenLeagues)
 {
   Console.WriteLine($"{league.Name}");
-  Console.WriteLine($"  State: {league.LeagueState}");
-  Console.WriteLine($"  Record: {league.Score}-{league.Losses} of {league.MaxRounds}");
+  Console.WriteLine($"  Record: {league.Wins}-{league.Losses} of {league.TotalMatches}");
 }
 ```
 
-The `OpenLeagues` collection contains leagues the user has an active entry in. The `Score` and `Losses` properties track your win-loss record, while `MaxRounds` tells you how many matches you can play before the entry completes (typically 5 for a traditional league). The `LeagueState` indicates whether you're actively in a match, waiting for a match, or have completed your entry.
+The `OpenLeagues` collection contains leagues the user has an active entry in. The `Wins` and `Losses` properties track your win-loss record, while `TotalMatches` tells you how many matches you can play before the entry completes (typically 5 for a traditional league; `MinMatches` is the minimum required to be eligible for prizes). To observe league lifecycle changes, subscribe to the `StateChanged` event, which provides a `LeagueStateEventArgs` describing the transition.
 
 ### League vs Tournament
 
@@ -183,7 +194,7 @@ A match represents a head-to-head series of games between two players. In a best
 ### Match Properties
 
 ```csharp
-var match = EventManager.GetMatch(123456);
+Match match = EventManager.GetEvent(123456);
 
 Console.WriteLine($"Match ID: {match.Id}");
 Console.WriteLine($"State: {match.State}");
@@ -237,13 +248,18 @@ Match events fire at key transition points. `OnGameStarted` fires when a new gam
 ### Tournament Events
 
 ```csharp
-tournament.CurrentRoundChanged += (sender, args) =>
+tournament.OnRoundChanged += (round) =>
 {
-  Console.WriteLine($"Round changed to {tournament.CurrentRound}");
+  Console.WriteLine($"Round changed to {round.Number}");
+};
+
+tournament.OnStateChanged += (state) =>
+{
+  Console.WriteLine($"Tournament state changed to {state}");
 };
 ```
 
-Tournament events track bracket progression. The `CurrentRoundChanged` event fires when a round completes and the next round begins, which is when new pairings become available. This is useful for refreshing standings displays or alerting users that their next match is ready.
+Tournament events track bracket progression. The `OnRoundChanged` event fires when a round completes and the next round begins, providing the new `TournamentRound`. The `OnStateChanged` event fires when the tournament transitions between states (e.g., registering, in progress, completed). These are useful for refreshing standings displays or alerting users that their next match is ready. You can also subscribe to `OnStandingsChanged` to be notified when the standings are recalculated after a round.
 
 ### Cleaning Up
 

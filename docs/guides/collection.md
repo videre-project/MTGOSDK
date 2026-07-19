@@ -20,7 +20,7 @@ using MTGOSDK.API.Collection;
 
 ## Accessing Your Collection
 
-The full collection is available through `CollectionManager.Collection`. Since MTGO collections can contain thousands of unique cards, the SDK provides a `GetFrozenCollection` method that creates a compact, read-only snapshot optimized for iteration:
+The full collection is available through `CollectionManager.Collection`. Since MTGO collections can contain thousands of unique cards, the SDK provides a `GetFrozenCollection` property that creates a compact, read-only snapshot optimized for iteration:
 
 ```csharp
 var collection = CollectionManager.Collection
@@ -35,7 +35,7 @@ foreach (var card in snapshot.Take(10))
 }
 ```
 
-The `Collection` property can be null if the user hasn't logged in yet or the collection hasn't finished loading. Always check for null before accessing it "in production code. The `ItemCount` property gives you the total number of cards (counting duplicates), while iterating the frozen collection gives you unique cards with quantities.
+The `Collection` property always returns a wrapper around the user's collection. The `ItemCount` property gives you the total number of cards (counting duplicates), while iterating the frozen collection gives you unique cards with quantities.
 
 The frozen collection creates an immutable snapshot at the moment you call it. This is useful for exports or analytics where you want consistent data even if the collection changes during iteration. For live displays that should update as cards are added or removed, use the regular `Items` property instead.
 
@@ -133,14 +133,14 @@ var deck = new Deck(
   mainboard,
   sideboard,
   name: "Mono Red Burn",
-  format: PlayFormat.Legacy
+  format: CollectionManager.Decks.First().Format
 );
 
 Console.WriteLine($"Created: {deck.Name}");
 Console.WriteLine($"Format: {deck.Format?.Name}");
 ```
 
-You can provide just the card name (the SDK will look up the ID when needed), just the catalog ID (for maximum efficiency), or both (name for readability, ID for performance). The catalog ID is the unique identifier for a specific card printing in MTGO's database.
+You can provide just the card name (the SDK will look up the ID when needed), just the catalog ID (for maximum efficiency), or both (name for readability, ID for performance). The catalog ID is the unique identifier for a specific card printing in MTGO's database. The optional `format` parameter accepts a `PlayFormat` instance (such as a deck's `Format` property) used to associate the deck with a format.
 
 These deck objects don't appear in the collection scene of the MTGO client by default. They exist in memory and can be used for operations like matchmaking or export, but they're not persisted unless you explicitly save them.
 
@@ -167,14 +167,14 @@ The boolean properties `IsWishList` and `IsMegaBinder` identify special binder t
 To access cards in a specific binder:
 
 ```csharp
-var binder = CollectionManager.GetBinder("My Trade Binder");
+var binder = CollectionManager.GetBinder(binderId);
 foreach (var card in binder.Items.Take(10))
 {
-  Console.WriteLine($"  {card.Count}x {card.Name}");
+  Console.WriteLine($"  {card.Quantity}x {card.Name}");
 }
 ```
 
-The `GetBinder` method searches by name. If no binder with that name exists, you'll get null back. The `Items` collection contains the cards in the binder, which you can iterate, filter, or export just like deck contents.
+The `GetBinder` method looks up a binder by its numeric id. If no binder with that id exists, you'll get null back. The `Items` collection contains the cards in the binder, which you can iterate, filter, or export just like deck contents. You can enumerate `CollectionManager.Binders` to discover binder ids and names.
 
 ---
 
@@ -189,7 +189,7 @@ var card = CollectionManager.GetCard("Black Lotus");
 Console.WriteLine($"{card.Name}");
 Console.WriteLine($"  Mana cost: {card.ManaCost}");
 Console.WriteLine($"  Types: {card.Types}");
-Console.WriteLine($"  Set: {card.SetName}");
+Console.WriteLine($"  Set: {card.Set.Name}");
 Console.WriteLine($"  Rarity: {card.Rarity}");
 ```
 
@@ -211,7 +211,7 @@ Many cards have multiple printings across different sets. Use `GetCards` to retr
 ```csharp
 foreach (var printing in CollectionManager.GetCards("Colossal Dreadmaw"))
 {
-  Console.WriteLine($"{printing.SetName} ({printing.Rarity})");
+  Console.WriteLine($"{printing.Set.Name} ({printing.Rarity})");
 }
 ```
 

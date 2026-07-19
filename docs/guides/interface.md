@@ -36,7 +36,7 @@ Multiple toasts can queue up if you send several in quick succession. MTGO will 
 You can create a toast that navigates to an event when clicked:
 
 ```csharp
-var tournament = EventManager.GetTournament(123456);
+Tournament tournament = EventManager.GetEvent(123456);
 ToastViewManager.ShowToast(
   "Tournament Started",
   "Click to view tournament.",

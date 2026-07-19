@@ -98,23 +98,94 @@ Console.WriteLine($"State: {trade.State}");
 Console.WriteLine($"Accepted: {trade.IsAccepted}");
 
 Console.WriteLine("You're offering:");
-foreach (var item in trade.TradedItems)
+foreach (var item in trade.TradedItems.CollectionItems)
 {
   Console.WriteLine($"  {item.Quantity}x {item.Card.Name}");
 }
 
 Console.WriteLine("They're offering:");
-foreach (var item in trade.PartnerTradedItems)
+foreach (var item in trade.PartnerTradedItems.CollectionItems)
 {
   Console.WriteLine($"  {item.Quantity}x {item.Card.Name}");
 }
 ```
 
-The trade escrow tracks both sides of the trade in real time. As either player adds or removes cards from the trade, the `TradedItems` and `PartnerTradedItems` collections update automatically.
+The trade escrow tracks both sides of the trade in real time. `TradedItems` and `PartnerTradedItems` are `ItemCollection` objects; access their `CollectionItems` property to enumerate the `CardQuantityPair` objects for each side. As either player adds or removes cards from the trade, these collections update automatically.
 
 The `State` property indicates where the trade is in its lifecycle: negotiating (cards being added/removed), pending confirmation (one or both players reviewing), or completed. The `IsAccepted` property becomes true when both parties have clicked "Confirm" and the trade is ready to execute.
 
 If you're building a trading bot or automation tool, you'll want to monitor `CurrentTrade` changes to detect when trades are initiated, modified, or completed.
+
+---
+
+## Trade Lifecycle Events
+
+`TradeManager` exposes one lifecycle stream for every MTGO escrow. The `isTrade`
+value is `true` for player trades and `false` for non-player escrows such as
+opening packs.
+
+```csharp
+TradeManager.TradeStarted += (trade, isTrade) =>
+{
+  Console.WriteLine(isTrade ? "Player trade" : "Non-player escrow");
+  Console.WriteLine($"Escrow {trade.Token}: {trade.State}");
+};
+
+TradeManager.TradeStateChanged += (trade, change) =>
+{
+  Console.WriteLine(
+    $"Escrow {trade.Token}: {change.OldState} -> {change.NewState}");
+};
+```
+
+Applications that only need one kind of escrow can filter the stream using the
+classification supplied by `TradeStarted`. State notifications where `OldState`
+and `NewState` are equal are intentional: MTGO uses them when offered items
+change without changing the lifecycle state.
+
+Trade errors are exposed through a `(TradeEscrow?, TradeError)` callback that flattens MTGO's native error details into the SDK's `TradeError` enum:
+
+```csharp
+TradeManager.TradeError += (trade, error) =>
+{
+  if (trade == null)
+    Console.WriteLine($"Trade request failed: {error}");
+  else
+    Console.WriteLine($"Escrow {trade.Token} failed: {error}");
+};
+```
+
+The trade value is null when validation or setup fails before MTGO creates an escrow.
+
+### Trade Enums
+
+The lifecycle and error values above are backed by a few small enums in
+`MTGOSDK.API.Trade.Enums`.
+
+**`TradeState`** — the `State` reported by `TradeStarted`, `TradeStateChanged`,
+and `CurrentTrade`. It walks through the full negotiation, including pending client-side requests and server-side grants:
+
+| Phase | Example members |
+| --- | --- |
+| Invitation | `InviteSent`, `InviteReceived`, `InviteAccepted` |
+| Deposit negotiation | `NegotiateDepositSubmittedLocal`, `NegotiateDepositReceivedBoth` |
+| Approval | `ApprovalSubmittedLocal`, `ApprovalReceivedBoth` |
+| Terminal | `CancelRequested`, `Closed` |
+
+**`TradeError`** — the `error` value from `TradeError`. These are the flattened
+reasons a trade or escrow can fail:
+
+`Default`, `EscrowNotAvailible`, `UserNotAuthorized`, `PartnerNotAuthorized`,
+`UserNotOnline`, `InvalidQuantity`, `DepositListTooLarge`, `AlreadyInTrade`,
+`NoDepositListSepcified`, `NoPay`, `No2faOnRequestor`, `No2faOnRecipient`.
+
+**`TradeFinalState`** — the outcome reported when an escrow closes. This
+distinguishes successful completions (`TradeComplete`, `OpenpackComplete`) from
+cancellations and errors (`UserCanceledTrade`, `OtherCanceledInvitation`,
+`TradeExpired`, `TradeCompleteWithErrors`, `FinalListMismatch`, and more).
+
+**`TradePostFormat`** — the shape of a trade post, used when classifying
+listings: `Invalid`, `OfferedWantedList`, `Message`.
 
 ---
 

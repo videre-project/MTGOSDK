@@ -24,7 +24,7 @@ You don't create `Game` objects directly. They come from `Match` instances. When
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 
-var match = EventManager.GetMatch(123456);
+Match match = EventManager.GetEvent(123456);
 
 // See all games played in this match
 foreach (var game in match.Games)
