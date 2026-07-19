@@ -56,9 +56,6 @@ namespace MTGOSDK.API;
 /// <see cref="Events.ToastEventCallback"/><br/>
 /// <see cref="Events.TournamentEventCallback"/><br/>
 /// <see cref="Events.TournamentStateChangedEventCallback"/><br/>
-/// <see cref="Events.TradeErrorEventCallback"/><br/>
-/// <see cref="Events.TradeStartedEventCallback"/><br/>
-/// <see cref="Events.TradeStateChangedEventCallback"/><br/>
 /// <see cref="Events.UserEventCallback"/><br/>
 /// </remarks>
 public sealed partial class Events

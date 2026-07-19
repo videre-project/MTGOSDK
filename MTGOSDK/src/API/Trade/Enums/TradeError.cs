@@ -17,5 +17,7 @@ public enum TradeError
 	DepositListTooLarge,
 	AlreadyInTrade,
 	NoDepositListSepcified,
-	NoPay
+	NoPay,
+	No2faOnRequestor,
+	No2faOnRecipient
 }

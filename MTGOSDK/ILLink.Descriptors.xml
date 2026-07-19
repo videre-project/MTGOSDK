@@ -151,6 +151,9 @@
         <property name="GameIds" />
       </type>
     </namespace>
+    <namespace fullname="WotC.MtGO.Client.Model.Trade.Events">
+      <type fullname="TradeErrorEventArgs" preserve="methods" />
+    </namespace>
   </assembly>
   <!--
     EventHookProxy Static References (no preservation of members):

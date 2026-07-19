@@ -17,6 +17,11 @@ using static MTGOSDK.API.Events;
 
 public static class ChannelManager
 {
+  /// <summary>
+  /// The internal reference to the model chat service.
+  /// </summary>
+  private static readonly IChat s_chat = ObjectProvider.Get<IChat>();
+
   //
   // IChannelManager wrapper methods
   //
@@ -65,6 +70,14 @@ public static class ChannelManager
   /// <returns>A new channel object.</returns>
   public static Channel GetChannel(string name) =>
     new(Unbind(s_channelManager.GetChannelByName(name)));
+
+  /// <summary>
+  /// Gets or creates the private chat channel for the given user.
+  /// </summary>
+  /// <param name="userId">The ID of the other user.</param>
+  /// <returns>The private channel.</returns>
+  public static Channel GetPrivateChannel(int userId) =>
+    new(Unbind(s_chat.GetPrivateChatChannel(userId)));
 
   //
   // IChatManager wrapper methods

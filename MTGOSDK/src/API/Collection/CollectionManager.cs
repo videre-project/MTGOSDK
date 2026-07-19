@@ -9,6 +9,7 @@ using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
 
+using MTGOSDK.API.Trade;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Hooking;
@@ -291,33 +292,49 @@ public static class CollectionManager
   /// <summary>
   /// Event triggered when the items in the user's collection change.
   /// </summary>
-  public static EventHookProxy<Collection, IList<CardQuantityPair>> CollectionItemsChanged =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Core.Collection.CollectionGroupingManager>(),
-      "Collection_ItemsAddedOrRemoved",
-      new((_, args) =>
-      {
-        var collection = Collection; // Get the current collection instance
+  public static EventHookProxy<
+    Collection,
+    (
+      IList<CardQuantityPair> Changes,
+      TransactionCorrelation Correlation)> CollectionItemsChanged =
+        new(
+          new TypeProxy<WotC.MtGO.Client.Model.Core.Collection.CollectionGroupingManager>(),
+          "Collection_ItemsAddedOrRemoved",
+          new((instance, args) =>
+          {
+            var collection = Collection;
+            var changeSet = new List<CardQuantityPair>();
+            var e = args[1]; // CardGroupingItemsChangedEventArgs
+            if (e.ItemsAdded != null)
+            {
+              changeSet.AddRange(Map<CardQuantityPair>(e.ItemsAdded));
+            }
+            if (e.ItemsRemoved != null)
+            {
+              changeSet.AddRange(Map(
+                e.ItemsRemoved,
+                Lambda<CardQuantityPair>(item =>
+                  new(item, -item.Quantity))));
+            }
+            if (e.ItemsModified != null)
+            {
+              changeSet.AddRange(Map<CardQuantityPair>(e.ItemsModified));
+            }
 
-        var changeSet = new List<CardQuantityPair>();
-        var e = args[1]; // CardGroupingItemsChangedEventArgs
-        if (e.ItemsAdded != null)
-        {
-          changeSet.AddRange(Map<CardQuantityPair>(e.ItemsAdded));
-        }
-        if (e.ItemsRemoved != null)
-        {
-          changeSet.AddRange(Map(e.ItemsRemoved, Lambda<CardQuantityPair>(c => new(c, -c.Quantity))));
-        }
-        if (e.ItemsModified != null)
-        {
-          changeSet.AddRange(Map<CardQuantityPair>(e.ItemsModified));
-        }
+            IList<CardQuantityPair> changes = changeSet
+              .Select(item => new CardQuantityPair(item.Id, item.Quantity))
+              .ToArray();
 
-        return (collection, changeSet); // Return a tuple of (Collection, IList<CardQuantityPair>)
-      }),
-      HarmonyPatchPosition.Postfix
-    );
+            var correlation = new TransactionCorrelation(
+              (DateTime)instance.__timestamp,
+              (ulong?)e.OperationId,
+              (Guid?)e.EscrowToken
+            );
+
+            return (collection, (changes, correlation));
+          }),
+          HarmonyPatchPosition.Postfix
+        );
 
   /// <summary>
   /// Event triggered when the items in a card grouping (deck or binder) change.
@@ -345,7 +362,7 @@ public static class CollectionManager
           changeSet.AddRange(Map<CardQuantityPair>(e.ItemsModified));
         }
 
-        return (grouping, changeSet); // Return a tuple of (CardGrouping, IList<CardQuantityPair>)
+        return (grouping, changeSet);
       }),
       HarmonyPatchPosition.Postfix
     );

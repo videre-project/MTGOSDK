@@ -3,12 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections;
-
 using MTGOSDK.Core.Reflection;
-
-using CollectionItem = MTGOSDK.API.Collection.CollectionItem<dynamic>;
-
+using MTGOSDK.Core.Reflection.Serialization;
 
 namespace MTGOSDK.API.Collection;
 
@@ -19,28 +15,67 @@ public class ItemCollection(dynamic itemCollection) : DLRWrapper<dynamic>
   /// </summary>
   internal override dynamic obj => itemCollection; // Input obj is not type-casted.
 
+  private static readonly string[] s_collectionItemBatchPaths =
+  [
+    "Id",
+    "Quantity"
+  ];
+
+  private static readonly string[] s_cardQuantityPairBatchPaths =
+  [
+    "CatalogId",
+    "Quantity"
+  ];
+
+  internal static List<CardQuantityPair> SerializeCollectionItems(
+    dynamic collectionItems) =>
+      SerializeCollectionItems(collectionItems, s_collectionItemBatchPaths);
+
+  internal static List<CardQuantityPair> SerializeCardQuantityPairs(
+    dynamic cardQuantityPairs) =>
+      SerializeCollectionItems(cardQuantityPairs, s_cardQuantityPairBatchPaths);
+
+  private static List<CardQuantityPair> SerializeCollectionItems(
+      dynamic collectionItems,
+      string[] batchPaths)
+    {
+      if (!RemoteBatchCollection.TryFetch(
+            collectionItems,
+            batchPaths,
+            out BatchCollectionSnapshot batch))
+      {
+        return [];
+      }
+
+      var items = new List<CardQuantityPair>(batch.Count);
+      for (int i = 0; i < batch.Count; i++)
+      {
+        items.Add(new CardQuantityPair(
+          batch.GetInt(i, batchPaths[0]),
+          batch.GetInt(i, batchPaths[1])));
+      }
+
+      return items;
+    }
+
   //
   // ItemCollection wrapper properties
   //
 
   public int Count => @base.Count;
 
-	public List<CollectionItem> CollectionItems =>
-    Map<IList, CollectionItem>(@base.CollectionItems);
+	public List<CardQuantityPair> CollectionItems =>
+    SerializeCollectionItems(@base.CollectionItems);
 
-	public List<CollectionItem> OpenableItems =>
-    Map<IList, CollectionItem>(@base.OpenableItems);
+	public List<CardQuantityPair> OpenableItems =>
+    SerializeCollectionItems(@base.OpenableItems);
 
   //
   // ItemCollection wrapper methods
   //
 
-  // TODO:
-  //   - AddItem, RemoveItem
-  //   - AddRange, RemoveRange
-
-  public List<CollectionItem> GetItem(int id) =>
-    Map<IList, CollectionItem>(@base.GetItemById(id));
+  public List<CardQuantityPair> GetItem(int id) =>
+    SerializeCollectionItems(@base.GetItemById(id));
 
   public bool Contains(int id) => @base.Contains(id);
 
