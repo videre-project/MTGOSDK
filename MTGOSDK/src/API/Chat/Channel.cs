@@ -159,6 +159,7 @@ public sealed class Channel(dynamic chatChannel)
           FromUser = Optional<User>(args[1],
                                     Lambda<bool>(o => !string.IsNullOrEmpty(o))),
           Timestamp = instance.__timestamp,
+          __timestamp = instance.__timestamp,
         });
 
         return (new Channel(instance), message);
