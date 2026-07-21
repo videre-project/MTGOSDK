@@ -37,6 +37,11 @@ public sealed class League(dynamic league) : Event
   //
 
   /// <summary>
+  /// The global unique identifier for this specific league course.
+  /// </summary>
+  public int CourseId => this.LeagueUser.CourseId;
+
+  /// <summary>
   /// The name of the league event.
   /// </summary>
   public string Name => @base.Name;
