@@ -64,26 +64,4 @@ public static class LeagueManager
     leaguesByToken.ContainsKey(guid)
       ? new League(leaguesByToken[guid])
       : throw new KeyNotFoundException($"No league found with guid {guid}");
-
-  //
-  // ILeagueManager wrapper events
-  //
-
-  public static EventProxy<LeagueEventArgs> LeagueAdded =
-    new(s_leagueManager, nameof(LeagueAdded));
-
-  public static EventProxy<LeagueEventArgs> LeagueRemoved =
-    new(s_leagueManager, nameof(LeagueRemoved));
-
-  public static EventProxy<LeagueEventArgs> LocalUserJoinedLeague =
-    new(s_leagueManager, nameof(LocalUserJoinedLeague));
-
-  public static EventProxy<LeagueEventArgs> LocalUserLeftLeague =
-    new(s_leagueManager, nameof(LocalUserLeftLeague));
-
-  public static EventProxy<LeagueEventArgs> LeagueStateChanged =
-    new(s_leagueManager, nameof(LeagueStateChanged));
-
-  public static EventProxy<LeagueEventArgs> ReceivedLeagueList =
-    new(s_leagueManager, nameof(ReceivedLeagueList));
 }

@@ -336,14 +336,28 @@ public static class EventManager
   /// <summary>
   /// Event triggered when a new event is joined by the user.
   /// </summary>
-  public static EventHookProxy<Event, object> EventJoined =
+  public static EventHookProxy<Event, DateTime> EventJoined =
     new(
       new TypeProxy<WotC.MtGO.Client.Model.Play.PlayService>(),
       "AddJoinedEvent",
-      new((_, args) =>
+      new((instance, args) =>
       {
         var playerEvent = PlayerEventFactory(args[0]);
-        return (playerEvent, null); // Return a tuple of (Event, null).
+        return (playerEvent, instance.__timestamp); // Return a tuple of (Event, DateTime).
+      })
+    );
+
+  /// <summary>
+  /// Event triggered when an event is left or removed by the user.
+  /// </summary>
+  public static EventHookProxy<Event, DateTime> EventRemoved =
+    new(
+      new TypeProxy<WotC.MtGO.Client.Model.Play.PlayService>(),
+      "RemoveJoinedEvent",
+      new((instance, args) =>
+      {
+        var playerEvent = PlayerEventFactory(args[0]);
+        return (playerEvent, instance.__timestamp); // Return a tuple of (Event, DateTime).
       })
     );
 
@@ -362,9 +376,7 @@ public static class EventManager
         Game game = new(args[0]);
 
         Match match = game.Match;
-        Event? playerEvent = FindParentEvent(JoinedEvents, match);
-        if (playerEvent == null)
-          return null; // Ignore no-op or invalid events.
+        Event playerEvent = FindParentEvent(JoinedEvents, match) ?? match;
 
         return (playerEvent, game); // Return a tuple of (Event, Game).
       })

@@ -40,7 +40,6 @@ namespace MTGOSDK.API;
 /// <see cref="Events.GameEventCallback"/><br/>
 /// <see cref="Events.GamePlayerEventCallback"/><br/>
 /// <see cref="Events.GameZoneEventCallback"/><br/>
-/// <see cref="Events.LeagueEventCallback"/><br/>
 /// <see cref="Events.LeagueOperationEventCallback"/><br/>
 /// <see cref="Events.LeagueStateEventCallback"/><br/>
 /// <see cref="Events.MatchErrorEventCallback"/><br/>
