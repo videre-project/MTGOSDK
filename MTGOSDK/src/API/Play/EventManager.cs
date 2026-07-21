@@ -219,8 +219,15 @@ public static class EventManager
   /// <returns>The parent event of the game, or null if not found.</returns>
   public static Event? FindParentEvent(IEnumerable<dynamic> events, Match match)
   {
+    // First, check MTGO's native ParentEvent reference on the match object.
+    Event? parent = match.ParentEvent;
+    if (parent != null)
+      return parent;
+
+    // Fallback: search candidate events including open leagues.
     int matchId = match.Id;
-    foreach(var playerEvent in events)
+    var candidateEvents = events.Concat(LeagueManager.OpenLeagues.Cast<dynamic>());
+    foreach(var playerEvent in candidateEvents)
     {
       switch (playerEvent)
       {
@@ -261,7 +268,7 @@ public static class EventManager
   public static readonly Func<dynamic, Event> PlayerEventFactory =
     new(FromPlayerEvent);
 
-  private static Event FromPlayerEvent(dynamic playerEvent)
+  internal static Event FromPlayerEvent(dynamic playerEvent)
   {
     // If an event is provided as a FilterableEvent, extract the actual event.
     string eventType = playerEvent.GetType().Name;

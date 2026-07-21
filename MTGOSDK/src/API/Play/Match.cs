@@ -103,6 +103,14 @@ public sealed class Match(dynamic match) : Event
   public Game? CurrentGame => Optional<Game>(@base.CurrentGame);
 
   /// <summary>
+  /// The parent event of this match (e.g. League or Tournament).
+  /// </summary>
+  [NonSerializable]
+  public Event? ParentEvent =>
+    Try(() => Optional<Event>(
+        EventManager.FromPlayerEvent(Unbind(this).ParentEvent)));
+
+  /// <summary>
   /// The start time of the match.
   /// </summary>
   public DateTime StartTime => @base.StartTime;
