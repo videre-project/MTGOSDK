@@ -102,6 +102,11 @@ public sealed class League(dynamic league) : Event
   public Deck? ActiveDeck => Optional<Deck>(LeagueUser.ActiveDeck);
 
   /// <summary>
+  /// The user's current active match in the league.
+  /// </summary>
+  public Match? ActiveMatch => Optional<Match>(LeagueUser.ActiveMatch);
+
+  /// <summary>
   /// The game history of the current league.
   /// </summary>
   public IList<GameResult> GameHistory =>

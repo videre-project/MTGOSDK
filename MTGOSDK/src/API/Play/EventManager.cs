@@ -225,7 +225,8 @@ public static class EventManager
       switch (playerEvent)
       {
         case League league:
-          if (league.GameHistory.Any(e => e.MatchId == matchId))
+          if (league.GameHistory.Any(e => e.MatchId == matchId) ||
+              league.ActiveMatch?.Id == matchId)
             return league;
           break;
         case Tournament tournament:
