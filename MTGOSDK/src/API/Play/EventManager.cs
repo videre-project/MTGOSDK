@@ -230,11 +230,9 @@ public static class EventManager
             return league;
           break;
         case Tournament tournament:
-          foreach (var round in tournament.Rounds)
-          {
-            if (round.Matches.Any(m => m.Id == matchId))
-              return tournament;
-          }
+          if (tournament.ActiveMatch?.Id == matchId ||
+              tournament.Rounds.Any(r => r.Matches.Any(m => m.Id == matchId)))
+            return tournament;
           break;
         case Match matchEvent:
           if (matchEvent.Id == matchId)

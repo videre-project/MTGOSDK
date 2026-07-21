@@ -10,7 +10,11 @@ using System.Diagnostics;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Types;
+
+using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.Tournaments;
 
 
@@ -241,6 +245,30 @@ public sealed class Tournament(dynamic tournament) : Event
   public bool HasPlayoffs =>
     Try(() => Unbind(this).m_playoffs.Count > 0,
         () => this.EventStructure.HasPlayoffs) ?? false;
+
+  /// <summary>
+  /// The user's current active match in the tournament round.
+  /// </summary>
+  [NonSerializable]
+  public Match? ActiveMatch
+  {
+    get
+    {
+      return Try(() =>
+      {
+        var currentRoundObj = Unbind(this).CurrentRound;
+        if (currentRoundObj is null) return null;
+
+        dynamic userMatchRemote = ((DynamicRemoteObject)currentRoundObj.Matches)
+          .Filter<IPlayerEvent>(m => m.IsCompleted == false)
+          .Filter<IPlayerEvent>(m => m.IsLocalUserJoined == true);
+
+        return userMatchRemote.Count > 0
+          ? Optional<Match>(userMatchRemote[0])
+          : null;
+      }, fallback: null);
+    }
+  }
 
   /// <summary>
   /// The tournament's detailed round information.
