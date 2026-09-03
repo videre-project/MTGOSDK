@@ -131,6 +131,17 @@ public partial class Diver : IDisposable
 
       var type = current.GetType();
 
+      //
+      // DynamicRemoteObject exposes enum values through an EnumValue member.
+      // Here we preserve the type's underlying value for the enum, so that
+      // it can be resolved directly through reflection in the remote process.
+      //
+      if (type.IsEnum && segment == "EnumValue")
+      {
+        current = Convert.ChangeType(current, Enum.GetUnderlyingType(type));
+        continue;
+      }
+
       // Try property first (with full binding flags for non-public)
       var prop = type.GetProperty(segment, AllMembers);
       if (prop != null)

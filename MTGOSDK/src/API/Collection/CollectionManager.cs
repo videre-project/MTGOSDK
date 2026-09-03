@@ -8,6 +8,7 @@ using System.Collections;
 using WotC.MtGO.Client.Model;
 using WotC.MtGO.Client.Model.Collection;
 using WotC.MtGO.Client.Model.Core;
+using WotC.MtGO.Client.Model.Core.FileImport;
 
 using MTGOSDK.API.Trade;
 using MTGOSDK.Core.Logging;
@@ -166,6 +167,16 @@ public static class CollectionManager
   private static ICardGrouping GetCollectionItem(int id) =>
     s_collectionGroupingManager.GetCardGroupingById(id);
 
+  /// <summary>
+  /// Whether MTGO has loaded the online collection and can accept mutations.
+  /// </summary>
+  public static bool IsLoadedOnline => s_collectionGroupingManager.IsLoadedOnline;
+
+  /// <summary>
+  /// The maximum name length accepted by MTGO for a deck.
+  /// </summary>
+  public static int MaxDeckNameLength => s_collectionGroupingManager.MaxDeckNameLength;
+
   //
   // ICollectionGrouping wrapper methods
   //
@@ -236,8 +247,13 @@ public static class CollectionManager
   /// </summary>
   /// <param name="id">The id of the deck to return.</param>
   /// <returns>A new deck object.</returns>
+  /// <exception cref="KeyNotFoundException">
+  /// Thrown if no deck is found with the given id.
+  /// </exception>
   public static Deck GetDeck(int id) =>
-    new(Unbind(s_collectionGroupingManager).m_groupingsById[id]);
+    new(
+      Try(() => Unbind(s_collectionGroupingManager).m_groupingsById[id])
+        ?? throw new KeyNotFoundException($"No deck found with id #{id}."));
 
   /// <summary>
   /// Returns a deck object by the given deck name.
@@ -252,8 +268,116 @@ public static class CollectionManager
         .Filter<IDeck>(e => e.Name == name)[0]
     );
 
-  // IDeck ImportTextDeck(FileInfo textFileToImport, string name, IPlayFormat format, IVisualResource deckBoxImage, IDeckFolder location);
-  // IDeck CreateNewDeck(string name, IPlayFormat format, IVisualResource deckBoxImage = null, IDeckFolder location = null, IEnumerable<ICardDefinition> initialCards = null);
+  /// <summary>
+  /// Returns a non-conflicting deck name using MTGO's naming rules.
+  /// </summary>
+  public static string GetUniqueDeckName(string name)
+  {
+    var normalized = NormalizeDeckName(name);
+    return s_collectionGroupingManager.FindNonDuplicateUnrestrictedDeckName(normalized);
+  }
+
+  /// <summary>
+  /// Flushes all queued grouping changes to MTGO's online collection service.
+  /// </summary>
+  /// <remarks>
+  /// This sends every pending grouping and returns after sending.
+  /// Note that MTGO does not provide a server acknowledgement through this API.
+  /// </remarks>
+  public static void SavePendingUpdates() =>
+    s_collectionGroupingManager.SavePendingUpdates();
+
+  /// <summary>
+  /// Permanently deletes a registered deck from the user's MTGO collection.
+  /// </summary>
+  /// <remarks>
+  /// MTGO removes the deck from the local collection immediately and sends the
+  /// delete request asynchronously. This operation cannot be undone through the
+  /// SDK. The deck's server id and name must still identify the registered deck,
+  /// which prevents a stale wrapper from deleting a different deck by id alone.
+  /// </remarks>
+  public static void DeleteDeck(Deck deck)
+  {
+    ArgumentNullException.ThrowIfNull(deck);
+    if (!IsLoadedOnline)
+      throw new InvalidOperationException("The MTGO collection is not loaded online.");
+    if (deck.NetDeckId <= 0)
+      throw new ArgumentException("Only a registered deck can be deleted.", nameof(deck));
+
+    var registered = GetDeck(deck.NetDeckId);
+    if (!string.Equals(registered.Name, deck.Name, StringComparison.Ordinal))
+      throw new InvalidOperationException(
+        "The deck id is now registered to a deck with a different name.");
+
+    registered.EnsureMutable();
+    s_collectionGroupingManager.Delete(Bind<IDeck>(registered));
+  }
+
+  /// <summary>
+  /// Imports an in-memory deck into the user's MTGO collection.
+  /// </summary>
+  /// <remarks>
+  /// Add mode registers a new deck immediately and may return with NetDeckId set
+  /// to zero while MTGO assigns the server ID asynchronously. Replace mode
+  /// updates a matching deck in place and queues that update for an explicit
+  /// <see cref="SavePendingUpdates"/> call.
+  /// </remarks>
+  public static Deck ImportDeck(
+    Deck deck,
+    DeckImportMode mode = DeckImportMode.Add)
+  {
+    ArgumentNullException.ThrowIfNull(deck);
+    if (!Enum.IsDefined(mode))
+      throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown deck import mode.");
+    if (!IsLoadedOnline)
+      throw new InvalidOperationException("The MTGO collection is not loaded online.");
+    if (deck.NetDeckId > 0)
+      throw new ArgumentException("Only an unregistered deck can be imported.", nameof(deck));
+
+    var requestedName = NormalizeDeckName(deck.Name);
+    deck.ValidateContents();
+    if (mode == DeckImportMode.Replace)
+    {
+      var matches = Decks
+        .Where(candidate => string.Equals(
+          candidate.Name, requestedName, StringComparison.InvariantCultureIgnoreCase))
+        .ToArray();
+      if (matches.Length > 1)
+        throw new InvalidOperationException(
+          $"More than one deck matches the name '{requestedName}'.");
+      if (matches.Length == 1)
+      {
+        var existing = matches[0];
+        existing.EnsureMutable();
+        if (deck.Format is { } format)
+          Unbind(existing).Format = Unbind(format);
+        existing.ReplaceCards(deck.GetItemSnapshot());
+        return existing;
+      }
+    }
+
+    var importName = mode == DeckImportMode.Add
+      ? GetUniqueDeckName(requestedName)
+      : requestedName;
+    var imported = s_collectionGroupingManager.FinalizeImportedDeck(
+      Bind<IDeck>(deck),
+      FileImportFormatType.Dek,
+      importName,
+      deck.Format is { } importFormat ? Bind<IPlayFormat>(importFormat) : null,
+      null,
+      null);
+    return new Deck(imported);
+  }
+
+  private static string NormalizeDeckName(string name)
+  {
+    ArgumentException.ThrowIfNullOrWhiteSpace(name);
+    var normalized = name.Normalize();
+    if (normalized.Length > MaxDeckNameLength)
+      throw new ArgumentException(
+        $"Deck names cannot exceed {MaxDeckNameLength} characters.", nameof(name));
+    return normalized;
+  }
 
   public static readonly Func<dynamic, CardGrouping> CardGroupingFactory =
     new(FromCardGrouping);

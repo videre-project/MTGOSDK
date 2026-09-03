@@ -7,9 +7,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Logging;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace MTGOSDK.Tests.MTGOSDK_API;
@@ -44,6 +46,197 @@ public class Collection : CollectionValidationFixture
     Log.Debug("Got deck: {Name} ({Id})", deck.Name, deck.Id);
     ValidateDeck(deck);
     ValidateDeck(CollectionManager.GetDeck(deck.Id));
+  }
+
+  [Test]
+  [NonParallelizable]
+  [CancelAfter(/* 2 min */ 120_000)]
+  public async Task Test_DeckLifecycle()
+  {
+    const int CatalogId = 65378;
+    const uint GreenAnnotation = 0x10;
+    var requestedName = $"{TestDeckNamePrefix}{Guid.NewGuid():N}"[..21];
+    var createdDecks = new List<Deck>();
+
+    //
+    // Removes any stale test decks leftover from the previous CI job in the
+    // event of a failed run so that the client isn't left in a bad state in
+    // which later (non-concurrent) CI jobs fail.
+    //
+    DeleteStaleTestDecks();
+
+    try
+    {
+      //
+      // Import a new deck (Add mode) and wait for MTGO to register it.
+      //
+
+      var imported = CollectionManager.ImportDeck(new Deck(
+        [new CardQuantityPair(CatalogId, 1)],
+        Array.Empty<CardQuantityPair>(),
+        requestedName));
+      createdDecks.Add(imported);
+
+      Assert.That(
+        await WaitUntilAsync(
+          async () => imported.NetDeckId > 0,
+          retries: 120 /* 30 seconds */),
+        Is.True, "MTGO to assign the imported deck an id");
+      int importedId = imported.NetDeckId;
+
+      Assert.That(
+        await WaitUntilAsync(
+          async () => CollectionManager.Decks.Any(deck => deck.Id == importedId),
+          retries: 120 /* 30 seconds */),
+        Is.True, "the imported deck to appear in CollectionManager.Decks");
+
+      // Verify the imported deck is visible and addressable by id and name.
+      var listed = CollectionManager.Decks.Single(deck => deck.Id == importedId);
+      Assert.That(listed.Name, Is.EqualTo(requestedName));
+      Assert.That(CollectionManager.GetDeck(importedId).Name, Is.EqualTo(requestedName));
+      Assert.That(CollectionManager.GetDeck(requestedName).Id, Is.EqualTo(importedId));
+      Assert.That(listed.GetQuantity(DeckRegion.MainDeck, CatalogId), Is.EqualTo(1));
+
+      //
+      // Add cards to the main deck and confirm the quantity increased.
+      //
+
+      Assert.That(listed.AddCards(
+        DeckRegion.MainDeck,
+        [new CardQuantityPair(CatalogId, 2)]), Is.True);
+      CollectionManager.SavePendingUpdates();
+
+      var modified = CollectionManager.GetDeck(importedId);
+      Assert.That(modified.GetQuantity(DeckRegion.MainDeck, CatalogId), Is.EqualTo(3));
+
+      //
+      // Remove cards and confirm the reported removal and new quantity.
+      //
+
+      var removed = modified.RemoveCards(
+        DeckRegion.MainDeck,
+        [new CardQuantityPair(CatalogId, 1)]);
+      CollectionManager.SavePendingUpdates();
+
+      Assert.That(removed, Has.Count.EqualTo(1));
+      Assert.That(removed[0].Id, Is.EqualTo(CatalogId));
+      Assert.That(removed[0].Quantity, Is.EqualTo(1));
+      Assert.That(
+        CollectionManager.GetDeck(importedId).GetQuantity(DeckRegion.MainDeck, CatalogId),
+        Is.EqualTo(2));
+
+      // Reconcile the deck to an exact desired state via ReplaceCards.
+      CardGroupingItemSnapshot[] desired =
+      [
+        new(CatalogId, DeckRegion.MainDeck, GreenAnnotation, 2),
+        new(CatalogId, DeckRegion.CommandZone, GreenAnnotation, 1),
+      ];
+      Assert.That(
+        modified.ReplaceCards(desired, enforceLegality: false),
+        Is.EquivalentTo(desired));
+      CollectionManager.SavePendingUpdates();
+      Assert.That(
+        CollectionManager.GetDeck(importedId).GetItemSnapshot(),
+        Is.EquivalentTo(desired));
+
+      //
+      // Re-import in Replace mode to update the existing deck in place.
+      //
+
+      var replaced = CollectionManager.ImportDeck(new Deck(
+        [new CardQuantityPair(CatalogId, 3, GreenAnnotation)],
+        [new CardQuantityPair(CatalogId, 1)],
+        requestedName),
+        DeckImportMode.Replace);
+      CollectionManager.SavePendingUpdates();
+
+      CardGroupingItemSnapshot[] replacement =
+      [
+        new(CatalogId, DeckRegion.MainDeck, GreenAnnotation, 3),
+        new(CatalogId, DeckRegion.Sideboard, 0, 1),
+      ];
+      Assert.That(replaced.Id, Is.EqualTo(importedId));
+      Assert.That(replaced.Name, Is.EqualTo(requestedName));
+      Assert.That(replaced.GetItemSnapshot(), Is.EquivalentTo(replacement));
+
+      //
+      // Importing the same name again (Add mode) must collide and suffix.
+      //
+
+      string expectedCollisionName = CollectionManager.GetUniqueDeckName(requestedName);
+      Assert.That(expectedCollisionName, Is.Not.EqualTo(requestedName));
+
+      var collision = CollectionManager.ImportDeck(new Deck(
+        [new CardQuantityPair(CatalogId, 1)],
+        Array.Empty<CardQuantityPair>(),
+        requestedName));
+      createdDecks.Add(collision);
+      Assert.That(
+        await WaitUntilAsync(
+          async () => collision.NetDeckId > 0,
+          retries: 120 /* 30 seconds */),
+        Is.True, "MTGO to assign the same-name deck an id");
+      int collisionId = collision.NetDeckId;
+      Assert.That(
+        await WaitUntilAsync(
+          async () => CollectionManager.Decks.Any(deck => deck.Id == collisionId),
+          retries: 120 /* 30 seconds */),
+        Is.True, "the same-name deck to appear in CollectionManager.Decks");
+
+      Assert.That(collisionId, Is.Not.EqualTo(importedId));
+      Assert.That(collision.Name, Is.EqualTo(expectedCollisionName));
+      Assert.That(
+        CollectionManager.GetDeck(collisionId).GetQuantity(DeckRegion.MainDeck, CatalogId),
+        Is.EqualTo(1));
+
+      //
+      // Delete both decks and confirm they are gone.
+      //
+
+      CollectionManager.DeleteDeck(CollectionManager.GetDeck(collisionId));
+      CollectionManager.DeleteDeck(CollectionManager.GetDeck(importedId));
+      createdDecks.Clear();
+
+      Assert.That(CollectionManager.Decks.Any(deck => deck.Id == collisionId), Is.False);
+      Assert.That(CollectionManager.Decks.Any(deck => deck.Id == importedId), Is.False);
+      Assert.Throws<KeyNotFoundException>(() => CollectionManager.GetDeck(collisionId));
+      Assert.Throws<KeyNotFoundException>(() => CollectionManager.GetDeck(importedId));
+    }
+    finally
+    {
+      // Delete any decks that were created but not yet cleaned up.
+      foreach (var candidate in createdDecks.AsEnumerable().Reverse())
+      {
+        int candidateId = candidate.NetDeckId;
+        string candidateName = candidate.Name;
+
+        var cleanupDeck = CollectionManager.Decks.SingleOrDefault(deck =>
+          (candidateId <= 0 || deck.Id == candidateId) &&
+          string.Equals(deck.Name, candidateName, StringComparison.Ordinal));
+
+        if (cleanupDeck is not null)
+          CollectionManager.DeleteDeck(cleanupDeck);
+      }
+    }
+  }
+
+  private const string TestDeckNamePrefix = "SDK Test ";
+
+  /// <summary>
+  /// Deletes any test decks left over from previous failed runs so the
+  /// lifecycle test is idempotent and does not accumulate garbage in the
+  /// account. Materializes the match first because deleting mutates the
+  /// underlying collection being enumerated.
+  /// </summary>
+  private static void DeleteStaleTestDecks()
+  {
+    var stale = CollectionManager.Decks
+      .Where(deck => deck.Name.StartsWith(TestDeckNamePrefix, StringComparison.Ordinal))
+      .ToList();
+    foreach (var deck in stale)
+    {
+      CollectionManager.DeleteDeck(deck);
+    }
   }
 
   [Test]

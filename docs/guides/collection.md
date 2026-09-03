@@ -142,7 +142,34 @@ Console.WriteLine($"Format: {deck.Format?.Name}");
 
 You can provide just the card name (the SDK will look up the ID when needed), just the catalog ID (for maximum efficiency), or both (name for readability, ID for performance). The catalog ID is the unique identifier for a specific card printing in MTGO's database. The optional `format` parameter accepts a `PlayFormat` instance (such as a deck's `Format` property) used to associate the deck with a format.
 
-These deck objects don't appear in the collection scene of the MTGO client by default. They exist in memory and can be used for operations like matchmaking or export, but they're not persisted unless you explicitly save them.
+These deck objects don't appear in the collection scene of the MTGO client by default. Import one with `CollectionManager.ImportDeck` to register it in the user's collection:
+
+```csharp
+var deck = new Deck(mainboard, sideboard, "Mono Red Burn");
+var imported = CollectionManager.ImportDeck(deck);
+// A newly imported deck may briefly have NetDeckId == 0 while MTGO assigns it.
+```
+
+The default import mode adds a new deck and suffixes a conflicting name using MTGO's naming rules. `DeckImportMode.Replace` updates a matching deck in place (or adds it when no match exists), preserving its server identity. A null format lets MTGO auto-detect the format for a new deck; replace mode preserves the existing format unless one is supplied.
+
+Deck contents can be changed directly by region:
+
+```csharp
+// Wait for NetDeckId > 0 before editing a newly imported deck.
+imported.AddCards(DeckRegion.MainDeck, [new CardQuantityPair("Lightning Bolt", 4)]);
+var removed = imported.RemoveCards(
+  DeckRegion.MainDeck, [new CardQuantityPair("Lightning Bolt", 1)]);
+CollectionManager.SavePendingUpdates();
+```
+
+`AddCards` follows MTGO's legality, maximum-size, and special-region rules, so its Boolean result only indicates whether anything changed. `RemoveCards` reports the quantities actually removed. Both operations update the local client immediately and queue the server update; call `SavePendingUpdates` explicitly to send all queued grouping changes. `Deck.ReplaceCards` accepts a complete `CardGroupingItemSnapshot` list, clears omitted regions, and returns the resulting authoritative snapshot.
+
+Delete a deck only when you have confirmed its identity. MTGO removes it from the local collection immediately and sends the server request asynchronously; deletion cannot be undone through the SDK.
+
+```csharp
+var deck = CollectionManager.GetDeck(deckId);
+CollectionManager.DeleteDeck(deck);
+```
 
 ---
 

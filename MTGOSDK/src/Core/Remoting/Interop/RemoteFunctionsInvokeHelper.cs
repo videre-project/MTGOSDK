@@ -50,6 +50,10 @@ public static class RemoteFunctionsInvokeHelper
         .FromToken(originRemoteObject.RemoteToken,
                   originRemoteObject.GetType().FullName);
     }
+    else if (TypeProxy<dynamic>.IsProxy(parameter))
+    {
+      return CreateRemoteParameter(DLRWrapper.Unbind((dynamic)parameter));
+    }
     else if (parameter is Type t)
     {
       return ObjectOrRemoteAddress.FromType(t);
