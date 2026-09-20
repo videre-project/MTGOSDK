@@ -11,6 +11,7 @@ using WotC.MtGO.Client.Model.Core;
 using WotC.MtGO.Client.Model.Core.FileImport;
 
 using MTGOSDK.API.Trade;
+using PlayFormat = MTGOSDK.API.Play.PlayFormat;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Extensions;
 using MTGOSDK.Core.Remoting.Hooking;
@@ -22,6 +23,10 @@ namespace MTGOSDK.API.Collection;
 
 public static class CollectionManager
 {
+  /// <summary>The play formats available in the connected MTGO client.</summary>
+  public static IEnumerable<PlayFormat> PlayFormats =>
+    Map<PlayFormat>(Unbind(s_cardDataManager).PlayFormats);
+
   //
   // CardDataManager wrapper methods
   //
