@@ -296,7 +296,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
             throw new SetupFailureException("Unable to restart MTGO.");
 
           // Start a new MTGO process.
-          await RemoteClient.StartProcess();
+          await RemoteClient.StartInstalledProcess();
         }).Wait();
         RemoteClient.EnsureInitialize();
         Log.Debug("Restarted the MTGO process with the updated EULA version.");

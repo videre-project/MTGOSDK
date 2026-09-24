@@ -58,6 +58,8 @@ public sealed class SdkDiagnosticsSnapshot
 /// </summary>
 public sealed class RemoteClient : DLRWrapper
 {
+  private const string InvalidProgramLaunchTitle = "Invalid Program Launch";
+
   //
   // Singleton instance and static accessors
   //
@@ -282,29 +284,70 @@ public sealed class RemoteClient : DLRWrapper
   /// <param name="path">The path to the executable.</param>
   /// <param name="args">The arguments to pass to the executable.</param>
   /// <param name="timeout">The timeout to wait for the process to exit.</param>
+  /// <param name="captureOutput">Whether to capture and consume standard output.</param>
   private static async Task StartShellProcess(
     string path,
     string args = "",
-    TimeSpan? timeout = null)
+    TimeSpan? timeout = null,
+    bool captureOutput = false)
   {
+    var startInfo = new ProcessStartInfo()
+    {
+      FileName = path,
+      Arguments = args,
+      UseShellExecute = !captureOutput,
+      CreateNoWindow = false,
+      WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty,
+    };
+
+    if (captureOutput)
+    {
+      startInfo.RedirectStandardOutput = true;
+      startInfo.RedirectStandardError = true;
+    }
+
     using var process = new Process()
     {
-      StartInfo = new ProcessStartInfo()
-      {
-        FileName = path,
-        Arguments = args,
-        UseShellExecute = true,
-        CreateNoWindow = false,
-        WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty,
-      },
+      StartInfo = startInfo,
     };
-    process.Start();
 
-    // Return early if no timeout is specified
+    var outputCompleted = new TaskCompletionSource<bool>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+    var errorCompleted = new TaskCompletionSource<bool>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+
+    if (captureOutput)
+    {
+      process.OutputDataReceived += (_, e) =>
+      {
+        if (e.Data is null)
+          outputCompleted.TrySetResult(true);
+      };
+
+      process.ErrorDataReceived += (_, e) =>
+      {
+        if (e.Data is null)
+          errorCompleted.TrySetResult(true);
+        else
+          HandleLauncherError(e.Data);
+      };
+    }
+
+    if (!process.Start())
+      throw new ExternalErrorException($"The process '{path}' could not be started.");
+
+    if (captureOutput)
+    {
+      process.BeginOutputReadLine();
+      process.BeginErrorReadLine();
+    }
+
+    // Return early when the caller explicitly does not want to wait.
     if (timeout == TimeSpan.Zero) return;
 
     // Wait for the process to exit or timeout
-    var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(10));
+    using var cts = new CancellationTokenSource(
+        timeout ?? TimeSpan.FromSeconds(10));
     try
     {
       await process.WaitForExitAsync(cts.Token);
@@ -313,6 +356,29 @@ public sealed class RemoteClient : DLRWrapper
     {
       throw new ExternalErrorException($"The process '{path}' timed out after {cts.Token} seconds.");
     }
+
+    if (captureOutput)
+      await Task.WhenAll(outputCompleted.Task, errorCompleted.Task);
+
+    if (process.ExitCode != 0)
+    {
+      throw new ExternalErrorException(
+        $"The process '{path}' exited with code {process.ExitCode}.");
+    }
+  }
+
+  private static void HandleLauncherError(string line)
+  {
+    if (!string.IsNullOrWhiteSpace(line))
+      Log.Error("{Line}", line);
+  }
+
+  private static string GetLauncherPath()
+  {
+    byte[] launcherResource = Bootstrapper.GetBinaryResource(@"Resources\Launcher.exe");
+    string launcherPath = Path.Combine(Bootstrapper.AppDataDir, "Launcher.exe");
+    Bootstrapper.OverrideFileIfChanged(launcherPath, launcherResource);
+    return launcherPath;
   }
 
   /// <summary>
@@ -320,15 +386,21 @@ public sealed class RemoteClient : DLRWrapper
   /// </summary>
   public static async Task InstallOrUpdate()
   {
-    byte[] launcherResource = Bootstrapper.GetBinaryResource(@"Resources\Launcher.exe");
-    string launcherPath = Path.Combine(Bootstrapper.AppDataDir, "Launcher.exe");
-    Bootstrapper.OverrideFileIfChanged(launcherPath, launcherResource);
+    string launcherPath = GetLauncherPath();
 
     // Check if there are any updates first before starting MTGO.
     // This will also create a new MTGO installation if one does not exist.
+    Log.Debug("Checking for MTGO updates from {ApplicationUri}.", ApplicationUri);
     await StartShellProcess(launcherPath, ApplicationUri,
-                            timeout: TimeSpan.FromMinutes(5));
+                            timeout: TimeSpan.FromMinutes(5),
+                            captureOutput: true);
+    Log.Debug("MTGO update check completed.");
 
+    await EnsureClickOnceService();
+  }
+
+  private static async Task EnsureClickOnceService()
+  {
     //
     // Its possible for the ClickOnce service to not be running after a new
     // installation of MTGO (usually on Windows Server i.e. Datacenter builds).
@@ -352,7 +424,9 @@ public sealed class RemoteClient : DLRWrapper
   /// Note: This method will close any existing MTGO processes when called.
   /// <para/>
   /// If no MTGO installation exists or is out of date, this method will
-  /// attempt to install or update the client before starting it.
+  /// attempt to install or update the client before starting it. If the
+  /// normal provider activation fails after a deployment is present, the
+  /// installed ClickOnce bind is used as a fallback without another fetch.
   /// </remarks>
   /// <returns>True if the MTGO client process was started.</returns>
   /// <exception cref="SetupFailureException">
@@ -361,15 +435,40 @@ public sealed class RemoteClient : DLRWrapper
   /// <exception cref="ExternalErrorException">
   /// Thrown when the MTGO process failed to start.
   /// </exception>
-  public static async Task StartProcess()
+  public static Task StartProcess() =>
+    StartProcess(checkForUpdates: true);
+
+  /// <summary>
+  /// Restarts MTGO using the deployment installed by the preceding
+  /// <see cref="StartProcess()"/> call, without fetching the deployment
+  /// manifest again.
+  /// </summary>
+  internal static Task StartInstalledProcess() =>
+    StartProcess(checkForUpdates: false);
+
+  private static async Task ActivateCachedDeployment()
   {
-    using var activity = s_activitySource.StartActivity("RemoteClient.StartProcess");
-    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    if (!File.Exists(AppRefPath))
+      throw new SetupFailureException(
+        "Cannot restart MTGO without an existing ClickOnce deployment.");
 
-    // Check if there are any updates first before starting MTGO.
-    await InstallOrUpdate();
+    string launcherPath = GetLauncherPath();
+    string launcherArguments = $"--activate-cached \"{AppRefPath}\"";
+    Log.Debug("Activating the installed MTGO deployment from {AppRefPath}.", AppRefPath);
 
-    // Start MTGO using the ClickOnce application manifest uri.
+    await EnsureClickOnceService();
+    await StartShellProcess(
+      launcherPath,
+      launcherArguments,
+      timeout: TimeSpan.FromSeconds(30),
+      captureOutput: true);
+
+    Log.Debug("Installed MTGO deployment activated.");
+  }
+
+  private static async Task StartAppRefProcess()
+  {
+    // Start MTGO as the current desktop user.
     Log.Debug("Starting MTGO process as the current desktop user.");
     try
     {
@@ -383,6 +482,10 @@ public sealed class RemoteClient : DLRWrapper
       // https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/replace-a-process-level-token
       //
       using var process = ProcessUtilities.RunAsDesktopUser(AppRefPath, "");
+      if (process is null)
+        throw new ExternalErrorException(
+          $"The process '{AppRefPath}' could not be started as the desktop user.");
+
       await process.WaitForExitAsync();
     }
     catch
@@ -393,18 +496,88 @@ public sealed class RemoteClient : DLRWrapper
       //
       await StartShellProcess(AppRefPath, timeout: TimeSpan.FromSeconds(10));
     }
+  }
 
-    //
-    // Here we perform another check to verify that the process has stalled
-    // during installation or updating to better inform the user.
-    //
-    if (!await WaitUntil(() => HasStarted, delay: 500, retries: 20)) // 10s
+  private static Task<bool> WaitForProcessStart() =>
+    WaitUntil(() => HasStarted, delay: 500, retries: 20); // 10s
+
+  private static async Task StartProcess(bool checkForUpdates)
+  {
+    using var activity = s_activitySource.StartActivity("RemoteClient.StartProcess");
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+
+    if (checkForUpdates)
     {
-      throw new ExternalErrorException("The MTGO process failed to start.");
+      try
+      {
+        // Always perform the normal update check first. This creates or updates
+        // the ClickOnce deployment before any cached activation fallback.
+        await InstallOrUpdate();
+        await StartAppRefProcess();
+        if (!await WaitForProcessStart())
+        {
+          throw new ExternalErrorException(
+            "The MTGO process failed to start after appref activation.");
+        }
+      }
+      //
+      // A failed provider check can occur either while installing the deployment
+      // or during the appref shortcut's second provider check.
+      //
+      // If a deployment is already present, we instead retry its current bind
+      // without making another provider request. Otherwise, if no cached bind
+      // exists, we simply fail with the original installation failure.
+      //
+      catch (ExternalErrorException exception)
+      {
+        if (!File.Exists(AppRefPath))
+          throw;
+
+        Log.Warning(
+          "MTGO startup failed; retrying the installed deployment. {Error}",
+          exception.Message);
+        try
+        {
+          await ActivateCachedDeployment();
+          if (!await WaitForProcessStart())
+          {
+            throw new ExternalErrorException(
+              "The MTGO process failed to start after cached activation.");
+          }
+        }
+        catch (Exception fallbackException)
+        {
+          throw new ExternalErrorException(
+            "The ClickOnce update failed and the installed deployment could " +
+            "not be activated.",
+            new AggregateException(exception, fallbackException));
+        }
+      }
+    }
+    else
+    {
+      // Use the ClickOnce store's current bind to preserve the activation
+      // context without asking the deployment provider for an update.
+      await ActivateCachedDeployment();
+      if (!await WaitForProcessStart())
+      {
+        throw new ExternalErrorException(
+          "The MTGO process failed to start after cached activation.");
+      }
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
-    MTGOProcess().WaitForInputIdle();
+    Process process = MTGOProcess()!;
+    if (string.Equals(
+          process.MainWindowTitle,
+          InvalidProgramLaunchTitle,
+          StringComparison.OrdinalIgnoreCase))
+    {
+      throw new SetupFailureException(
+        "MTGO was found, but its ClickOnce activation context was invalid.");
+    }
+
+    process.WaitForInputIdle();
     await WaitUntil(() => !string.IsNullOrEmpty(MTGOProcess().MainWindowTitle));
     if (!await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero))
     {
