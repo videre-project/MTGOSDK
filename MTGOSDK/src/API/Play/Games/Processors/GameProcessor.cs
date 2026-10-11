@@ -76,6 +76,7 @@ public sealed class GameProcessor : IDisposable
   internal static ProcessorEvent<PromptChangedEventArgs> PromptChanged(Game game) =>
     new(game, typeof(PromptProcessor), () => new PromptProcessor());
 
+
   internal static ProcessorEvent<LogMessageCorrelatedEventArgs> LogMessage(Game game) =>
     new(game, typeof(LogMessageProcessor), () => new LogMessageProcessor());
 
@@ -124,6 +125,8 @@ public sealed class GameProcessor : IDisposable
   private readonly object _lock = new();
   private readonly List<Action> _eventCleanup = new();
   private GameReferenceResolver? _references;
+  private CardActionRegistry? _cardActions;
+  private InteractionModeTracker? _interactionState;
   private int? _activeGameId;
   private volatile bool _disposed;
   private bool _resourcesReleased;
@@ -197,6 +200,52 @@ public sealed class GameProcessor : IDisposable
       {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _references ??= GameReferenceResolver.ForGame((object)Unbind(Unbind(Game)));
+      }
+    }
+  }
+
+  /// <summary>
+  /// Lazily attaches the captured card-action registry without starting snapshots.
+  /// </summary>
+  public CardActionRegistry CardActions
+  {
+    get
+    {
+      lock (_lock)
+      {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_cardActions is null)
+        {
+          var registry = new CardActionRegistry();
+          registry.Initialize(Game);
+          _cardActions = registry;
+        }
+        return _cardActions;
+      }
+    }
+  }
+
+  /// <summary>
+  /// Lazily attaches the duel scene's interaction tracker without starting snapshots.
+  /// </summary>
+  public InteractionModeTracker InteractionState
+  {
+    get
+    {
+      lock (_lock)
+      {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_interactionState is null)
+        {
+          var tracker = new InteractionModeTracker();
+          tracker.Initialize(Game);
+          _interactionState = tracker;
+        }
+        else
+        {
+          _interactionState.Initialize(Game);
+        }
+        return _interactionState;
       }
     }
   }
@@ -981,6 +1030,8 @@ public sealed class GameProcessor : IDisposable
       if (_resourcesReleased) return;
       _resourcesReleased = true;
       resources = _processors.OfType<IDisposable>().ToList();
+      if (_cardActions is not null) resources.Add(_cardActions);
+      if (_interactionState is not null) resources.Add(_interactionState);
       if (_references is not null) resources.Add(_references);
       _processors.Clear();
       _previous = new();

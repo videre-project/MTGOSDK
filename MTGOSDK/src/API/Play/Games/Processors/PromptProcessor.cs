@@ -5,6 +5,10 @@
 
 using System;
 using System.Collections.ObjectModel;
+using System.Security.Cryptography;
+using System.Text;
+using MTGOSDK.API.Interface.Controls;
+using MTGOSDK.API.Play.Games.Processors.Intermediate;
 using System.Threading;
 
 using MTGOSDK.API.Play.Games.Processors.Events;
@@ -25,6 +29,7 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// </summary>
 public sealed class PromptProcessor : IGameStateProcessor, IDisposable
 {
+  private Game? _game;
   private volatile bool _disposed;
 
   /// <summary>
@@ -43,7 +48,79 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
   /// </summary>
   public GamePrompt? LastPrompt { get; private set; }
 
-  public void Initialize(Game game) => ObjectDisposedException.ThrowIf(_disposed, this);
+  public void Initialize(Game game)
+  {
+    ObjectDisposedException.ThrowIf(_disposed, this);
+    _game = game;
+  }
+  /// <summary>
+  /// Captures a prompt's options and client UI revision for this processor's game.
+  /// </summary>
+  public PromptOptionsSnapshot CaptureOptions(GamePrompt prompt) =>
+    CaptureOptions(
+      _game ?? throw new InvalidOperationException("The prompt processor is not initialized."),
+      prompt);
+
+  /// <summary>
+  /// Combines the supplied prompt actions with captured client-local controls
+  /// without registering a snapshot processor. The retained options may reference
+  /// SDK card and player objects.
+  /// </summary>
+  /// <remarks>
+  /// Only a matching captured native prompt receives client controls. Historical
+  /// prompts retain their native actions and are never paired with newer UI buttons.
+  /// Reads the notification-driven interaction capture without refreshing live UI state.
+  /// </remarks>
+  public static PromptOptionsSnapshot CaptureOptions(Game game, GamePrompt prompt)
+  {
+    ArgumentNullException.ThrowIfNull(game);
+    ArgumentNullException.ThrowIfNull(prompt);
+
+    return CaptureOptions(prompt, GameProcessor.ForGame(game).InteractionState.Snapshot);
+  }
+
+  internal static PromptOptionsSnapshot CaptureOptions(
+    GamePrompt prompt, InteractionStateSnapshot interaction)
+  {
+    int nonce = prompt.Nonce;
+    var options = prompt.Options
+      .Where(group => group.Key != ActionType.PromptControl)
+      .ToDictionary(group => group.Key, group => group.Value);
+
+    IReadOnlyList<PromptButton> buttons = interaction.PromptNonce == nonce
+      ? interaction.Buttons : Array.Empty<PromptButton>();
+    var controls = buttons
+      .Where(button => !button.HasGameAction
+        && !string.IsNullOrWhiteSpace(button.ButtonType)
+        && !string.IsNullOrWhiteSpace(button.Name ?? button.Color))
+      .Select(button => (IPromptOption)new PromptControl(
+        button.Id,
+        button.Name ?? button.Color!,
+        button.Enabled,
+        button.ButtonType,
+        button.Color))
+      .ToArray();
+    if (controls.Length > 0)
+      options[ActionType.PromptControl] = Array.AsReadOnly(controls);
+
+    var signature = new StringBuilder();
+    signature.Append(nonce);
+    signature.Append(':').Append(interaction.Mode);
+    foreach (var button in buttons)
+      signature.Append('|').Append(button.Id.Group).Append(':')
+        .Append(button.Id.Index).Append(':').Append(button.ButtonType)
+        .Append(':').Append(button.Name).Append(':').Append(button.Color)
+        .Append(':').Append(button.Enabled).Append(':')
+        .Append(button.HasGameAction);
+    byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(signature.ToString()));
+
+    var capturedPrompt = new GamePrompt((object)Unbind(prompt),
+      new ReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>>(options));
+
+    return new PromptOptionsSnapshot(nonce, BitConverter.ToInt64(hash), capturedPrompt);
+  }
+
+
 
   public void Process(GameContext context)
   {
@@ -67,7 +144,7 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
       if (prompt.Timestamp != LastSnapshot.InteractionTimestamp ||
           prompt.PromptedPlayer != LastSnapshot.PromptedPlayer || prompt.Text != LastSnapshot.PromptText)
         throw new InvalidOperationException("Captured prompt identity differs from the gameplay snapshot.");
-      LastPrompt = prompt;
+      LastPrompt = CaptureOptions(_game!, prompt).Prompt;
       PromptCorrelated.Set();
       context.Emit(new PromptChangedEventArgs(LastSnapshot, LastPrompt));
     }
@@ -160,7 +237,13 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
     {
       Batch = batch.ToRequest(),
       Inputs = [-1, 0],
-      CaptureOnExit = true
+      CaptureOnExit = true,
+      Scope = new()
+      {
+        Group = InteractionModeTracker.CaptureGroup,
+        OwnerInput = 0,
+        IsStateBoundary = true
+      }
     };
   }
 

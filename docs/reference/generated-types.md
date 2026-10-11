@@ -66,6 +66,7 @@ parse or alter enum declarations; the C# compiler validates the resulting enum.
 | `FunctionKey` | `WotC.MtGO.Client.Model.Play.Actions.FunctionKeyMessageAction+FunctionKey` | `WotC.MtGO.Client.Model.Play` |
 | `GamePhase` | `WotC.MtGO.Client.Model.Play.GamePhase` | `WotC.MtGO.Client.Model.Reference` |
 | `GameStatus` | `WotC.MtGO.Client.Model.Play.GameState` | `WotC.MtGO.Client.Model.Reference` |
+| `InteractionMode` | `Shiny.Play.Duel.Utility.InteractMode` | `DuelScene` |
 | `MagicProperty` | `WotC.MtGO.Client.Model.MagicProperty` | `Mtgo.Shared.Parser.Attributes` |
 | `MagicColors` | `WotC.MtGO.Client.Model.MagicColors` | `Mtgo.Shared.Parser.Attributes` |
 | `StateElementType` | `WotC.MtGO.Client.Model.Play.StateElementType` | `WotC.MtGO.Client.Model.Play` |
