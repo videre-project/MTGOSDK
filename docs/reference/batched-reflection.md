@@ -12,7 +12,8 @@ using their existing protocols.
 references, the executor and serializer, and materialized local values.
 `MTGOSDK.Core.Remoting.Interop.Interactions.Batching` contains the MessagePack
 request, operation, projection, and result types. Each top-level type has its own
-file.
+file. Hook and event capture descriptors live with the callback protocol under
+`Interop.Interactions.Callbacks`.
 
 Callers that describe signatures or projections import both batching namespaces;
 the wire types' MessagePack keys and enum values are unchanged by this organization.
@@ -206,3 +207,77 @@ V1 supports synchronous constructors/methods. Task/ValueTask-returning methods,
 unsupported. Native copying and synchronization are caller-described operations.
 Native game interpretation, schemas, acceptance policies, and the existing
 game-specific hash helper remain outside this extension.
+
+## Synchronous capture in native hooks
+
+`RemoteClient.HookMethod` and `RemoteHarmony.HookMethod` accept an optional
+`RemoteHookCapture`. Its `Batch` is an ordinary recorded request; `Inputs` binds
+leading request inputs to the native instance (`-1`) or a zero-based method
+argument. Remaining inputs retain their encoded values. Bound inputs use
+placeholders because binding requires no remote handles.
+
+The Diver validates the description when subscribing, then executes its batch
+at the configured hook position or at an enclosing capture scope's completion,
+before enqueueing callback delivery. Input objects and
+intermediates remain local to that invocation and are not pinned. Ordinary hook
+sender/argument references still follow the existing callback protocol.
+`ForceUIThread` is rejected for hook capture: capture runs on the thread executing
+the native method and does not redispatch or issue IPC.
+
+`HookContext.Capture` contains the projected results, including any row errors.
+`CaptureError` records a request-level execution or serialization failure, and `CaptureElapsedMs` measures the synchronous
+batch. Capture errors are logged by the Diver and forwarded explicitly; the event
+proxy reports them through existing callback error handling. A shared subscription
+must have the same patch position and capture description. Captured values do not
+provide rollback, synchronization with other threads, or live execution handles.
+
+`RemoteHookCapture.Filters` optionally selects invocations by native instance
+type and exact string argument values. Types are resolved once during registration;
+derived instances match. The first matching filter can replace the instance batch
+input with a member-path value. A null path value rejects that invocation.
+Null and empty string arguments can be included explicitly in `ArgumentValues`.
+
+Filtered hooks require a capture scope and an enrolled subscription for that exact
+capture root. Removing the root's last subscription stops its captures, including
+when a replacement root uses the same owner. Rejected invocations execute no batch,
+pin no objects, and deliver no callback. The Diver interprets only the supplied
+types, paths, and values; application-specific routing remains with the caller.
+
+## Synchronous capture in native events
+
+`RemoteEventCapture` attaches a batch description to an ordinary event
+subscription. Outside an enrolled native scope, the Diver executes and projects it
+inside the event handler. Inside a scope, it defers projection until that invocation
+completes. Both paths detach values before queueing callback delivery. Captured callbacks receive `HookContext.Capture`,
+`CaptureError`, the originating timestamp, and native capture duration. Sender
+and event-argument handles are not implicitly returned or pinned for these callbacks.
+
+`Inputs` maps batch input indices to native event parameter indices: `0` is the
+sender and `1` is the event arguments. Unmapped inputs retain their encoded literals
+or existing remote handles. Bindings are validated during subscription, and
+`ForceUIThread` must be false: capture runs on the event's originating thread.
+This does not establish thread affinity for events raised on another thread.
+
+```csharp
+var batch = new RemoteBatch();
+var root = batch.Input(existingRoot);
+batch.Output("state", batch.Read(root, "State"), stateProjection);
+var capture = new RemoteEventCapture { Batch = batch.ToRequest() };
+var changes = new EventProxy(existingSource, "Changed");
+changes.Subscribe(context => Consume(context.Capture), capture);
+```
+
+`PropertyChangeRouter.Subscribe(source, batch, propertyNames)` uses the same
+capture path and carries the detached payload in `CaptureContext`. Without an
+enclosing scope, property names are detached in the notification handler; scoped
+captures describe the grouped update at completion. Subscriptions with the same source and
+capture description share their native event registration; different descriptions
+remain independent. The native filter uses the union of properties requested by
+subscriptions sharing the registration, and local delivery applies each subscriber's
+filter. Inside an enrolled scope, matching notifications contribute to one capture
+at completion. Filter changes retain the native event subscription. Capture work and native-thread cost should be
+measured with the actual event source. Capture errors reach subscribers explicitly.
+
+Capture removes the delivery-time reread of mutable state. It does not provide
+rollback, stop unrelated concurrent writers, or imply globally ordered callback
+delivery across independently scheduled event sources.

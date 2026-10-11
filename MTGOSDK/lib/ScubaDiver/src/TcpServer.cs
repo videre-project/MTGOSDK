@@ -1,4 +1,4 @@
-/** @file
+﻿/** @file
   Copyright (c) 2025, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
@@ -30,6 +30,7 @@ namespace ScubaDiver;
 public class TcpServer : IDisposable
 {
   private readonly TcpListener _listener;
+  private int _disposed;
   private readonly CancellationTokenSource _cts;
   private readonly Func<string, byte[], byte[]> _requestHandler;
 
@@ -62,30 +63,35 @@ public class TcpServer : IDisposable
   }
 
   /// <summary>
-  /// Starts listening for client connections.
-  /// Loops to accept new connections concurrently.
+  /// Accepts clients until cancellation or disposal stops the listener.
+  /// Each accepted connection handles requests independently.
   /// </summary>
   public async Task StartAsync(CancellationToken cancellationToken = default)
   {
+    if (Volatile.Read(ref _disposed) != 0)
+      throw new ObjectDisposedException(nameof(TcpServer));
+
+    using var shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cts.Token);
+    var token = shutdown.Token;
     _listener.Start();
+    using var stopListening = token.Register(_listener.Stop);
     Log.Debug($"[TcpServer] Listening on port {Port}...");
 
     try
     {
       // Loop to accept new connections
-      while (!cancellationToken.IsCancellationRequested)
+      while (!token.IsCancellationRequested)
       {
         // Wait for a client to connect
         TcpClient client = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
         
         // Handle client in a background task (fire-and-forget from acceptor's perspective)
-        _ = HandleNewClientAsync(client, cancellationToken);
+        _ = HandleNewClientAsync(client, token);
       }
     }
-    catch (OperationCanceledException)
-    {
-      // Expected on shutdown
-    }
+    catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+    catch (SocketException) when (token.IsCancellationRequested) { }
+    catch (ObjectDisposedException) when (token.IsCancellationRequested) { }
     catch (Exception ex)
     {
       Log.Error($"[TcpServer] Server error: {ex.Message}");
@@ -150,6 +156,7 @@ public class TcpServer : IDisposable
   /// </summary>
   public void Dispose()
   {
+    if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
     _cts.Cancel();
     try { _listener.Stop(); } catch { }
     
@@ -223,9 +230,7 @@ public class TcpServer : IDisposable
       
       // Enqueue to write channel (fire-and-forget)
       if (!TryEnqueueWrite(0, TcpMessageType.Callback, "/invoke_callback", serializedCallback))
-      {
-        // Channel full, drop callback
-      }
+        Log.Warning("[TcpClientConnection] Callback could not be queued because the write channel is full or closed.");
     }
 
     /// <summary>
@@ -244,7 +249,7 @@ public class TcpServer : IDisposable
           {
             if (frame.Type == TcpMessageType.Request)
             {
-              // Capture messageId for correlation inside the SyncThread lambda
+              // Capture the correlation ID for the scheduled request.
               var mid = frame.MessageId;
               _ = SyncThread.EnqueueAsync(async () =>
               {

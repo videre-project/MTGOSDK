@@ -14,6 +14,7 @@ using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Structs;
 using MTGOSDK.Core.Remoting.Types;
 using MTGOSDK.Resources;
@@ -1478,14 +1479,16 @@ public sealed class RemoteClient : DLRWrapper
   /// <param name="methodName">The name of the method to hook.</param>
   /// <param name="callback">The local Harmony callback to use.</param>
   /// <param name="position">The Harmony patch position for the callback.</param>
+  /// <param name="capture">Optional synchronous native value capture.</param>
   public static void HookMethod(
     string queryPath,
     string methodName,
     HookAction callback,
-    HarmonyPatchPosition position)
+    HarmonyPatchPosition position,
+    RemoteHookCapture capture = null)
   {
     MethodInfo method = GetInstanceMethod(queryPath, methodName);
-    @client.Harmony.HookMethod(method, position, callback);
+    @client.Harmony.HookMethod(method, position, callback, capture);
   }
 
   /// <summary>

@@ -6,8 +6,12 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 
+using MessagePack;
+
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Remoting.Batching;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -16,6 +20,11 @@ namespace MTGOSDK.Core.Remoting;
 public interface IPropertyChangeSubscription : IDisposable
 {
   ulong Token { get; }
+
+  /// <summary>
+  /// Native capture stream baseline supplied at subscription time.
+  /// </summary>
+  RemoteCaptureSequence? CaptureSequence { get; }
 
   IReadOnlyCollection<string> TrackedProperties { get; }
 
@@ -29,8 +38,9 @@ public interface IPropertyChangeSubscription : IDisposable
 }
 
 /// <summary>
-/// Routes token-tracked remote property change notifications to independent
-/// subscriptions with additive local property filters.
+/// Shares a native property subscription among local observers with the same source
+/// and capture description. The native handler filters by all requested properties,
+/// then local delivery applies each observer's own filter.
 /// </summary>
 public sealed class PropertyChangeRouter : IDisposable
 {
@@ -43,15 +53,19 @@ public sealed class PropertyChangeRouter : IDisposable
     PropertyChangeRouter router,
     ulong token,
     Guid id,
-    IEnumerable<string> initialProperties) : IPropertyChangeSubscription
+    IEnumerable<string> initialProperties,
+    string captureKey) : IPropertyChangeSubscription
   {
     private readonly PropertyChangeRouter _router = router;
     private readonly Guid _id = id;
-    private readonly HashSet<string> _trackedProperties = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _trackedProperties = new(
+      initialProperties.Where(name => !string.IsNullOrWhiteSpace(name)), StringComparer.Ordinal);
     private readonly object _gate = new();
     private int _isDisposed;
 
     public ulong Token { get; } = token;
+
+    public RemoteCaptureSequence? CaptureSequence { get; internal set; }
 
     public IReadOnlyCollection<string> TrackedProperties
     {
@@ -66,52 +80,53 @@ public sealed class PropertyChangeRouter : IDisposable
 
     public void AddTrackedProperties(params string[] propertyNames)
     {
-      ThrowIfDisposed();
-      if (propertyNames is null)
-        throw new ArgumentNullException(nameof(propertyNames));
-
-      lock (_gate)
-      {
-        foreach (var propertyName in propertyNames)
-        {
-          if (!string.IsNullOrWhiteSpace(propertyName))
-            _trackedProperties.Add(propertyName);
-        }
-      }
+      if (propertyNames is null) throw new ArgumentNullException(nameof(propertyNames));
+      ChangeTrackedProperties(properties => properties.UnionWith(
+        propertyNames.Where(name => !string.IsNullOrWhiteSpace(name))));
     }
 
     public bool RemoveTrackedProperties(params string[] propertyNames)
     {
-      ThrowIfDisposed();
-      if (propertyNames is null)
-        throw new ArgumentNullException(nameof(propertyNames));
-
+      if (propertyNames is null) throw new ArgumentNullException(nameof(propertyNames));
       bool removed = false;
-      lock (_gate)
+      ChangeTrackedProperties(properties =>
       {
-        foreach (var propertyName in propertyNames)
-        {
-          if (!string.IsNullOrWhiteSpace(propertyName))
-            removed |= _trackedProperties.Remove(propertyName);
-        }
-      }
-
+        foreach (string name in propertyNames)
+          if (!string.IsNullOrWhiteSpace(name)) removed |= properties.Remove(name);
+      });
       return removed;
     }
 
     public void SetTrackedProperties(params string[] propertyNames)
     {
-      ThrowIfDisposed();
-      if (propertyNames is null)
-        throw new ArgumentNullException(nameof(propertyNames));
-
-      lock (_gate)
+      if (propertyNames is null) throw new ArgumentNullException(nameof(propertyNames));
+      ChangeTrackedProperties(properties =>
       {
-        _trackedProperties.Clear();
-        foreach (var propertyName in propertyNames)
+        properties.Clear();
+        properties.UnionWith(propertyNames.Where(name => !string.IsNullOrWhiteSpace(name)));
+      });
+    }
+
+    private void ChangeTrackedProperties(Action<HashSet<string>> change)
+    {
+      lock (_router._gate)
+      {
+        ThrowIfDisposed();
+        string[] previous;
+        lock (_gate)
         {
-          if (!string.IsNullOrWhiteSpace(propertyName))
-            _trackedProperties.Add(propertyName);
+          previous = _trackedProperties.ToArray();
+          change(_trackedProperties);
+        }
+        try { _router.RefreshPropertyFilter((Token, captureKey)); }
+        catch
+        {
+          lock (_gate)
+          {
+            _trackedProperties.Clear();
+            _trackedProperties.UnionWith(previous);
+          }
+          throw;
         }
       }
     }
@@ -122,7 +137,8 @@ public sealed class PropertyChangeRouter : IDisposable
         return false;
 
       lock (_gate)
-        return _trackedProperties.Contains(propertyName);
+        return _trackedProperties.Count != 0 &&
+          (string.IsNullOrEmpty(propertyName) || _trackedProperties.Contains(propertyName));
     }
 
     internal void Raise(RemotePropertyChangedEventArgs args)
@@ -148,7 +164,7 @@ public sealed class PropertyChangeRouter : IDisposable
       if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
         return;
 
-      _router.RemoveSubscription(Token, _id);
+      _router.RemoveSubscription((Token, captureKey), _id);
 
       PropertyChanged = null;
       lock (_gate)
@@ -164,13 +180,13 @@ public sealed class PropertyChangeRouter : IDisposable
 
   public static PropertyChangeRouter Shared { get; } = new();
 
-  private readonly ConcurrentDictionary<ulong, TokenRegistration> _registrations = new();
+  private readonly ConcurrentDictionary<(ulong Token, string Capture), TokenRegistration> _registrations = new();
   private readonly object _gate = new();
   private int _isDisposed;
 
   public event EventHandler<RemotePropertyChangedEventArgs>? PropertyChanged;
 
-  public int Count => _registrations.Count;
+  public int Count => _registrations.Keys.Select(key => key.Token).Distinct().Count();
 
   public PropertyChangeRouter()
   {
@@ -179,8 +195,28 @@ public sealed class PropertyChangeRouter : IDisposable
 
   public IPropertyChangeSubscription Subscribe(
     DynamicRemoteObject dro,
-    params string[] propertyNames)
+    params string[] propertyNames) => Subscribe(dro, null, propertyNames);
+
+  /// <summary>
+  /// Captures values inside matching native PropertyChanged notifications.
+  /// Subscriptions sharing this capture description combine their requested
+  /// properties for native filtering and retain their own filters for local delivery.
+  /// </summary>
+  public IPropertyChangeSubscription Subscribe(DynamicRemoteObject dro,
+    RemoteBatch? capture, params string[] propertyNames) =>
+    Subscribe(dro, capture, null, null, propertyNames);
+
+  /// <summary>
+  /// Enrolls notification capture in a caller-described native scope, deferring
+  /// projection until the enclosing invocation completes. Notifications outside
+  /// a scope capture immediately. The callback is installed before the filter is activated.
+  /// </summary>
+  public IPropertyChangeSubscription Subscribe(DynamicRemoteObject dro,
+    RemoteBatch? capture, RemoteCaptureScope? scope,
+    EventHandler<RemotePropertyChangedEventArgs>? callback, params string[] propertyNames)
   {
+    if (scope is not null && (capture is null || callback is null))
+      throw new ArgumentException("Scoped subscriptions require a capture and an installed callback.");
     if (Volatile.Read(ref _isDisposed) != 0)
       throw new ObjectDisposedException(nameof(PropertyChangeRouter));
     if (dro is null)
@@ -192,25 +228,31 @@ public sealed class PropertyChangeRouter : IDisposable
         nameof(dro));
 
     ulong token = remoteObject.RemoteToken;
+    string captureKey = capture is null ? ""
+      : Convert.ToBase64String(MessagePackSerializer.Serialize(
+          new RemoteEventCapture { Batch = capture.ToRequest(), Scope = scope }));
+    var key = (Token: token, Capture: captureKey);
     var subscriptionId = Guid.NewGuid();
     var subscription = new PropertyChangeSubscription(
       this,
       token,
       subscriptionId,
-      propertyNames ?? []);
-    subscription.AddTrackedProperties(propertyNames ?? []);
+      propertyNames ?? [], captureKey);
+    if (callback is not null) subscription.PropertyChanged += callback;
 
     lock (_gate)
     {
       if (Volatile.Read(ref _isDisposed) != 0)
         throw new ObjectDisposedException(nameof(PropertyChangeRouter));
 
-      if (!_registrations.TryGetValue(token, out var registration))
+      bool shared = _registrations.TryGetValue(key, out var registration);
+      if (!shared)
       {
-        var proxy = new RemotePropertyChangeProxy(remoteObject);
+        var proxy = new RemotePropertyChangeProxy(remoteObject, capture,
+          subscription.TrackedProperties.OrderBy(name => name, StringComparer.Ordinal).ToArray(), scope);
 
         PropertyChangedEventHandler handler = (_, args) =>
-          OnProxyPropertyChanged(token, proxy, args);
+          OnProxyPropertyChanged(key, proxy, args);
 
         proxy.PropertyChanged += handler;
 
@@ -219,10 +261,32 @@ public sealed class PropertyChangeRouter : IDisposable
           handler,
           new Dictionary<Guid, PropertyChangeSubscription>());
 
-        _registrations[token] = registration;
+        _registrations[key] = registration;
       }
 
+      subscription.CaptureSequence = registration!.Proxy.CaptureSequence;
       registration.Subscriptions[subscriptionId] = subscription;
+      if (shared || scope is not null)
+      {
+        // Keep the native filter empty until local routing and the stream baseline
+        // are installed so notifications cannot arrive before the subscriber is ready.
+        try { RefreshPropertyFilter(key); }
+        catch
+        {
+          registration.Subscriptions.Remove(subscriptionId);
+          subscription.MarkDisposed();
+          if (!shared)
+          {
+            _registrations.TryRemove(key, out _);
+            try { DisposeRegistration(registration); }
+            catch (Exception error)
+            {
+              Log.Debug(error, "Failed to release inactive property subscription for token={Token}", token);
+            }
+          }
+          throw;
+        }
+      }
     }
 
     return subscription;
@@ -233,25 +297,19 @@ public sealed class PropertyChangeRouter : IDisposable
     if (token == 0 || Volatile.Read(ref _isDisposed) != 0)
       return false;
 
-    TokenRegistration? removed = null;
+    List<TokenRegistration> removed = [];
     lock (_gate)
     {
-      if (_registrations.TryRemove(token, out var existing))
-      {
-        removed = existing;
-      }
+      foreach (var key in _registrations.Keys.Where(key => key.Token == token))
+        if (_registrations.TryRemove(key, out var existing)) removed.Add(existing);
     }
-
-    if (removed is null)
-      return false;
-
-    DisposeRegistration(removed);
-    return true;
+    foreach (var registration in removed) DisposeRegistration(registration);
+    return removed.Count != 0;
   }
 
   public void Clear()
   {
-    KeyValuePair<ulong, TokenRegistration>[] entries;
+    KeyValuePair<(ulong Token, string Capture), TokenRegistration>[] entries;
     lock (_gate)
     {
       entries = _registrations.ToArray();
@@ -280,7 +338,7 @@ public sealed class PropertyChangeRouter : IDisposable
   }
 
   private void OnProxyPropertyChanged(
-    ulong token,
+    (ulong Token, string Capture) key,
     INotifyPropertyChanged source,
     PropertyChangedEventArgs args)
   {
@@ -288,18 +346,18 @@ public sealed class PropertyChangeRouter : IDisposable
       return;
 
     var propertyName = args?.PropertyName;
-    if (string.IsNullOrWhiteSpace(propertyName))
-      return;
+    var capturedArgs = args as RemotePropertyChangedEventArgs;
+    var context = capturedArgs?.CaptureContext;
 
     List<PropertyChangeSubscription> matchingSubscriptions = [];
     lock (_gate)
     {
-      if (!_registrations.TryGetValue(token, out var registration))
+      if (!_registrations.TryGetValue(key, out var registration))
         return;
 
       foreach (var subscription in registration.Subscriptions.Values)
       {
-        if (subscription.Matches(propertyName))
+        if (context?.CaptureError is not null || subscription.Matches(propertyName ?? ""))
           matchingSubscriptions.Add(subscription);
       }
     }
@@ -307,8 +365,8 @@ public sealed class PropertyChangeRouter : IDisposable
     if (matchingSubscriptions.Count == 0 && PropertyChanged is null)
       return;
 
-    var eventArgs = new RemotePropertyChangedEventArgs(token, propertyName, source);
-    var groupId = $"token-pc-router:{token}";
+    var eventArgs = capturedArgs ?? new RemotePropertyChangedEventArgs(key.Token, propertyName ?? "", source);
+    var groupId = $"token-pc-router:{key.Token}";
 
     SyncThread.Enqueue(() =>
     {
@@ -322,13 +380,22 @@ public sealed class PropertyChangeRouter : IDisposable
     }, groupId);
   }
 
-  private void RemoveSubscription(ulong token, Guid id)
+  // The caller holds _gate while replacing the union of active property filters.
+  private void RefreshPropertyFilter((ulong Token, string Capture) key)
+  {
+    if (!_registrations.TryGetValue(key, out var registration)) return;
+    registration.Proxy.SetTrackedProperties(registration.Subscriptions.Values
+      .SelectMany(subscription => subscription.TrackedProperties)
+      .Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal).ToArray());
+  }
+
+  private void RemoveSubscription((ulong Token, string Capture) key, Guid id)
   {
     TokenRegistration? toDispose = null;
 
     lock (_gate)
     {
-      if (!_registrations.TryGetValue(token, out var registration))
+      if (!_registrations.TryGetValue(key, out var registration))
         return;
 
       if (!registration.Subscriptions.TryGetValue(id, out var subscription))
@@ -339,8 +406,15 @@ public sealed class PropertyChangeRouter : IDisposable
 
       if (registration.Subscriptions.Count == 0)
       {
-        _registrations.TryRemove(token, out _);
+        _registrations.TryRemove(key, out _);
         toDispose = registration;
+      }
+      else
+      {
+        // Failure can leave the native filter wider than necessary. Local matching
+        // still uses the current subscriptions, so the extra notifications are filtered.
+        try { RefreshPropertyFilter(key); }
+        catch (Exception error) { Log.Debug(error, "Failed to narrow property filter for token={Token}", key.Token); }
       }
     }
 

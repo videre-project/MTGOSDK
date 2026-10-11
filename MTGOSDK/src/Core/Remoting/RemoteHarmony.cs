@@ -8,8 +8,11 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 
+using MessagePack;
+
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -38,6 +41,7 @@ public class RemoteHarmony
     public HookAction HookAction { get; set; }
     public LocalHookCallback WrappedHookAction { get; set; }
     public HarmonyPatchPosition Position { get; private set; }
+    public RemoteHookCapture Capture { get; set; }
     public PositionedLocalHook(HookAction action, HarmonyPatchPosition pos)
     {
       HookAction = action;
@@ -57,7 +61,8 @@ public class RemoteHarmony
 
   /// <returns>True on success, false otherwise</returns>
 
-  public bool HookMethod(MethodBase methodToHook, HarmonyPatchPosition pos, HookAction hookAction)
+  public bool HookMethod(MethodBase methodToHook, HarmonyPatchPosition pos, HookAction hookAction,
+    RemoteHookCapture capture = null)
   {
     // Get or create MethodHooks object for the given method
     MethodHooks methodHooks = _callbacksToProxies.GetOrAdd(methodToHook, _ => new MethodHooks());
@@ -73,6 +78,9 @@ public class RemoteHarmony
           throw new InvalidOperationException("Hook already exists on another patch type.");
         }
 
+        if (!MessagePackSerializer.Serialize(registeredHook.Capture)
+            .SequenceEqual(MessagePackSerializer.Serialize(capture)))
+          throw new InvalidOperationException("Hook capture differs from the existing subscription.");
         return true;
       }
 
@@ -83,6 +91,9 @@ public class RemoteHarmony
         var existingHook = methodHooks.Values.FirstOrDefault(hook => hook.Position == pos);
         if (existingHook != null)
         {
+          if (!MessagePackSerializer.Serialize(existingHook.Capture)
+              .SequenceEqual(MessagePackSerializer.Serialize(capture)))
+            throw new InvalidOperationException("Hook capture differs from the existing subscription.");
           // Keep the existing registered callback token stable and update the
           // delegate it dispatches. Replacing WrappedHookAction here would strand
           // the old callback token in the communicator/Diver maps.
@@ -96,7 +107,7 @@ public class RemoteHarmony
 
       // Wrapping the callback which uses `dynamic`s in a callback that handles `ObjectOrRemoteAddresses`
       // and converts them to DROs
-      var positionedHook = new PositionedLocalHook(hookAction, pos);
+      var positionedHook = new PositionedLocalHook(hookAction, pos) { Capture = capture };
       LocalHookCallback wrappedHook = WrapCallback(positionedHook);
       positionedHook.WrappedHookAction = wrappedHook;
       methodHooks.TryAdd(hookAction, positionedHook);
@@ -110,7 +121,7 @@ public class RemoteHarmony
           methodToHook.Name,
           pos,
           wrappedHook,
-          parametersTypeFullNames);
+          parametersTypeFullNames, capture);
     }
   }
 
@@ -118,7 +129,12 @@ public class RemoteHarmony
   {
     LocalHookCallback hookProxy = (HookContext context, ObjectOrRemoteAddress instance, ObjectOrRemoteAddress[] args) =>
     {
-      // Converting instance to DRO
+      if (hook.Capture?.IncludeParameters == false)
+      {
+        hook.HookAction.DynamicInvoke(context, null, Array.Empty<object>());
+        return;
+      }
+
       DynamicRemoteObject droInstance;
       if (instance.IsNull)
       {
@@ -131,13 +147,12 @@ public class RemoteHarmony
         droInstance.__timestamp = context.Timestamp; // Preserve oora timestamp
       }
 
-      // Converting args to DROs/raw primitive types
       if (args.Length != 1)
       {
         throw new NotImplementedException("Unexpected arguments forwarded to callback from the diver.");
       }
-      // We are expecting a single arg which is a REMOTE array of objects (object[]) and we need to flatten it
-      // into several (Dynamic) Remote Objects in a LOCAL array of objects.
+      // The Diver passes method arguments as one remote object array. Decode
+      // its elements into local values and proxies before invoking the callback.
       RemoteObject ro = _app.GetRemoteObjectFromField(args[0].RemoteAddress, args[0].Type);
       dynamic dro = ro.Dynamify();
       if (!ro.GetType().IsArray)
@@ -152,18 +167,16 @@ public class RemoteHarmony
       object[] decodedParameters = new object[len];
       for (int i = 0; i < len; i++)
       {
-        // Since this object isn't really a local array (just a proxy of a remote one) the index
-        // acceess causes a 'GetItem' function call and retrieval of the remote object at the position
+        // The argument array lives in the target process, so each element
+        // must be fetched through its proxy.
         dynamic item = dro[i];
         decodedParameters[i] = item;
-        // (decodedParameters as dynamic)[i].__timestamp = args[i].Timestamp;
         if (item is DynamicRemoteObject droItem)
         {
           droItem.__timestamp = args[0].Timestamp;
         }
       }
 
-      // Call the callback with the proxied parameters (using DynamicRemoteObjects)
       hook.HookAction.DynamicInvoke(context, droInstance, decodedParameters);
     };
     return hookProxy;

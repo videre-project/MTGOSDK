@@ -58,16 +58,16 @@ public class TcpCommunicator : TcpPipelineBase
     _hostname = hostname;
     _port = port;
     _cts = cancellationTokenSource ?? new CancellationTokenSource();
-    _callbackScheduler = new ChannelScheduler(Environment.ProcessorCount);
+    // Run callbacks in wire order on a separate queue so the reader can complete
+    // responses even when a callback is waiting for a reflection request.
+    _callbackScheduler = new ChannelScheduler(1);
   }
 
   /// <summary>
   /// Registers a handler for incoming callbacks from the Diver.
   /// </summary>
-  public void SetCallbackHandler(Action<string, byte[]> handler)
-  {
+  public void SetCallbackHandler(Action<string, byte[]> handler) =>
     _callbackHandler = handler;
-  }
 
   /// <summary>
   /// Connects to the Diver and starts the background reader.

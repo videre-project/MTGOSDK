@@ -8,6 +8,8 @@ using System.Diagnostics;
 using System.Collections.Concurrent;
 
 using MTGOSDK.Core.Memory;
+using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 
@@ -137,7 +139,7 @@ public class RemoteObject : IObjectReference
     // TODO: Add a check for amount of parameters and types (need to be dynamics)
     // See implementation inside DynamicEventProxy
 
-    void callbackProxy(ObjectOrRemoteAddress[] args)
+    void callbackProxy(HookContext context, ObjectOrRemoteAddress[] args)
     {
       DynamicRemoteObject[] droParameters = new DynamicRemoteObject[args.Length];
       for (int i = 0; i < args.Length; i++)
@@ -153,15 +155,36 @@ public class RemoteObject : IObjectReference
       callback.DynamicInvoke(droParameters);
     }
 
-    if (_eventCallbacksAndProxies.TryRemove(
-      callback,
-      out DiverCommunicator.LocalEventCallback existingCallbackProxy))
-    {
-      _ref.EventUnsubscribe(eventName, existingCallbackProxy);
-    }
+    RegisterEventCallback(eventName, callback, callbackProxy);
+  }
 
-    _ref.EventSubscribe(eventName, callbackProxy);
-    _eventCallbacksAndProxies[callback] = callbackProxy;
+  /// <summary>
+  /// Subscribes to detached values captured in the native event handler or at
+  /// an enclosing scope's completion. Delivery resolves no sender or argument handles.
+  /// </summary>
+  public RemoteCaptureSequence EventSubscribe(string eventName, Action<HookContext> callback,
+    RemoteEventCapture capture, string[] propertyNames = null)
+  {
+    if (capture is null) throw new ArgumentNullException(nameof(capture));
+    return RegisterEventCallback(eventName, callback, (context, _) => callback(context), capture, propertyNames);
+  }
+
+  private RemoteCaptureSequence RegisterEventCallback(string eventName, Delegate callback,
+    DiverCommunicator.LocalEventCallback proxy, RemoteEventCapture capture = null,
+    string[] propertyNames = null)
+  {
+    if (_eventCallbacksAndProxies.TryRemove(callback, out var existing))
+      _ref.EventUnsubscribe(eventName, existing);
+    var sequence = _ref.EventSubscribe(eventName, proxy, capture, propertyNames);
+    _eventCallbacksAndProxies[callback] = proxy;
+    return sequence;
+  }
+
+  internal void SetEventPropertyFilter(Delegate callback, string[] propertyNames)
+  {
+    if (!_eventCallbacksAndProxies.TryGetValue(callback, out var proxy))
+      throw new InvalidOperationException("Event callback is not registered.");
+    _ref.SetEventPropertyFilter(proxy, propertyNames);
   }
 
   public void EventUnsubscribe(string eventName, Delegate callback)

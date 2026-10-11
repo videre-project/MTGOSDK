@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -80,14 +81,13 @@ public partial class Diver : IDisposable
       if (dispatcher != null)
       {
         var sw = Stopwatch.StartNew();
-        var signal = new ManualResetEventSlim(false);
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         dispatcher.BeginInvoke(DispatcherPriority.Background,
-          new Action(() => signal.Set()));
-        if (signal.Wait(2000)) // 2s timeout
+          new Action(() => completion.TrySetResult(true)));
+        if (completion.Task.Wait(2000))
           dispatcherMs = sw.Elapsed.TotalMilliseconds;
         else
-          dispatcherMs = 2000; // timed out — UI thread is blocked
-        signal.Dispose();
+          dispatcherMs = 2000; // The dispatcher did not execute the probe within the timeout.
       }
     }
     catch { /* Dispatcher unavailable */ }

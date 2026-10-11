@@ -9,15 +9,20 @@ using System.Runtime.CompilerServices;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 
 namespace MTGOSDK.Core.Reflection.Proxy;
 
 public delegate (dynamic, dynamic)? EventHook(dynamic instance, dynamic[] args);
+public delegate (dynamic, dynamic)? CapturedEventHook(HookContext context, dynamic instance, dynamic[] args);
 public delegate dynamic? EventValueHook(dynamic instance, dynamic[] args);
 
 internal static class EventHookProxyHelpers
 {
+
+
+
   public static T CastValue<T>(object? value)
   {
     if (value is T typedValue) return typedValue;
@@ -95,20 +100,18 @@ internal static class EventHookProxyHelpers
 /// </remarks>
 public class EventHookProxy<I, T> : EventProxyBase<I, T>
 {
-  // private event HookProxy<I,T> _eventHook;
   private event Action<I,T> _eventHook;
 
   private readonly string _typeName;
   private readonly string _methodName;
   private readonly MethodBase? _method;
   private readonly EventHook _hook;
+  private readonly CapturedEventHook? _capturedHook;
+  private readonly RemoteHookCapture? _capture;
   private readonly HarmonyPatchPosition _position;
 
   private readonly HookAction _hookAction;
-  private int _initializedGeneration = -1;
-  private readonly object _gate = new();
-
-  // public delegate void HookProxy<I1, T1>(I1 instance, T1 args);
+  private readonly object _lock = new();
 
   public EventHookProxy(
     string typeName,
@@ -122,23 +125,50 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     this._hook = hook;
     this._position = position;
 
-    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
-    {
-      (dynamic, dynamic)? res = hook(instance, args);
-      if ((object?)res is null) return; // Skip if the hook returns null.
+    this._hookAction = new((ctx, instance, args) =>
+      Dispatch(ctx, (object?)instance, args));
+  }
 
-      try
-      {
-        _eventHook?.Invoke(
-          EventHookProxyHelpers.CastValue<I>((object?)res.Value.Item1),
-          EventHookProxyHelpers.CastValue<T>((object?)res.Value.Item2));
-      }
-      catch (Exception e)
-      {
-        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
-        Log.Debug(e.StackTrace);
-      }
-    });
+  /// <summary>
+  /// Captures a caller-described batch in the target before queuing delivery.
+  /// </summary>
+  public EventHookProxy(string typeName, string methodName, CapturedEventHook hook,
+    RemoteHookCapture capture, HarmonyPatchPosition position = HarmonyPatchPosition.Postfix)
+  {
+    _typeName = typeName;
+    _methodName = methodName;
+    _hook = null!;
+    _capturedHook = hook;
+    _capture = capture;
+    _position = position;
+    _hookAction = new((ctx, instance, args) => Dispatch(ctx, (object?)instance, args));
+  }
+
+  private void Dispatch(HookContext context, object? instance, dynamic[] args)
+  {
+    if (context.CaptureError is { } captureError)
+    {
+      // Ordered capture consumers must receive failures to advance their stream.
+      if (context.CaptureSequence is null)
+        throw new InvalidOperationException("Native hook capture failed: " + captureError.Message);
+    }
+    (dynamic, dynamic)? result = _capturedHook is null
+      ? _hook(instance, args)
+      : _capturedHook(context, instance, args);
+    if (result is null)
+    {
+      return;
+    }
+    try
+    {
+      _eventHook?.Invoke(
+        EventHookProxyHelpers.CastValue<I>((object?)result.Value.Item1),
+        EventHookProxyHelpers.CastValue<T>((object?)result.Value.Item2));
+    }
+    catch (Exception error)
+    {
+      Log.Error(error, "Error invoking event hook {0}.", Name);
+    }
   }
 
   /// <summary>
@@ -160,23 +190,8 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     this._hook = hook;
     this._position = position;
 
-    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
-    {
-      (dynamic, dynamic)? res = hook(instance, args);
-      if ((object?)res is null) return; // Skip if the hook returns null.
-
-      try
-      {
-        _eventHook?.Invoke(
-          EventHookProxyHelpers.CastValue<I>((object?)res.Value.Item1),
-          EventHookProxyHelpers.CastValue<T>((object?)res.Value.Item2));
-      }
-      catch (Exception e)
-      {
-        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
-        Log.Debug(e.StackTrace);
-      }
-    });
+    this._hookAction = new((ctx, instance, args) =>
+      Dispatch(ctx, (object?)instance, args));
   }
 
   /// <summary>
@@ -206,16 +221,11 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
   public void EnsureInitialize()
   {
-    lock (_gate)
+    lock (_lock)
     {
-      if (_initializedGeneration == -1)
-      {
-        DoInitialize();
-      }
+      DoInitialize();
 
-      // Verify the hook still exists even within the same remote connection.
-      // Long-running MTGO sessions can invalidate remote hook state without a
-      // full reconnect, while our managed subscribers remain attached.
+      // Reinstall the hook if connection teardown cleared its registration.
       bool hasHook = _method == null
         ? RemoteClient.MethodHasHook(
             _typeName, _methodName, _hookAction, _position)
@@ -224,20 +234,18 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
       {
         if (_method == null)
           RemoteClient.HookMethod(
-            _typeName, _methodName, _hookAction, _position);
+            _typeName, _methodName, _hookAction, _position, _capture);
         else
           RemoteClient.HookMethod(_method, _hookAction, _position);
       }
-      _initializedGeneration = RemoteClient.s_connectionGeneration;
     }
   }
 
   public override void Clear()
   {
-    lock (_gate)
+    lock (_lock)
     {
       _eventHook = null;
-      _initializedGeneration = -1;
       ResetInitialize();
       if (!RemoteClient.IsInitialized) return;
 
@@ -256,9 +264,8 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
   public static EventHookProxy<I,T> operator +(EventHookProxy<I,T> e, Delegate c)
   {
-    lock (e._gate)
+    lock (e._lock)
     {
-      // e._eventHook += (HookProxy<I,T>)e.ProxyTypedDelegate(c);
       e._eventHook += (Action<I,T>)c;
 
       // If the method is not already hooked, hook it.
@@ -270,9 +277,8 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
   public static EventHookProxy<I,T> operator -(EventHookProxy<I,T> e, Delegate c)
   {
-    lock (e._gate)
+    lock (e._lock)
     {
-      // e._eventHook -= (HookProxy<I,T>)e.ProxyTypedDelegate(c);
       e._eventHook -= (Action<I,T>)c;
 
       // If there are no more subscribers, remove the hook.
@@ -283,7 +289,6 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
             e._typeName, e._methodName, e._hookAction);
         else
           RemoteClient.UnhookMethod(e._method, e._hookAction);
-        e._initializedGeneration = -1;
         e.ResetInitialize();
       }
     }
@@ -301,7 +306,10 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
 
   public static implicit operator EventHookProxy<dynamic, T>(
     EventHookProxy<I, T> e) =>
-      e._method == null
+      e._capture != null
+        ? new EventHookProxy<dynamic, T>(e._typeName, e._methodName,
+            e._capturedHook!, e._capture, e._position)
+        : e._method == null
         ? new EventHookProxy<dynamic, T>(
             e._typeName, e._methodName, e._hook, e._position)
         : new EventHookProxy<dynamic, T>(
@@ -324,12 +332,10 @@ public class EventHookProxy<T> : EventProxyBase<dynamic, T>
   private readonly string _typeName;
   private readonly string _methodName;
   private readonly MethodBase? _method;
-  private readonly EventValueHook _hook;
   private readonly HarmonyPatchPosition _position;
 
   private readonly HookAction _hookAction;
-  private int _initializedGeneration = -1;
-  private readonly object _gate = new();
+  private readonly object _lock = new();
 
   public EventHookProxy(
     string typeName,
@@ -340,25 +346,10 @@ public class EventHookProxy<T> : EventProxyBase<dynamic, T>
     this._typeName = typeName;
     this._methodName = methodName;
     this._method = null;
-    this._hook = hook;
     this._position = position;
 
-    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
-    {
-      dynamic? res = hook(instance, args);
-      if ((object?)res is null) return; // Skip if the hook returns null.
-
-      try
-      {
-        _eventHook?.Invoke(
-          EventHookProxyHelpers.CastValue<T>((object?)res));
-      }
-      catch (Exception e)
-      {
-        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
-        Log.Debug(e.StackTrace);
-      }
-    });
+    this._hookAction = new((ctx, instance, args) =>
+      Dispatch(ctx, hook, (object?)instance, args));
   }
 
   /// <summary>
@@ -377,25 +368,10 @@ public class EventHookProxy<T> : EventProxyBase<dynamic, T>
     this._typeName = typeName;
     this._methodName = method.Name;
     this._method = method;
-    this._hook = hook;
     this._position = position;
 
-    this._hookAction = new((HookContext ctx, dynamic instance, dynamic[] args) =>
-    {
-      dynamic? res = hook(instance, args);
-      if ((object?)res is null) return; // Skip if the hook returns null.
-
-      try
-      {
-        _eventHook?.Invoke(
-          EventHookProxyHelpers.CastValue<T>((object?)res));
-      }
-      catch (Exception e)
-      {
-        Log.Error("Error invoking event hook {0}: {1}", Name, e.Message);
-        Log.Debug(e.StackTrace);
-      }
-    });
+    this._hookAction = new((ctx, instance, args) =>
+      Dispatch(ctx, hook, (object?)instance, args));
   }
 
   /// <summary>
@@ -423,18 +399,32 @@ public class EventHookProxy<T> : EventProxyBase<dynamic, T>
         position)
   { }
 
+  private void Dispatch(HookContext context, EventValueHook convert,
+    object? instance, dynamic[] args)
+  {
+    dynamic? result = convert(instance, args);
+    if ((object?)result is null)
+    {
+      return;
+    }
+
+    try
+    {
+      _eventHook?.Invoke(EventHookProxyHelpers.CastValue<T>((object?)result));
+    }
+    catch (Exception error)
+    {
+      Log.Error(error, "Error invoking event hook {0}.", Name);
+    }
+  }
+
   public void EnsureInitialize()
   {
-    lock (_gate)
+    lock (_lock)
     {
-      if (_initializedGeneration == -1)
-      {
-        DoInitialize();
-      }
+      DoInitialize();
 
-      // Verify the hook still exists even within the same remote connection.
-      // Long-running MTGO sessions can invalidate remote hook state without a
-      // full reconnect, while our managed subscribers remain attached.
+      // Reinstall the hook if connection teardown cleared its registration.
       bool hasHook = _method == null
         ? RemoteClient.MethodHasHook(
             _typeName, _methodName, _hookAction, _position)
@@ -447,16 +437,14 @@ public class EventHookProxy<T> : EventProxyBase<dynamic, T>
         else
           RemoteClient.HookMethod(_method, _hookAction, _position);
       }
-      _initializedGeneration = RemoteClient.s_connectionGeneration;
     }
   }
 
   public override void Clear()
   {
-    lock (_gate)
+    lock (_lock)
     {
       _eventHook = null;
-      _initializedGeneration = -1;
       ResetInitialize();
       if (!RemoteClient.IsInitialized) return;
 
@@ -475,7 +463,7 @@ public class EventHookProxy<T> : EventProxyBase<dynamic, T>
 
   public static EventHookProxy<T> operator +(EventHookProxy<T> e, Delegate c)
   {
-    lock (e._gate)
+    lock (e._lock)
     {
       e._eventHook += (Action<T>)c;
 
@@ -488,7 +476,7 @@ public class EventHookProxy<T> : EventProxyBase<dynamic, T>
 
   public static EventHookProxy<T> operator -(EventHookProxy<T> e, Delegate c)
   {
-    lock (e._gate)
+    lock (e._lock)
     {
       e._eventHook -= (Action<T>)c;
 
@@ -500,7 +488,6 @@ public class EventHookProxy<T> : EventProxyBase<dynamic, T>
             e._typeName, e._methodName, e._hookAction);
         else
           RemoteClient.UnhookMethod(e._method, e._hookAction);
-        e._initializedGeneration = -1;
         e.ResetInitialize();
       }
     }

@@ -5,6 +5,7 @@
 **/
 
 using MessagePack;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -18,4 +19,7 @@ public class CallbackInvocationRequest
   public int Token { get; set; }
   [Key(2)]
   public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
+  [Key(3)] public RemoteBatchResult Capture { get; set; }
+  [Key(4)] public RemoteBatchError CaptureError { get; set; }
+  [Key(5)] public RemoteCaptureSequence CaptureSequence { get; set; }
 }

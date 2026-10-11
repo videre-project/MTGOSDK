@@ -23,6 +23,13 @@ public class RegisteredMethodHookInfo
   public MethodBase OriginalHookedMethod { get; set; }
 
   /// <summary>
+  /// Active subscriptions sharing this native patch and callback token.
+  /// </summary>
+  public int SubscriptionCount { get; set; } = 1;
+  public string Position { get; set; }
+  public RemoteHookCapture Capture { get; set; }
+
+  /// <summary>
   /// The IP Endpoint listening for invocations
   /// </summary>
   public IPEndPoint Endpoint { get; set; }

@@ -13,10 +13,12 @@ using System.Threading;
 
 using MessagePack;
 
+using MTGOSDK.Core;
 using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Memory.Snapshot;
 using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -29,21 +31,25 @@ namespace ScubaDiver;
 
 public partial class Diver : IDisposable
 {
+  // Use one sender to preserve callback enqueue order over TCP.
+  private readonly ChannelScheduler _callbackScheduler = new(1);
   private SnapshotRuntime _runtime;
   private TcpServer _tcpServer;
   private readonly BatchExecutionEndpoint _batchExecutionEndpoint;
   private readonly BatchExecutor _batchExecutor;
+  private readonly CaptureScopeManager _captureScopes = new();
 
-  private static readonly AsyncLocal<byte[]> _cachedRequestBody = new();
+  private static readonly AsyncLocal<byte[]> s_requestBody = new();
 
   private readonly Dictionary<string, Func<byte[], byte[]>> _tcpHandlers;
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
   private readonly ConcurrentDictionary<int, RegisteredMethodHookInfo> _remoteHooks;
+  private readonly object _methodHookGate = new();
 
   private readonly CancellationTokenSource _cts = new();
+  private int _disposed;
 
-  private readonly ConcurrentDictionary<int, HashSet<int>> _clientCallbacks = new();
-  private readonly ConcurrentDictionary<int, CancellationTokenSource> _callbackTokens = new();
+  private readonly ConcurrentDictionary<int, byte> _activeCallbacks = new();
 
   public Diver()
   {
@@ -75,6 +81,7 @@ public partial class Diver : IDisposable
       {"/batch_collection", _ => MakeBatchCollectionResponse()},
       {"/batch_execute", body => _batchExecutionEndpoint.Handle(body)},
       {"/event_subscribe", _ => MakeEventSubscribeResponse()},
+      {"/event_property_filter", _ => MakeEventPropertyFilterResponse()},
       {"/event_unsubscribe", _ => MakeEventUnsubscribeResponse()},
       {"/hook_method", _ => MakeHookMethodResponse()},
       {"/unhook_method", _ => MakeUnhookMethodResponse()},
@@ -110,21 +117,23 @@ public partial class Diver : IDisposable
 
   public void Start(ushort listenPort)
   {
+    try
+    {
 #if MTGOSDK_TRACING
-    _traceExporter = new TraceExporter(
+      _traceExporter = new TraceExporter(
         Path.Combine(Bootstrapper.AppDataDir, "Logs", "trace", "trace_diver.json"),
         "ScubaDiver");
 #endif
-
-    _runtime = new SnapshotRuntime();
-
-    _tcpServer = new TcpServer(listenPort, HandleTcpRequest);
-    Log.Debug($"[Diver] Listening on TCP port {listenPort}...");
-    
-    _tcpServer.StartAsync(_cts.Token).GetAwaiter().GetResult();
-
-    Log.Debug("[Diver] Closing ClrMD runtime and snapshot");
-    this.Dispose();
+      _runtime = new SnapshotRuntime();
+      _tcpServer = new TcpServer(listenPort, HandleTcpRequest);
+      Log.Debug($"[Diver] Listening on TCP port {listenPort}...");
+      _tcpServer.StartAsync(_cts.Token).GetAwaiter().GetResult();
+    }
+    finally
+    {
+      Log.Debug("[Diver] Closing ClrMD runtime and snapshot");
+      Dispose();
+    }
 
     Log.Debug("[Diver] Exiting");
   }
@@ -135,70 +144,38 @@ public partial class Diver : IDisposable
   private byte[] HandleTcpRequest(string endpoint, byte[] body)
   {
 #if MTGOSDK_TRACING
-    // Unwrap the TracedRequest
-    TracedRequest tracedReq;
-    try 
+    using var activity = s_activitySource.StartActivity(endpoint, ActivityKind.Server);
+    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+    activity?.SetTag("endpoint", endpoint);
+    activity?.SetTag("ipc.flow", "end");
+#else
+    Activity activity = null;
+#endif
+    if (!_tcpHandlers.TryGetValue(endpoint, out var handler))
+      return QuickError($"Unknown endpoint: {endpoint}");
+
+    var previousBody = s_requestBody.Value;
+    s_requestBody.Value = body;
+    long started = Stopwatch.GetTimestamp();
+    try
     {
-      tracedReq = TracedRequest.Deserialize(body);
+      return handler(body);
     }
     catch (Exception ex)
     {
-      // Fallback for legacy/non-traced requests (e.g. ping before tracing enabled)
-      // or if deser fails, we assume it's a raw body
-      Log.Error($"[Diver] Failed to deserialize TracedRequest: {ex.GetType().Name} - {ex.Message}");
-      tracedReq = new TracedRequest { Body = body };
+      activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+      return QuickError(ex.Message, ex.StackTrace);
     }
-
-    ActivityContext parentContext = default;
-    if (!string.IsNullOrEmpty(tracedReq.TraceParent))
+    finally
     {
-        ActivityContext.TryParse(tracedReq.TraceParent, tracedReq.TraceState, out parentContext);
+      // Restore the enclosing request if a handler invoked another request locally.
+      s_requestBody.Value = previousBody;
+      long elapsed = Stopwatch.GetTimestamp() - started;
+      var metrics = s_endpointMetrics.GetOrAdd(endpoint, _ => new EndpointMetrics());
+      Interlocked.Increment(ref metrics.Count);
+      Interlocked.Add(ref metrics.TotalTicks, elapsed);
+      Interlocked.Exchange(ref metrics.LastTicks, elapsed);
     }
-
-    // Start metadata-rich activity for the request
-    using var activity = s_activitySource.StartActivity(
-        endpoint, 
-        ActivityKind.Server, 
-        parentContext);
-    
-    if (activity != null)
-    {
-        activity.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
-        activity.SetTag("endpoint", endpoint);
-        activity.SetTag("ipc.flow", "end"); // Tag for flow event visualization
-    }
-
-    // Set the actual request body in thread-local storage
-    _cachedRequestBody.Value = tracedReq.Body;
-#else
-    // Tracing is disabled unless MTGOSDK_TRACING is defined
-    Activity activity = null;
-    _cachedRequestBody.Value = body;
-#endif
-
-    if (_tcpHandlers.TryGetValue(endpoint, out var handler))
-    {
-      var sw = Stopwatch.StartNew();
-      try
-      {
-        var result = handler(_cachedRequestBody.Value);
-        return result;
-      }
-      catch (Exception ex)
-      {
-        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-        return QuickError(ex.Message, ex.StackTrace);
-      }
-      finally
-      {
-        sw.Stop();
-        var m = s_endpointMetrics.GetOrAdd(endpoint, _ => new EndpointMetrics());
-        Interlocked.Increment(ref m.Count);
-        Interlocked.Add(ref m.TotalTicks, sw.ElapsedTicks);
-        Interlocked.Exchange(ref m.LastTicks, sw.ElapsedTicks);
-      }
-    }
-    return QuickError($"Unknown endpoint: {endpoint}");
   }
 
   /// <summary>
@@ -228,36 +205,64 @@ public partial class Diver : IDisposable
   /// Get the cached request body for the current request.
   /// </summary>
   public static byte[] ReadRequestBody() =>
-    _cachedRequestBody.Value ?? Array.Empty<byte>();
+    s_requestBody.Value ?? Array.Empty<byte>();
 
   /// <summary>
   /// Deserialize the cached request body.
   /// </summary>
   public static T DeserializeRequest<T>() =>
-    MessagePackSerializer.Deserialize<T>(_cachedRequestBody.Value);
+    MessagePackSerializer.Deserialize<T>(s_requestBody.Value);
+
+
 
   public void Dispose()
   {
-    _cts.Cancel();
-    _cts.Dispose();
-    _tcpServer?.Dispose();
-    _runtime?.Dispose();
-#if MTGOSDK_TRACING
-    _traceExporter?.Dispose();
-#endif
-    _clientCallbacks.Clear();
-    STAThread.Stop();
+    if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-    // Clean up event subscriptions and hooks
-    foreach (RegisteredEventHandlerInfo rehi in _remoteEventHandler.Values)
+    var failures = new List<Exception>();
+
+    void Release(string resource, Action release)
     {
-      rehi.EventInfo.RemoveEventHandler(rehi.Target, rehi.RegisteredProxy);
+      try
+      {
+        release();
+      }
+      catch (Exception error)
+      {
+        failures.Add(error);
+        Log.Error(error, "[Diver] Failed to release {0} during disposal.", resource);
+      }
     }
-    foreach (RegisteredMethodHookInfo rmhi in _remoteHooks.Values)
+
+    // Detach native callbacks before releasing the runtime they use for capture.
+    Release("transport cancellation", _cts.Cancel);
+    Release("TCP server", () => _tcpServer?.Dispose());
+    _activeCallbacks.Clear();
+    foreach (var registration in _remoteEventHandler.Values)
     {
-      HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
+      Release("event handler", () => RemoveEventHandler(
+        registration.EventInfo, registration.Target, registration.RegisteredProxy));
+      Release("event capture scope", () => registration.CaptureScopeSubscription?.Dispose());
     }
     _remoteEventHandler.Clear();
-    _remoteHooks.Clear();
+    lock (_methodHookGate)
+    {
+      foreach (var registration in _remoteHooks.Values)
+        Release("method hook", () => HarmonyWrapper.Instance.RemoveHook(registration.OriginalHookedMethod));
+      _remoteHooks.Clear();
+    }
+
+    Release("callback scheduler", _callbackScheduler.Dispose);
+    Release("capture scopes", _captureScopes.Dispose);
+    Release("snapshot runtime", () => _runtime?.Dispose());
+    Release("STA thread", STAThread.Stop);
+    lock (_registeredPidsLock) _registeredPids.Clear();
+#if MTGOSDK_TRACING
+    Release("trace exporter", () => _traceExporter?.Dispose());
+#endif
+    Release("transport cancellation source", _cts.Dispose);
+
+    if (failures.Count != 0)
+      throw new AggregateException("Diver disposal failed to release one or more resources.", failures);
   }
 }
