@@ -17,12 +17,16 @@ public sealed class RemoteBatchError
 {
   [Key(0)]
   public int OperationId { get; set; }
+
   [Key(1)]
   public string? OutputPath { get; set; }
+
   [Key(2)]
   public string ExceptionType { get; set; } = "";
+
   [Key(3)]
   public string Message { get; set; } = "";
+
   [Key(4)]
   public string? StackTrace { get; set; }
 }

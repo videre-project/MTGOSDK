@@ -16,10 +16,13 @@ public sealed class RemoteBatchMethod
 {
   [Key(0)]
   public RemoteBatchType DeclaringType { get; set; } = new();
+
   [Key(1)]
   public string Name { get; set; } = "";
+
   [Key(2)]
   public RemoteBatchType[] ParameterTypes { get; set; } = [];
+
   [Key(3)]
   public RemoteBatchType[] GenericArguments { get; set; } = [];
 

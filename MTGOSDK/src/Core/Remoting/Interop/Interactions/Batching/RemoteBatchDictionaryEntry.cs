@@ -16,6 +16,7 @@ public sealed class RemoteBatchDictionaryEntry
 {
   [Key(0)]
   public RemoteBatchValue Key { get; set; } = new();
+
   [Key(1)]
   public RemoteBatchValue Value { get; set; } = new();
 }

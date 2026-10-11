@@ -17,22 +17,31 @@ public sealed class RemoteBatchOperation
 {
   [Key(0)]
   public int Id { get; set; }
+
   [Key(1)]
   public RemoteBatchOperationKind Kind { get; set; }
+
   [Key(2)]
   public RemoteBatchReference? Target { get; set; }
+
   [Key(3)]
   public string? Path { get; set; }
+
   [Key(4)]
   public RemoteBatchMethod? Method { get; set; }
+
   [Key(5)]
   public RemoteBatchReference[] Arguments { get; set; } = [];
+
   [Key(6)]
   public List<RemoteBatchOperation> Body { get; set; } = [];
+
   [Key(7)]
   public int[]? Indices { get; set; }
+
   [Key(8)]
   public string? OutputName { get; set; }
+
   [Key(9)]
   public RemoteBatchProjection Projection { get; set; } = new();
 }

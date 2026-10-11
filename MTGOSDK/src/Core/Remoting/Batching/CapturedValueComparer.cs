@@ -28,8 +28,10 @@ internal sealed class CapturedValueComparer : IEqualityComparer<object?>
 
   public new bool Equals(object? left, object? right)
   {
-    if (ReferenceEquals(left, right)) return true;
-    if (left == null || right == null) return false;
+    if (ReferenceEquals(left, right))
+      return true;
+    if (left == null || right == null)
+      return false;
     if (left is KeyValuePair<object?, object?>[] dictionary)
       return right is KeyValuePair<object?, object?>[] otherDictionary &&
         dictionary.Length == otherDictionary.Length &&
@@ -42,17 +44,20 @@ internal sealed class CapturedValueComparer : IEqualityComparer<object?>
 
   public int GetHashCode(object? value)
   {
-    if (value == null) return 0;
+    if (value == null)
+      return 0;
     if (value is KeyValuePair<object?, object?>[] dictionary)
     {
       int hash = 0;
-      foreach (var entry in dictionary) hash ^= s_entries.GetHashCode(entry);
+      foreach (var entry in dictionary)
+        hash ^= s_entries.GetHashCode(entry);
       return HashCode.Combine(dictionary.Length, hash);
     }
     if (value is IEnumerable sequence && value is not string)
     {
       var hash = new HashCode();
-      foreach (var item in sequence) hash.Add(GetHashCode(item));
+      foreach (var item in sequence)
+        hash.Add(GetHashCode(item));
       return hash.ToHashCode();
     }
     return value.GetHashCode();

@@ -20,9 +20,6 @@ public delegate dynamic? EventValueHook(dynamic instance, dynamic[] args);
 
 internal static class EventHookProxyHelpers
 {
-
-
-
   public static T CastValue<T>(object? value)
   {
     if (value is T typedValue) return typedValue;

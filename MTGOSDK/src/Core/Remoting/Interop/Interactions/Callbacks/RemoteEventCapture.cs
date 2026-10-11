@@ -30,6 +30,7 @@ public sealed class RemoteEventCapture
 {
   [Key(0)]
   public RemoteBatchRequest Batch { get; set; }
+
   [Key(1)]
   public Dictionary<int, int> Inputs { get; set; } = new();
 

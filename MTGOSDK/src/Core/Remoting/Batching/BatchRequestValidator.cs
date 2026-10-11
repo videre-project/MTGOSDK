@@ -51,7 +51,8 @@ internal static class BatchRequestValidator
       // Sharing allIds across bodies keeps operation IDs unique throughout the batch.
       void CheckReference(RemoteBatchReference? reference)
       {
-        if (reference == null) throw new ArgumentException("Missing operation reference.");
+        if (reference == null)
+          throw new ArgumentException("Missing operation reference.");
         bool valid = reference.Kind switch
         {
           RemoteBatchReferenceKind.Input => reference.Id >= 0 && reference.Id < request.Inputs.Count,
@@ -59,10 +60,12 @@ internal static class BatchRequestValidator
           RemoteBatchReferenceKind.Item => items.Contains(reference.Id),
           _ => false
         };
-        if (!valid) throw new ArgumentException($"Invalid, forward, or inaccessible reference {reference.Id}.");
+        if (!valid)
+          throw new ArgumentException($"Invalid, forward, or inaccessible reference {reference.Id}.");
       }
 
-      foreach (var argument in operation.Arguments) CheckReference(argument);
+      foreach (var argument in operation.Arguments)
+        CheckReference(argument);
 
       switch (operation.Kind)
       {
@@ -74,14 +77,16 @@ internal static class BatchRequestValidator
         case RemoteBatchOperationKind.Create:
         case RemoteBatchOperationKind.Call:
         case RemoteBatchOperationKind.CallStatic:
-          if (operation.Kind == RemoteBatchOperationKind.Call) CheckReference(operation.Target);
+          if (operation.Kind == RemoteBatchOperationKind.Call)
+            CheckReference(operation.Target);
           var method = operation.Method;
           if (method == null || method.ParameterTypes == null || method.GenericArguments == null ||
               method.ParameterTypes.Length != operation.Arguments.Length)
             throw new ArgumentException("Missing exact method signature or wrong argument count.");
           RequireType(method.DeclaringType);
           RequireName(method.Name);
-          foreach (var type in method.ParameterTypes.Concat(method.GenericArguments)) RequireType(type);
+          foreach (var type in method.ParameterTypes.Concat(method.GenericArguments))
+            RequireType(type);
           if (operation.Kind == RemoteBatchOperationKind.Create &&
               (method.Name != ".ctor" || method.GenericArguments.Length != 0))
             throw new ArgumentException("Create requires a nongeneric .ctor signature.");
@@ -101,7 +106,8 @@ internal static class BatchRequestValidator
         case RemoteBatchOperationKind.Output:
           CheckReference(operation.Target);
           RequireName(operation.OutputName);
-          if (!outputs.Add(operation.OutputName!)) throw new ArgumentException("Duplicate output name.");
+          if (!outputs.Add(operation.OutputName!))
+            throw new ArgumentException("Duplicate output name.");
           ValidateProjection(operation.Projection, request.Projections, new());
           continue;
 
@@ -115,8 +121,10 @@ internal static class BatchRequestValidator
   private static void ValidateProjection(RemoteBatchProjection projection,
     Dictionary<string, RemoteBatchProjection> definitions, HashSet<RemoteBatchProjection> visited)
   {
-    if (projection == null) throw new ArgumentException("Missing projection.");
-    if (!visited.Add(projection)) return;
+    if (projection == null)
+      throw new ArgumentException("Missing projection.");
+    if (!visited.Add(projection))
+      return;
     foreach (var alternative in projection.RuntimeTypes)
     {
       RequireName(alternative.Key);
@@ -163,11 +171,13 @@ internal static class BatchRequestValidator
         break;
 
       case RemoteBatchProjectionKind.Object:
-        if (projection.Members == null) throw new ArgumentException("Missing object members.");
+        if (projection.Members == null)
+          throw new ArgumentException("Missing object members.");
         foreach (var member in projection.Members)
         {
           RequireName(member.Key);
-          if (member.Value == null) throw new ArgumentException("Missing member projection.");
+          if (member.Value == null)
+            throw new ArgumentException("Missing member projection.");
           RequirePath(member.Value.Path);
           ValidateProjection(member.Value.Projection, definitions, visited);
         }
@@ -179,10 +189,13 @@ internal static class BatchRequestValidator
 
   private static void RequireType(RemoteBatchType type)
   {
-    if (type == null) throw new ArgumentException("Missing type identity.");
+    if (type == null)
+      throw new ArgumentException("Missing type identity.");
     RequireName(type.FullName);
-    if (type.GenericArguments == null) throw new ArgumentException("Missing generic type arguments.");
-    foreach (var argument in type.GenericArguments) RequireType(argument);
+    if (type.GenericArguments == null)
+      throw new ArgumentException("Missing generic type arguments.");
+    foreach (var argument in type.GenericArguments)
+      RequireType(argument);
     if (type.ElementType != null)
     {
       RequireType(type.ElementType);
@@ -197,12 +210,14 @@ internal static class BatchRequestValidator
 
   private static void RequireName(string? name)
   {
-    if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Names cannot be empty.");
+    if (string.IsNullOrWhiteSpace(name))
+      throw new ArgumentException("Names cannot be empty.");
   }
 
   private static void RequirePath(string? path)
   {
     RequireName(path);
-    if (path!.Split('.').Any(string.IsNullOrWhiteSpace)) throw new ArgumentException("Invalid member path.");
+    if (path!.Split('.').Any(string.IsNullOrWhiteSpace))
+      throw new ArgumentException("Invalid member path.");
   }
 }

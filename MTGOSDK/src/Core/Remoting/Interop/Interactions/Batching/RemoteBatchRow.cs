@@ -16,12 +16,16 @@ public sealed class RemoteBatchRow
 {
   [Key(0)]
   public int CollectionOperationId { get; set; }
+
   [Key(1)]
   public int SourceIndex { get; set; }
+
   [Key(2)]
   public Dictionary<string, RemoteBatchValue> Values { get; set; } = new();
+
   [Key(3)]
   public RemoteBatchError? Error { get; set; }
+
   [Key(4)]
   public List<RemoteBatchRow> Rows { get; set; } = [];
 }

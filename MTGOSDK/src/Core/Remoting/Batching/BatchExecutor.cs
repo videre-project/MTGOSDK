@@ -45,7 +45,8 @@ public sealed class BatchExecutor(
 
     public object? Find(int id, bool item)
     {
-      if ((item ? Items : Results).TryGetValue(id, out var value)) return value;
+      if ((item ? Items : Results).TryGetValue(id, out var value))
+        return value;
       return Parent != null ? Parent.Find(id, item)
         : throw new InvalidOperationException($"Unresolved reference {id}.");
     }
@@ -253,7 +254,8 @@ public sealed class BatchExecutor(
   {
     foreach (var segment in path.Split('.'))
     {
-      if (source == null) return null;
+      if (source == null)
+        return null;
       var type = source.GetType();
       var member = _members.GetOrAdd((type, segment), key =>
       {
@@ -263,7 +265,8 @@ public sealed class BatchExecutor(
           if (property != null && property.GetIndexParameters().Length == 0 && property.GetGetMethod(true) != null)
             return property;
           var field = candidate.GetField(key.Name, Members);
-          if (field != null) return field;
+          if (field != null)
+            return field;
         }
         throw new MissingMemberException(type.FullName, segment);
       });
@@ -306,7 +309,8 @@ public sealed class BatchExecutor(
             MethodInfo method = candidate;
             if (candidate.IsGenericMethodDefinition)
             {
-              if (candidate.GetGenericArguments().Length != genericArguments.Length) continue;
+              if (candidate.GetGenericArguments().Length != genericArguments.Length)
+                continue;
               try
               {
                 method = candidate.MakeGenericMethod(genericArguments);
@@ -317,11 +321,13 @@ public sealed class BatchExecutor(
                 continue;
               }
             }
-            else if (genericArguments.Length != 0) continue;
+            else if (genericArguments.Length != 0)
+              continue;
             if (method.GetParameters().Select(p => p.ParameterType).SequenceEqual(parameters))
               matches.Add(method);
           }
-          if (matches.Count > 1) throw new AmbiguousMatchException(descriptor.Name);
+          if (matches.Count > 1)
+            throw new AmbiguousMatchException(descriptor.Name);
           if (matches.Count == 1)
           {
             bound = matches[0];
@@ -330,7 +336,8 @@ public sealed class BatchExecutor(
         }
       }
 
-      if (bound == null) throw new MissingMethodException(declaring.FullName, descriptor.Name);
+      if (bound == null)
+        throw new MissingMethodException(declaring.FullName, descriptor.Name);
       if (bound.GetParameters().Any(p => p.ParameterType.IsByRef || p.IsOut) || bound.ContainsGenericParameters)
         throw new NotSupportedException("Batch calls do not support ref/out or open generic signatures.");
       if (bound is MethodInfo methodInfo && (typeof(Task).IsAssignableFrom(methodInfo.ReturnType) ||
@@ -346,7 +353,8 @@ public sealed class BatchExecutor(
     if (identity.ElementType != null)
     {
       var element = Resolve(identity.ElementType);
-      if (identity.IsByRef) return element.MakeByRefType();
+      if (identity.IsByRef)
+        return element.MakeByRefType();
       return identity.IsVector ? element.MakeArrayType() : element.MakeArrayType(identity.ArrayRank);
     }
     var definition = resolveType(identity);
@@ -356,9 +364,11 @@ public sealed class BatchExecutor(
 
   private static IEnumerable<Type> Hierarchy(Type type)
   {
-    for (var current = type; current != null; current = current.BaseType) yield return current;
+    for (var current = type; current != null; current = current.BaseType)
+      yield return current;
     if (type.IsInterface)
-      foreach (var inherited in type.GetInterfaces()) yield return inherited;
+      foreach (var inherited in type.GetInterfaces())
+        yield return inherited;
   }
 
   private static Exception Unwrap(Exception ex)

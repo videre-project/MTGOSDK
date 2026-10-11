@@ -29,6 +29,7 @@ public sealed class RemoteHookCapture
 {
   [Key(0)]
   public RemoteBatchRequest Batch { get; set; }
+
   [Key(1)]
   public List<int> Inputs { get; set; } = new();
   /// <summary>

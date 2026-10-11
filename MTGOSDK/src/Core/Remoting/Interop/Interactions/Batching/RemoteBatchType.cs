@@ -16,16 +16,22 @@ public sealed class RemoteBatchType
 {
   [Key(0)]
   public string FullName { get; set; } = "";
+
   [Key(1)]
   public string? AssemblyName { get; set; }
+
   [Key(2)]
   public RemoteBatchType[] GenericArguments { get; set; } = [];
+
   [Key(3)]
   public RemoteBatchType? ElementType { get; set; }
+
   [Key(4)]
   public int ArrayRank { get; set; }
+
   [Key(5)]
   public bool IsByRef { get; set; }
+
   [Key(6)]
   public bool IsVector { get; set; }
 

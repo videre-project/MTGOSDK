@@ -16,6 +16,7 @@ public sealed class RemoteBatchMemberProjection
 {
   [Key(0)]
   public string Path { get; set; } = "";
+
   [Key(1)]
   public RemoteBatchProjection Projection { get; set; } = new();
 }

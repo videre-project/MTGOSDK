@@ -273,7 +273,10 @@ public partial class Diver : IDisposable
         if (description.Scope != null && description.Inputs.ContainsKey(description.Scope.OwnerInput))
           throw new ArgumentException("Event scope owner must be a retained batch input.");
       }
-      catch (Exception error) { return QuickError("Invalid event capture: " + error.Message); }
+      catch (Exception error)
+      {
+        return QuickError("Invalid event capture: " + error.Message);
+      }
     }
 
     if (request.PropertyNames is not null &&
@@ -295,10 +298,14 @@ public partial class Diver : IDisposable
       {
         var captureRoot = _runtime.ParseParameterObject(request.Capture.Batch.Inputs[scope.OwnerInput]);
         scopeOwner = captureRoot;
-        if (scope.OwnerPath != null) scopeOwner = _batchExecutor.Read(scopeOwner, scope.OwnerPath);
+        if (scope.OwnerPath != null)
+          scopeOwner = _batchExecutor.Read(scopeOwner, scope.OwnerPath);
         registration.CaptureScopeSubscription = _captureScopes.Subscribe(scope.Group, scopeOwner, out baseline, captureRoot);
       }
-      catch (Exception error) { return QuickError("Invalid event scope owner: " + error.Message); }
+      catch (Exception error)
+      {
+        return QuickError("Invalid event scope owner: " + error.Message);
+      }
     }
 
     int token = AssignCallbackToken();
@@ -306,7 +313,8 @@ public partial class Diver : IDisposable
 
     EventHandler eventHandler = (obj, args) =>
     {
-      if (!IsCallbackActive(token)) return;
+      if (!IsCallbackActive(token))
+        return;
       DateTime timestamp = DateTime.UtcNow;
       var eventKey = (resolvedType.FullName, eventName);
       if (!GlobalEvents.IsValidEvent(eventKey, obj, args, out var mappedArgs))
@@ -321,7 +329,9 @@ public partial class Diver : IDisposable
 
       void Complete(RemoteCaptureSequence sequence, Exception nativeError = null)
       {
-        if (!IsCallbackActive(token)) return;
+        if (!IsCallbackActive(token))
+          return;
+
         // An enclosing scope calls this after the native update completes.
         // Otherwise, the event handler captures immediately. In both cases the
         // values are detached before callback delivery can be delayed.
@@ -347,7 +357,8 @@ public partial class Diver : IDisposable
 
       if (request.Capture?.Scope is { } scope)
       {
-        if (_captureScopes.MarkChanged(scope.Group, scopeOwner, eventName, Complete, objAddr)) return;
+        if (_captureScopes.MarkChanged(scope.Group, scopeOwner, eventName, Complete, objAddr))
+          return;
         _captureScopes.Complete(scope.Group, scopeOwner, sequence =>
         {
           sequence.EventNames = [eventName];

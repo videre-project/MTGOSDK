@@ -25,7 +25,9 @@ public class RemoteBatchScope
     _itemScope = itemScope;
   }
 
-  internal RemoteBatchScope() { }
+  internal RemoteBatchScope()
+  {
+  }
 
   /// <summary>
   /// Refers to the current collection item. Available only in a ForEach body.
@@ -36,9 +38,11 @@ public class RemoteBatchScope
 
   private RemoteBatchReference Reference(RemoteBatchSlot slot)
   {
-    if (slot.Owner != Owner) throw new ArgumentException("Reference belongs to another batch.");
+    if (slot.Owner != Owner)
+      throw new ArgumentException("Reference belongs to another batch.");
     for (var scope = this; scope != null; scope = scope.Parent)
-      if (scope == slot.Scope) return slot.Reference;
+      if (scope == slot.Scope)
+        return slot.Reference;
     throw new ArgumentException("Reference belongs to a child or sibling scope.");
   }
 

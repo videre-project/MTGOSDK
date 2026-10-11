@@ -90,26 +90,30 @@ public sealed class PropertyChangeRouter : IDisposable
 
     public void AddTrackedProperties(params string[] propertyNames)
     {
-      if (propertyNames is null) throw new ArgumentNullException(nameof(propertyNames));
+      if (propertyNames is null)
+        throw new ArgumentNullException(nameof(propertyNames));
       ChangeTrackedProperties(properties => properties.UnionWith(
         propertyNames.Where(name => !string.IsNullOrWhiteSpace(name))));
     }
 
     public bool RemoveTrackedProperties(params string[] propertyNames)
     {
-      if (propertyNames is null) throw new ArgumentNullException(nameof(propertyNames));
+      if (propertyNames is null)
+        throw new ArgumentNullException(nameof(propertyNames));
       bool removed = false;
       ChangeTrackedProperties(properties =>
       {
         foreach (string name in propertyNames)
-          if (!string.IsNullOrWhiteSpace(name)) removed |= properties.Remove(name);
+          if (!string.IsNullOrWhiteSpace(name))
+            removed |= properties.Remove(name);
       });
       return removed;
     }
 
     public void SetTrackedProperties(params string[] propertyNames)
     {
-      if (propertyNames is null) throw new ArgumentNullException(nameof(propertyNames));
+      if (propertyNames is null)
+        throw new ArgumentNullException(nameof(propertyNames));
       ChangeTrackedProperties(properties =>
       {
         properties.Clear();
@@ -328,9 +332,11 @@ public sealed class PropertyChangeRouter : IDisposable
     lock (_gate)
     {
       foreach (var key in _registrations.Keys.Where(key => key.Token == token))
-        if (_registrations.TryRemove(key, out var existing)) removed.Add(existing);
+        if (_registrations.TryRemove(key, out var existing))
+          removed.Add(existing);
     }
-    foreach (var registration in removed) DisposeRegistration(registration);
+    foreach (var registration in removed)
+      DisposeRegistration(registration);
     return removed.Count != 0;
   }
 

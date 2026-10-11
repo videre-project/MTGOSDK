@@ -16,6 +16,7 @@ public sealed class RemoteBatchResult
 {
   [Key(0)]
   public Dictionary<string, RemoteBatchValue> Values { get; set; } = new();
+
   [Key(1)]
   public List<RemoteBatchRow> Rows { get; set; } = [];
 }

@@ -18,22 +18,31 @@ public sealed class RemoteBatchProjection
 {
   [Key(0)]
   public RemoteBatchProjectionKind Kind { get; set; }
+
   [Key(1)]
   public Dictionary<string, RemoteBatchMemberProjection> Members { get; set; } = new();
+
   [Key(2)]
   public RemoteBatchProjection? Element { get; set; }
+
   [Key(3)]
   public RemoteBatchProjection? DictionaryKey { get; set; }
+
   [Key(4)]
   public RemoteBatchProjection? DictionaryValue { get; set; }
+
   [Key(5)]
   public string? Name { get; set; }
+
   [Key(6)]
   public RemoteBatchType? ScalarContract { get; set; }
+
   [Key(7)]
   public bool RuntimeScalars { get; set; }
+
   [Key(8)]
   public Dictionary<string, RemoteBatchProjection> RuntimeTypes { get; set; } = new();
+
   [Key(9)]
   public bool IncludeLogicalAddress { get; set; }
 
@@ -61,7 +70,11 @@ public sealed class RemoteBatchProjection
     new() { Kind = RemoteBatchProjectionKind.Sequence, Element = element ?? Value() };
   public static RemoteBatchProjection Dictionary(RemoteBatchProjection key,
     RemoteBatchProjection value) => new()
-    { Kind = RemoteBatchProjectionKind.Dictionary, DictionaryKey = key, DictionaryValue = value };
+    {
+      Kind = RemoteBatchProjectionKind.Dictionary,
+      DictionaryKey = key,
+      DictionaryValue = value
+    };
   public static RemoteBatchProjection Object(params (string Name, string Path,
     RemoteBatchProjection Projection)[] members) => new()
     {

@@ -15,11 +15,19 @@ public class CallbackInvocationRequest
 {
   [Key(0)]
   public DateTime Timestamp { get; set; }
+
   [Key(1)]
   public int Token { get; set; }
+
   [Key(2)]
   public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
-  [Key(3)] public RemoteBatchResult Capture { get; set; }
-  [Key(4)] public RemoteBatchError CaptureError { get; set; }
-  [Key(5)] public RemoteCaptureSequence CaptureSequence { get; set; }
+
+  [Key(3)]
+  public RemoteBatchResult Capture { get; set; }
+
+  [Key(4)]
+  public RemoteBatchError CaptureError { get; set; }
+
+  [Key(5)]
+  public RemoteCaptureSequence CaptureSequence { get; set; }
 }

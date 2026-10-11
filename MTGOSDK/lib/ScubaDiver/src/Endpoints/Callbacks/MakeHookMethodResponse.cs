@@ -92,7 +92,10 @@ public partial class Diver : IDisposable
         captureFilter = new HookCaptureFilter(captureDescription.Filters, methodInfo,
           name => _runtime.ResolveType(name), _batchExecutor);
       }
-      catch (Exception error) { return QuickError("Invalid hook capture: " + error.Message); }
+      catch (Exception error)
+      {
+        return QuickError("Invalid hook capture: " + error.Message);
+      }
     }
 
     lock (_methodHookGate)
@@ -139,7 +142,9 @@ public partial class Diver : IDisposable
       // this native invocation.
       Action<object, object[], RemoteCaptureSequence, Exception> completeCapture = (obj, args, sequence, nativeError) =>
       {
-        if (!IsCallbackActive(token)) return;
+        if (!IsCallbackActive(token))
+          return;
+
         DateTime timestamp = DateTime.UtcNow;
         var eventKey = (resolvedType.FullName, methodName);
         dynamic mappedArgs = args;
@@ -179,14 +184,16 @@ public partial class Diver : IDisposable
         {
           wrapper.AddScopeHook(methodInfo, (obj, args) =>
           {
-            if (!IsCallbackActive(token)) return null;
+            if (!IsCallbackActive(token))
+              return null;
             if (!GlobalEvents.IsValidEvent((resolvedType.FullName, methodName), obj, args, out _))
               return null;
             if (!captureFilter.TryMatch(obj, args, out var captureRoot))
               return null;
             int index = request.Capture.Inputs[scope.OwnerInput];
             object owner = index == -1 ? captureRoot : args[index];
-            if (scope.OwnerPath != null) owner = _batchExecutor.Read(owner, scope.OwnerPath);
+            if (scope.OwnerPath != null)
+              owner = _batchExecutor.Read(owner, scope.OwnerPath);
             if (request.Capture.Filters.Count != 0 &&
                 !_captureScopes.HasSubscribers(scope.Group, owner, captureRoot))
               return null;

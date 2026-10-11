@@ -18,21 +18,25 @@ public sealed class RemoteCaptureScope
   /// <summary>
   /// The capture group shared by participating registrations.
   /// </summary>
-  [Key(0)] public string Group { get; set; } = "";
+  [Key(0)]
+  public string Group { get; set; } = "";
 
   /// <summary>
   /// The batch input containing the owner or the root of its member path.
   /// </summary>
-  [Key(1)] public int OwnerInput { get; set; }
+  [Key(1)]
+  public int OwnerInput { get; set; }
 
   /// <summary>
   /// An optional property/field path from that input to the native owner.
   /// </summary>
-  [Key(2)] public string? OwnerPath { get; set; }
+  [Key(2)]
+  public string? OwnerPath { get; set; }
 
   /// <summary>
   /// Advances the owner's state revision when this invocation begins.
   /// Nested notification captures are deferred until this boundary completes.
   /// </summary>
-  [Key(3)] public bool IsStateBoundary { get; set; }
+  [Key(3)]
+  public bool IsStateBoundary { get; set; }
 }

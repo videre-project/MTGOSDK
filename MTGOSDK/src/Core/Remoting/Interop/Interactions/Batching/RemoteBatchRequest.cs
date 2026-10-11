@@ -18,12 +18,16 @@ public sealed class RemoteBatchRequest
 {
   [Key(0)]
   public List<ObjectOrRemoteAddress> Inputs { get; set; } = [];
+
   [Key(1)]
   public List<RemoteBatchOperation> Operations { get; set; } = [];
+
   [Key(2)]
   public Dictionary<string, RemoteBatchProjection> Projections { get; set; } = new();
+
   [Key(3)]
   public int MaxDepth { get; set; } = 32;
+
   [Key(4)]
   public bool ForceUIThread { get; set; }
 }

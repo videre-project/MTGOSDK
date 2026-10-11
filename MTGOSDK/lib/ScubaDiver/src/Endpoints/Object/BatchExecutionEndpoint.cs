@@ -38,7 +38,8 @@ public sealed class BatchExecutionEndpoint
   /// </summary>
   public static Type ResolveLoadedType(RemoteBatchType identity, Func<string, Type> fallback)
   {
-    if (identity.AssemblyName == null) return fallback(identity.FullName);
+    if (identity.AssemblyName == null)
+      return fallback(identity.FullName);
     return s_types.GetOrAdd((identity.FullName, identity.AssemblyName), key =>
     {
       var matches = AppDomain.CurrentDomain.GetAssemblies()

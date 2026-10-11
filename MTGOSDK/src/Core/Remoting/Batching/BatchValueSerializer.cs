@@ -44,7 +44,8 @@ internal sealed class BatchValueSerializer(
   {
     try
     {
-      if (depth > request.MaxDepth) throw new InvalidOperationException("Projection depth limit exceeded.");
+      if (depth > request.MaxDepth)
+        throw new InvalidOperationException("Projection depth limit exceeded.");
       if (value == null)
         return new() { Kind = RemoteBatchValueKind.Null };
 
@@ -105,7 +106,8 @@ internal sealed class BatchValueSerializer(
                 throw new ArgumentException($"Value does not implement {contract.FullName}.");
               foreach (var member in s_scalarMembers.GetOrAdd(contract, GetScalarMembers))
               {
-                if (projection.Members.ContainsKey(member.Name)) continue;
+                if (projection.Members.ContainsKey(member.Name))
+                  continue;
                 var memberPath = path + "." + member.Name;
                 object? memberValue;
                 try
@@ -169,7 +171,8 @@ internal sealed class BatchValueSerializer(
       }
       finally
       {
-        if (!type.IsValueType) ancestors.Remove(value);
+        if (!type.IsValueType)
+          ancestors.Remove(value);
       }
     }
     catch (BatchProjectionException)

@@ -38,7 +38,10 @@ public sealed class RemoteBatch : RemoteBatchScope
   /// </summary>
   public bool ForceUIThread { get; set; }
 
-  public RemoteBatch() { Owner = this; }
+  public RemoteBatch()
+  {
+    Owner = this;
+  }
 
   /// <summary>
   /// Records an encoded literal or an existing remote handle.
@@ -56,7 +59,8 @@ public sealed class RemoteBatch : RemoteBatchScope
   /// </summary>
   public RemoteBatchSlot Input(object? value)
   {
-    if (value is ObjectOrRemoteAddress encoded) return Input(encoded);
+    if (value is ObjectOrRemoteAddress encoded)
+      return Input(encoded);
     if (value is DLRWrapper)
       throw new ArgumentException("Pass an existing raw remote handle instead of a wrapper.", nameof(value));
     // Use the existing handle token so recording an input does not fetch

@@ -46,7 +46,8 @@ public sealed class RemoteBatchObject : DynamicObject, IEquatable<RemoteBatchObj
 
   public override bool TryGetMember(GetMemberBinder binder, out object? result)
   {
-    if (Members.TryGetValue(binder.Name, out result)) return true;
+    if (Members.TryGetValue(binder.Name, out result))
+      return true;
     throw new MissingMemberException($"Member '{binder.Name}' was not captured.");
   }
 
@@ -81,8 +82,10 @@ public sealed class RemoteBatchObject : DynamicObject, IEquatable<RemoteBatchObj
 
   private static T ConvertValue<T>(object? value, string path)
   {
-    if (value is T typed) return typed;
-    if (value == null && default(T) == null) return default!;
+    if (value is T typed)
+      return typed;
+    if (value == null && default(T) == null)
+      return default!;
     if (typeof(T).IsEnum && value != null)
     {
       var number = value is RemoteBatchEnum captured ? captured.EnumValue : value;

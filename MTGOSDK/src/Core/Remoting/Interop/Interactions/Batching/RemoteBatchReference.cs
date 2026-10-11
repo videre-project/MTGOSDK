@@ -16,6 +16,7 @@ public sealed class RemoteBatchReference
 {
   [Key(0)]
   public RemoteBatchReferenceKind Kind { get; set; }
+
   [Key(1)]
   public int Id { get; set; }
 }
