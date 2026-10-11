@@ -45,13 +45,11 @@ internal sealed class BatchValueSerializer(
     try
     {
       if (depth > request.MaxDepth) throw new InvalidOperationException("Projection depth limit exceeded.");
-      while (projection.Kind == RemoteBatchProjectionKind.Named)
-        projection = request.Projections[projection.Name!];
-      if (value == null) return new() { Kind = RemoteBatchValueKind.Null };
+      if (value == null)
+        return new() { Kind = RemoteBatchValueKind.Null };
 
       var type = value.GetType();
-      if (projection.RuntimeTypes.TryGetValue(type.FullName!, out var selected))
-        projection = selected;
+      projection = ResolveProjection(projection, type);
       if (projection.Kind == RemoteBatchProjectionKind.Value && type.IsEnum)
       {
         var underlying = Enum.GetUnderlyingType(type);
@@ -181,6 +179,26 @@ internal sealed class BatchValueSerializer(
     catch (Exception error)
     {
       throw new BatchProjectionException(path, error);
+    }
+  }
+
+  private RemoteBatchProjection ResolveProjection(RemoteBatchProjection projection, Type type)
+  {
+    HashSet<RemoteBatchProjection>? visited = null;
+    while (true)
+    {
+      RemoteBatchProjection selected;
+      if (projection.Kind == RemoteBatchProjectionKind.Named)
+        selected = request.Projections[projection.Name!];
+      else if (!projection.RuntimeTypes.TryGetValue(type.FullName!, out selected!))
+        return projection;
+
+      // Selecting an alias or a runtime type can lead back to the same schema
+      // without traversing an object member. Reject that loop before serialization.
+      visited ??= new();
+      if (!visited.Add(projection))
+        throw new InvalidOperationException("Cyclic projection selection.");
+      projection = selected;
     }
   }
 
