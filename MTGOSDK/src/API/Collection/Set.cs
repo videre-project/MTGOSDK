@@ -18,6 +18,14 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// </summary>
   internal override dynamic obj => Bind<ICardSet>(set);
 
+  /// <summary>
+  /// Uses the supplied set's operations when available, otherwise resolves them
+  /// from the catalog using this set's code. Metadata reads retain their source.
+  /// </summary>
+  private ICardSet CardSet => field ??=
+    HasMember(set, nameof(ICardSet.Cards)) && HasMember(set, nameof(ICardSet.ContainsCatalogId))
+      ? @base : CollectionManager.GetSet(Code).@base;
+
   //
   // ICardSet wrapper properties
   //
@@ -64,8 +72,9 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// </summary>
   /// <remarks>
   /// This collection is ordered by the card's catalog id.
+  /// When the supplied object contains only metadata, resolves the collection by set code.
   /// </remarks>
-  public IEnumerable<Card> Cards => Map<Card>(@base.Cards);
+  public IEnumerable<Card> Cards => Map<Card>(CardSet.Cards);
 
   //
   // ICardSet wrapper methods
@@ -76,7 +85,7 @@ public sealed class Set(dynamic set) : DLRWrapper<ICardSet>
   /// </summary>
   /// <param name="id">The catalog id of the card to check for.</param>
   /// <returns>True if the set contains the card, otherwise false.</returns>
-  public bool ContainsCatalogId(int id) => @base.ContainsCatalogId(id);
+  public bool ContainsCatalogId(int id) => CardSet.ContainsCatalogId(id);
 
   /// <summary>
   /// Whether the set contains the specified card printing.

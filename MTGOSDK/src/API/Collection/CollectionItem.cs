@@ -31,6 +31,11 @@ public class CollectionItem<T>(dynamic collectionItem)
 
   public int Id => @base.Id;
 
+  /// <summary>
+  /// The native texture number for this definition.
+  /// </summary>
+  public int CTN => @base.CTN;
+
   public string Name => @base.Name;
 
   public string Description => @base.Description;
