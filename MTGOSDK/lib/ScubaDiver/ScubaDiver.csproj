@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
+  <PropertyGroup>
     <TargetFramework>$(_MTGOSDKCoreTFM)</TargetFramework>
     <LangVersion>Latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -12,13 +12,6 @@
     <EnableMTGOSDKTracing Condition="'$(EnableMTGOSDKTracing)' == ''">false</EnableMTGOSDKTracing>
     <DefineConstants Condition="'$(EnableMTGOSDKTracing)' == 'true'">$(DefineConstants);MTGOSDK_TRACING</DefineConstants>
   </PropertyGroup>
-
-  <!-- ILLink trimmer -->
-  <!-- <PropertyGroup>
-    <UseILLinkTrim>true</UseILLinkTrim>
-  </PropertyGroup>
-  <Import Project="$(ToolsDir)\ILLink\ILLink.targets"
-          Condition="'$(UseILLinkTrim)' == 'true'" /> -->
 
   <!-- Merge the ScubaDiver assembly with ClrMD and other dependencies -->
   <Import Project="$(_ILRepackTargetsPath)" />

@@ -21,6 +21,8 @@ public class DllEntry
 {
   private static readonly object s_resolveLock = new();
   private static bool s_resolveInitialized;
+  private static readonly object s_hostLock = new();
+  private static Thread s_hostThread;
 
   /// <summary>
   /// Resolve version-mismatched framework assemblies (e.g. System.ValueTuple)
@@ -139,9 +141,7 @@ public class DllEntry
     if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
       return;
 
-    // Pre-scan the directory and index every .dll by file name (without
-    // extension). This lets the resolve handler skip file I/O and
-    // GetAssemblies() for assemblies we don't ship.
+    // Index payload paths once so resolution does not enumerate the directory again.
     foreach (string file in Directory.GetFiles(directory, "*.dll"))
     {
       string name = Path.GetFileNameWithoutExtension(file);
@@ -179,8 +179,8 @@ public class DllEntry
       };
 
       // Start the diver instance and block the thread until it exits.
-      Diver _instance = new();
-      _instance.Start(port);
+      using var diver = new Diver();
+      diver.Start(port);
       Log.Debug("[DiverHost] Diver finished gracefully.");
     }
     catch (Exception e)
@@ -197,23 +197,34 @@ public class DllEntry
     // Ensure resolve hooks are initialized before Diver startup.
     InitializeAssemblyResolve();
 
-    // The bootstrapper is expecting to call a C# function with this signature,
-    // so we use it to start a new thread to host the diver in it's own thread.
-    ParameterizedThreadStart func = DiverHost;
-    Thread diverHostThread = new(func)
+    // Concurrent injectors can reach this entry point before the first host
+    // starts listening. Share that host rather than installing a second set
+    // of hooks, log providers, and runtime resources on the same port.
+    Thread diverHostThread;
+    lock (s_hostLock)
     {
-      Name = "DiverHostThread",
-      IsBackground = true,
-    };
-    diverHostThread.SetApartmentState(ApartmentState.STA);
-    diverHostThread.Start(pwzArgument);
+      if (s_hostThread?.IsAlive == true)
+      {
+        diverHostThread = s_hostThread;
+        Log.Debug("[DiverHost] Reusing the running Diver host thread.");
+      }
+      else
+      {
+        diverHostThread = new Thread(DiverHost)
+        {
+          Name = "DiverHostThread",
+          IsBackground = true,
+        };
+        diverHostThread.SetApartmentState(ApartmentState.STA);
+        diverHostThread.Start(pwzArgument);
+        s_hostThread = diverHostThread;
+      }
+    }
 
-    // Block the thread until the diver has exited.
-    // This may cause a deadlock if the diver crashes in a non-recoverable way,
-    // so we handle that case in the <see cref="DiverHost"/> function.
+    // Keep the injected entry point alive for the host's lifetime.
     diverHostThread.Join();
 
-    // Signal to the launcher that the diver has finished bootstrapping.
+    // The injected host has finished serving requests.
     return 0;
   }
 }

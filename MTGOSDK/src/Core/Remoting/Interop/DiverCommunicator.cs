@@ -9,8 +9,10 @@ using System.Diagnostics;
 
 using MessagePack;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -37,6 +39,14 @@ public class DiverCommunicator : IDisposable
   private Exception? _lastError;
 
   public Exception? LastError => _lastError;
+
+  /// <summary>
+  /// Reports ordered captures received by this connection. Captures can belong to
+  /// subscriptions registered by other clients, so subscribers should filter by
+  /// StreamId and use Sequence to process values in native completion order. Handlers run
+  /// on the connection's callback delivery queue.
+  /// </summary>
+  public event Action<HookContext>? CaptureCompleted;
 
   // Callback handling
   private readonly ConcurrentDictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
@@ -192,10 +202,8 @@ public class DiverCommunicator : IDisposable
     {
       var request = MessagePackSerializer.Deserialize<CallbackInvocationRequest>(body);
       Interlocked.Increment(ref s_callbacksReceived);
-
-      // Measure end-to-end callback delivery latency.
-      // Normalize to UTC before comparing — MessagePack serializes DateTime
-      // as UTC ticks, so the deserialized Kind may differ from DateTime.Now.
+      // Normalize both timestamps to UTC before measuring delivery latency because
+      // the deserialized DateTime kind may differ from the Diver's original timestamp.
       double latencyMs = (DateTime.UtcNow - request.Timestamp.ToUniversalTime())
         .TotalMilliseconds;
       s_lastCallbackLatencyMs = latencyMs;
@@ -203,7 +211,6 @@ public class DiverCommunicator : IDisposable
         ? latencyMs
         : s_avgCallbackLatencyMs * 0.9 + latencyMs * 0.1;
 
-      // Rolling 5-second peak: reset if window expired, otherwise keep max
       long now = Stopwatch.GetTimestamp();
       if ((now - s_peakResetTicks) / (double)Stopwatch.Frequency > 5.0)
       {
@@ -215,22 +222,33 @@ public class DiverCommunicator : IDisposable
         s_peakCallbackLatencyMs = latencyMs;
       }
 
-      // Set the timestamp for the sender
+      var context = new HookContext(request.Timestamp)
+      {
+        Capture = request.Capture,
+        CaptureError = request.CaptureError,
+        CaptureSequence = request.CaptureSequence
+      };
+      if (request.CaptureSequence is not null && CaptureCompleted is { } handlers)
+        foreach (Action<HookContext> handler in handlers.GetInvocationList())
+        {
+          try { handler(context); }
+          catch (Exception error) { Log.Error(error, "Native capture completion handler failed."); }
+        }
+
       if (request.Parameters.Count > 0)
         request.Parameters[0].Timestamp = request.Timestamp;
 
       if (_tokensToEventHandlers.TryGetValue(request.Token, out LocalEventCallback callback))
       {
-        // Set timestamps for event args
         if (request.Parameters.Count > 1)
           request.Parameters[1].Timestamp = request.Timestamp;
 
-        callback([.. request.Parameters]);
+        callback(context, [.. request.Parameters]);
       }
       else if (_tokensToHookCallbacks.TryGetValue(request.Token, out LocalHookCallback hook))
       {
-        hook(new HookContext(request.Timestamp),
-             request.Parameters.FirstOrDefault(),
+        hook(context,
+             request.Parameters.FirstOrDefault() ?? ObjectOrRemoteAddress.Null,
              [.. request.Parameters.Skip(1)]);
       }
     }
@@ -620,19 +638,73 @@ public class DiverCommunicator : IDisposable
       "/batch_collection", body);
   }
 
-  public void EventSubscribe(
+  /// <summary>
+  /// Executes a composed reflection batch in one IPC request.
+  /// </summary>
+  public RemoteBatchResult ExecuteBatch(RemoteBatchRequest request) =>
+    ExecuteBatchAsync(request).GetAwaiter().GetResult();
+
+  /// <summary>
+  /// Sends one batch request and asynchronously awaits the result. The Diver still
+  /// executes native calls synchronously and applies any ambient UI dispatch setting
+  /// to the whole batch.
+  /// </summary>
+  public async Task<RemoteBatchResult> ExecuteBatchAsync(RemoteBatchRequest request)
+  {
+    var copy = MessagePackSerializer.Deserialize<RemoteBatchRequest>(
+      MessagePackSerializer.Serialize(request));
+    return await ExecuteDetachedBatchAsync(copy).ConfigureAwait(false);
+  }
+
+  /// <summary>
+  /// Takes ownership of an already detached request from the batch builder.
+  /// </summary>
+  internal async Task<RemoteBatchResult> ExecuteDetachedBatchAsync(RemoteBatchRequest request)
+  {
+    request.ForceUIThread |= ForceUIThread;
+    EnsureConnected();
+    Interlocked.Increment(ref s_totalRequests);
+    var sw = Stopwatch.StartNew();
+    try
+    {
+      return await _tcp.SendRequestAsync<RemoteBatchResult>("/batch_execute",
+        MessagePackSerializer.Serialize(request)).ConfigureAwait(false);
+    }
+    finally
+    {
+      sw.Stop();
+      var metrics = s_ipcMetrics.GetOrAdd("batch_execute", _ => new EndpointMetrics());
+      Interlocked.Increment(ref metrics.Count);
+      Interlocked.Add(ref metrics.TotalTicks, sw.ElapsedTicks);
+      Interlocked.Exchange(ref metrics.LastTicks, sw.ElapsedTicks);
+    }
+  }
+
+  public RemoteCaptureSequence EventSubscribe(
     ulong targetAddr,
     string eventName,
-    LocalEventCallback callback)
+    LocalEventCallback callback,
+    RemoteEventCapture capture = null, string[] propertyNames = null)
   {
     var request = new EventSubscriptionRequest
     {
       Address = targetAddr,
-      EventName = eventName
+      EventName = eventName,
+      Capture = capture,
+      PropertyNames = propertyNames
     };
     var regRes = SendRequest<EventRegistrationResults>("event_subscribe", request);
     _tokensToEventHandlers[regRes.Token] = callback;
     _eventHandlersToToken[callback] = regRes.Token;
+    return regRes.CaptureSequence;
+  }
+
+  internal void SetEventPropertyFilter(LocalEventCallback callback, string[] propertyNames)
+  {
+    if (!_eventHandlersToToken.TryGetValue(callback, out int token))
+      throw new InvalidOperationException("Event callback is not registered.");
+    SendRequest("event_property_filter", new EventPropertyFilterRequest
+    { Token = token, PropertyNames = propertyNames });
   }
 
   public void EventUnsubscribe(LocalEventCallback callback)
@@ -684,14 +756,16 @@ public class DiverCommunicator : IDisposable
     string methodName,
     HarmonyPatchPosition pos,
     LocalHookCallback callback,
-    List<string> parametersTypeFullNames = null)
+    List<string> parametersTypeFullNames = null,
+    RemoteHookCapture capture = null)
   {
     var req = new HookSubscriptionRequest
     {
       TypeFullName = type,
       MethodName = methodName,
       HookPosition = pos.ToString(),
-      ParametersTypeFullNames = parametersTypeFullNames
+      ParametersTypeFullNames = parametersTypeFullNames,
+      Capture = capture
     };
 
     var regRes = SendRequest<EventRegistrationResults>("hook_method", req);
@@ -749,7 +823,7 @@ public class DiverCommunicator : IDisposable
     return false;
   }
 
-  public delegate void LocalEventCallback(ObjectOrRemoteAddress[] args);
+  public delegate void LocalEventCallback(HookContext context, ObjectOrRemoteAddress[] args);
 
   public void Dispose()
   {

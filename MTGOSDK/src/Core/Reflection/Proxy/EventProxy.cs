@@ -3,6 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+
 
 namespace MTGOSDK.Core.Reflection.Proxy;
 
@@ -27,6 +30,18 @@ public class EventProxy<I, T>(dynamic @ref, string name) : EventProxyBase<I, T>
 
   private void EventSubscribe(string eventName, Delegate callback) =>
     @ro.EventSubscribe(eventName, callback);
+
+  /// <summary>
+  /// Subscribes to detached values captured in the native event handler or at
+  /// an enclosing scope's completion. Clear and the unsubscribe operator release
+  /// the registration as they do for ordinary event subscriptions.
+  /// </summary>
+  public void Subscribe(Action<HookContext> callback, RemoteEventCapture capture)
+  {
+    DoInitialize();
+    @ro.EventSubscribe(Name, callback, capture);
+    _delegates.Add((callback, callback));
+  }
 
   private void EventUnsubscribe(string eventName, Delegate callback) =>
     @ro.EventUnsubscribe(eventName, callback);

@@ -99,10 +99,9 @@ public partial class Diver : IDisposable
       }
       method = method.MakeGenericMethod(genericArgs);
     }
-    // Check if this invocation requires UI thread affinity
-    // DispatcherObject instances must be accessed on their owning thread
-    bool isDispatcherObject = instance != null && instance is System.Windows.Threading.DispatcherObject;
-    bool needsUIThread = request.ForceUIThread && isDispatcherObject;
+    // The caller determines thread affinity through ForceUIThread for both
+    // instance and static methods.
+    bool needsUIThread = request.ForceUIThread;
 
     // Start sub-activity for the actual reflection invocation
     using var activity = s_activitySource.StartActivity("MethodInvoke");
@@ -118,13 +117,11 @@ public partial class Diver : IDisposable
     {
       if (needsUIThread && !STAThread.IsDispatcherThread)
       {
-        // For DispatcherObject instances with ForceUIThread, invoke on UI thread proactively
-        Log.Debug($"[Diver] Invoking {request.MethodName} on UI thread (DispatcherObject target)");
+        Log.Debug($"[Diver] Invoking {request.MethodName} on UI thread (requested dispatch)");
         results = STAThread.Execute(() => method.Invoke(instance, paramsArray));
       }
       else
       {
-        // Try direct execution first - most operations don't need UI thread
         results = method.Invoke(instance, paramsArray);
       }
     }

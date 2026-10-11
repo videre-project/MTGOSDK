@@ -5,6 +5,8 @@
 
 using System.ComponentModel;
 
+using MTGOSDK.Core.Remoting.Hooking;
+
 
 namespace MTGOSDK.Core.Remoting.Interop;
 
@@ -14,7 +16,7 @@ namespace MTGOSDK.Core.Remoting.Interop;
 public sealed class RemotePropertyChangedEventArgs(
   ulong token,
   string propertyName,
-  INotifyPropertyChanged source) : EventArgs
+  INotifyPropertyChanged source) : PropertyChangedEventArgs(propertyName)
 {
   /// <summary>
   /// Gets the <see cref="MTGOSDK.Core.Memory.Snapshot.SnapshotRuntime"/> token associated with the source object.
@@ -22,12 +24,13 @@ public sealed class RemotePropertyChangedEventArgs(
   public ulong Token { get; } = token;
 
   /// <summary>
-  /// Gets the name of the property that changed.
-  /// </summary>
-  public string PropertyName { get; } = propertyName;
-
-  /// <summary>
   /// Gets the source object that raised <see cref="INotifyPropertyChanged.PropertyChanged"/>.
   /// </summary>
   public INotifyPropertyChanged Source { get; } = source;
+
+  /// <summary>
+  /// Values detached in the native notification or at an enclosing scope's
+  /// completion, when capture was requested.
+  /// </summary>
+  public HookContext? CaptureContext { get; init; }
 }

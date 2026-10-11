@@ -6,6 +6,7 @@
 
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
 
@@ -305,12 +306,20 @@ internal class RemoteObjectRef
           fieldName);
   }
 
-  public void EventSubscribe(
+  public RemoteCaptureSequence EventSubscribe(
     string eventName,
-    DiverCommunicator.LocalEventCallback callbackProxy)
+    DiverCommunicator.LocalEventCallback callbackProxy,
+    RemoteEventCapture capture = null, string[] propertyNames = null)
   {
     ThrowIfReleased();
-    _communicator.EventSubscribe(_pinnedAddress, eventName, callbackProxy);
+    return _communicator.EventSubscribe(_pinnedAddress, eventName, callbackProxy, capture, propertyNames);
+  }
+
+  internal void SetEventPropertyFilter(
+    DiverCommunicator.LocalEventCallback callbackProxy, string[] propertyNames)
+  {
+    ThrowIfReleased();
+    _communicator.SetEventPropertyFilter(callbackProxy, propertyNames);
   }
 
   public void EventUnsubscribe(

@@ -13,6 +13,12 @@ Per-namespace API documentation for MTGOSDK.
 | [Debugging](./debugging.md) | Log files, traces, and troubleshooting |
 | [Generated Types](./generated-types.md) | Import enums from MTGO at build time |
 
+## MTGOSDK.Core
+
+| Guide | Description |
+| ----- | ----------- |
+| [Batched Reflection](./batched-reflection.md) | Compose reflection operations and return projected values in one request |
+
 For task-oriented tutorials, see the [Guides](../guides/README.md).
 
 For SDK internals and design decisions, see the [Architecture](../architecture/README.md).

@@ -5,15 +5,15 @@
 **/
 
 using System;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 
 using HarmonyLib;
 
 using MTGOSDK.Core;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Hooking;
 
 
@@ -21,7 +21,9 @@ namespace ScubaDiver.Hooking;
 
 public class HarmonyWrapper
 {
-  // We'll use this class to indicate a some parameter in a hooked function can't be proxied
+  /// <summary>
+  /// Occupies the argument slot of a byref-like value that cannot be boxed.
+  /// </summary>
   public class DummyParameterReplacement
   {
     public static readonly DummyParameterReplacement Instance = new();
@@ -30,50 +32,45 @@ public class HarmonyWrapper
       throw new InvalidOperationException("Parameter can't be proxied.");
   }
 
-  private static HarmonyWrapper _instance = null;
-  public static HarmonyWrapper Instance => _instance ??= new();
+  private static readonly Lazy<HarmonyWrapper> s_instance = new(() => new());
+  public static HarmonyWrapper Instance => s_instance.Value;
 
   private readonly Harmony _harmony;
-  /// <summary>
-  /// Maps 'target function parameters count' to right hook function (UnifiedHook_NUMBER)
-  /// </summary>
-  private readonly Dictionary<string, MethodInfo> _psHooks;
-  /// <summary>
-  /// Maps methods and the prefix hooks that were used to hook them. (Important for unpatching)
-  /// </summary>
-  private readonly Dictionary<string, MethodInfo> _singlePrefixHooks = new();
 
   /// <summary>
-  /// This dict is static because <see cref="SinglePrefixHook"/> must be a static function (Harmony limitations)
+  /// Selects a Harmony adapter from the target's boxable argument positions.
   /// </summary>
-  private static readonly ConcurrentDictionary<string, HookCallback> _actualHooks = new();
+  private readonly Dictionary<string, MethodInfo> _parameterHooks;
+
+  /// <summary>
+  /// Retains the installed adapter so removal targets only this wrapper's patch.
+  /// </summary>
+  private readonly ConcurrentDictionary<MethodBase, MethodInfo> _installedHooks = new();
+
+  /// <summary>
+  /// Routes Harmony's static adapters to the registered in-process callbacks.
+  /// </summary>
+  private static readonly ConcurrentDictionary<MethodBase, HookCallback> s_callbacks = new();
+  private static readonly ConcurrentDictionary<MethodBase, Func<object, object[], Action<Exception>>>
+    s_scopeHooks = new();
 
   private HarmonyWrapper()
   {
     _harmony = new Harmony("com.videre.mtgosdk");
-    _psHooks = new Dictionary<string, MethodInfo>();
-    var methods = typeof(HarmonyWrapper).GetMethods((BindingFlags)0xffffff);
+    _parameterHooks = new Dictionary<string, MethodInfo>();
+    var methods = typeof(HarmonyWrapper).GetMethods(BindingFlags.NonPublic | BindingFlags.Static);
     foreach (MethodInfo method in methods)
     {
       if (method.Name.StartsWith("UnifiedHook_"))
       {
         string key = method.Name.Substring("UnifiedHook_".Length);
-        _psHooks[key] = method;
+        _parameterHooks[key] = method;
       }
     }
   }
 
-  public static string GetUniqueId(MethodBase target) =>
-    GetUniqueId(target.DeclaringType.FullName, target.Name);
-
-  public static string GetUniqueId(string fullName, string methodName) =>
-    fullName + ":" + methodName;
-
   public static bool HasCallback(MethodBase target) =>
-    _actualHooks.ContainsKey(GetUniqueId(target));
-
-  public static bool HasCallback(string uniqueId) =>
-    _actualHooks.ContainsKey(uniqueId);
+    s_callbacks.ContainsKey(target) || s_scopeHooks.ContainsKey(target);
 
   public delegate void HookCallback(object instance, object[] args);
 
@@ -85,64 +82,49 @@ public class HarmonyWrapper
         .GetProperties()
         .FirstOrDefault(p => p.Name == "IsByRefLike");
       bool isDotNetCore = isByRefLikeProp != null;
-      if(!isDotNetCore)
+      if (!isDotNetCore)
         return false;
 
       bool isByRef = t.IsByRef;
       bool isByRefLike = (bool)isByRefLikeProp.GetValue(t);
-      if(isByRefLike)
+      if (isByRefLike)
         return true;
 
       if (!isByRef)
         return false;
 
-      // Otherwise, we have a "ref" type. This could be things like:
-      // Object&
-      // Span<byte>&
-      // We must look into the inner type to figure out if it's
-      // RefLike (e.g., Span<byte>) or not (e.g., Object)
+      // By-reference parameters expose the element type's boxing restriction.
       return IsRefStruct(t.GetElementType());
     }
 
-    //
-    // Save the patch callback to invoke when the target is called
-    //
-    string uniqueId = GetUniqueId(target);
-    _actualHooks[uniqueId] = patch;
 
-    //
-    // Actual hook for the method is the generic "SinglePrefixHook" (through one
-    // if its proxies 'UnifiedHook_X')  the "SinglePrefixHook" will search for
-    // the above saved callback and invoke it itself.
-    //
+    // The adapter preserves argument positions when a byref-like value cannot
+    // be boxed. Unsupported signatures are rejected before registering a callback.
     var parameters = target.GetParameters();
     int paramsCount = parameters.Length;
+    if (!target.IsConstructor && paramsCount > 10)
+      throw new NotSupportedException("Method hooks support at most ten parameters.");
     int[] hookableParametersFlags = new int[10];
-    for (int i = 0; i < paramsCount; i++)
+    for (int i = 0; !target.IsConstructor && i < paramsCount; i++)
     {
       ParameterInfo parameter = parameters[i];
       bool isRefStruct = IsRefStruct(parameter.ParameterType);
       hookableParametersFlags[i] = isRefStruct ? 0 : 1;
     }
 
-    // Now we need to turn the parameters flags into a "binary" string.
-    // For example:
-    // {0, 0, 1, 0} ---> "0010"
+    // Adapter names encode ten argument positions, with zero for omitted values.
     string binaryParams = string.Join(string.Empty, hookableParametersFlags.Select(i => i.ToString()));
-    // Logger.Debug($"[HarmonyWrapper][AddHook] Constructed binaryParams: {binaryParams} for method {target.Name}");
 
-    MethodInfo myPrefixHook;
+    MethodInfo hookMethod;
     if (target.IsConstructor)
     {
-      myPrefixHook = typeof(HarmonyWrapper).GetMethod("UnifiedHook_ctor", (BindingFlags)0xffff);
+      hookMethod = typeof(HarmonyWrapper).GetMethod("UnifiedHook_ctor", BindingFlags.NonPublic | BindingFlags.Static);
     }
     else
     {
-      myPrefixHook = _psHooks[binaryParams];
+      if (!_parameterHooks.TryGetValue(binaryParams, out hookMethod))
+        throw new NotSupportedException($"No hook adapter supports the parameter signature of {target}.");
     }
-
-    // Document the `single prefix hook` used so we can remove later
-    _singlePrefixHooks[uniqueId] = myPrefixHook;
 
     HarmonyMethod prefix = null;
     HarmonyMethod postfix = null;
@@ -151,39 +133,103 @@ public class HarmonyWrapper
     switch (pos)
     {
       case HarmonyPatchPosition.Prefix:
-        prefix = new HarmonyMethod(myPrefixHook);
+        prefix = new HarmonyMethod(hookMethod);
         break;
       case HarmonyPatchPosition.Postfix:
-        postfix = new HarmonyMethod(myPrefixHook);
+        postfix = new HarmonyMethod(hookMethod);
         break;
       case HarmonyPatchPosition.Finalizer:
-        finalizer = new HarmonyMethod(myPrefixHook);
+        finalizer = new HarmonyMethod(hookMethod);
         break;
       default:
         throw new ArgumentException("Invalid Harmony patch position.");
     }
-    _harmony.Patch(target, prefix, postfix, transpiler, finalizer);
-  }
-
-  public void RemovePrefix(MethodBase target)
-  {
-    string uniqueId = target.DeclaringType.FullName + ":" + target.Name;
-    if (_singlePrefixHooks.TryGetValue(uniqueId, out MethodInfo spHook))
+    if (!s_callbacks.TryAdd(target, patch))
+      throw new InvalidOperationException("A callback is already installed for this method.");
+    _installedHooks[target] = hookMethod;
+    try
     {
-      _harmony.Unpatch(target, spHook);
+      _harmony.Patch(target, prefix, postfix, transpiler, finalizer);
     }
-    _singlePrefixHooks.Remove(uniqueId);
-    _actualHooks.TryRemove(uniqueId, out _);
+    catch
+    {
+      s_callbacks.TryRemove(target, out _);
+      _installedHooks.TryRemove(target, out _);
+      throw;
+    }
   }
 
-  private static void SinglePrefixHook(
+  public void RemoveHook(MethodBase target)
+  {
+    if (_installedHooks.TryGetValue(target, out MethodInfo hookMethod))
+    {
+      _harmony.Unpatch(target, hookMethod);
+    }
+    _installedHooks.TryRemove(target, out _);
+    s_callbacks.TryRemove(target, out _);
+    if (s_scopeHooks.TryRemove(target, out _))
+    {
+      _harmony.Unpatch(target, typeof(HarmonyWrapper).GetMethod(nameof(ScopePrefix), BindingFlags.NonPublic | BindingFlags.Static));
+      _harmony.Unpatch(target, typeof(HarmonyWrapper).GetMethod(nameof(ScopeFinalizer), BindingFlags.NonPublic | BindingFlags.Static));
+    }
+  }
+
+  /// <summary>
+  /// Installs a prefix that creates invocation-local state and a finalizer that
+  /// completes it on normal return or exception. The prefix callback stays in process.
+  /// </summary>
+  public void AddScopeHook(MethodBase target, Func<object, object[], Action<Exception>> enter)
+  {
+    if (!s_scopeHooks.TryAdd(target, enter))
+      throw new InvalidOperationException("A capture scope is already installed for this method.");
+    try
+    {
+      var flags = BindingFlags.NonPublic | BindingFlags.Static;
+      _harmony.Patch(target,
+        prefix: new HarmonyMethod(typeof(HarmonyWrapper).GetMethod(nameof(ScopePrefix), flags)),
+        finalizer: new HarmonyMethod(typeof(HarmonyWrapper).GetMethod(nameof(ScopeFinalizer), flags)));
+    }
+    catch
+    {
+      s_scopeHooks.TryRemove(target, out _);
+      throw;
+    }
+  }
+
+  private static void ScopePrefix(MethodBase __originalMethod, object __instance,
+    object[] __args, out Action<Exception> __state)
+  {
+    __state = null;
+    try
+    {
+      if (s_scopeHooks.TryGetValue(__originalMethod, out var enter))
+        __state = enter(__instance, __args);
+    }
+    catch (Exception error)
+    {
+      Log.Error(error, "[Diver] Failed to enter capture scope for {0}.", __originalMethod);
+    }
+  }
+
+  private static void ScopeFinalizer(Action<Exception> __state, Exception __exception)
+  {
+    // Capture failures must not replace or suppress the native method's exception.
+    try
+    {
+      __state?.Invoke(__exception);
+    }
+    catch (Exception error)
+    {
+      Log.Error(error, "[Diver] Failed to complete native capture scope.");
+    }
+  }
+
+  private static void InvokeHook(
     MethodBase __originalMethod,
     object __instance,
     params object[] args)
   {
-    string uniqueId = __originalMethod.DeclaringType.FullName + ":"
-                    + __originalMethod.Name;
-    if (_actualHooks.TryGetValue(uniqueId, out HookCallback funcHook))
+    if (s_callbacks.TryGetValue(__originalMethod, out HookCallback funcHook))
     {
       funcHook(__instance, args);
     }
@@ -194,37 +240,37 @@ public class HarmonyWrapper
   private static void UnifiedHook_ctor(
     MethodBase __originalMethod,
     object[] __args) =>
-      SinglePrefixHook(__originalMethod, new object(), __args);
+      InvokeHook(__originalMethod, new object(), __args);
   private static void UnifiedHook_0000000000(MethodBase __originalMethod, object __instance) =>
-    SinglePrefixHook(__originalMethod, __instance);
+    InvokeHook(__originalMethod, __instance);
   private static void UnifiedHook_1000000000(MethodBase __originalMethod, object __instance, object __0) =>
-    SinglePrefixHook(__originalMethod, __instance, __0);
+    InvokeHook(__originalMethod, __instance, __0);
   private static void UnifiedHook_1100000000(MethodBase __originalMethod, object __instance, object __0, object __1) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1);
+    InvokeHook(__originalMethod, __instance, __0, __1);
   private static void UnifiedHook_0100000000(MethodBase __originalMethod, object __instance, object __1) =>
-    SinglePrefixHook(__originalMethod, __instance, DummyParameterReplacement.Instance, __1);
+    InvokeHook(__originalMethod, __instance, DummyParameterReplacement.Instance, __1);
   private static void UnifiedHook_1110000000(MethodBase __originalMethod, object __instance, object __0, object __1, object __2) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1, __2);
+    InvokeHook(__originalMethod, __instance, __0, __1, __2);
   private static void UnifiedHook_0110000000(MethodBase __originalMethod, object __instance, object __1, object __2) =>
-    SinglePrefixHook(__originalMethod, __instance, DummyParameterReplacement.Instance, __1, __2);
+    InvokeHook(__originalMethod, __instance, DummyParameterReplacement.Instance, __1, __2);
   private static void UnifiedHook_1010000000(MethodBase __originalMethod, object __instance, object __0, object __2) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, DummyParameterReplacement.Instance, __2);
+    InvokeHook(__originalMethod, __instance, __0, DummyParameterReplacement.Instance, __2);
   private static void UnifiedHook_0010000000(MethodBase __originalMethod, object __instance, object __2) =>
-    SinglePrefixHook(__originalMethod, __instance, DummyParameterReplacement.Instance, DummyParameterReplacement.Instance, __2);
+    InvokeHook(__originalMethod, __instance, DummyParameterReplacement.Instance, DummyParameterReplacement.Instance, __2);
   private static void UnifiedHook_1111000000(MethodBase __originalMethod, object __instance, object __0, object __1, object __2, object __3) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1, __2, __3);
+    InvokeHook(__originalMethod, __instance, __0, __1, __2, __3);
   private static void UnifiedHook_1111100000(MethodBase __originalMethod, object __instance, object __0, object __1, object __2, object __3, object __4) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1, __2, __3, __4);
+    InvokeHook(__originalMethod, __instance, __0, __1, __2, __3, __4);
   private static void UnifiedHook_1111110000(MethodBase __originalMethod, object __instance, object __0, object __1, object __2, object __3, object __4, object __5) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5);
+    InvokeHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5);
   private static void UnifiedHook_1111111000(MethodBase __originalMethod, object __instance, object __0, object __1, object __2, object __3, object __4, object __5, object __6) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6);
+    InvokeHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6);
   private static void UnifiedHook_1111111100(MethodBase __originalMethod, object __instance, object __0, object __1, object __2, object __3, object __4, object __5, object __6, object __7) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6, __7);
+    InvokeHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6, __7);
   private static void UnifiedHook_1111111110(MethodBase __originalMethod, object __instance, object __0, object __1, object __2, object __3, object __4, object __5, object __6, object __7, object __8) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6, __7, __8);
+    InvokeHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6, __7, __8);
   private static void UnifiedHook_1111111111(MethodBase __originalMethod, object __instance, object __0, object __1, object __2, object __3, object __4, object __5, object __6, object __7, object __8, object __9) =>
-    SinglePrefixHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6, __7, __8, __9);
+    InvokeHook(__originalMethod, __instance, __0, __1, __2, __3, __4, __5, __6, __7, __8, __9);
   // ReSharper restore UnusedMember.Local
 #pragma warning restore IDE0051, CS4014
 }

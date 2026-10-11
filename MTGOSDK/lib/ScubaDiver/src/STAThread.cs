@@ -5,7 +5,9 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -20,7 +22,7 @@ namespace ScubaDiver;
 /// </summary>
 public static class STAThread
 {
-  private static readonly BlockingCollection<STAWorkItem> s_workQueue = new();
+  private static readonly BlockingCollection<Action> s_workQueue = new();
   private static readonly Thread s_staThread;
   private static readonly CancellationTokenSource s_cts = new();
 
@@ -52,7 +54,7 @@ public static class STAThread
     {
       foreach (var item in s_workQueue.GetConsumingEnumerable(s_cts.Token))
       {
-        item.Execute();
+        item();
       }
     }
     catch (OperationCanceledException)
@@ -93,6 +95,9 @@ public static class STAThread
   /// <param name="action">The action to execute.</param>
   /// <param name="timeout">Optional timeout for the operation.</param>
   /// <exception cref="TimeoutException">Thrown if the operation times out.</exception>
+  /// <remarks>
+  /// A timeout ends the wait without cancelling an action already queued or running.
+  /// </remarks>
   /// <exception cref="Exception">Rethrows any exception from the action.</exception>
   public static void Execute(Action action, TimeSpan? timeout = null)
   {
@@ -101,81 +106,84 @@ public static class STAThread
     var dispatcher = GetApplicationDispatcher();
     var waitTimeout = timeout ?? TimeSpan.FromSeconds(5);
 
-    // If we're already on the dispatcher thread, execute directly
     if (dispatcher != null && dispatcher.CheckAccess())
     {
       action();
       return;
     }
 
-    // Try to use the WPF Dispatcher first (for UI thread access)
     if (dispatcher != null)
     {
       Interlocked.Increment(ref s_dispatcherOps);
       Interlocked.Increment(ref s_pendingOps);
-
-      Exception caughtException = null;
-      var completionEvent = new System.Threading.ManualResetEventSlim(false);
-      long dispatchStartTicks = 0;
-
-      dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+      Task completion;
+      try
       {
-        dispatchStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-        try
+        var operation = dispatcher.InvokeAsync(() =>
         {
-          action();
-        }
-        catch (Exception ex)
-        {
-          caughtException = ex;
-        }
-        finally
-        {
-          var elapsed = System.Diagnostics.Stopwatch.GetTimestamp()
-                      - dispatchStartTicks;
-          Interlocked.Add(ref s_totalDispatchTicks, elapsed);
-          Interlocked.Decrement(ref s_pendingOps);
-          completionEvent.Set();
-        }
-      }));
-
-      // Wait for completion with proper timeout using ManualResetEventSlim
-      // This ensures timeout is respected even if dispatcher is blocked
-      if (!completionEvent.Wait(waitTimeout))
+          long started = Stopwatch.GetTimestamp();
+          try
+          {
+            action();
+          }
+          finally
+          {
+            Interlocked.Add(ref s_totalDispatchTicks, Stopwatch.GetTimestamp() - started);
+          }
+        }, DispatcherPriority.Normal);
+        completion = operation.Task;
+      }
+      catch
       {
-        Interlocked.Increment(ref s_timeoutCount);
         Interlocked.Decrement(ref s_pendingOps);
-        Log.Debug($"[STAThread] Dispatcher operation timed out after {waitTimeout.TotalSeconds} seconds.");
-        throw new TimeoutException($"Dispatcher operation timed out after {waitTimeout.TotalSeconds} seconds. The WPF UI thread may be blocked.");
+        throw;
       }
 
-      completionEvent.Dispose();
-
-      if (caughtException != null)
-      {
-        throw caughtException;
-      }
+      // A timeout only ends the caller's wait. Count the queued operation until
+      // it completes or is aborted, including completion after that timeout.
+      _ = completion.ContinueWith(_ => Interlocked.Decrement(ref s_pendingOps),
+        CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+      WaitForCompletion(completion, waitTimeout, "Dispatcher");
       return;
     }
 
-    // Fall back to dedicated STA thread if no dispatcher available
     Log.Debug("[STAThread] No dispatcher available, using STA worker thread.");
     if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
     {
-      // Already on an STA thread, execute directly
       action();
       return;
     }
 
-    var workItem = new STAWorkItem(action);
-    s_workQueue.Add(workItem);
-
-    if (!workItem.WaitForCompletion(waitTimeout))
+    var completionSource = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+    s_workQueue.Add(() =>
     {
-      throw new TimeoutException($"STA thread operation timed out after {waitTimeout.TotalSeconds} seconds.");
+      try
+      {
+        action();
+        completionSource.SetResult(null);
+      }
+      catch (Exception error)
+      {
+        completionSource.SetException(error);
+      }
+    });
+    WaitForCompletion(completionSource.Task, waitTimeout, "STA thread");
+  }
+
+  private static void WaitForCompletion(Task completion, TimeSpan timeout, string threadName)
+  {
+    try
+    {
+      if (completion.Wait(timeout)) return;
+    }
+    catch (AggregateException)
+    {
+      // Preserve the action's exception and stack rather than Task.Wait's wrapper.
+      completion.GetAwaiter().GetResult();
     }
 
-    workItem.ThrowIfFaulted();
+    Interlocked.Increment(ref s_timeoutCount);
+    throw new TimeoutException($"{threadName} operation timed out after {timeout.TotalSeconds} seconds.");
   }
 
   /// <summary>
@@ -212,64 +220,6 @@ public static class STAThread
   }
 
   /// <summary>
-  /// Determines if an exception indicates that UI thread/Dispatcher execution is required.
-  /// </summary>
-  /// <param name="ex">The exception to check.</param>
-  /// <returns>True if the exception suggests UI thread is needed.</returns>
-  public static bool RequiresSTAThread(Exception ex)
-  {
-    if (ex == null) return false;
-
-    // Check the exception and all inner exceptions
-    var current = ex;
-    while (current != null)
-    {
-      // Common STA/UI thread-related exception messages
-      if (current is InvalidOperationException)
-      {
-        var msg = current.Message?.ToLowerInvariant() ?? "";
-        if (msg.Contains("sta") ||
-            msg.Contains("single-threaded apartment") ||
-            msg.Contains("calling thread must be sta") ||
-            msg.Contains("different thread owns") ||
-            msg.Contains("dispatcher") ||
-            msg.Contains("wpf") ||
-            msg.Contains("ui thread") ||
-            msg.Contains("freezable") ||
-            msg.Contains("across threads") ||
-            msg.Contains("cannot be frozen"))
-        {
-          return true;
-        }
-      }
-
-      // XamlParseException can wrap threading issues
-      if (current.GetType().Name == "XamlParseException")
-      {
-        var msg = current.Message?.ToLowerInvariant() ?? "";
-        if (msg.Contains("freezable") ||
-            msg.Contains("across threads") ||
-            msg.Contains("cannot be frozen"))
-        {
-          return true;
-        }
-      }
-
-      // COM threading exceptions
-      if (current.HResult == unchecked((int) 0x8001010E) || // RPC_E_WRONG_THREAD
-          current.HResult == unchecked((int) 0x80010100) || // RPC_E_SYS_CALL_FAILED
-          current.HResult == unchecked((int) 0x800401F0))   // CO_E_NOTINITIALIZED
-      {
-        return true;
-      }
-
-      current = current.InnerException;
-    }
-
-    return false;
-  }
-
-  /// <summary>
   /// Stops the STA worker thread.
   /// </summary>
   public static void Stop()
@@ -278,45 +228,4 @@ public static class STAThread
     s_workQueue.CompleteAdding();
   }
 
-  private class STAWorkItem
-  {
-    private readonly Action _action;
-    private readonly ManualResetEventSlim _signal;
-    private Exception _exception;
-
-    public STAWorkItem(Action action)
-    {
-      _action = action;
-      _signal = new ManualResetEventSlim(false);
-    }
-
-    public void Execute()
-    {
-      try
-      {
-        _action();
-      }
-      catch (Exception ex)
-      {
-        _exception = ex;
-      }
-      finally
-      {
-        _signal.Set();
-      }
-    }
-
-    public bool WaitForCompletion(TimeSpan timeout)
-    {
-      return _signal.Wait(timeout);
-    }
-
-    public void ThrowIfFaulted()
-    {
-      if (_exception != null)
-      {
-        throw _exception;
-      }
-    }
-  }
 }

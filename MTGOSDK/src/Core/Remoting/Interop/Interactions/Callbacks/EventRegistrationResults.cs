@@ -14,4 +14,6 @@ public class EventRegistrationResults
 {
   [Key(0)]
   public int Token { get; set; }
+
+  [Key(1)] public RemoteCaptureSequence CaptureSequence { get; set; }
 }

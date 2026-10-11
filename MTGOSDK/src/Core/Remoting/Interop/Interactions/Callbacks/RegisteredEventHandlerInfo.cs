@@ -25,6 +25,12 @@ public class RegisteredEventHandlerInfo
 
   public EventInfo EventInfo { get; set; }
 
+  // Replace the array atomically so a notification handler reads a stable filter.
+  public string[] PropertyNames;
+
+  // Releases the capture-stream interest retained by this native subscription.
+  public IDisposable CaptureScopeSubscription { get; set; }
+
   /// <summary>
   /// Endpoint listening for invocations of the event
   /// </summary>

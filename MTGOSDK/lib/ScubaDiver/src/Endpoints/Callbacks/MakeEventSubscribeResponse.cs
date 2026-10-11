@@ -5,6 +5,9 @@
 **/
 
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -14,8 +17,12 @@ using MTGOSDK.Core;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Extensions;
+using MTGOSDK.Core.Remoting.Batching;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+
+using ScubaDiver.Hooking;
 
 
 namespace ScubaDiver;
@@ -34,8 +41,8 @@ public partial class Diver : IDisposable
     if (accessor != null && !accessor.IsAbstract)
       return accessor;
 
-    // Interface events can surface abstract accessors; map them to the
-    // concrete implementation on the runtime target type.
+    // Resolve interface accessors to the runtime implementation because reflection
+    // can return abstract add/remove methods for the interface event.
     if (accessor?.DeclaringType?.IsInterface == true)
     {
       var map = targetType.GetInterfaceMap(accessor.DeclaringType);
@@ -47,7 +54,7 @@ public partial class Diver : IDisposable
     return null;
   }
 
-  private static void AddEventHandlerCompat(
+  private static void AddEventHandler(
     EventInfo eventObj,
     object target,
     Delegate handler)
@@ -59,7 +66,7 @@ public partial class Diver : IDisposable
     addMethod.Invoke(target, [handler]);
   }
 
-  private static void RemoveEventHandlerCompat(
+  private static void RemoveEventHandler(
     EventInfo eventObj,
     object target,
     Delegate handler)
@@ -73,7 +80,7 @@ public partial class Diver : IDisposable
 
   private static EventInfo ResolveEventInfo(Type resolvedType, string eventName)
   {
-    const BindingFlags allInstanceEvents =
+    const BindingFlags AllEvents =
       BindingFlags.Instance |
       BindingFlags.Static |
       BindingFlags.Public |
@@ -87,7 +94,7 @@ public partial class Diver : IDisposable
 
     // Fallback for explicit/non-public event implementations.
     eventObj = resolvedType
-      .GetEvents(allInstanceEvents)
+      .GetEvents(AllEvents)
       .FirstOrDefault(e =>
         string.Equals(e.Name, eventName, StringComparison.Ordinal) ||
         e.Name.EndsWith($".{eventName}", StringComparison.Ordinal));
@@ -118,6 +125,9 @@ public partial class Diver : IDisposable
   public int AssignCallbackToken() =>
     Interlocked.Increment(ref _nextAvailableCallbackToken);
 
+  private bool IsCallbackActive(int token) =>
+    Volatile.Read(ref _disposed) == 0 && _activeCallbacks.ContainsKey(token);
+
   //
   // Callback diagnostics
   //
@@ -128,18 +138,19 @@ public partial class Diver : IDisposable
   /// <summary>
   /// Invokes a callback to the connected SDK client over TCP.
   /// </summary>
-  public void InvokeCallback(
-    int token,
-    DateTime timestamp,
-    params object[] parameters)
+  public void InvokeCallback(int token, DateTime timestamp, params object[] parameters) =>
+    InvokeCallback(token, timestamp, null, null, null, parameters);
+
+  private bool InvokeCallback(int token, DateTime timestamp,
+    RemoteBatchResult capture, RemoteBatchError captureError,
+    RemoteCaptureSequence sequence, params object[] parameters)
   {
-    Interlocked.Increment(ref s_callbacksSent);
-    var queueDelay = DateTime.Now - timestamp;
+    var queueDelay = DateTime.UtcNow - timestamp.ToUniversalTime();
     Interlocked.Exchange(
       ref s_lastCallbackQueueDelayTicks, queueDelay.Ticks);
 
-    if (!_callbackTokens.TryGetValue(token, out var cts))
-      return;
+    if (!IsCallbackActive(token))
+      return false;
 
     var remoteParams = new ObjectOrRemoteAddress[parameters.Length];
     for (int i = 0; i < parameters.Length; i++)
@@ -169,10 +180,55 @@ public partial class Diver : IDisposable
     {
       Token = token,
       Timestamp = timestamp,
-      Parameters = [.. remoteParams]
+      Parameters = [.. remoteParams],
+      Capture = capture,
+      CaptureError = captureError,
+      CaptureSequence = sequence
     };
     SendTcpCallback(callbackRequest);
+    Interlocked.Increment(ref s_callbacksSent);
+    return true;
   }
+
+  // Parameters are omitted for captures that must release native arguments before
+  // delivery. Ordinary callbacks retain those arguments until they are encoded.
+  private void QueueCallback(int token, DateTime timestamp,
+    RemoteBatchResult capture, RemoteBatchError error,
+    RemoteCaptureSequence sequence, params object[] parameters) =>
+    _callbackScheduler.Enqueue(() =>
+      InvokeCallback(token, timestamp, capture, error, sequence, parameters));
+
+  private RemoteBatchResult ExecuteCallbackCapture(RemoteBatchRequest batch,
+    Func<IReadOnlyDictionary<int, object>> bindInputs, Exception nativeError,
+    string source, out RemoteBatchError captureError)
+  {
+    captureError = null;
+    if (nativeError != null)
+    {
+      // Preserve the native exception while reporting it to the subscriber.
+      captureError = CreateCaptureError(nativeError);
+      return null;
+    }
+
+    try
+    {
+      return _batchExecutor.Execute(batch, bindInputs());
+    }
+    catch (Exception error)
+    {
+      captureError = CreateCaptureError(error);
+      Log.Error($"[Diver] Capture failed for {source}: {error}");
+      return null;
+    }
+  }
+
+  private static RemoteBatchError CreateCaptureError(Exception error) => new()
+  {
+    OperationId = -1,
+    ExceptionType = error.GetType().FullName,
+    Message = error.Message,
+    StackTrace = error.ToString()
+  };
 
   private byte[] MakeEventSubscribeResponse()
   {
@@ -203,17 +259,115 @@ public partial class Diver : IDisposable
     if (paramInfos.Length != 2)
       return QuickError("Currently only events with 2 parameters (object & EventArgs) can be subscribed to.");
 
+    if (request.Capture is { } description)
+    {
+      if (description.Batch == null || description.Batch.ForceUIThread ||
+          description.Batch.Inputs == null || description.Inputs == null || description.Inputs.Any(binding =>
+            binding.Key < 0 || binding.Key >= description.Batch.Inputs.Count ||
+            binding.Value < 0 || binding.Value >= paramInfos.Length))
+        return QuickError("Invalid event capture inputs; capture runs on the native event thread.");
+      try
+      {
+        BatchExecutor.Validate(description.Batch);
+        CaptureScopeManager.Validate(description.Scope, description.Batch);
+        if (description.Scope != null && description.Inputs.ContainsKey(description.Scope.OwnerInput))
+          throw new ArgumentException("Event scope owner must be a retained batch input.");
+      }
+      catch (Exception error)
+      {
+        return QuickError("Invalid event capture: " + error.Message);
+      }
+    }
+
+    if (request.PropertyNames is not null &&
+        !typeof(PropertyChangedEventArgs).IsAssignableFrom(paramInfos[1].ParameterType))
+      return QuickError("Property filters require PropertyChangedEventArgs.");
+
+    var registration = new RegisteredEventHandlerInfo
+    {
+      EventInfo = eventObj,
+      Target = target,
+      PropertyNames = NormalizePropertyNames(request.PropertyNames)
+    };
+
+    object scopeOwner = null;
+    RemoteCaptureSequence baseline = null;
+    if (request.Capture?.Scope is { } scope)
+    {
+      try
+      {
+        var captureRoot = _runtime.ParseParameterObject(request.Capture.Batch.Inputs[scope.OwnerInput]);
+        scopeOwner = captureRoot;
+        if (scope.OwnerPath != null)
+          scopeOwner = _batchExecutor.Read(scopeOwner, scope.OwnerPath);
+        registration.CaptureScopeSubscription = _captureScopes.Subscribe(scope.Group, scopeOwner, out baseline, captureRoot);
+      }
+      catch (Exception error)
+      {
+        return QuickError("Invalid event scope owner: " + error.Message);
+      }
+    }
+
     int token = AssignCallbackToken();
-    _callbackTokens[token] = new CancellationTokenSource();
+    _activeCallbacks[token] = 0;
 
     EventHandler eventHandler = (obj, args) =>
     {
-      DateTime timestamp = DateTime.Now;
+      if (!IsCallbackActive(token))
+        return;
+      DateTime timestamp = DateTime.UtcNow;
       var eventKey = (resolvedType.FullName, eventName);
       if (!GlobalEvents.IsValidEvent(eventKey, obj, args, out var mappedArgs))
         return;
 
-      SyncThread.Enqueue(() => InvokeCallback(token, timestamp, obj, mappedArgs));
+      // Filter on the native notification before reflection, serialization or queueing.
+      var names = Volatile.Read(ref registration.PropertyNames);
+      if (names is not null && (names.Length == 0 ||
+          (args is PropertyChangedEventArgs change && !string.IsNullOrEmpty(change.PropertyName) &&
+           Array.IndexOf(names, change.PropertyName) < 0)))
+        return;
+
+      void Complete(RemoteCaptureSequence sequence, Exception nativeError = null)
+      {
+        if (!IsCallbackActive(token))
+          return;
+
+        // An enclosing scope calls this after the native update completes.
+        // Otherwise, the event handler captures immediately. In both cases the
+        // values are detached before callback delivery can be delayed.
+        RemoteBatchResult captured = null;
+        RemoteBatchError captureError = null;
+        if (request.Capture is { } capture)
+        {
+          captured = ExecuteCallbackCapture(capture.Batch, () =>
+          {
+            object[] parameters = [obj, args];
+            return capture.Inputs.ToDictionary(binding => binding.Key,
+              binding => parameters[binding.Value]);
+          }, nativeError, $"event {resolvedType.FullName}.{eventName}", out captureError);
+        }
+
+        if (request.Capture == null)
+          // Cast mappedArgs to keep this void invocation statically bound.
+          // Otherwise, the scheduler can treat it as a task-returning callback.
+          _callbackScheduler.Enqueue(() => InvokeCallback(token, timestamp, obj, (object)mappedArgs));
+        else
+          QueueCallback(token, timestamp, captured, captureError, sequence);
+      }
+
+      if (request.Capture?.Scope is { } scope)
+      {
+        if (_captureScopes.MarkChanged(scope.Group, scopeOwner, eventName, Complete, objAddr))
+          return;
+        _captureScopes.Complete(scope.Group, scopeOwner, sequence =>
+        {
+          sequence.EventNames = [eventName];
+          sequence.SourceToken = objAddr;
+          sequence.EventSources[eventName] = [objAddr];
+          Complete(sequence);
+        });
+      }
+      else Complete(null);
     };
 
     try
@@ -221,25 +375,41 @@ public partial class Diver : IDisposable
       Type eventArgsType = paramInfos[1].ParameterType;
       var wrapperType = typeof(EventWrapper<>).MakeGenericType(eventArgsType);
       var wrapperInstance = Activator.CreateInstance(wrapperType, eventHandler);
-      Delegate my_delegate = Delegate.CreateDelegate(eventDelegateType, wrapperInstance, "Handle");
+      Delegate handler = Delegate.CreateDelegate(eventDelegateType, wrapperInstance, "Handle");
 
       Log.Debug($"[Diver] Adding event handler to event {eventName}...");
-      AddEventHandlerCompat(eventObj, target, my_delegate);
+      AddEventHandler(eventObj, target, handler);
       Log.Debug($"[Diver] Added event handler to event {eventName}!");
 
-      _remoteEventHandler[token] = new RegisteredEventHandlerInfo()
-      {
-        EventInfo = eventObj,
-        Target = target,
-        RegisteredProxy = my_delegate
-      };
+      registration.RegisteredProxy = handler;
+      _remoteEventHandler[token] = registration;
     }
     catch (Exception ex)
     {
+      registration.CaptureScopeSubscription?.Dispose();
+      _activeCallbacks.TryRemove(token, out _);
       return QuickError($"Failed insert the event handler: {ex}");
     }
 
-    var erResults = new EventRegistrationResults { Token = token };
+    var erResults = new EventRegistrationResults { Token = token, CaptureSequence = baseline };
     return WrapSuccess(erResults);
+  }
+
+  private static string[] NormalizePropertyNames(string[] names) => names?.Where(
+    name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.Ordinal).ToArray();
+
+  private byte[] MakeEventPropertyFilterResponse()
+  {
+    var request = DeserializeRequest<EventPropertyFilterRequest>();
+    if (request == null)
+      return QuickError("Missing or invalid request body");
+    if (!_remoteEventHandler.TryGetValue(request.Token, out var registration))
+      return QuickError("Unknown token for event callback subscription");
+    var arguments = registration.EventInfo.EventHandlerType.GetMethod("Invoke").GetParameters();
+    if (!typeof(PropertyChangedEventArgs).IsAssignableFrom(arguments[1].ParameterType))
+      return QuickError("Property filters require PropertyChangedEventArgs.");
+
+    Volatile.Write(ref registration.PropertyNames, NormalizePropertyNames(request.PropertyNames));
+    return s_okResponse;
   }
 }

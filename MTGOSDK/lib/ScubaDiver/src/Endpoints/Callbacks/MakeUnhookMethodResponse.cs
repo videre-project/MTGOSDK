@@ -26,15 +26,18 @@ public partial class Diver : IDisposable
 
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Called! Token: {token}");
 
-    if (_remoteHooks.TryRemove(token, out RegisteredMethodHookInfo rmhi))
+    lock (_methodHookGate)
     {
-      if (_callbackTokens.TryRemove(token, out var tokenSource))
+      if (_remoteHooks.TryGetValue(token, out RegisteredMethodHookInfo rmhi))
       {
-        tokenSource.Cancel();
-        tokenSource.Dispose();
+        // Another SDK connection may still be using this shared native hook.
+        if (--rmhi.SubscriptionCount > 0) return s_okResponse;
+
+        _remoteHooks.TryRemove(token, out _);
+        _activeCallbacks.TryRemove(token, out _);
+        HarmonyWrapper.Instance.RemoveHook(rmhi.OriginalHookedMethod);
+        return s_okResponse;
       }
-      HarmonyWrapper.Instance.RemovePrefix(rmhi.OriginalHookedMethod);
-      return s_okResponse;
     }
 
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Unknown token for event callback subscription. Token: {token}");
