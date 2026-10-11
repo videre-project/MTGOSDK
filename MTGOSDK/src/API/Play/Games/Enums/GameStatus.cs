@@ -9,8 +9,10 @@ namespace MTGOSDK.API.Play.Games;
 //WotC.MtGO.Client.Model.Play.GameState
 public enum GameStatus
 {
-  Invalid,
-  NotStarted,
-  Started,
-  Finished,
+  //#pragma import enum WotC.MtGO.Client.Model.Play.GameState begin
+  Invalid = 0,
+  NotStarted = 1,
+  Started = 2,
+  Finished = 3,
+  //#pragma import enum WotC.MtGO.Client.Model.Play.GameState end
 }

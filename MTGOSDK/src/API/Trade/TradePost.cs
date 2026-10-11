@@ -4,7 +4,7 @@
 **/
 
 using MTGOSDK.API.Collection;
-using MTGOSDK.API.Trade.Enums;
+using TradePostFormat = MTGOSDK.API.Trade.Enums.TradePostFormat;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 

@@ -47,6 +47,71 @@ both branches of conditional compilation are refreshed, including inactive
 branches, so their checked-in members remain current too. The task does not
 parse or alter enum declarations; the C# compiler validates the resulting enum.
 
+## Current imports
+
+| SDK enum | MTGO enum | Reference assembly |
+| --- | --- | --- |
+| `ChannelType` | `WotC.MtGO.Client.Model.Chat.ChatChannelType` | `WotC.MtGO.Client.Model.Reference` |
+| `CardGroupingType` | `WotC.MtGO.Client.Model.Data.CardGroupingType` | `WotC.MtGO.Client.Model.Data` |
+| `DeckRegion` | `WotC.MTGO.Common.DeckRegionEnum` | `MTGOEnumStruct` |
+| `SetType` | `WotC.MTGO.Common.CardSetTypeEnum` | `MTGOEnumStruct` |
+| `ActionModifiers` | `WotC.MtGO.Client.Model.Play.ActionModifiers` | `WotC.MtGO.Client.Model.Reference` |
+| `ActionTargetRequirements` | `WotC.MtGO.Client.Model.Play.Enums.ActionTargetRequirements` | `WotC.MtGO.Client.Model.Reference` |
+| `ActionType` | `WotC.MtGO.Client.Model.Play.ActionType` | `WotC.MtGO.Client.Model.Reference` |
+| `CardAbility` | `WotC.MtGO.Client.Model.MagicCardAbility` | `WotC.MtGO.Client.Model.Reference` |
+| `CardAssociation` | `WotC.MtGO.Client.Model.Play.CardAssociation` | `WotC.MtGO.Client.Model.Reference` |
+| `CardCounter` | `WotC.MtGO.Client.Model.Play.Counter` | `WotC.MtGO.Client.Model.Reference` |
+| `CardZone` | `WotC.MtGO.Client.Model.Play.CardZone` | `WotC.MtGO.Client.Model.Reference` |
+| `FunctionKey` | `WotC.MtGO.Client.Model.Play.Actions.FunctionKeyMessageAction+FunctionKey` | `WotC.MtGO.Client.Model.Play` |
+| `GamePhase` | `WotC.MtGO.Client.Model.Play.GamePhase` | `WotC.MtGO.Client.Model.Reference` |
+| `GameStatus` | `WotC.MtGO.Client.Model.Play.GameState` | `WotC.MtGO.Client.Model.Reference` |
+| `MagicColors` | `WotC.MtGO.Client.Model.MagicColors` | `Mtgo.Shared.Parser.Attributes` |
+| `StateElementType` | `WotC.MtGO.Client.Model.Play.StateElementType` | `WotC.MtGO.Client.Model.Play` |
+| `MatchState` | `WotC.MtGO.Client.Model.Play.Enums.MatchStatuses` | `WotC.MtGO.Client.Model.Reference` |
+| `PlayFormatType` | `WotC.MtGO.Client.Model.Collection.PlayFormatType` | `WotC.MtGO.Client.Model.Reference` |
+| `QueueState` | `WotC.MtGO.Client.Model.Play.Enums.QueueState` | `WotC.MtGO.Client.Model.Reference` |
+| `TournamentEliminationStyle` | `WotC.MtGO.Client.Model.Play.TournamentEliminationStyle` | `WotC.MtGO.Client.Model.Reference` |
+| `TournamentState` | `WotC.MtGO.Client.Model.Play.Tournaments.TournamentState` | `WotC.MtGO.Client.Model.Reference` |
+| `Setting` | `WotC.MtGO.Client.Model.Settings.SettingName` | `WotC.MtGO.Client.Model.Reference` |
+| `TradeError` | `WotC.MtGO.Client.Model.Trade.Enums.ClientTradeErrorEnum` | `WotC.MtGO.Client.Model.Reference` |
+| `TradeFinalState` | `WotC.MtGO.Client.Model.Trade.Enums.TradeFinalState` | `WotC.MtGO.Client.Model.Reference` |
+| `TradePostFormat` | `WotC.MtGO.Client.Model.Trade.TradePostFormat` | `WotC.MtGO.Client.Model.Data` |
+| `TradeState` | `WotC.MtGO.Client.Model.Trade.Enums.TradeState` | `WotC.MtGO.Client.Model.Reference` |
+
+`GamePhase.PreGame1 = 13` and `PreGame2 = 14` likewise remain explicit SDK
+additions outside the imported native members.
+
+The imports also replace previously stale copies: `ActionModifiers`,
+`ActionTargetRequirements`, and `FunctionKey` gain current native members;
+`StateElementType` no longer includes `CasualWish` and uses current native
+numbering. `Setting` follows `SettingName`, including the separate
+`KeyBindingLargeCardView` and `KeyBindingManualZoom` entries in place of the
+obsolete SDK `KeyBindingZoom` name. `TradeError` uses native
+`NoDepositListSpecified`, correcting the SDK's former spelling.
+
+`DeckRegion` uses the native `int` underlying type. `MatchState` remains `long`
+and `FunctionKey` remains `byte`, matching their native declarations. The SDK
+explicitly references `WotC.MtGO.Client.Model.Data` for `CardGroupingType` and
+`TradePostFormat`.
+
+`DeckImportMode`, `EventManager.EventCollection`, `PromptButtonGroup`,
+`PlayDrawResult`, `GameResult`, and `MatchResult` remain handwritten SDK
+contracts rather than direct native enum copies.
+
+`GameResult` adapts the final-result members of
+`WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game+FlsGameResult`:
+SDK `Win = 2` corresponds to native `Won = 2`, and `Loss = 3` to `Lost = 3`.
+The SDK omits native `StillPlaying = 1` and retains its `int` underlying type
+(the native enum uses `byte`). `WotC.MTGO.Common.GameResultCodeEnum` uses the
+same numeric codes with `STILL_PLAYING`, `WIN`, and `LOSS` names. The separate
+`WotC.MtGO.Client.Model.Play.GameResultType` uses `Win = 1` and `Loss = 2`,
+so it is not the encoding read by `GameResultsChanged`.
+
+New counters appear when **the SDK is rebuilt against updated MTGO references**.
+An already compiled SDK package does not gain enum members when MTGO updates.
+The build copies the actual constant values from its references, rather than
+inferring them from a hand-maintained ordering.
+
 ## Build and review
 
 Build normally to refresh the regions:

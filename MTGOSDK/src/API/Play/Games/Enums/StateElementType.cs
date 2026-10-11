@@ -11,6 +11,7 @@ namespace MTGOSDK.API.Play.Games;
 /// </summary>
 public enum StateElementType
 {
+  //#pragma import enum WotC.MtGO.Client.Model.Play.StateElementType begin
   Invalid = 0,
   Card = 1,
   PlayerStatus = 2,
@@ -19,11 +20,11 @@ public enum StateElementType
   Thing = 5,
   Animation = 6,
   DamageAssignment = 7,
-  CasualWish = 8,
-  CreatureOrdering = 9,
-  InteractState = 10,
-  CommanderInfoState = 11,
-  PlayerAutoYieldInfo = 12,
-  DungeonInfoState = 13,
+  CreatureOrdering = 8,
+  InteractState = 9,
+  CommanderInfoState = 10,
+  PlayerAutoYieldInfo = 11,
+  DungeonInfoState = 12,
   MiniChange = 200,
+  //#pragma import enum WotC.MtGO.Client.Model.Play.StateElementType end
 }

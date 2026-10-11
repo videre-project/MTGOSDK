@@ -8,7 +8,9 @@ namespace MTGOSDK.API.Trade.Enums;
 
 public enum TradePostFormat
 {
-  Invalid,
-  OfferedWantedList,
-  Message
+  //#pragma import enum WotC.MtGO.Client.Model.Trade.TradePostFormat begin
+  Invalid = 0,
+  OfferedWantedList = 1,
+  Message = 2,
+  //#pragma import enum WotC.MtGO.Client.Model.Trade.TradePostFormat end
 }
