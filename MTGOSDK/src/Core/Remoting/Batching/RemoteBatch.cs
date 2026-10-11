@@ -84,19 +84,21 @@ public sealed class RemoteBatch : RemoteBatchScope
   /// Copies the recorded batch into an independent wire request.
   /// </summary>
   public RemoteBatchRequest ToRequest() => MessagePackSerializer.Deserialize<RemoteBatchRequest>(
-    MessagePackSerializer.Serialize(new RemoteBatchRequest
-    {
-      Inputs = _inputs,
-      Operations = Operations,
-      Projections = _projections,
-      MaxDepth = MaxDepth,
-      ForceUIThread = ForceUIThread
-    }));
+    MessagePackSerializer.Serialize(CreateRequest()));
+
+  private RemoteBatchRequest CreateRequest() => new()
+  {
+    Inputs = _inputs,
+    Operations = Operations,
+    Projections = _projections,
+    MaxDepth = MaxDepth,
+    ForceUIThread = ForceUIThread
+  };
 
   /// <summary>
-  /// Copies the recorded description for internal notification composition.
+  /// Composes additional operations on a detached copy and returns its request.
   /// </summary>
-  internal RemoteBatch Copy()
+  internal RemoteBatchRequest ToRequest(Action<RemoteBatch> configure)
   {
     var request = ToRequest();
     var copy = new RemoteBatch
@@ -109,7 +111,8 @@ public sealed class RemoteBatch : RemoteBatchScope
     copy.Operations.AddRange(request.Operations);
     foreach (var projection in request.Projections)
       copy._projections.Add(projection.Key, projection.Value);
-    return copy;
+    configure(copy);
+    return copy.CreateRequest();
   }
 
   public RemoteBatchResult Execute(DiverCommunicator connection) =>

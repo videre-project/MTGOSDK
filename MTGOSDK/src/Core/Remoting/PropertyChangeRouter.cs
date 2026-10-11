@@ -250,9 +250,9 @@ public sealed class PropertyChangeRouter : IDisposable
         nameof(dro));
 
     ulong token = remoteObject.RemoteToken;
-    string captureKey = capture is null ? ""
-      : Convert.ToBase64String(MessagePackSerializer.Serialize(
-          new RemoteEventCapture { Batch = capture.ToRequest(), Scope = scope }));
+    var description = capture is null ? null : RemotePropertyChangeProxy.CreateCapture(capture, scope);
+    string captureKey = description is null ? ""
+      : Convert.ToBase64String(MessagePackSerializer.Serialize(description));
     var key = (Token: token, Capture: captureKey);
     TokenRegistration registration;
     lock (_gate)
@@ -279,8 +279,8 @@ public sealed class PropertyChangeRouter : IDisposable
         {
           // Captures start with an empty filter. Activate it only after local routing
           // and the subscription's stream baseline have been installed.
-          var proxy = new RemotePropertyChangeProxy(remoteObject, capture,
-            capture is null ? null : Array.Empty<string>(), scope);
+          var proxy = new RemotePropertyChangeProxy(remoteObject, description,
+            description is null ? null : Array.Empty<string>());
           registration.Handler = (_, args) => OnProxyPropertyChanged(registration, proxy, args);
           proxy.PropertyChanged += registration.Handler;
           registration.Proxy = proxy;

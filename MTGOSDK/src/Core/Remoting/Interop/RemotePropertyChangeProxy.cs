@@ -33,13 +33,13 @@ internal sealed class RemotePropertyChangeProxy :
 
   internal RemoteCaptureSequence? CaptureSequence { get; }
 
-  public RemotePropertyChangeProxy(RemoteObject remoteObject, RemoteBatch? capture = null,
-    string[]? propertyNames = null, RemoteCaptureScope? scope = null)
+  public RemotePropertyChangeProxy(RemoteObject remoteObject, RemoteEventCapture? capture = null,
+    string[]? propertyNames = null)
   {
     _remoteObject = remoteObject ??
       throw new ArgumentNullException(nameof(remoteObject));
     _hasCapture = capture is not null;
-    _propertyNames = scope is null ? propertyNames : Array.Empty<string>();
+    _propertyNames = capture?.Scope is null ? propertyNames : Array.Empty<string>();
     if (capture is null)
     {
       _callback = (Action<dynamic, dynamic>)OnRemotePropertyChanged;
@@ -47,12 +47,6 @@ internal sealed class RemotePropertyChangeProxy :
     }
     else
     {
-      // Clone the description before adding the native event argument binding.
-      var batch = capture.Copy();
-      var arguments = batch.Input(ObjectOrRemoteAddress.Null);
-      batch.Output("event.propertyName", batch.Read(arguments, "PropertyName"));
-      var description = new RemoteEventCapture
-      { Batch = batch.ToRequest(), Inputs = new() { [arguments.Reference.Id] = 1 }, Scope = scope };
       Action<HookContext> callback = context =>
       {
         if (Volatile.Read(ref _isDisposed) != 0) return;
@@ -64,8 +58,24 @@ internal sealed class RemotePropertyChangeProxy :
           { CaptureContext = context });
       };
       _callback = callback;
-      CaptureSequence = _remoteObject.EventSubscribe(nameof(INotifyPropertyChanged.PropertyChanged), callback, description, _propertyNames);
+      CaptureSequence = _remoteObject.EventSubscribe(nameof(INotifyPropertyChanged.PropertyChanged), callback, capture, _propertyNames);
     }
+  }
+
+  /// <summary>
+  /// Adds the property-name output to an independent copy of the caller's batch.
+  /// The router uses this same description to identify and register the capture.
+  /// </summary>
+  internal static RemoteEventCapture CreateCapture(RemoteBatch batch, RemoteCaptureScope? scope)
+  {
+    var capture = new RemoteEventCapture { Scope = scope };
+    capture.Batch = batch.ToRequest(copy =>
+    {
+      var arguments = copy.Input(ObjectOrRemoteAddress.Null);
+      copy.Output("event.propertyName", copy.Read(arguments, "PropertyName"));
+      capture.Inputs.Add(arguments.Reference.Id, 1);
+    });
+    return capture;
   }
 
   internal void SetTrackedProperties(string[] propertyNames)
