@@ -225,8 +225,8 @@ sender/argument references still follow the existing callback protocol.
 the native method and does not redispatch or issue IPC.
 
 `HookContext.Capture` contains the projected results, including any row errors.
-`CaptureError` records a request-level execution or serialization failure, and `CaptureElapsedMs` measures the synchronous
-batch. Capture errors are logged by the Diver and forwarded explicitly; the event
+`CaptureError` records a request-level execution or serialization failure.
+Capture errors are logged by the Diver and forwarded explicitly; the event
 proxy reports them through existing callback error handling. A shared subscription
 must have the same patch position and capture description. Captured values do not
 provide rollback, synchronization with other threads, or live execution handles.
@@ -248,8 +248,9 @@ types, paths, and values; application-specific routing remains with the caller.
 `RemoteEventCapture` attaches a batch description to an ordinary event
 subscription. Outside an enrolled native scope, the Diver executes and projects it
 inside the event handler. Inside a scope, it defers projection until that invocation
-completes. Both paths detach values before queueing callback delivery. Captured callbacks receive `HookContext.Capture`,
-`CaptureError`, the originating timestamp, and native capture duration. Sender
+completes. Both paths detach values before queueing callback delivery.
+Captured callbacks receive `HookContext.Capture`, `CaptureError`, the originating
+timestamp, and `CaptureSequence` for enrolled captures. Sender
 and event-argument handles are not implicitly returned or pinned for these callbacks.
 
 `Inputs` maps batch input indices to native event parameter indices: `0` is the

@@ -5,6 +5,7 @@
 **/
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -197,6 +198,38 @@ public partial class Diver : IDisposable
     _callbackScheduler.Enqueue(() =>
       InvokeCallback(token, timestamp, capture, error, sequence, parameters));
 
+  private RemoteBatchResult ExecuteCallbackCapture(RemoteBatchRequest batch,
+    Func<IReadOnlyDictionary<int, object>> bindInputs, Exception nativeError,
+    string source, out RemoteBatchError captureError)
+  {
+    captureError = null;
+    if (nativeError != null)
+    {
+      // Preserve the native exception while reporting it to the subscriber.
+      captureError = CreateCaptureError(nativeError);
+      return null;
+    }
+
+    try
+    {
+      return _batchExecutor.Execute(batch, bindInputs());
+    }
+    catch (Exception error)
+    {
+      captureError = CreateCaptureError(error);
+      Log.Error($"[Diver] Capture failed for {source}: {error}");
+      return null;
+    }
+  }
+
+  private static RemoteBatchError CreateCaptureError(Exception error) => new()
+  {
+    OperationId = -1,
+    ExceptionType = error.GetType().FullName,
+    Message = error.Message,
+    StackTrace = error.ToString()
+  };
+
   private byte[] MakeEventSubscribeResponse()
   {
     var request = DeserializeRequest<EventSubscriptionRequest>();
@@ -294,37 +327,16 @@ public partial class Diver : IDisposable
         // values are detached before callback delivery can be delayed.
         RemoteBatchResult captured = null;
         RemoteBatchError captureError = null;
-        if (nativeError != null)
+        if (request.Capture is { } capture)
         {
-          captureError = new RemoteBatchError
-          {
-            OperationId = -1,
-            ExceptionType = nativeError.GetType().FullName,
-            Message = nativeError.Message,
-            StackTrace = nativeError.ToString()
-          };
-        }
-        else if (request.Capture is { } capture)
-        {
-          try
+          captured = ExecuteCallbackCapture(capture.Batch, () =>
           {
             object[] parameters = [obj, args];
-            var inputs = capture.Inputs.ToDictionary(binding => binding.Key,
+            return capture.Inputs.ToDictionary(binding => binding.Key,
               binding => parameters[binding.Value]);
-            captured = _batchExecutor.Execute(capture.Batch, inputs);
-          }
-          catch (Exception error)
-          {
-            captureError = new RemoteBatchError
-            {
-              OperationId = -1,
-              ExceptionType = error.GetType().FullName,
-              Message = error.Message,
-              StackTrace = error.ToString()
-            };
-            Log.Error($"[Diver] Event capture failed for {resolvedType.FullName}.{eventName}: {error}");
-          }
+          }, nativeError, $"event {resolvedType.FullName}.{eventName}", out captureError);
         }
+
         if (request.Capture == null)
           // Cast mappedArgs to keep this void invocation statically bound.
           // Otherwise, the scheduler can treat it as a task-returning callback.

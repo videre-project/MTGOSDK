@@ -5,6 +5,7 @@
 **/
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -151,37 +152,13 @@ public partial class Diver : IDisposable
         RemoteBatchError captureError = null;
         if (request.Capture is { } description)
         {
-          try
-          {
-            var inputs = description.Inputs.Select((index, slot) =>
-              new { Slot = slot, Value = index == -1 ? obj : args[index] })
-              .ToDictionary(binding => binding.Slot, binding => binding.Value);
-            if (nativeError == null)
-              captured = _batchExecutor.Execute(description.Batch, inputs);
-            else
-            {
-              // Report failure to the subscriber without replacing the native exception.
-              captureError = new RemoteBatchError
-              {
-                OperationId = -1,
-                ExceptionType = nativeError.GetType().FullName,
-                Message = nativeError.Message,
-                StackTrace = nativeError.ToString()
-              };
-            }
-          }
-          catch (Exception error)
-          {
-            captureError = new RemoteBatchError
-            {
-              OperationId = -1,
-              ExceptionType = error.GetType().FullName,
-              Message = error.Message,
-              StackTrace = error.ToString()
-            };
-            Log.Error($"[Diver] Hook capture failed for {resolvedType.FullName}.{methodName}: {error}");
-          }
+          captured = ExecuteCallbackCapture(description.Batch, () =>
+            description.Inputs.Select((index, slot) =>
+              new KeyValuePair<int, object>(slot, index == -1 ? obj : args[index]))
+              .ToDictionary(binding => binding.Key, binding => binding.Value),
+            nativeError, $"hook {resolvedType.FullName}.{methodName}", out captureError);
         }
+
         if (request.Capture?.IncludeParameters == false)
         {
           QueueCallback(token, timestamp, captured, captureError, sequence);
