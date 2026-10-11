@@ -12,6 +12,20 @@
              TaskName="GenerateReferenceAssemblies"
              TaskFactory="TaskHostFactory" />
 
+  <UsingTask AssemblyFile="$(_MTGOSDK_MSBuild)"
+             TaskName="UpdateEnumImports"
+             TaskFactory="TaskHostFactory" />
+
+  <!-- Refresh source regions even when CoreCompile would otherwise be skipped. -->
+  <Target Name="UpdateImportedEnums"
+          BeforeTargets="CoreCompile"
+          DependsOnTargets="ResolveAssemblyReferences"
+          Condition="'$(DesignTimeBuild)' != 'true' And '@(Compile)' != ''">
+    <UpdateEnumImports SourceFiles="@(Compile)"
+                       ReferencePaths="@(ReferencePath)"
+                       CheckOnly="$(CheckImportedEnums)" />
+  </Target>
+
   <Target Name="GenerateReferenceAssemblies"
           BeforeTargets="ResolveAssemblyReferences;
                          DesignTimeResolveReferenceAssemblies"

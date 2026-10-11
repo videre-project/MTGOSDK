@@ -14,6 +14,8 @@
     <Platform>AnyCPU</Platform>
   </PropertyGroup>
   <PropertyGroup>
+    <!-- CI can verify checked-in enum regions without modifying source files. -->
+    <CheckImportedEnums Condition="'$(CheckImportedEnums)' == ''">false</CheckImportedEnums>
     <UseReferenceAssemblies>true</UseReferenceAssemblies>
     <UseReferenceAssemblies Condition="'$(UseRef)' != ''">$(UseRef)</UseReferenceAssemblies>
   </PropertyGroup>

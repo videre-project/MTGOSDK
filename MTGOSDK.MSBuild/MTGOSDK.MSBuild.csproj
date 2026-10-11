@@ -8,7 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup Label="Dependencies">
+    <!-- The compiler loads generators separately from the MSBuild task host. -->
+    <ProjectReference Include="src\SourceGenerators\MTGOSDK.SourceGenerators.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
     <PackageReference Include="Microsoft.ILVerification" />
+    <PackageReference Include="System.CodeDom" />
     <PackageReference Include="JetBrains.Refasmer" />
     <ProjectReference Include="$(SolutionDir)\MTGOSDK.Win32\MTGOSDK.Win32.csproj" />
     <!--
@@ -17,6 +22,10 @@
     -->
     <PackageReference Include="Microsoft.Build.Utilities.Core"
                       PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="src\SourceGenerators\**\*.cs" />
   </ItemGroup>
 
   <!-- Import MTGOSDK.MSBuild package properties -->

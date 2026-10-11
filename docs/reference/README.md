@@ -11,6 +11,7 @@ Per-namespace API documentation for MTGOSDK.
 | [Connection Lifecycle](./connection-lifecycle.md) | Crash recovery and reconnection patterns |
 | [ClickOnce](./clickonce.md) | MTGO deployment, installation, and CI/CD |
 | [Debugging](./debugging.md) | Log files, traces, and troubleshooting |
+| [Generated Types](./generated-types.md) | Import enums from MTGO at build time |
 
 For task-oriented tutorials, see the [Guides](../guides/README.md).
 
