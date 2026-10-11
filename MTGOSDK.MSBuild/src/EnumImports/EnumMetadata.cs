@@ -27,18 +27,23 @@ public static class EnumMetadata
     using var provider = new CSharpCodeProvider();
     var wanted = new HashSet<string>(typeNames, StringComparer.Ordinal);
     var found = new Dictionary<string, string>(StringComparer.Ordinal);
+
     foreach (var path in references.Select(Path.GetFullPath).Distinct())
     {
       using var stream = File.OpenRead(path);
       using var pe = new PEReader(stream);
-      if (!pe.HasMetadata) continue;
+      if (!pe.HasMetadata)
+        continue;
+
       var reader = pe.GetMetadataReader();
       foreach (var handle in reader.TypeDefinitions)
       {
         var name = TypeName(reader, handle);
-        if (!wanted.Contains(name)) continue;
+        if (!wanted.Contains(name))
+          continue;
         if (found.ContainsKey(name))
           throw new EnumMetadataException(name, $"Enum '{name}' is ambiguous in the resolved references.");
+
         var type = reader.GetTypeDefinition(handle);
         if (TypeName(reader, type.BaseType) != "System.Enum")
           throw new EnumMetadataException(name, $"Referenced type '{name}' is not an enum.");
@@ -48,25 +53,32 @@ public static class EnumMetadata
         {
           var field = reader.GetFieldDefinition(fieldHandle);
           var constantHandle = field.GetDefaultValue();
-          if (constantHandle.IsNil) continue;
+          if (constantHandle.IsNil)
+            continue;
+
           var constant = reader.GetConstant(constantHandle);
           var blob = reader.GetBlobReader(constant.Value);
           var value = blob.ReadConstant(constant.TypeCode);
           var member = reader.GetString(field.Name);
           members.Add(provider.CreateEscapedIdentifier(member) + " = " + Format(value) + ",");
         }
+
         found.Add(name, string.Join("\n", members));
       }
     }
+
     foreach (var name in wanted)
       if (!found.ContainsKey(name))
         throw new EnumMetadataException(name, $"Enum '{name}' was not found in the resolved references.");
+
     return found;
   }
 
   private static string TypeName(MetadataReader reader, EntityHandle handle)
   {
-    if (handle.IsNil) return string.Empty;
+    if (handle.IsNil)
+      return string.Empty;
+
     if (handle.Kind == HandleKind.TypeDefinition)
     {
       var type = reader.GetTypeDefinition((TypeDefinitionHandle)handle);
@@ -75,11 +87,13 @@ public static class EnumMetadata
         ? Qualify(reader.GetString(type.Namespace), reader.GetString(type.Name))
         : TypeName(reader, parent) + "+" + reader.GetString(type.Name);
     }
+
     if (handle.Kind == HandleKind.TypeReference)
     {
       var type = reader.GetTypeReference((TypeReferenceHandle)handle);
       return Qualify(reader.GetString(type.Namespace), reader.GetString(type.Name));
     }
+
     return string.Empty;
   }
 
@@ -95,10 +109,4 @@ public static class EnumMetadata
     ulong number => number.ToString(CultureInfo.InvariantCulture) + "UL",
     _ => throw new InvalidOperationException("An enum member has a non-integral constant.")
   };
-}
-
-internal sealed class EnumMetadataException : InvalidOperationException
-{
-  public string TypeName { get; }
-  public EnumMetadataException(string typeName, string message) : base(message) => TypeName = typeName;
 }

@@ -30,7 +30,9 @@ public static class EnumRegionUpdater
     // Validate every region and resolve every enum before changing any file.
     var documents = files.Select(Path.GetFullPath).Distinct().Select(Read)
       .Where(document => document.Regions.Count != 0).ToList();
-    if (documents.Count == 0) return Array.Empty<string>();
+    if (documents.Count == 0)
+      return Array.Empty<string>();
+
     var imports = documents.SelectMany(document => document.Regions).ToList();
     IReadOnlyDictionary<string, string> members;
     try
@@ -48,6 +50,7 @@ public static class EnumRegionUpdater
     foreach (var document in documents)
     {
       var text = document.Text;
+
       // Replace from the end so original offsets remain valid.
       foreach (var region in document.Regions.AsEnumerable().Reverse())
       {
@@ -56,11 +59,15 @@ public static class EnumRegionUpdater
           lines.Split('\n').Select(line => region.Indent + line)) + region.Newline;
         text = text.Remove(region.Start, region.Length).Insert(region.Start, replacement);
       }
-      if (text == document.Text) continue;
+
+      if (text == document.Text)
+        continue;
       if (checkOnly)
         throw new EnumImportException("MTGO003", document.Path, document.Regions[0].Line,
           "Enum import region is stale. Build without CheckImportedEnums=true to refresh it.");
-      updates.Add((document, document.Preamble.Concat(document.Encoding.GetBytes(text)).ToArray()));
+
+      var bytes = document.Preamble.Concat(document.Encoding.GetBytes(text)).ToArray();
+      updates.Add((document, bytes));
     }
 
     // An editor may have changed the file while its imports were being resolved.
@@ -79,39 +86,51 @@ public static class EnumRegionUpdater
       }
       finally
       {
-        if (File.Exists(temp)) File.Delete(temp);
+        if (File.Exists(temp))
+          File.Delete(temp);
       }
     }
+
     return updates.Select(update => update.Document.Path).ToArray();
   }
 
   private static Document Read(string path)
   {
     var bytes = File.ReadAllBytes(path);
+
     // Preserve BOM and encoding, including UTF-16/32 sources.
     var encoding = new Encoding[]
     {
-      new UTF32Encoding(false, true, true), new UTF32Encoding(true, true, true),
-      new UTF8Encoding(true, true), new UnicodeEncoding(false, true, true),
+      new UTF32Encoding(false, true, true),
+      new UTF32Encoding(true, true, true),
+      new UTF8Encoding(true, true),
+      new UnicodeEncoding(false, true, true),
       new UnicodeEncoding(true, true, true)
     }.FirstOrDefault(candidate => bytes.Take(candidate.GetPreamble().Length)
       .SequenceEqual(candidate.GetPreamble())) ?? new UTF8Encoding(false, true);
     var preamble = encoding.GetPreamble();
     var text = encoding.GetString(bytes, preamble.Length, bytes.Length - preamble.Length);
+
     var regions = new List<Region>();
     Region? open = null;
     foreach (var comment in SourceComments.Standalone(text))
     {
       var line = text.Substring(comment.Start, comment.Length);
-      if (!ImportPrefix.IsMatch(line)) continue;
+      if (!ImportPrefix.IsMatch(line))
+        continue;
+
       var match = Marker.Match(line);
       if (!match.Success)
         throw Error(path, comment.Line, "Expected '//#pragma import enum <metadata type> begin|end'.");
+
       var type = match.Groups["type"].Value;
-      if (type.StartsWith("global::", StringComparison.Ordinal)) type = type.Substring(8);
+      if (type.StartsWith("global::", StringComparison.Ordinal))
+        type = type.Substring(8);
+
       if (match.Groups["kind"].Value == "begin")
       {
-        if (open is not null) throw Error(path, comment.Line, "Enum import regions cannot be nested.");
+        if (open is not null)
+          throw Error(path, comment.Line, "Enum import regions cannot be nested.");
         if (comment.Newline.Length == 0)
           throw Error(path, comment.Line, "Enum import begin marker must end with a newline.");
         open = new Region(path, comment.Line, type, match.Groups["indent"].Value,
@@ -119,14 +138,20 @@ public static class EnumRegionUpdater
       }
       else
       {
-        if (open is null) throw Error(path, comment.Line, "Enum import end marker has no begin marker.");
-        if (open.Type != type) throw Error(path, comment.Line, "Enum import begin and end types differ.");
+        if (open is null)
+          throw Error(path, comment.Line, "Enum import end marker has no begin marker.");
+        if (open.Type != type)
+          throw Error(path, comment.Line, "Enum import begin and end types differ.");
+
         open.Length = comment.Start - open.Start;
         regions.Add(open);
         open = null;
       }
     }
-    if (open is not null) throw Error(path, open.Line, "Enum import begin marker has no end marker.");
+
+    if (open is not null)
+      throw Error(path, open.Line, "Enum import begin marker has no end marker.");
+
     return new Document(path, bytes, text, encoding, preamble, regions);
   }
 
@@ -141,9 +166,17 @@ public static class EnumRegionUpdater
     public Encoding Encoding { get; }
     public byte[] Preamble { get; }
     public List<Region> Regions { get; }
+
     public Document(string path, byte[] bytes, string text, Encoding encoding,
       byte[] preamble, List<Region> regions)
-    { Path = path; Bytes = bytes; Text = text; Encoding = encoding; Preamble = preamble; Regions = regions; }
+    {
+      Path = path;
+      Bytes = bytes;
+      Text = text;
+      Encoding = encoding;
+      Preamble = preamble;
+      Regions = regions;
+    }
   }
 
   private sealed class Region
@@ -155,16 +188,15 @@ public static class EnumRegionUpdater
     public string Newline { get; }
     public int Start { get; }
     public int Length { get; set; }
-    public Region(string file, int line, string type, string indent, string newline, int start)
-    { File = file; Line = line; Type = type; Indent = indent; Newline = newline; Start = start; }
-  }
-}
 
-public sealed class EnumImportException : Exception
-{
-  public string Code { get; }
-  public string File { get; }
-  public int Line { get; }
-  public EnumImportException(string code, string file, int line, string message) : base(message)
-  { Code = code; File = file; Line = line; }
+    public Region(string file, int line, string type, string indent, string newline, int start)
+    {
+      File = file;
+      Line = line;
+      Type = type;
+      Indent = indent;
+      Newline = newline;
+      Start = start;
+    }
+  }
 }
