@@ -10,6 +10,11 @@ using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Batching;
 
 using WotC.MtGO.Client.Model.Play;
 using WotC.MtGO.Client.Model.Play.InProgressGameEvent;
@@ -392,4 +397,38 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   public EventProxy<GameCardEventArgs> TypesChanged =
     new(/* IGameCard */ gameCard, nameof(TypesChanged));
+  /// <summary>
+  /// Event triggered when the card's <c>Actions</c> collection changes, such as when
+  /// a new action is added or removed from the card's available actions.
+  /// </summary>
+  public static EventHookProxy<GameCard, IReadOnlyList<CardAction>> ActionsChanged =
+    new(
+      "Shiny.Play.Duel.ViewModel.DuelSceneCardViewModel",
+      "Actions_CollectionChanged",
+      new CapturedEventHook((context, _, _) =>
+      {
+        var capture = context.Capture
+          ?? throw new InvalidOperationException("Card actions callback has no native capture.");
+        var card = (RemoteBatchObject)RemoteBatchObject.FromValue(capture.Values["card"])!;
+        var actions = capture.Values["actions"].Items.Select(value =>
+          (CardAction)GameAction.MaterializeCaptured(
+            (RemoteBatchObject)RemoteBatchObject.FromValue(value)!)).ToArray();
+        return (new GameCard(card), Array.AsReadOnly(actions));
+      }),
+      CreateActionsCapture(),
+      HarmonyPatchPosition.Postfix
+    );
+
+  private static RemoteHookCapture CreateActionsCapture()
+  {
+    var batch = new RemoteBatch();
+    var view = batch.Input(ObjectOrRemoteAddress.Null);
+    var scalar = RemoteBatchProjection.Value();
+    batch.Output("card", batch.Read(view, "GameCard"), RemoteBatchProjection.Object(
+      ("Id", "Id", scalar), ("SourceId", "SourceId", scalar), ("Name", "Name", scalar),
+      ("GameInterface", "GameInterface", RemoteBatchProjection.Object(("Id", "Id", scalar)))).WithLogicalAddress());
+    batch.Output("actions", batch.Read(view, "Actions"),
+      RemoteBatchProjection.Sequence(GameAction.CreateCaptureProjection()));
+    return new() { Batch = batch.ToRequest(), Inputs = [-1], IncludeParameters = false };
+  }
 }

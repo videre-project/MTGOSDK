@@ -6,6 +6,7 @@
 using System.Dynamic;
 
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting.Batching;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -40,7 +41,8 @@ public sealed class Targetable(dynamic targetable) : DLRWrapper<ITargetable>
   // ITargetable wrapper methods
   //
 
-  public dynamic ToGameObject() => targetable.GetType().Name switch
+  public dynamic ToGameObject() => (targetable is RemoteBatchObject captured
+    ? captured.NativeType?.FullName.Split('.').Last() : (string)targetable.GetType().Name) switch
   {
     "GameCard" or "GameCardPartial" => new GameCard(targetable),
     "GamePlayer" => new GamePlayer(targetable),

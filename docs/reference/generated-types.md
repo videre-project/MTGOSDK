@@ -12,16 +12,17 @@ Keep the enum declaration and SDK additions outside the region:
 ```csharp
 namespace MTGOSDK.API.Play.Games;
 
-public enum GamePhase
+public enum ActionType
 {
-  //#pragma import enum WotC.MtGO.Client.Model.Play.GamePhase begin
+  //#pragma import enum WotC.MtGO.Client.Model.Play.ActionType begin
   Invalid = 0,
-  Untap = 1,
+  ChooseOption = 1,
+  CardAction = 2,
   // Remaining native members appear here in the actual file.
-  //#pragma import enum WotC.MtGO.Client.Model.Play.GamePhase end
+  //#pragma import enum WotC.MtGO.Client.Model.Play.ActionType end
 
-  PreGame1 = 13,
-  PreGame2 = 14
+  /// <summary>SDK-only client prompt button without a native game action.</summary>
+  PromptControl = int.MaxValue
 }
 ```
 
@@ -78,6 +79,7 @@ parse or alter enum declarations; the C# compiler validates the resulting enum.
 | `TradePostFormat` | `WotC.MtGO.Client.Model.Trade.TradePostFormat` | `WotC.MtGO.Client.Model.Data` |
 | `TradeState` | `WotC.MtGO.Client.Model.Trade.Enums.TradeState` | `WotC.MtGO.Client.Model.Reference` |
 
+`ActionType.PromptControl` is an SDK addition outside its import region.
 `GamePhase.PreGame1 = 13` and `PreGame2 = 14` likewise remain explicit SDK
 additions outside the imported native members.
 

@@ -4,11 +4,10 @@
 **/
 
 using System.Collections;
+using System.Collections.ObjectModel;
 using System.Text;
 
-using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.Core.Reflection;
-using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -20,13 +19,24 @@ namespace MTGOSDK.API.Play.Games;
 /// </summary>
 public sealed class GamePrompt(dynamic gamePrompt) : DLRWrapper<IGamePrompt>
 {
+  private readonly IReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>>?
+    _options;
+
+  internal GamePrompt(
+    dynamic gamePrompt,
+    IReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>> options)
+      : this((object)gamePrompt)
+  {
+    _options = options;
+  }
+
   /// <summary>
   /// Strips MTGO prompt markup (e.g. <c>@[Card Name@:123]</c> → <c>Card Name</c>)
   /// from raw prompt text. Mirrors the logic in the MTGO client's
   /// <c>GamePrompt.RemoveMarkupFromText</c>.
   /// </summary>
   /// <remarks>
-  /// Both <see cref="GameStateSnapshot"/> and <see cref="GamePrompt"/> must use
+  /// Both game state snapshots and <see cref="GamePrompt"/> must use
   /// the same cleaned text when computing the nonce, otherwise interact-state
   /// prompts with card-name markup will fail to correlate.
   /// </remarks>
@@ -102,36 +112,65 @@ public sealed class GamePrompt(dynamic gamePrompt) : DLRWrapper<IGamePrompt>
 
   /// <summary>
   /// A deterministic nonce derived from the prompt state, used to correlate
-  /// this prompt with the corresponding <see cref="GameStateSnapshot"/>.
+  /// this prompt with the corresponding game state snapshot.
   /// </summary>
-  public int Nonce => GameStateSnapshot.ComputeNonce(Timestamp, PromptedPlayer, Text);
+  public int Nonce => ComputeNonce(Timestamp, PromptedPlayer, Text);
+
+  /// <summary>
+  /// Computes a correlation hash from prompt state fields.
+  /// </summary>
+  internal static int ComputeNonce(uint timestamp, byte promptedPlayer, string promptText)
+  {
+    var hash = new HashCode();
+    hash.Add(timestamp);
+    hash.Add(promptedPlayer);
+    hash.Add(promptText ?? string.Empty, StringComparer.Ordinal);
+    return hash.ToHashCode();
+  }
 
   /// <summary>
   /// The available game actions for the prompt.
   /// </summary>
   /// <remarks>
-  /// Handles both the remote <c>IDictionary&lt;ActionType, IList&lt;IGameAction&gt;&gt;</c>
-  /// and the materialized <c>IEnumerable&lt;GameAction&gt;</c> produced by
-  /// <see cref="PromptProcessor"/> via <c>Map&lt;GameAction&gt;</c>.
+  /// Reads the native <c>IDictionary&lt;ActionType, IList&lt;IGameAction&gt;&gt;</c>
+  /// and wraps each action using its native action type.
   /// </remarks>
-  public IDictionary<ActionType, IList<GameAction>> Options
+  public IDictionary<ActionType, IList<GameAction>> GameActions
   {
     get
     {
-      var options = new Dictionary<ActionType, IList<GameAction>>();
-      // Use the raw captured DRO directly — Unbind(@base) can return a
+      if (_options != null)
+        return _options.Where(group => group.Key != ActionType.PromptControl)
+          .ToDictionary(group => group.Key, group => (IList<GameAction>)
+            Array.AsReadOnly(group.Value.OfType<GameAction>().ToArray()));
+      // Use the raw captured DRO directly as Unbind(@base) can return a
       // CachingRemoteProxy (from batch hydration) that doesn't support
       // iterating complex collections like dictionaries.
       dynamic rawOptions = Unbind(gamePrompt).Options;
+
       Func<dynamic, ActionType> keyFunc = k => Cast<ActionType>(k);
       Func<dynamic, IList<GameAction>> valueFunc =
         v => Map<IList, GameAction>(v, GameAction.GameActionFactory);
+
+      var options = new Dictionary<ActionType, IList<GameAction>>();
       foreach (var kvp in Map<IDictionary, ActionType, IList<GameAction>>(
         rawOptions, keyFunc, valueFunc))
       {
         options[kvp.Key] = kvp.Value;
       }
+
       return options;
     }
   }
+
+  /// <summary>
+  /// Prompt options exposed by the game client, grouped by action type.
+  /// </summary>
+  public IReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>> Options
+    => _options
+      ?? new ReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>>(
+        GameActions.ToDictionary(
+          group => group.Key,
+          group => (IReadOnlyList<IPromptOption>)Array.AsReadOnly(
+            group.Value.Cast<IPromptOption>().ToArray())));
 }

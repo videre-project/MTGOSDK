@@ -40,7 +40,7 @@ public sealed class SelectFromListAction(dynamic selectFromListAction)
   public string ItemType => @base.ItemType;
 
   public IList<NamedValue<int>> AvailableItems =>
-    Map<IList, NamedValue<int>>(@base.AvailableItems);
+    Map<IList, NamedValue<int>>((object)@base.AvailableItems, item => new NamedValue<int>(item));
 
   public NamedValue<int> SelectedItem => new(@base.SelectedValue);
 }

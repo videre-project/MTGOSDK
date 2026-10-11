@@ -20,8 +20,8 @@ public sealed class TargetSet(dynamic targetSet) : DLRWrapper<ITargetSet>
 
   internal CardAction.TargetSetChange? Delta = null;
 
-  internal int Index => Unbind(Action).Targets.IndexOf(Unbind(this));
-
+  internal int Index => HasMember(targetSet, nameof(Index))
+    ? (int)targetSet.Index : Unbind(Action).Targets.IndexOf(Unbind(this));
 
   //
   // ITargetSet wrapper properties
