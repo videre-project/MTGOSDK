@@ -76,6 +76,8 @@ public sealed class GameProcessor : IDisposable
   internal static ProcessorEvent<PromptChangedEventArgs> PromptChanged(Game game) =>
     new(game, typeof(PromptProcessor), () => new PromptProcessor());
 
+  internal static ProcessorEvent<GameStateChangedEventArgs> StateChanged(Game game) =>
+    new(game, typeof(PromptProcessor), () => new PromptProcessor());
 
   internal static ProcessorEvent<LogMessageCorrelatedEventArgs> LogMessage(Game game) =>
     new(game, typeof(LogMessageProcessor), () => new LogMessageProcessor());
@@ -914,6 +916,8 @@ public sealed class GameProcessor : IDisposable
       }
     }
 
+    // Publish one combined update after every processor has applied this message.
+    processors.OfType<PromptProcessor>().FirstOrDefault()?.Complete(context);
 
 
     // Retain the state used to compare the next message.

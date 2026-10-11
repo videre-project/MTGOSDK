@@ -322,6 +322,15 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   }
 
   /// <summary>
+  /// Event triggered when correlated gameplay or captured local interaction state changes.
+  /// </summary>
+  public ProcessorEvent<GameStateChangedEventArgs> OnStateChanged
+  {
+    get => field ??= GameProcessor.StateChanged(this);
+    set => field = value;
+  }
+
+  /// <summary>
   /// Event triggered when a log message is correlated with a game state snapshot.
   /// </summary>
   public ProcessorEvent<LogMessageCorrelatedEventArgs> OnLogMessage

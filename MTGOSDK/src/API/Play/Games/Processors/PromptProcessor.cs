@@ -7,11 +7,11 @@ using System;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text;
-using MTGOSDK.API.Interface.Controls;
-using MTGOSDK.API.Play.Games.Processors.Intermediate;
 using System.Threading;
 
+using MTGOSDK.API.Interface.Controls;
 using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Intermediate;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.Core.Remoting.Batching;
@@ -31,10 +31,28 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
 {
   private Game? _game;
   private volatile bool _disposed;
+  private int _gameId;
+  private readonly object _stateLock = new();
+  private readonly Dictionary<int, InteractionStateSnapshot> _interactions = new();
+  private readonly Dictionary<(Guid Stream, long Revision), List<InteractionStateSnapshot>> _pendingInteractions = new();
+  private InteractionModeTracker? _interactionTracker;
+  private GameContext? _completedContext;
+  private GamePrompt? _completedPrompt;
+  private GameStateChangedEventArgs? _lastState;
+  private long _stateSequence;
+
+  //
+  // Captured state
+  //
 
   /// <summary>
-  /// Signals prompt readiness after successful correlation or processor disposal.
-  /// A failed capture or identity check resets it.
+  /// The most recent combined game and interaction update.
+  /// </summary>
+  public GameStateChangedEventArgs? LastState => Volatile.Read(ref _lastState);
+
+  /// <summary>
+  /// Signals prompt readiness. A failed capture or identity check resets it.
+  /// Successful correlation or processor disposal releases waiting callers.
   /// </summary>
   internal ManualResetEventSlim PromptCorrelated { get; } = new(true);
 
@@ -48,11 +66,20 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
   /// </summary>
   public GamePrompt? LastPrompt { get; private set; }
 
+  //
+  // Initialization and prompt options
+  //
+
   public void Initialize(Game game)
   {
     ObjectDisposedException.ThrowIf(_disposed, this);
     _game = game;
+    _gameId = game.Id;
+    _interactionTracker = GameProcessor.ForGame(game).InteractionState;
+    _interactionTracker.StateChanged += OnInteractionChanged;
+    OnInteractionChanged(_interactionTracker.Snapshot);
   }
+
   /// <summary>
   /// Captures a prompt's options and client UI revision for this processor's game.
   /// </summary>
@@ -120,7 +147,9 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
     return new PromptOptionsSnapshot(nonce, BitConverter.ToInt64(hash), capturedPrompt);
   }
 
-
+  //
+  // Gameplay and interaction updates
+  //
 
   public void Process(GameContext context)
   {
@@ -144,7 +173,8 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
       if (prompt.Timestamp != LastSnapshot.InteractionTimestamp ||
           prompt.PromptedPlayer != LastSnapshot.PromptedPlayer || prompt.Text != LastSnapshot.PromptText)
         throw new InvalidOperationException("Captured prompt identity differs from the gameplay snapshot.");
-      LastPrompt = CaptureOptions(_game!, prompt).Prompt;
+      var interaction = GetInteraction(context);
+      LastPrompt = CaptureOptions(prompt, interaction).Prompt;
       PromptCorrelated.Set();
       context.Emit(new PromptChangedEventArgs(LastSnapshot, LastPrompt));
     }
@@ -154,6 +184,174 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
       throw;
     }
   }
+
+  /// <summary>
+  /// Publishes after the current gameplay message's processors have finished.
+  /// </summary>
+  internal void Complete(GameContext context)
+  {
+    lock (_stateLock)
+    {
+      if (_disposed)
+        return;
+      if (LastPrompt is null)
+      {
+        _completedContext = null;
+        _completedPrompt = null;
+        return;
+      }
+      if (LastPrompt.Nonce != context.Current.Nonce)
+        return;
+
+      // Validate the UI capture paired with this native gameplay completion.
+      var boundary = context.CaptureSequence;
+      var interaction = GetInteraction(context);
+      bool requiresCapture = boundary is { NotificationSequence: > 0 }
+        && (_interactionTracker is null || _interactionTracker.RequiresCapture(boundary));
+      if (requiresCapture && interaction.CaptureSequence != boundary!.NotificationSequence)
+      {
+        PromptCorrelated.Reset();
+        throw new InvalidOperationException(
+          $"Gameplay revision {boundary.StateRevision} has no matching interaction capture {boundary.NotificationSequence}.");
+      }
+
+      // Publish the completed server snapshot before its later local transitions.
+      _completedContext = context;
+      _completedPrompt = LastPrompt;
+      _interactions[context.Current.Nonce] = interaction;
+      PublishState(context, LastPrompt, interaction);
+
+      // Completed local transitions can arrive while the server pipeline is still processing.
+      // Publish each against its owning message after the boundary capture, in native order.
+      if (boundary is not null)
+      {
+        if (_pendingInteractions.TryGetValue((boundary.StreamId, boundary.StateRevision), out var local))
+        {
+          foreach (var capture in local.Where(capture => capture.CaptureSequence > boundary.NotificationSequence))
+          {
+            _interactions[context.Current.Nonce] = capture;
+            PublishState(context, LastPrompt, capture);
+          }
+        }
+
+        // Retire consumed revisions while retaining captures for later messages.
+        foreach (var key in _pendingInteractions.Keys.Where(key => key.Stream == boundary.StreamId
+          && key.Revision <= boundary.StateRevision).ToArray())
+          _pendingInteractions.Remove(key);
+      }
+
+      // Retain captures for newer prompts which arrived ahead of their gameplay callback.
+      foreach (int nonce in _interactions.Where(entry => entry.Key != context.Current.Nonce
+        && entry.Value.Version < interaction.Version).Select(entry => entry.Key).ToArray())
+        _interactions.Remove(nonce);
+    }
+  }
+
+  private InteractionStateSnapshot GetInteraction(GameContext context)
+  {
+    lock (_stateLock)
+    {
+      if (context.CaptureSequence is { } sequence
+        && _pendingInteractions.TryGetValue((sequence.StreamId, sequence.StateRevision), out var pending))
+      {
+        var paired = pending.FirstOrDefault(capture => capture.PromptNonce == context.Current.Nonce
+          && capture.CaptureSequence == sequence.NotificationSequence);
+        if (paired is not null)
+          return paired;
+      }
+
+      var interaction = _interactions.GetValueOrDefault(context.Current.Nonce);
+      if (interaction is null)
+        return InteractionStateSnapshot.Empty;
+
+      // No relevant native notification means the previous captured UI values remain current.
+      return context.CaptureSequence is null or { NotificationSequence: 0 }
+        || MatchesRevision(interaction, context) ? interaction : InteractionStateSnapshot.Empty;
+    }
+  }
+
+  private static bool MatchesRevision(InteractionStateSnapshot interaction, GameContext context) =>
+    context.CaptureSequence is { } sequence && interaction.CaptureStream == sequence.StreamId
+      && interaction.StateRevision == sequence.StateRevision;
+
+  private void OnInteractionChanged(InteractionStateSnapshot interaction)
+  {
+    lock (_stateLock)
+    {
+      if (_disposed || interaction.PromptNonce is not int nonce)
+        return;
+
+      // A newer native revision may arrive before its gameplay callback is processed.
+      // Retain it by invocation identity even when the prompt nonce is unchanged.
+      if (interaction.StateRevision != 0 && (_completedContext is null
+        || !MatchesRevision(interaction, _completedContext)))
+      {
+        var key = (interaction.CaptureStream, interaction.StateRevision);
+        if (!_pendingInteractions.TryGetValue(key, out var pending))
+        {
+          pending = new();
+          _pendingInteractions.Add(key, pending);
+        }
+        pending.Add(interaction);
+        return;
+      }
+
+      _interactions[nonce] = interaction;
+      if (_completedContext?.Current.Nonce == nonce && _completedPrompt is not null)
+        PublishState(_completedContext, _completedPrompt, interaction);
+    }
+  }
+
+  private void PublishState(GameContext context, GamePrompt prompt,
+    InteractionStateSnapshot interaction)
+  {
+    var previous = _lastState;
+    if (previous is not null && ReferenceEquals(previous.Context, context)
+      && previous.Interaction.Mode == interaction.Mode
+      && previous.Interaction.PromptBoxText == interaction.PromptBoxText
+      && previous.Interaction.Buttons.SequenceEqual(interaction.Buttons)
+      && previous.Interaction.Players.SequenceEqual(interaction.Players)
+      && previous.Interaction.Cards.SequenceEqual(interaction.Cards))
+      return;
+
+    // Server timestamps can repeat across messages. Include the emitted revision.
+    var hash = new HashCode();
+    hash.Add(_gameId);
+    hash.Add(++_stateSequence);
+    hash.Add(context.Current.Nonce);
+    hash.Add(context.Current.Timestamp);
+    hash.Add(interaction.Mode);
+    hash.Add(interaction.PromptBoxText, StringComparer.Ordinal);
+    foreach (var button in interaction.Buttons)
+      hash.Add(button);
+    foreach (var player in interaction.Players)
+      hash.Add(player);
+    foreach (var card in interaction.Cards)
+      hash.Add(card);
+
+
+    var options = CaptureOptions(prompt, interaction);
+
+    // Resolve action card/player identities against this event's server snapshot.
+    // The native action data and eligibility stay unchanged by this local binding.
+    var cards = interaction.Cards.ToDictionary(pair => pair.Key,
+      pair => pair.Value.Resolve(value => ResolveReferences(value, context)));
+    interaction = interaction with
+    {
+      Cards = new ReadOnlyDictionary<ulong, CardInteractionSnapshot>(cards)
+    };
+    var update = new GameStateChangedEventArgs(options.Prompt, interaction, options)
+    {
+      Context = context,
+      Nonce = hash.ToHashCode()
+    };
+    Volatile.Write(ref _lastState, update);
+    context.Processor?.Dispatch(update, context, update.Nonce);
+  }
+
+  //
+  // Captured prompt materialization
+  //
 
   private static GamePrompt MaterializePrompt(RemoteBatchValue value, GameContext context)
   {
@@ -204,6 +402,14 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
       pair => ResolveReferences(pair.Value, context)), item.NativeType, item.LogicalAddress);
   }
 
+  //
+  // Native gameplay capture
+  //
+
+  /// <summary>
+  /// Builds the projection captured when native gameplay processing completes.
+  /// The hook executes it in the client before delivering the callback.
+  /// </summary>
   internal static RemoteHookCapture CreateGameplayCapture()
   {
     var scalar = RemoteBatchProjection.Value();
@@ -247,10 +453,24 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
     };
   }
 
+  //
+  // Lifetime cleanup
+  //
+
   public void Dispose()
   {
-    _disposed = true;
+    lock (_stateLock)
+    {
+      _disposed = true;
+      if (_interactionTracker is not null)
+        _interactionTracker.StateChanged -= OnInteractionChanged;
+      _interactions.Clear();
+      _pendingInteractions.Clear();
+      _completedContext = null;
+      _completedPrompt = null;
+    }
     PromptCorrelated.Set();
   }
 
+  public static void EnsureHookInitialized() => GameProcessor.EnsureHookInitialized();
 }

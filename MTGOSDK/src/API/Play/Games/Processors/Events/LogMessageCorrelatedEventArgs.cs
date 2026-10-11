@@ -6,8 +6,8 @@
 using System;
 
 using MTGOSDK.API.Chat;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Events;
@@ -32,7 +32,7 @@ public sealed class LogMessageCorrelatedEventArgs(
 
   /// <summary>
   /// The time delta (in seconds) between the message and snapshot client timestamps.
-  /// Lower values indicate higher confidence in the correlation.
+  /// This is an absolute receive-time difference, not a calibrated confidence score.
   /// </summary>
   public double TimeDeltaSeconds { get; } = timeDeltaSeconds;
 
@@ -47,7 +47,7 @@ public sealed class LogMessageCorrelatedEventArgs(
   public DateTime MessageClientTimestamp => Unbind(Message).__timestamp;
 
   /// <summary>
-  /// The snapshot's server ActionTimestamp.
+  /// The snapshot's ActionTimestamp from gameplay-hook capture.
   /// </summary>
   public DateTime SnapshotServerTimestamp => Snapshot.ActionTimestamp;
 

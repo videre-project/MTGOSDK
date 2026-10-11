@@ -3,8 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
+
 
 namespace MTGOSDK.API.Play.Games.Processors.Events;
 
