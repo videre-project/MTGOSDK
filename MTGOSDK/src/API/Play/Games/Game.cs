@@ -8,9 +8,10 @@ using System.Collections;
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.API.Play.Games.Processors;
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -354,7 +355,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<ZoneChangeEventArgs> OnZoneChanged
   {
-    get => field ??= new(this, typeof(ZoneChangeTracker), () => new ZoneChangeTracker());
+    get => field ??= new(this, typeof(ZoneChangeProcessor), () => new ZoneChangeProcessor());
     set => field = value;
   }
 
@@ -363,13 +364,13 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<CardChangedEventArgs> OnCardChanged
   {
-    get => field ??= new(this, typeof(PropertyChangeTracker), () =>
+    get => field ??= new(this, typeof(PropertyChangeProcessor), () =>
     {
       // CombatProcessor must populate AttackingOrders/BlockingOrders before
-      // PropertyChangeTracker diffs them.
+      // PropertyChangeProcessor diffs them.
       EnsureProcessor().EnsureRegistered(
         typeof(CombatProcessor), () => new CombatProcessor());
-      return new PropertyChangeTracker();
+      return new PropertyChangeProcessor();
     });
     set => field = value;
   }
@@ -379,7 +380,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<PlayerChangedEventArgs> OnPlayerChanged
   {
-    get => field ??= new(this, typeof(PropertyChangeTracker), () => new PropertyChangeTracker());
+    get => field ??= new(this, typeof(PropertyChangeProcessor), () => new PropertyChangeProcessor());
     set => field = value;
   }
 
@@ -424,7 +425,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<RevealedCardsEventArgs> OnRevealedCards
   {
-    get => field ??= new(this, typeof(RevealedZoneTracker), () => new RevealedZoneTracker());
+    get => field ??= new(this, typeof(RevealedZoneProcessor), () => new RevealedZoneProcessor());
     set => field = value;
   }
 

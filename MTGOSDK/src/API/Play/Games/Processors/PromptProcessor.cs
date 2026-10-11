@@ -7,8 +7,10 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
+
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
 namespace MTGOSDK.API.Play.Games.Processors;

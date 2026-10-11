@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 /// <summary>
 /// A single tick's worth of game state: timing, phase, and entity snapshots.

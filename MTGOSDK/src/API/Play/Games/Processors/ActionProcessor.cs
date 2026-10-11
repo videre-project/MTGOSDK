@@ -8,9 +8,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Intermediate;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
@@ -363,7 +365,7 @@ public sealed class ActionProcessor : IGameStateProcessor
   /// <summary>
   /// Writes previously resolved ACTION_TARGETID properties into snapshot
   /// PropertyContainers for cards that have pending target data.
-  /// Called by GameProcessor BEFORE PropertyChangeTracker runs, so that
+  /// Called by GameProcessor BEFORE PropertyChangeProcessor runs, so that
   /// card change diffs see the complete target list.
   /// </summary>
   /// <remarks>

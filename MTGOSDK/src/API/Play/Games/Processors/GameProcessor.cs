@@ -12,11 +12,13 @@ using System.Threading.Tasks;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play.Games;
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Proxy;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Intermediate;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
@@ -526,7 +528,7 @@ public sealed class GameProcessor
         var card = GameCard.FromProperties(props, instance, thing.FromZone);
 
         // Filter out sub-cards (Adventures, Split faces, etc.) unless they're in play.
-        // Store them in HiddenCards so ZoneChangeTracker can correlate when cast.
+        // Store them in HiddenCards so ZoneChangeProcessor can correlate when cast.
         // Use the resolved zone name rather than the raw zone ID (which is an MTGO
         // instance ID and does not correspond to CardZone enum ordinals).
         // Track SUBC status per ThingID. After a library shuffle, MTGO can
@@ -751,7 +753,7 @@ public sealed class GameProcessor
         RevealedZoneCards = revealedZoneCards,
       };
 
-      // Backfill action targets before PropertyChangeTracker runs.
+      // Backfill action targets before PropertyChangeProcessor runs.
       foreach (var processor in processors)
       {
         if (processor is ActionProcessor ap)
@@ -812,7 +814,7 @@ public sealed class GameProcessor
     };
 
     // Pre-pass: backfill action target IDs into card PropertyContainers
-    // before PropertyChangeTracker runs, so card change diffs see all targets.
+    // before PropertyChangeProcessor runs, so card change diffs see all targets.
     foreach (var processor in processors)
     {
       if (processor is ActionProcessor actionProcessor)

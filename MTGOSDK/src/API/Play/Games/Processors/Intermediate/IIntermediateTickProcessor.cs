@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 /// <summary>
 /// Marker for processors that are safe to run on same-nonce (intermediate)

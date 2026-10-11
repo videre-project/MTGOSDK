@@ -10,6 +10,7 @@ using System.Linq;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection.Serialization;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 namespace MTGOSDK.API.Play.Games.Processors;

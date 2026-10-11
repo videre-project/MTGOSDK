@@ -6,7 +6,7 @@
 using MTGOSDK.API.Play.Games;
 
 
-namespace MTGOSDK.API.Play.Games.Processors.EventArgs;
+namespace MTGOSDK.API.Play.Games.Processors.Events;
 
 /// <summary>
 /// Event args for a finalized and reconciled game action.

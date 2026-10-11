@@ -8,17 +8,18 @@ using System.Collections.Generic;
 using System.Linq;
 
 using MTGOSDK.API.Play.Games;
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Events;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 /// <summary>
 /// Tracks zone changes between snapshots: departures, arrivals, same-ID moves,
 /// and server-chain / texture-match correlations.
 /// </summary>
-public sealed class ZoneChangeTracker : IIntermediateTickProcessor
+public sealed class ZoneChangeProcessor : IIntermediateTickProcessor
 {
   /// <summary>
   /// Accumulated old-ThingID → new-ThingID chain for the lifetime of the game.

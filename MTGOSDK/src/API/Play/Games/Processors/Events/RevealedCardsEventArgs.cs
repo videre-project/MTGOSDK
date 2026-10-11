@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using MTGOSDK.API.Play.Games;
 
 
-namespace MTGOSDK.API.Play.Games.Processors.EventArgs;
+namespace MTGOSDK.API.Play.Games.Processors.Events;
 
 /// <summary>
 /// Event arguments emitted when cards enter or leave a revealed or pile zone.

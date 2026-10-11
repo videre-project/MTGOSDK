@@ -6,18 +6,19 @@
 using System;
 
 using MTGOSDK.API.Play.Games;
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Events;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 /// <summary>
 /// Tracks property changes for cards and players between snapshots.
 /// Uses the GameContext.CardAncestryMap to correlate card identities across ID changes.
 /// </summary>
-public sealed class PropertyChangeTracker : IIntermediateTickProcessor
+public sealed class PropertyChangeProcessor : IIntermediateTickProcessor
 {
   public void Process(GameContext context)
   {

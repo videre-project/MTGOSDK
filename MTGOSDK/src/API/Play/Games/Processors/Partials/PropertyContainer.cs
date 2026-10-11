@@ -7,6 +7,7 @@ using System.Collections;
 
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Partials;
@@ -242,7 +243,7 @@ public class PropertyContainer : DLRWrapper<object>
   ];
 
   /// <summary>
-  /// Properties excluded from PropertyChangeTracker log output.
+  /// Properties excluded from PropertyChangeProcessor log output.
   /// These are still hashed (needed for correctness) but handled
   /// by other processors or are static metadata.
   /// </summary>
@@ -284,7 +285,7 @@ public class PropertyContainer : DLRWrapper<object>
   ];
 
   /// <summary>
-  /// Name patterns excluded from PropertyChangeTracker log output,
+  /// Name patterns excluded from PropertyChangeProcessor log output,
   /// but still hashed to track component state changes.
   /// </summary>
   private static readonly string[] s_logExcludedNamePatterns =

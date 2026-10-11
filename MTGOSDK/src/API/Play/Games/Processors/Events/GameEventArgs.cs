@@ -4,7 +4,9 @@
 **/
 
 
-namespace MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
+
+namespace MTGOSDK.API.Play.Games.Processors.Events;
 
 /// <summary>
 /// Base class for all game processor event arguments. Carries the game state

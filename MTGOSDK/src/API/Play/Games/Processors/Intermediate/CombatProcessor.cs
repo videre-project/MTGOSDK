@@ -7,13 +7,14 @@ using System.Collections.Generic;
 using System.Linq;
 
 using MTGOSDK.API.Play.Games.Processors.Partials;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 /// <summary>
 /// Cross-links combat orders (attacking/blocking) on GameCardPartial snapshots.
-/// Must run before PropertyChangeTracker so that combat order changes are
+/// Must run before PropertyChangeProcessor so that combat order changes are
 /// detected via GameCardPartial.Equals.
 /// </summary>
 public sealed class CombatProcessor : IIntermediateTickProcessor

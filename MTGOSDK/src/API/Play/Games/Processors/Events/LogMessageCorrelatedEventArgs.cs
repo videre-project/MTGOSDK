@@ -7,9 +7,10 @@ using System;
 
 using MTGOSDK.API.Chat;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
-namespace MTGOSDK.API.Play.Games.Processors.EventArgs;
+namespace MTGOSDK.API.Play.Games.Processors.Events;
 
 /// <summary>
 /// Event args for a correlated log message and snapshot pair.

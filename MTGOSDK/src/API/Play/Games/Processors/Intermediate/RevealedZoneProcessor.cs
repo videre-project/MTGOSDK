@@ -6,10 +6,11 @@
 using System.Collections.Generic;
 using System.Linq;
 
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 /// <summary>
 /// Tracks cards that enter or leave a Revealed or Pile zone and emits
@@ -28,7 +29,7 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// departure message is needed.
 /// </para>
 /// </summary>
-public sealed class RevealedZoneTracker : IIntermediateTickProcessor
+public sealed class RevealedZoneProcessor : IIntermediateTickProcessor
 {
   /// <summary>
   /// Cards that were in the revealed zone on the previous tick.

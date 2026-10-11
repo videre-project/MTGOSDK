@@ -8,6 +8,7 @@ using System.Text;
 
 using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 using WotC.MtGO.Client.Model.Play;
 

@@ -5,10 +5,11 @@
 
 using System.Collections.Generic;
 
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
 /// <summary>
@@ -53,7 +54,7 @@ public sealed class GameContext
   /// <para>
   /// Scry / top-of-library effects use ThingElements (Zone = 0xFFFFFF) and
   /// appear in <see cref="GameStateSnapshot.HiddenCards"/> instead.
-  /// <see cref="RevealedZoneTracker"/> merges both sources.
+  /// <see cref="RevealedZoneProcessor"/> merges both sources.
   /// </para>
   /// </summary>
   public List<GameCard> RevealedZoneCards { get; internal set; } = new();

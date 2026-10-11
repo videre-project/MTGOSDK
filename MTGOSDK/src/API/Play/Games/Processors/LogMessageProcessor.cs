@@ -9,8 +9,9 @@ using System.Linq;
 
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Users;
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using WotC.MtGO.Client.Model.Chat;

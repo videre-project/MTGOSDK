@@ -5,10 +5,10 @@
 
 using System;
 
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Events;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Events;
 
 /// <summary>
 /// Event wrapper that lazily registers an <see cref="IGameStateProcessor"/>
