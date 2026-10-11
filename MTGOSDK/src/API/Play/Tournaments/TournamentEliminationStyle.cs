@@ -7,7 +7,9 @@ namespace MTGOSDK.API.Play.Tournaments;
 
 public enum TournamentEliminationStyle
 {
-  Invalid,
-  Swiss,
-  SingleElimination
+  //#pragma import enum WotC.MtGO.Client.Model.Play.TournamentEliminationStyle begin
+  Invalid = 0,
+  Swiss = 1,
+  SingleElimination = 2,
+  //#pragma import enum WotC.MtGO.Client.Model.Play.TournamentEliminationStyle end
 }

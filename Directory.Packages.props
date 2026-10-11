@@ -69,6 +69,8 @@
                     Version="2.0.2" />
     <PackageVersion Include="Microsoft.ILVerification"
                     Version="$(DotNetSdkVersion)" />
+    <PackageVersion Include="System.CodeDom"
+                    Version="10.0.0" />
     <!-- Source Generator Dependencies -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp"
                     Version="4.14.0" />

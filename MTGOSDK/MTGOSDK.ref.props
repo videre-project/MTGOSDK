@@ -48,6 +48,7 @@
     <Reference Include="WotC.MtGO.Client.Common"          Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Chat"      Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Core"      Private="$(UseRef)" />
+    <Reference Include="WotC.MtGO.Client.Model.Data"      Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Play"      Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Reference" Private="$(UseRef)" />
     <Reference Include="WotC.MtGO.Client.Model.Settings"  Private="$(UseRef)" />

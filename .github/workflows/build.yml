@@ -36,18 +36,20 @@ jobs:
     runs-on: windows-latest
     if: >-
       ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' &&
+          !startsWith(github.event.pull_request.title, '[Docs]')) ||
         (github.event_name == 'push' && (
           startsWith(github.ref, 'refs/tags/') ||
           !startsWith(github.event.head_commit.message, '[Docs]')
-        )) &&
-        (github.event_name != 'pull_request' || !startsWith(github.event.pull_request.title, '[Docs]'))
+        ))
       }}
     steps:
       - name: Setup Dev Drive and Checkout
         id: setup_dev_drive_checkout
         uses: videre-project/MTGOSDK/.github/actions/setup-dev-drive@main
         with:
-          ref: ${{ github.event.workflow_run.head_commit.id }}
+          ref: ${{ github.sha }}
 
       - name: Setup .NET and Restore NuGet Packages
         uses: ./.github/actions/setup-dotnet

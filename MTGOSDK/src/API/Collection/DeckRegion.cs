@@ -7,13 +7,15 @@
 namespace MTGOSDK.API.Collection;
 
 [Flags]
-public enum DeckRegion : long
+public enum DeckRegion
 {
-  NotSet      = 0L,
-  MainDeck    = 1L,
-  Sideboard   = 2L,
-  CommandZone = 4L,
-  Planechase  = 8L,
-  Vanguard    = 0x10L, // 16
-  Hidden      = 0x20L, // 32
+  //#pragma import enum WotC.MTGO.Common.DeckRegionEnum begin
+  NotSet = 0,
+  MainDeck = 1,
+  Sideboard = 2,
+  CommandZone = 4,
+  Planechase = 8,
+  Vanguard = 16,
+  Hidden = 32,
+  //#pragma import enum WotC.MTGO.Common.DeckRegionEnum end
 }

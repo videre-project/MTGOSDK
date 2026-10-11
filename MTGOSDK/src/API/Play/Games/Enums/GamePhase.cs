@@ -8,20 +8,23 @@ namespace MTGOSDK.API.Play.Games;
 
 public enum GamePhase
 {
-  Invalid,
-  Untap,
-  Upkeep,
-  Draw,
-  PreCombatMain,
-  BeginCombat,
-  DeclareAttackers,
-  DeclareBlockers,
-  CombatDamage,
-  EndOfCombat,
-  PostCombatMain,
-  EndOfTurn,
-  Cleanup,
-  // These are not in the original enum but are still values used in the client
-  PreGame1,
-  PreGame2,
+  //#pragma import enum WotC.MtGO.Client.Model.Play.GamePhase begin
+  Invalid = 0,
+  Untap = 1,
+  Upkeep = 2,
+  Draw = 3,
+  PreCombatMain = 4,
+  BeginCombat = 5,
+  DeclareAttackers = 6,
+  DeclareBlockers = 7,
+  CombatDamage = 8,
+  EndOfCombat = 9,
+  PostCombatMain = 10,
+  EndOfTurn = 11,
+  Cleanup = 12,
+  //#pragma import enum WotC.MtGO.Client.Model.Play.GamePhase end
+
+  // Client pregame values absent from the native enum declaration.
+  PreGame1 = 13,
+  PreGame2 = 14,
 }

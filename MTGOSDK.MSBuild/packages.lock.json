@@ -61,6 +61,12 @@
           "Microsoft.NETCore.Platforms": "1.1.0"
         }
       },
+      "System.CodeDom": {
+        "type": "Direct",
+        "requested": "[10.0.0, )",
+        "resolved": "10.0.0",
+        "contentHash": "QWERdKi/tQAx+MbrPxTGcpchqMANnVXNiv2r2tILBBB38E74buD+fABSUhozZ1G9kjbadFB0m+HPFMkhJPeFvA=="
+      },
       "Microsoft.Build.Framework": {
         "type": "Transitive",
         "resolved": "17.14.28",

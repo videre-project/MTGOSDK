@@ -10,8 +10,10 @@ namespace MTGOSDK.API.Play;
 [Flags]
 public enum PlayFormatType
 {
-  Null        = 0,
+  //#pragma import enum WotC.MtGO.Client.Model.Collection.PlayFormatType begin
+  Null = 0,
   Constructed = 1,
-  Sealed      = 2,
-  Draft       = 4,
+  Sealed = 2,
+  Draft = 4,
+  //#pragma import enum WotC.MtGO.Client.Model.Collection.PlayFormatType end
 }

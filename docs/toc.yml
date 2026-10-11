@@ -50,6 +50,8 @@ items:
       href: reference/clickonce.md
     - name: Debugging
       href: reference/debugging.md
+    - name: Generated Types
+      href: reference/generated-types.md
     - name: Object Provider
       href: reference/object-provider.md
 
