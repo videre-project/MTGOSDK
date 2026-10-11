@@ -4,20 +4,18 @@
 **/
 
 using System.Collections;
-using System.Reflection;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
-using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
-using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
-using MTGOSDK.Core.Remoting.Interop;
-using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 using WotC.MtGO.Client.Model.Play;
-using WotC.MtGO.Client.Model.Play.InProgressGameEvent;
 
 
 namespace MTGOSDK.API.Play.Games;
@@ -34,87 +32,14 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
       ? partial
       : Bind<IGameCard>(gameCard);
 
-  public readonly struct OrderedCombatParticipant(int order, GameCard target)
-  {
-    public readonly int Order = order;
-    public readonly GameCard Target = target;
-  }
-
   internal Game GameInterface => new(@base.GameInterface);
-
-  private static ICardZone? GetCardZone(
-    Game game,
-    GameCard card,
-    int? zoneId,
-    int? ownerId = null)
-  {
-    if (zoneId == null) return null;
-
-    var zone = Unbind(card).GetSharedCardZone((uint)zoneId);
-    if (zone == null && ownerId != null)
-    {
-      dynamic owner = Unbind(game).PlayersInServerOrder[ownerId];
-      zone = Unbind(card).GetPlayerCardZone((uint)zoneId, owner);
-    }
-    if (zone == null) return null;
-
-    return Bind<ICardZone>(zone);
-  }
-
-  private static MethodInfo? s_gcCreateMethod;
-
-  public static GameCard Create(
-    Game game,
-    PropertyContainer properties,
-    int? previousZone = null)
-  {
-    //
-    // This tells MTGO to ignore tracking this card as part of its visual zone collections.
-    // This is necessary because we are creating these cards as static snapshots of the
-    // game state, and we don't want MTGO to try and manage them in its own collections
-    // as it may confuse the WPF binding system.
-    //
-    properties[MagicProperty.SPLITPARENT_ID] = -2;
-
-    // Create new GameCard object with state properties populated.
-    s_gcCreateMethod ??= RemoteClient.GetMethod<WotC.MtGO.Client.Model.Play.GameCard>("Create");
-    dynamic source = s_gcCreateMethod.Invoke(null, [-1, Unbind(game), Unbind(properties)]);
-    source.ResolvePropertiesButDeferUpdatingAssociations();
-    var gameCard = new GameCard(source);
-
-    RemoteClient.SetField(source, "m_zone", source.ActualZone);
-    if (previousZone != null)
-    {
-      int? ownerId = properties[MagicProperty.OWNER];
-      var prevZone = GetCardZone(game, gameCard, previousZone, ownerId);
-      RemoteClient.SetProperty(source, "PreviousZone", Unbind(prevZone));
-    }
-
-    return gameCard;
-  }
-
-  /// <summary>
-  /// Creates a GameCard backed by a local PropertyContainer snapshot.
-  /// No remote IPC call to MTGO.
-  /// </summary>
-  /// <param name="properties">The parsed MagicProperty dictionary.</param>
-  /// <param name="game">The raw MTGO Game object (for player/zone resolution).</param>
-  /// <param name="previousZoneId">Optional raw zone ID for PreviousZone resolution.</param>
-  public static GameCard FromProperties(
-    PropertyContainer properties,
-    dynamic game,
-    int? previousZoneId = null)
-  {
-    var snapshot = new GameCardPartial(properties, game, previousZoneId);
-    return new GameCard(snapshot);
-  }
 
   //
   // IGameCard wrapper properties
   //
 
   /// <summary>
-  /// The unique identifier for this card instance.
+  /// The native thing number for this card. Auxiliary cards may report -1.
   /// </summary>
   /// <remarks>
   /// Retrieved from the <c>MagicProperty.THINGNUMBER</c> property.
@@ -124,7 +49,11 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// <summary>
   /// The unique card texture number for the card object.
   /// </summary>
-  public int CTN => Unbind(this).CTN;
+  /// <remarks>
+  /// Uses the resolved definition. Cards without a definition retain their
+  /// reported texture identity when no native definition is available.
+  /// </remarks>
+  public int CTN => Definition?.CTN ?? GetIntegerProperty(MagicProperty.CARDTEXTURE_NUMBER);
 
   /// <summary>
   /// The source ID or 'thing' number of the card.
@@ -138,8 +67,8 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// For parent cards (adventure/split/MDFC), the game IDs of the SUBC children.
   /// Returns 0 if no child is present at that index.
   /// </summary>
-  public int SplitChildId0 => @base.SplitChildId0;
-  public int SplitChildId1 => @base.SplitChildId1;
+  public int SplitChildId0 => GetIntegerProperty(MagicProperty.GS_SPLITCARD_ID0);
+  public int SplitChildId1 => GetIntegerProperty(MagicProperty.GS_SPLITCARD_ID1);
 
   /// <summary>
   /// The card name.
@@ -156,17 +85,18 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   /// <summary>
   /// The "blue text" — granted abilities and effects text shown in blue
-  /// on the card in MTGO. Concatenation of BLUETEXT_STRING0 and
-  /// ABILITY_BLUETEXT_STRING0 properties.
+  /// on the card in MTGO. Reads the native BlueTextString ability description.
   /// </summary>
   public string BlueText =>
-    field ??= MTGOSDK.API.MtgoTextNormalizer.NormalizeText(@base.BlueText);
+    field ??= MTGOSDK.API.MtgoTextNormalizer.NormalizeText(
+      ReadBlueText());
 
   /// <summary>
-  /// The associated card definition.
+  /// The associated card definition, or null when a snapshot has none.
   /// </summary>
   [NonSerializable]
-  public Card Definition => new(Unbind(this).Definition);
+  public Card? Definition =>
+    Unbind(this).Definition is object definition ? new Card(definition) : null;
 
   /// <summary>
   /// The latest interaction timestamp associated with the card.
@@ -215,7 +145,8 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
     Map<IList, CardAction>(@base.PendingTargets);
 
   public IEnumerable<GameCardAssociation> Associations =>
-    Map<GameCardAssociation>(@base.Associations);
+    gameCard is GameCardPartial partial
+      ? partial.Associations : Map<GameCardAssociation>(@base.Associations);
 
   /// <summary>
   /// The card ID this card is visually attached to (equipment target, aura
@@ -223,20 +154,17 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// Returns 0 if not attached.
   /// </summary>
   /// <remarks>
-  /// Uses MTGO's priority chain: SHOW_ATTACHED_TO → ATTACHED_TO_ID →
+  /// Uses the SDK's display-reference priority: SHOW_ATTACHED_TO → ATTACHED_TO_ID →
   /// MUTATE_PARENT_ID → ENCODED_ON.
   /// </remarks>
-  public int AttachedToId =>
-    gameCard is GameCardPartial partial
-      ? partial.ResolveAttachedToId()
-      : @base.AttachedToId;
+  public int AttachedToId => ReadAttachedToId();
 
   public IEnumerable<GameCard> AttackingOrders
   {
     get
     {
       if (@base is GameCardPartial partial)
-        return partial.AttackingOrders.Select(p => p.Target);
+        return partial.AttackingOrders.OrderBy(p => p.Order).Select(p => p.Target);
 
       var attackers = new List<OrderedCombatParticipant>();
       foreach (var item in Unbind(this).AttackingOrders)
@@ -255,7 +183,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
     get
     {
       if (@base is GameCardPartial partial)
-        return partial.BlockingOrders.Select(p => p.Target);
+        return partial.BlockingOrders.OrderBy(p => p.Order).Select(p => p.Target);
 
       var blockers = new List<OrderedCombatParticipant>();
       foreach (var item in Unbind(this).BlockingOrders)
@@ -270,12 +198,13 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   }
 
   public IEnumerable<CardAbility> Abilities =>
-    Map<IList, CardAbility>(Unbind(this).Abilities);
+    Map<IList, CardAbility>(Unbind(this).Abilities.Keys);
 
   public IEnumerable<CardCounter> Counters =>
     Map<IList, CardCounter>(Unbind(this).Counters);
 
-  public string TypeLine => (string)Unbind(this).TypeLine;
+  public string TypeLine => gameCard is GameCardPartial
+    ? (string)Unbind(this).TypeLine : ReadTypeLine();
 
   public GamePlayer Owner =>
     gameCard is GameCardPartial partialOwner
@@ -284,12 +213,12 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   /// <summary>
   /// The raw owner player index from the card's properties.
-  /// Avoids the GamePlayer wrapper chain which requires IPC that can fail.
+  /// Captured cards use the detached value; live cards read the native player ID.
   /// </summary>
   public int OwnerIndex =>
     gameCard is GameCardPartial po
-      ? po.GetPlayerIndex(MagicProperty.OWNER)
-      : -1;
+      ? po.OwnerIndex
+      : (int)@base.Owner.Id;
 
   public GamePlayer Controller =>
     gameCard is GameCardPartial partialController
@@ -298,12 +227,12 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   /// <summary>
   /// The raw controller player index from the card's properties.
-  /// Avoids the GamePlayer wrapper chain which requires IPC that can fail.
+  /// Captured cards use the detached value; live cards read the native player ID.
   /// </summary>
   public int ControllerIndex =>
     gameCard is GameCardPartial pc
-      ? pc.GetPlayerIndex(MagicProperty.CONTROLLER)
-      : -1;
+      ? pc.ControllerIndex
+      : (int)@base.Controller.Id;
 
   public GamePlayer? Protector =>
     gameCard is GameCardPartial partialProtector
@@ -340,6 +269,8 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   public bool IsFlipped => (bool?)(@base.IsFlipped) ?? false;
 
+  public bool IsTransformed => GetBooleanProperty(MagicProperty.IS_TRANSFORMED);
+
   public bool IsCompanion => (bool?)(@base.IsCompanion) ?? false;
 
   public bool IsEmblem => (bool?)(@base.IsEmblem) ?? false;
@@ -356,13 +287,48 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   public bool HasAutoTargets => (bool?)(@base.HasAutoTargets) ?? false;
 
-  public bool IsToken => (bool?)(@base.IsToken) ?? false;
+  public bool IsToken => GetBooleanProperty(MagicProperty.IS_TOKEN);
 
-  public bool IsLand => (bool?)(@base.IsLand) ?? false;
+  public bool IsLand => GetBooleanProperty(MagicProperty.IS_LAND);
 
   //
   // IGameCard wrapper methods
   //
+
+  private int GetIntegerProperty(MagicProperty property) =>
+    Unbind(this).GetIntegerProperty((WotC.MtGO.Client.Model.MagicProperty)(uint)property, 0);
+
+  private bool GetBooleanProperty(MagicProperty property) =>
+    Unbind(this).GetBooleanProperty((WotC.MtGO.Client.Model.MagicProperty)(uint)property);
+
+  private string ReadBlueText()
+  {
+    dynamic abilities = Unbind(this).Abilities;
+    var blueText = (WotC.MtGO.Client.Model.MagicCardAbility)(int)CardAbility.BlueTextString;
+    return abilities.ContainsKey(blueText) ? (string)abilities[blueText].Name : string.Empty;
+  }
+
+  private int ReadAttachedToId()
+  {
+    foreach (var property in new[] { MagicProperty.SHOW_ATTACHED_TO,
+      MagicProperty.ATTACHED_TO_ID, MagicProperty.MUTATE_PARENT_ID, MagicProperty.ENCODED_ON })
+    {
+      int id = GetIntegerProperty(property);
+      if (id > 0) return id;
+    }
+    return 0;
+  }
+
+  private string ReadTypeLine()
+  {
+    var batch = new RemoteBatch();
+    var method = new RemoteBatchMethod(
+      new("Mtgo.Shared.Parser.Attributes.Helpers.MagicPropertyHelper", "Mtgo.Shared.Parser.Attributes"),
+      "ConstructCardTypeText",
+      new RemoteBatchType("WotC.MtGO.Client.Model.IPropertyHolder", "Mtgo.Shared.Parser.Attributes"));
+    batch.Output("typeLine", batch.CallStatic(method, batch.Input((object)Unbind(this))));
+    return batch.Execute(RemoteClient.@client).Values["typeLine"].GetScalar<string>();
+  }
 
   public override string ToString() =>
     string.Format("{0} (ID: {1}, SourceId: {2})", Name, Id, SourceId);
@@ -397,6 +363,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
 
   public EventProxy<GameCardEventArgs> TypesChanged =
     new(/* IGameCard */ gameCard, nameof(TypesChanged));
+
   /// <summary>
   /// Event triggered when the card's <c>Actions</c> collection changes, such as when
   /// a new action is added or removed from the card's available actions.

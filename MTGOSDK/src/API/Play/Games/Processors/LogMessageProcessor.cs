@@ -8,14 +8,10 @@ using System.Collections.Generic;
 using System.Linq;
 
 using MTGOSDK.API.Chat;
-using MTGOSDK.API.Users;
-using MTGOSDK.Core.Logging;
 using MTGOSDK.API.Play.Games.Processors.Events;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
+using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
-
-using WotC.MtGO.Client.Model.Chat;
-using ChannelManager = MTGOSDK.API.Chat.ChannelManager;
 
 
 namespace MTGOSDK.API.Play.Games.Processors;
@@ -25,23 +21,15 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// temporal match within a sliding window of recent snapshots.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Log messages arrive via the game's log channel with a <c>DateTime</c>
-/// timestamp in local client time. Game state snapshots have an
-/// <see cref="GameStateSnapshot.ActionTimestamp"/> in server time.
-/// </para>
-/// <para>
-/// This processor converts snapshot timestamps to client time using
-/// <see cref="ServerTime.ServerTimeAsClientTime"/> before comparing.
-/// It maintains a sliding window of recent snapshots and correlates each
-/// log message with the snapshot whose converted <c>ActionTimestamp</c> is
-/// closest to the message's <c>Timestamp</c>.
-/// </para>
+/// Correlation compares client receive timestamps for messages and snapshots.
+/// Messages wait for the next processing tick so newly arrived snapshots can
+/// participate in the closest-time match. This is temporal association, not
+/// the prompt-identity correlation performed by PromptProcessor.
 /// </remarks>
-public sealed class LogMessageProcessor : IGameStateProcessor
+public sealed class LogMessageProcessor : IGameStateProcessor, IDisposable
 {
-  private Game? _game;
-  private Channel? _channel;
+  private readonly object _messageGate = new();
+  private volatile bool _disposed;
   private string _localFileName = null!;
 
   /// <summary>
@@ -55,7 +43,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor
   private const double MaxCorrelationDeltaSeconds = 5;
 
   /// <summary>
-  /// Sliding window of recent snapshots, ordered by ActionTimestamp.
+  /// Sliding window of recent snapshots, in processing order.
   /// </summary>
   private readonly List<GameStateSnapshot> _snapshotWindow = new();
 
@@ -64,100 +52,97 @@ public sealed class LogMessageProcessor : IGameStateProcessor
   /// </summary>
   public GameStateSnapshot? LastSnapshot { get; private set; }
 
-  private GameContext? _lastContext;
-
   /// <summary>
   /// Buffer of uncorrelated log messages waiting for a matching snapshot.
   /// </summary>
   private readonly List<Message> _pendingMessages = new();
 
   /// <summary>
-  /// Tracks messages already emitted to prevent duplicates from the real-time
+  /// Tracks buffered or emitted messages to prevent duplicates from the real-time
   /// hook and historical polling processing the same message.
   /// </summary>
   private readonly HashSet<(string? User, DateTime Timestamp, string Text)>
-    _emittedMessages = new();
+    _seenMessages = new();
+
+  //
+  // Subscription and history capture
+  //
 
   public void Initialize(Game game)
   {
-    _game = game;
-    _channel = game.LogChannel;
-
-    // Subscribe to static event with a filter that matches the game's log channel
-    _localFileName = _channel.LocalFileName;
+    ArgumentNullException.ThrowIfNull(game);
+    ObjectDisposedException.ThrowIf(_disposed, this);
+    var channel = game.LogChannel;
+    _localFileName = channel.LocalFileName;
     Channel.MessageReceived += OnLogMessageReceived;
 
-    // Clear any pending messages that might have arrived during subscription
-    _pendingMessages.Clear();
+    // Read existing channel history while real-time notifications remain active.
+    // Both paths use the same deduplication and pending-message lock.
+    _ = Task.Run(() => ReadHistoricalMessagesAsync(game, channel));
+  }
 
-    // Start asynchronous polling for historical messages in the background.
-    // This avoids blocking initialization and allows the processor to start
-    // handling real-time messages immediately.
-    var pollTask = Task.Run(async () =>
+  private async Task ReadHistoricalMessagesAsync(Game game, Channel channel)
+  {
+    try
     {
-      var gameStartTime = game.StartTime;
+      if (_disposed)
+        return;
+      var earliestMessage = game.StartTime.AddSeconds(-5);
       var pollEndTime = DateTime.UtcNow.AddSeconds(10);
       var processedMessageKeys = new HashSet<(string? User, DateTime Timestamp, string Text)>();
-      var historicalCount = 0;
 
-      while (DateTime.UtcNow < pollEndTime)
+      while (!_disposed && DateTime.UtcNow < pollEndTime)
       {
-        foreach (var msg in _channel.Messages)
+        foreach (var message in channel.Messages)
         {
-          var key = (msg.User?.Id.ToString() ?? "system", msg.Timestamp, msg.Text);
-
-          if (processedMessageKeys.Contains(key))
-            continue;
-
-          if (msg.Timestamp >= gameStartTime.AddSeconds(-5))
-          {
-            processedMessageKeys.Add(key);
-            historicalCount++;
-            OnLogMessageReceived(_channel, msg);
-          }
+          if (_disposed)
+            return;
+          var key = (message.User?.Id.ToString() ?? "system", message.Timestamp, message.Text);
+          if (message.Timestamp >= earliestMessage && processedMessageKeys.Add(key))
+            OnLogMessageReceived(channel, message);
         }
-
-        await Task.Delay(100);
+        await Task.Delay(100).ConfigureAwait(false);
       }
-    });
+    }
+    catch (Exception error)
+    {
+      // A disposed scope no longer needs history; other failures remain visible.
+      if (!_disposed) Log.Error(error, "Failed to read historical game log messages.");
+    }
   }
+
+  //
+  // Snapshot correlation
+  //
 
   public void Process(GameContext context)
   {
-    _lastContext = context;
+    if (_disposed)
+      return;
     LastSnapshot = context.Current;
 
-    // Add snapshot to sliding window
     _snapshotWindow.Add(LastSnapshot);
 
-    // Trim window to max size, removing oldest entries
     while (_snapshotWindow.Count > MaxSnapshotWindow)
       _snapshotWindow.RemoveAt(0);
 
-    // Try to correlate all pending messages
     TryCorrelatePending(context);
   }
 
   private void OnLogMessageReceived(Channel source, Message message)
   {
-    // Check if the originating channel is parented to the game log channel.
-    // If so, it's a valid log message for the current game.
-    if (source.LocalFileName != _localFileName) return;
+    // Match the originating channel to this game's log file.
+    if (_disposed || source.LocalFileName != _localFileName)
+      return;
 
-    // Dedup: both the real-time hook and historical polling can deliver the
-    // same message. Skip if we've already emitted or buffered this one.
+    // History and native notifications can deliver the same message.
     var key = (message.User?.Name, message.Timestamp, message.Text);
-    lock (_emittedMessages)
+    lock (_messageGate)
     {
-      if (!_emittedMessages.Add(key)) return;
+      if (_disposed || !_seenMessages.Add(key))
+        return;
+      _pendingMessages.Add(message);
     }
-
-    // Always buffer — don't correlate immediately. During rapid state
-    // transitions (e.g., combat phases), the message often arrives before
-    // its associated snapshot enters the window. Deferring correlation to
-    // the next Process() call ensures the window contains the correct
-    // snapshot for "closest" matching.
-    _pendingMessages.Add(message);
   }
 
   /// <summary>
@@ -165,39 +150,48 @@ public sealed class LogMessageProcessor : IGameStateProcessor
   /// </summary>
   private void TryCorrelatePending(GameContext context)
   {
-    var correlated = new List<Message>();
-
-    foreach (var msg in _pendingMessages)
+    List<Message> pending;
+    lock (_messageGate)
     {
-      if (TryCorrelateMessage(msg, out var snapshot, out var delta))
-      {
-        correlated.Add(msg);
-        context.Emit(
-          new LogMessageCorrelatedEventArgs(snapshot, msg, delta));
-      }
+      pending = new List<Message>(_pendingMessages);
+      _pendingMessages.Clear();
     }
 
-    // Remove correlated messages from the pending buffer
-    foreach (var msg in correlated)
-      _pendingMessages.Remove(msg);
-
-    // Flush stale messages that are too old to ever correlate
-    FlushStaleMessages();
+    // Call subscribers outside the message lock. New arrivals stay in the buffer
+    // for the next tick instead of changing this enumeration.
+    try
+    {
+      foreach (var message in pending.ToArray())
+      {
+        if (TryCorrelateMessage(message, out var snapshot, out var delta))
+        {
+          context.Emit(new LogMessageCorrelatedEventArgs(snapshot, message, delta));
+          pending.Remove(message);
+        }
+      }
+      FlushStaleMessages(pending);
+    }
+    finally
+    {
+      // Preserve unmatched messages if a timestamp read or correlation fails.
+      lock (_messageGate)
+        if (!_disposed)
+          _pendingMessages.InsertRange(0, pending);
+    }
   }
 
   /// <summary>
-  /// Removes pending messages that are too old to ever correlate with the
-  /// current snapshot window (older than oldest snapshot + MaxCorrelationDeltaSeconds).
+  /// Removes messages older than the first retained snapshot's correlation window.
   /// </summary>
-  private void FlushStaleMessages()
+  private void FlushStaleMessages(List<Message> pending)
   {
-    if (_snapshotWindow.Count == 0 || _pendingMessages.Count == 0)
+    if (_snapshotWindow.Count == 0 || pending.Count == 0)
       return;
 
-    var oldestSnapshot = _snapshotWindow.First();
+    var oldestSnapshot = _snapshotWindow[0];
     var cutoffTime = oldestSnapshot.ClientTimestamp.AddSeconds(-MaxCorrelationDeltaSeconds);
 
-    var staleMessages = _pendingMessages.Where(msg =>
+    var staleMessages = pending.Where(msg =>
     {
       var msgTs = Unbind(msg).__timestamp;
       return msgTs < cutoffTime;
@@ -205,7 +199,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor
 
     foreach (var msg in staleMessages)
     {
-      _pendingMessages.Remove(msg);
+      pending.Remove(msg);
     }
   }
 
@@ -224,7 +218,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor
     bestSnapshot = null!;
     bestDelta = double.MaxValue;
 
-    // Both use the same client-side __timestamp calculation
+    // Compare receive times, rather than the timestamp displayed in the log.
     var msgClientTs = Unbind(message).__timestamp;
 
     foreach (var snapshot in _snapshotWindow)
@@ -240,12 +234,22 @@ public sealed class LogMessageProcessor : IGameStateProcessor
     return bestSnapshot != null && bestDelta <= MaxCorrelationDeltaSeconds;
   }
 
+  //
+  // Lifetime and hook initialization
+  //
+
   public void Dispose()
   {
+    lock (_messageGate)
+    {
+      if (_disposed)
+        return;
+      _disposed = true;
+      _pendingMessages.Clear();
+      _seenMessages.Clear();
+    }
     Channel.MessageReceived -= OnLogMessageReceived;
-    _pendingMessages.Clear();
     _snapshotWindow.Clear();
-    _emittedMessages.Clear();
   }
 
   /// <summary>

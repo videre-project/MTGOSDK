@@ -3,14 +3,12 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Games.Processors.Events;
-using MTGOSDK.Core.Logging;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
+using MTGOSDK.Core.Logging;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
@@ -61,11 +59,13 @@ public sealed class ZoneChangeProcessor : IIntermediateTickProcessor
     var inferredHiddenDepartures = new Dictionary<int, GameCard>();
     foreach (var arr in arrived)
     {
-      if (arr.SourceId == -1 || arr.SourceId == arr.Id) continue;
+      if (arr.SourceId == -1 || arr.SourceId == arr.Id)
+        continue;
       // Abilities are created fresh on the stack — their SourceId points to
       // the source permanent, not a zone-chain predecessor. Don't let them
       // trigger hidden-departure inference.
-      if (arr.IsTriggeredAbility || arr.IsActivatedAbility) continue;
+      if (arr.IsTriggeredAbility || arr.IsActivatedAbility)
+        continue;
 
       if (context.Current.HiddenCards.TryGetValue(arr.SourceId, out var hiddenCard))
         inferredHiddenDepartures[arr.SourceId] = hiddenCard;
@@ -167,20 +167,15 @@ public sealed class ZoneChangeProcessor : IIntermediateTickProcessor
       foreach (var arr in unmatchedArrs.ToList())
       {
         // Abilities should never texture-match against departures either
-        if (arr.IsTriggeredAbility || arr.IsActivatedAbility) continue;
+        if (arr.IsTriggeredAbility || arr.IsActivatedAbility)
+          continue;
 
         if (arr.CTN > 0
             && byTexture.TryGetValue(arr.CTN, out var q)
             && q.Count > 0)
         {
-          //
-          // Only reject if the arrival's explicitly-reported PreviousZone
-          // contradicts where we saw it depart from. If MTGO failed to populate
-          // PreviousZone (it's null, Nowhere, or even its destination zone),
-          // we still accept the texture match.
-          //
-          // This prevents mulligan mismatches without breaking Normal Play.
-          //
+          // A usable PreviousZone must agree with the departure. Null, Nowhere,
+          // and destination-zone values do not constrain texture matching.
           var dep = q.Peek();
           bool isContradictory = arr.PreviousZone != null
                               && arr.PreviousZone != CardZone.Nowhere
@@ -188,7 +183,8 @@ public sealed class ZoneChangeProcessor : IIntermediateTickProcessor
                               && dep.Zone != null
                               && arr.PreviousZone != dep.Zone;
 
-          if (isContradictory) continue;
+          if (isContradictory)
+            continue;
 
           q.Dequeue();
           _idChain[dep.Id] = arr.Id;
@@ -220,16 +216,15 @@ public sealed class ZoneChangeProcessor : IIntermediateTickProcessor
           $" traces back to origin ID:{origin}");
     }
 
-    // Fire event through centralized bus
     int totalDepartures = departed.Count + inferredHiddenDepartures.Count;
     if (arrived.Count > 0 || totalDepartures > 0 || moved.Count > 0)
     {
       context.Emit(new ZoneChangeEventArgs
       {
-        Arrived = unmatchedArrs,
-        Departed = unmatchedDeps,
-        Moved = moved,
-        ChainLogs = chainLogs,
+        Arrived           = unmatchedArrs,
+        Departed          = unmatchedDeps,
+        Moved             = moved,
+        ChainLogs         = chainLogs,
         UnresolvedOrigins = unresolvedOrigins
       });
     }

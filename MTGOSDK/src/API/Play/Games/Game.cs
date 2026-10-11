@@ -8,10 +8,9 @@ using System.Collections;
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.API.Play.Games.Processors;
+using MTGOSDK.API.Play.Games.Processors.Events;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
-using MTGOSDK.API.Play.Games.Processors.Events;
-using MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -266,84 +265,11 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public void SetCardMouseOver(int cardId, bool isFocused = true) =>
     @base.SetCardMouseOver(cardId, isFocused);
 
-  //
-  // Processor infrastructure
-  //
-
-  private GameProcessor? _processor;
-
-  /// <summary>
-  /// Gets or creates the <see cref="GameProcessor"/> for this game and
-  /// registers it in the static routing table so that
-  /// <c>HandleGamePlayStatus</c> hooks are routed here automatically.
-  /// </summary>
-  internal GameProcessor EnsureProcessor()
-  {
-    if (_processor == null)
-    {
-      _processor = new GameProcessor(this);
-      GameProcessor.Activate(this.Id, _processor);
-    }
-    return _processor;
-  }
-
-  /// <summary>
-  /// Signals that all <see cref="ProcessorEvent{T}"/> subscriptions are
-  /// complete and the <see cref="GameProcessor"/> may begin draining queued
-  /// hooks. Must be called after subscribing to all processor events.
-  /// </summary>
-  public void ReadyProcessor()
-  {
-    if (_processor != null)
-      _processor.IsInitialized = true;
-  }
-
-  /// <summary>
-  /// Blocks the calling thread until the <see cref="GameProcessor"/> has
-  /// processed all currently-pending hooks AND the <see cref="PromptProcessor"/>
-  /// has correlated any pending snapshots with their prompts (which arrive
-  /// via a separate <c>set_Prompt</c> IPC call). Returns immediately if no
-  /// processor is active or nothing is pending.
-  /// </summary>
-  /// <param name="timeout">Maximum time to wait.</param>
-  /// <returns><c>true</c> if processing completed within the timeout.</returns>
-  public bool WaitForPendingProcessing(TimeSpan timeout)
-  {
-    if (_processor == null) return true;
-
-    // Wait for the drain loop to process all pending hooks.
-    if (!_processor.WaitForPendingDrain(timeout))
-      return false;
-
-    // Wait for prompt correlation. After the drain loop processes
-    // a snapshot, the set_Prompt IPC may still be in flight. The
-    // PromptProcessor signals PromptCorrelated when the prompt arrives and
-    // the pending snapshot is matched.
-    var promptProcessor = _processor.GetProcessor<PromptProcessor>();
-    return promptProcessor?.PromptCorrelated.Wait(timeout) ?? true;
-  }
-
   /// <inheritdoc />
   public override void ClearEvents()
   {
-    base.ClearEvents();
-
-    if (_processor != null)
-    {
-      // Clear all ProcessorEvent handlers so dispatched events are no-ops.
-      OnZoneChanged.Clear();
-      OnCardChanged.Clear();
-      OnPlayerChanged.Clear();
-      OnActionFinalized.Clear();
-      OnPromptChanged.Clear();
-      OnLogMessage.Clear();
-      OnDamageAssignment.Clear();
-      OnRevealedCards.Clear();
-      // Remove from the static routing table so HandleGamePlayStatus
-      // messages for this game are no longer dispatched.
-      GameProcessor.Deactivate(this.Id);
-      _processor = null;
-    }
+    try { base.ClearEvents(); }
+    finally { GameProcessor.ClearEvents(this); }
   }
 
   //
@@ -355,7 +281,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<ZoneChangeEventArgs> OnZoneChanged
   {
-    get => field ??= new(this, typeof(ZoneChangeProcessor), () => new ZoneChangeProcessor());
+    get => field ??= GameProcessor.ZoneChanged(this);
     set => field = value;
   }
 
@@ -364,14 +290,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<CardChangedEventArgs> OnCardChanged
   {
-    get => field ??= new(this, typeof(PropertyChangeProcessor), () =>
-    {
-      // CombatProcessor must populate AttackingOrders/BlockingOrders before
-      // PropertyChangeProcessor diffs them.
-      EnsureProcessor().EnsureRegistered(
-        typeof(CombatProcessor), () => new CombatProcessor());
-      return new PropertyChangeProcessor();
-    });
+    get => field ??= GameProcessor.CardChanged(this);
     set => field = value;
   }
 
@@ -380,7 +299,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<PlayerChangedEventArgs> OnPlayerChanged
   {
-    get => field ??= new(this, typeof(PropertyChangeProcessor), () => new PropertyChangeProcessor());
+    get => field ??= GameProcessor.PlayerChanged(this);
     set => field = value;
   }
 
@@ -389,7 +308,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<ActionFinalizedEventArgs> OnActionFinalized
   {
-    get => field ??= new(this, typeof(ActionProcessor), () => new ActionProcessor());
+    get => field ??= GameProcessor.ActionFinalized(this);
     set => field = value;
   }
 
@@ -398,7 +317,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<PromptChangedEventArgs> OnPromptChanged
   {
-    get => field ??= new(this, typeof(PromptProcessor), () => new PromptProcessor());
+    get => field ??= GameProcessor.PromptChanged(this);
     set => field = value;
   }
 
@@ -407,7 +326,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<LogMessageCorrelatedEventArgs> OnLogMessage
   {
-    get => field ??= new(this, typeof(LogMessageProcessor), () => new LogMessageProcessor());
+    get => field ??= GameProcessor.LogMessage(this);
     set => field = value;
   }
 
@@ -416,7 +335,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<DamageAssignmentEventArgs> OnDamageAssignment
   {
-    get => field ??= new(this, typeof(DamageAssignmentProcessor), () => new DamageAssignmentProcessor());
+    get => field ??= GameProcessor.DamageAssignment(this);
     set => field = value;
   }
 
@@ -425,7 +344,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<RevealedCardsEventArgs> OnRevealedCards
   {
-    get => field ??= new(this, typeof(RevealedZoneProcessor), () => new RevealedZoneProcessor());
+    get => field ??= GameProcessor.RevealedCards(this);
     set => field = value;
   }
 

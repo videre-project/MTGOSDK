@@ -3,13 +3,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
-
-using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Games.Processors.Events;
 using MTGOSDK.API.Play.Games.Processors.Partials;
-using MTGOSDK.Core.Reflection;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
+using MTGOSDK.Core.Reflection;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
@@ -22,7 +19,7 @@ public sealed class PropertyChangeProcessor : IIntermediateTickProcessor
 {
   public void Process(GameContext context)
   {
-    // Diff cards
+    // Compare card state after resolving any ThingID changes.
     foreach (var (tid, curr) in context.Current.Cards)
     {
       GameCard? prev = null;
@@ -38,27 +35,24 @@ public sealed class PropertyChangeProcessor : IIntermediateTickProcessor
         prev = sameIdCard;
       }
 
-      if (prev != null)
-      {
-        var oldPartial = GetPartial(prev);
-        var newPartial = GetPartial(curr);
-        if (oldPartial == null || newPartial == null) continue;
+      if (prev is null)
+        continue;
+      if ((object)DLRWrapper.Unbind(prev) is not GameCardPartial oldPartial ||
+          (object)DLRWrapper.Unbind(curr) is not GameCardPartial newPartial)
+        continue;
 
-        if (!oldPartial.Equals(newPartial))
-        {
-          context.Emit(new CardChangedEventArgs(prev, curr));
-        }
-      }
+      if (!oldPartial.Equals(newPartial))
+        context.Emit(new CardChangedEventArgs(prev, curr));
     }
 
-    // Diff players
+    // Compare players by server-order index.
     foreach (var (idx, currPlayer) in context.Current.Players)
     {
       if (context.Previous.Players.TryGetValue(idx, out var prevPlayer))
       {
-        var oldPartial = GetPlayerPartial(prevPlayer);
-        var newPartial = GetPlayerPartial(currPlayer);
-        if (oldPartial == null || newPartial == null) continue;
+        if ((object)DLRWrapper.Unbind(prevPlayer) is not GamePlayerPartial oldPartial ||
+            (object)DLRWrapper.Unbind(currPlayer) is not GamePlayerPartial newPartial)
+          continue;
 
         if (!oldPartial.Equals(newPartial))
         {
@@ -67,49 +61,9 @@ public sealed class PropertyChangeProcessor : IIntermediateTickProcessor
       }
       else
       {
-        // New player appeared
+        // A newly observed player has no prior state to compare.
         context.Emit(new PlayerChangedEventArgs(idx, currPlayer, currPlayer));
       }
     }
-  }
-
-  private static GameCardPartial? GetPartial(GameCard card)
-  {
-    try
-    {
-      if (card is DLRWrapper wrapper)
-      {
-        var obj = DLRWrapper.Unbind(wrapper);
-        if (obj is GameCardPartial gcp)
-        {
-          return gcp;
-        }
-      }
-    }
-    catch (Exception)
-    {
-      // Swallow errors from unbound cards
-    }
-    return null;
-  }
-
-  private static GamePlayerPartial? GetPlayerPartial(GamePlayer player)
-  {
-    try
-    {
-      if (player is DLRWrapper wrapper)
-      {
-        var obj = DLRWrapper.Unbind(wrapper);
-        if (obj is GamePlayerPartial gpp)
-        {
-          return gpp;
-        }
-      }
-    }
-    catch (Exception)
-    {
-      // Swallow errors from unbound players
-    }
-    return null;
   }
 }

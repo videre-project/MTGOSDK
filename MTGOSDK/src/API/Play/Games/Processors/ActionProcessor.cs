@@ -4,15 +4,13 @@
 **/
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-using MTGOSDK.API.Play.Games.Processors.Partials;
-using MTGOSDK.Core.Logging;
 using MTGOSDK.API.Play.Games.Processors.Events;
-using MTGOSDK.API.Play.Games.Processors.Intermediate;
+using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
+using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
@@ -22,12 +20,13 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// Reconciles finalized target commitments and manages the full action lifecycle.
 /// Aggregates actions, handles Undo/Cancel, and finalizes based on game prompts.
 /// </summary>
-public sealed class ActionProcessor : IGameStateProcessor
+public sealed class ActionProcessor : IGameStateProcessor, IDisposable
 {
   private sealed class PendingCommitment(CardAction action, dynamic? message, int cardId)
   {
     public CardAction Action { get; } = action;
     public dynamic? Message { get; } = message;
+
     /// <summary>
     /// The card's Id captured at action receive time (while still in Hand).
     /// When the card moves to Stack, this becomes the Stack card's SourceId.
@@ -35,7 +34,10 @@ public sealed class ActionProcessor : IGameStateProcessor
     public int CardId { get; } = cardId;
   }
 
-  // Target reconciliation
+  //
+  // Target reconciliation state
+  //
+
   private readonly List<PendingCommitment> _commitments = new();
 
   /// <summary>
@@ -46,25 +48,33 @@ public sealed class ActionProcessor : IGameStateProcessor
   /// </summary>
   private readonly Dictionary<int, List<int>> _resolvedTargetIds = new();
 
-  // Action lifecycle
+  //
+  // Action lifecycle state
+  //
+
   private readonly List<GameAction> _pendingActions = new();
   private readonly List<GameAction> _finalizedActions = new();
-  
+
   private Game? _game;
   private int _gameId;
   private readonly object _lock = new();
+
+  //
+  // Action collection and finalization
+  //
 
   public void Initialize(Game game)
   {
     _game = game;
     _gameId = game.Id;
-    s_GameActionPerformed += OnGameActionReceived;
+    s_gameActionPerformed += OnGameActionReceived;
   }
 
   private void OnGameActionReceived(Game game, GameAction action)
   {
     int incomingId = Try(() => game.Id, () => -1);
-    if (incomingId != _gameId) return;
+    if (incomingId != _gameId)
+      return;
 
     lock (_lock)
     {
@@ -91,7 +101,7 @@ public sealed class ActionProcessor : IGameStateProcessor
       }
 
       // Queue for target reconciliation if it's a card action with a message.
-      // Capture the card's Id NOW (during Execute hook, card is still in Hand).
+      // Retain the pre-execution card identity for the later stack-card backfill.
       if (action is CardAction cardAction)
       {
         int cardId = Try(() => cardAction.Card.Id, () => -1);
@@ -110,23 +120,20 @@ public sealed class ActionProcessor : IGameStateProcessor
 
     lock (_lock)
     {
-      //
-      // Finalize pending actions only when TurnStep fires.
-      //
-      // InteractState means we're still building/resolving actions,
-      // so undo can still remove them from the pending stack.
-      //
+      // TurnStep finalizes pending actions. InteractState leaves them available
+      // for Undo while the client is still building the action.
       if (context.Current.StateType == StateElementType.TurnStep && _pendingActions.Count > 0)
       {
         // Sort by timestamp to ensure correct order despite concurrent
-        // callback execution from ChannelScheduler's worker threads.
+        // callback delivery through ChannelScheduler.
         _pendingActions.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
         _finalizedActions.AddRange(_pendingActions);
         _pendingActions.Clear();
       }
 
-      if (_commitments.Count == 0 && _finalizedActions.Count == 0) return;
-      
+      if (_commitments.Count == 0 && _finalizedActions.Count == 0)
+        return;
+
       commitmentsBatch = new List<PendingCommitment>(_commitments);
       _commitments.Clear();
 
@@ -139,18 +146,14 @@ public sealed class ActionProcessor : IGameStateProcessor
     {
       try
       {
-        ReconcileAction(
-          context,
-          commitment.Action,
-          commitment.Message,
-          _game);
+        ReconcileAction(context, commitment.Action, commitment.Message);
 
         // Store resolved target IDs keyed by Hand Id for later backfill.
         StoreResolvedTargets(commitment.CardId, commitment.Message);
       }
       catch (Exception e)
       {
-        Log.Error("ActionProcessor target reconciliation failed for {0}: {1}", commitment.Action.Name, e.Message);
+        Log.Error(e, "Target reconciliation failed for action {0}.", commitment.Action.Name);
       }
     }
 
@@ -161,17 +164,20 @@ public sealed class ActionProcessor : IGameStateProcessor
     }
   }
 
+  //
+  // Target reconciliation
+  //
+
   /// <summary>
-  /// Resolves targets for a specific action against either the server action
-  /// message payload or the live action target state.
+  /// Resolves action targets against the current snapshot, using the action
+  /// message or target wrappers retained by target-change notifications.
   /// </summary>
-  internal void ReconcileAction(
+  private void ReconcileAction(
     GameContext context,
     CardAction action,
-    dynamic? message = null,
-    Game? game = null)
+    dynamic? message)
   {
-    if (TryReconcileFromMessage(context, action, message, game ?? _game))
+    if (TryReconcileFromMessage(context, action, message, _game))
     {
       if (!action.RequiresTargets || action.IsTargetsSet)
       {
@@ -184,8 +190,8 @@ public sealed class ActionProcessor : IGameStateProcessor
     foreach (var targetSet in action.Targets)
     {
       var resolved = new List<Targetable>();
-      
-      // Pull IDs from CurrentTargets; assume Targetable.Id is stable.
+
+      // Match captured target identities against the current snapshot.
       foreach (var target in targetSet.CurrentTargets)
       {
         int id = target.Id;
@@ -213,35 +219,22 @@ public sealed class ActionProcessor : IGameStateProcessor
     }
   }
 
-  private bool TryReconcileFromMessage(
+  private static bool TryReconcileFromMessage(
     GameContext context,
     CardAction action,
     dynamic? message,
     Game? game)
   {
-    if (message == null) return false;
+    if (message == null)
+      return false;
 
     int[]? rawData = Try<int[]>(() => (int[])message.Targets);
-    if (rawData == null || rawData.Length == 0) return false;
+    if (rawData == null || rawData.Length == 0)
+      return false;
 
-    // Split target slots by sentinel 0xFFFFFFFE (-2).
-    var slots = new List<List<int>>();
-    var currentSlot = new List<int>();
-    foreach (int val in rawData)
-    {
-      if (val == -2)
-      {
-        slots.Add(currentSlot);
-        currentSlot = new List<int>();
-      }
-      else
-      {
-        currentSlot.Add(val);
-      }
-    }
-    slots.Add(currentSlot);
+    var slots = SplitTargetSlots(rawData);
 
-    // If HAS_DIVIDE_TARGETS is set, the tail contains distribution values.
+    // Native FLAGS_HAS_DIVIDE_TARGETS (2) appends distribution values.
     bool isDistributed = Try<bool>(() => ((uint)message.Flags & 2) != 0);
     var allTargetIds = slots.SelectMany(s => s).ToList();
     var values = new List<int>();
@@ -256,7 +249,7 @@ public sealed class ActionProcessor : IGameStateProcessor
           values.Add(rawData[i]);
         }
 
-        var lastSlot = slots.Last();
+        var lastSlot = slots[^1];
         int valuesInLastSlot = Math.Min(lastSlot.Count, valueCount);
         if (valuesInLastSlot > 0)
         {
@@ -273,17 +266,15 @@ public sealed class ActionProcessor : IGameStateProcessor
 
       foreach (int id in slots[i])
       {
-        if (id == -1) continue;
+        if (id == -1)
+          continue;
 
         Targetable resolved = ResolveId(context, id, game);
-        if (resolved != null)
+        if (isDistributed && valIdx < values.Count)
         {
-          if (isDistributed && valIdx < values.Count)
-          {
-            SetTargetInformation(resolved, values[valIdx++].ToString());
-          }
-          resolvedTargets.Add(resolved);
+          SetTargetInformation(resolved, values[valIdx++].ToString());
         }
+        resolvedTargets.Add(resolved);
       }
 
       sdkTargetSet.UpdateTargets(resolvedTargets);
@@ -292,7 +283,28 @@ public sealed class ActionProcessor : IGameStateProcessor
     return true;
   }
 
-  private Targetable ResolveId(GameContext context, int id, Game? game)
+  // MTGO separates target sets with -2. Empty slots must retain their position.
+  private static List<List<int>> SplitTargetSlots(int[] targets)
+  {
+    var slots = new List<List<int>>();
+    var current = new List<int>();
+    foreach (int target in targets)
+    {
+      if (target == -2)
+      {
+        slots.Add(current);
+        current = new List<int>();
+      }
+      else
+      {
+        current.Add(target);
+      }
+    }
+    slots.Add(current);
+    return slots;
+  }
+
+  private static Targetable ResolveId(GameContext context, int id, Game? game)
   {
     if (context.Current.Cards.TryGetValue(id, out var card))
       return new Targetable(card);
@@ -301,7 +313,8 @@ public sealed class ActionProcessor : IGameStateProcessor
     if (id >= 0 && id < 6 && game != null)
     {
       var player = game.Players.FirstOrDefault(p => (int)Unbind(p).Id == id);
-      if (player != null) return new Targetable(player);
+      if (player != null)
+        return new Targetable(player);
     }
 
     if (context.Current.HiddenCards.TryGetValue(id, out var hidden))
@@ -311,7 +324,12 @@ public sealed class ActionProcessor : IGameStateProcessor
     {
       { MagicProperty.THINGNUMBER, id }
     });
-    return new Targetable(new GameCardPartial(ghostProperties, game != null ? Unbind(game) : null));
+    var references = context.Processor?.References
+      ?? (game is null ? null : GameProcessor.ForGame(game).References);
+    var ghost = references != null
+      ? references.CreatePlaceholder(ghostProperties)
+      : new GameReferenceResolver(null).CreatePlaceholder(ghostProperties);
+    return new Targetable(Unbind(ghost));
   }
 
   /// <summary>
@@ -320,29 +338,16 @@ public sealed class ActionProcessor : IGameStateProcessor
   /// </summary>
   private void StoreResolvedTargets(int cardId, dynamic? message)
   {
-    if (message == null) return;
+    if (message == null)
+      return;
 
     int[]? rawData = Try<int[]>(() => (int[])message.Targets);
-    if (rawData == null || rawData.Length == 0) return;
+    if (rawData == null || rawData.Length == 0)
+      return;
 
-    // Split target slots by sentinel -2, same as TryReconcileFromMessage.
-    var slots = new List<List<int>>();
-    var currentSlot = new List<int>();
-    foreach (int val in rawData)
-    {
-      if (val == -2)
-      {
-        slots.Add(currentSlot);
-        currentSlot = new List<int>();
-      }
-      else
-      {
-        currentSlot.Add(val);
-      }
-    }
-    slots.Add(currentSlot);
+    var slots = SplitTargetSlots(rawData);
 
-    // If HAS_DIVIDE_TARGETS, strip distribution values from the tail.
+    // Strip distribution values when native FLAGS_HAS_DIVIDE_TARGETS (2) is set.
     bool isDistributed = Try<bool>(() => ((uint)message.Flags & 2) != 0);
     var targetIds = slots.SelectMany(s => s).Where(id => id >= 0).ToList();
     if (isDistributed && targetIds.Count > 0)
@@ -356,26 +361,26 @@ public sealed class ActionProcessor : IGameStateProcessor
           .ToList();
       }
     }
-    if (targetIds.Count <= 1) return;
+    if (targetIds.Count <= 1)
+      return;
 
     if (cardId > 0)
       _resolvedTargetIds[cardId] = targetIds;
   }
 
   /// <summary>
-  /// Writes previously resolved ACTION_TARGETID properties into snapshot
-  /// PropertyContainers for cards that have pending target data.
-  /// Called by GameProcessor BEFORE PropertyChangeProcessor runs, so that
+  /// Adds resolved target associations and local properties to captured card adapters.
+  /// Called by GameProcessor before PropertyChangeProcessor runs, so that
   /// card change diffs see the complete target list.
   /// </summary>
   /// <remarks>
-  /// The server's binary state only includes ACTION_TARGETID0; additional
-  /// targets are only available from the action message payload, which is
-  /// reconciled in an earlier tick before the card materializes on the Stack.
+  /// The action message can provide additional targets before its stack card
+  /// appears in a gameplay snapshot. Native captured properties stay unchanged.
   /// </remarks>
   public void BackfillPendingTargets(GameContext context)
   {
-    if (_resolvedTargetIds.Count == 0) return;
+    if (_resolvedTargetIds.Count == 0)
+      return;
 
     // Try to match resolved targets against Stack cards in the current snapshot.
     // The key is the card's Hand Id; on the Stack, SourceId == Hand Id.
@@ -383,18 +388,21 @@ public sealed class ActionProcessor : IGameStateProcessor
     foreach (var (handId, targetIds) in _resolvedTargetIds)
     {
       GameCard? card = null;
-      foreach (var (_, c) in context.Current.Cards)
+      foreach (var c in context.Current.Cards.Values)
       {
-        if (c.Zone?.Name != "Stack") continue;
+        if (c.Zone?.Name != "Stack")
+          continue;
         if (c.SourceId == handId || c.Id == handId)
         {
           card = c;
           break;
         }
       }
-      if (card == null) continue;
+      if (card == null)
+        continue;
 
-      if (Unbind(card) is not GameCardPartial partial) continue;
+      if (Unbind(card) is not GameCardPartial partial)
+        continue;
 
       for (int i = 0; i < targetIds.Count; i++)
       {
@@ -402,6 +410,7 @@ public sealed class ActionProcessor : IGameStateProcessor
         partial.Properties.SetLocal(prop, targetIds[i]);
       }
 
+      partial.BackfillTargets(targetIds);
       consumed.Add(handId);
     }
 
@@ -411,16 +420,20 @@ public sealed class ActionProcessor : IGameStateProcessor
 
   private static void SetTargetInformation(Targetable target, string info)
   {
-    dynamic obj = target.ToGameObject();
+    object obj = target.ToGameObject();
     if (obj is GameCard card && GameCard.Unbind(card) is GameCardPartial partial)
     {
       partial.TargetInformation = info;
     }
   }
 
+  //
+  // Lifetime and native action hook
+  //
+
   public void Dispose()
   {
-    s_GameActionPerformed -= OnGameActionReceived;
+    s_gameActionPerformed -= OnGameActionReceived;
   }
 
   /// <summary>
@@ -428,16 +441,12 @@ public sealed class ActionProcessor : IGameStateProcessor
   /// so that action detection is active.
   /// </summary>
   public static void EnsureHookInitialized() =>
-    s_GameActionPerformed.EnsureInitialize();
+    s_gameActionPerformed.EnsureInitialize();
 
-  //
-  // IGameAction static events
-  //
-  
   /// <summary>
   /// Event triggered when a game action in any active game is performed.
   /// </summary>
-  private static EventHookProxy<Game, GameAction> s_GameActionPerformed =
+  private static EventHookProxy<Game, GameAction> s_gameActionPerformed =
     new(
       new TypeProxy<WotC.MtGO.Client.Model.Play.Actions.GameAction>(),
       "Execute",
@@ -484,7 +493,7 @@ public sealed class ActionProcessor : IGameStateProcessor
         }
         catch (Exception e)
         {
-          Log.Error("GameActionPerformed hook error: {0}", e);
+          Log.Error(e, "Failed to capture a performed game action.");
           return null;
         }
       })

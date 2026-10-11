@@ -6,11 +6,11 @@
 using System.Collections.Generic;
 
 using MTGOSDK.API.Play.Games.Processors.Events;
-using MTGOSDK.API.Play.Games.Processors.Intermediate;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Snapshots;
-
 
 /// <summary>
 /// Paired current/previous snapshots passed to <see cref="IGameStateProcessor"/>
@@ -47,22 +47,11 @@ public sealed class GameContext
   public HashSet<int> SubCardIds { get; internal set; } = new();
 
   /// <summary>
-  /// Cards revealed via the <c>HandleRevealedCard</c> (opcode 4635) pathway —
-  /// opponent-visible reveals such as Gitaxian Probe or hand-reveal effects.
-  /// Non-empty only when the <c>s_handleRevealedCard</c> hook fires and
-  /// <see cref="GameProcessor.BuildRevealedZoneCards"/> returns synthetic cards.
-  /// <para>
-  /// Scry / top-of-library effects use ThingElements (Zone = 0xFFFFFF) and
-  /// appear in <see cref="GameStateSnapshot.HiddenCards"/> instead.
-  /// <see cref="RevealedZoneProcessor"/> merges both sources.
-  /// </para>
-  /// </summary>
-  public List<GameCard> RevealedZoneCards { get; internal set; } = new();
-
-  /// <summary>
   /// Reference to the host processor for centralized event dispatch.
   /// </summary>
   internal GameProcessor? Processor { get; init; }
+  internal RemoteBatchValue? CapturedPrompt { get; init; }
+  internal RemoteCaptureSequence? CaptureSequence { get; init; }
 
   /// <summary>
   /// Emits an event through the centralized event bus on the host

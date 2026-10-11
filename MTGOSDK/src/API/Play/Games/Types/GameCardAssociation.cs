@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting.Batching;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -16,8 +17,18 @@ namespace MTGOSDK.API.Play.Games;
 public class GameCardAssociation(dynamic gameCardAssociation)
     : DLRWrapper<IGameCardAssociation>
 {
+  private readonly CardAssociation? _association;
+  private readonly int _targetId;
+
+  internal GameCardAssociation(CardAssociation association, int targetId) : this((object?)null)
+  {
+    _association = association;
+    _targetId = targetId;
+  }
+
   internal override dynamic obj =>
-    Bind<IGameCardAssociation>(gameCardAssociation);
+    gameCardAssociation is RemoteBatchObject captured ? captured
+      : Bind<IGameCardAssociation>(gameCardAssociation);
 
   //
   // IGameCardAssociation wrapper properties
@@ -27,10 +38,15 @@ public class GameCardAssociation(dynamic gameCardAssociation)
   /// Represents a card association (e.g. ChosenPlayer, TriggeringSource, etc.).
   /// </summary>
   public CardAssociation Association =>
-    Cast<CardAssociation>(Unbind(this).Value);
+    _association ?? (gameCardAssociation is RemoteBatchObject captured
+      ? captured.Get<CardAssociation>("Value")
+      : Cast<CardAssociation>(Unbind(this).Value));
 
   /// <summary>
   /// The ID of the associated target.
   /// </summary>
-  public int TargetId => @base.AssociatedTarget.Id;
+  public int TargetId => _association != null ? _targetId
+    : gameCardAssociation is RemoteBatchObject captured
+      ? captured.Get<RemoteBatchObject>("AssociatedTarget").Get<int>("Id")
+      : @base.AssociatedTarget.Id;
 }

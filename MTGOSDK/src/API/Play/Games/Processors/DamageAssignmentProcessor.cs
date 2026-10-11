@@ -15,11 +15,10 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// </summary>
 public sealed class DamageAssignmentProcessor : IGameStateProcessor
 {
-  public void Initialize(Game game) { }
-
   public void Process(GameContext context)
   {
-    if (context.DamageAssignments.Count == 0) return;
+    if (context.DamageAssignments.Count == 0)
+      return;
 
     context.Emit(new DamageAssignmentEventArgs(context.DamageAssignments));
   }

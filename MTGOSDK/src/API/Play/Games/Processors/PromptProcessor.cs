@@ -4,56 +4,34 @@
 **/
 
 using System;
-using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using System.Threading;
 
-using static MTGOSDK.Core.Reflection.DLRWrapper;
-
 using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
+using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Types;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace MTGOSDK.API.Play.Games.Processors;
 
 /// <summary>
-/// Correlates <see cref="GameStateSnapshot"/> ticks with
-/// <see cref="GamePrompt"/> events by matching their shared nonce.
+/// Validates and publishes prompts captured with their gameplay message.
 /// </summary>
-/// <remarks>
-/// <para>
-/// The gameplay-status hook fires before <c>set_Prompt</c>, so prompts can
-/// arrive either before or after their matching snapshot is processed.
-/// Both sides buffer unmatched items in concurrent dictionaries:
-/// <see cref="_pendingPrompts"/> for early-arriving prompts and
-/// <see cref="_pendingSnapshots"/> for early-arriving snapshots.
-/// Whichever side completes the pair emits the correlated event.
-/// </para>
-/// </remarks>
-public sealed class PromptProcessor : IGameStateProcessor
+public sealed class PromptProcessor : IGameStateProcessor, IDisposable
 {
-  private Game? _game;
-  private int _gameId;
+  private volatile bool _disposed;
 
   /// <summary>
-  /// Prompts buffered by nonce, awaiting their matching snapshot.
-  /// Written from the EventHookProxy thread, read from the drain loop.
+  /// Signals prompt readiness after successful correlation or processor disposal.
+  /// A failed capture or identity check resets it.
   /// </summary>
-  private readonly ConcurrentDictionary<int, GamePrompt> _pendingPrompts = new();
-
-  /// <summary>
-  /// Snapshots buffered by nonce, awaiting their matching prompt.
-  /// Written from the drain loop thread, read from the EventHookProxy thread.
-  /// </summary>
-  private readonly ConcurrentDictionary<int, (GameStateSnapshot Snapshot, GameContext Context)>
-    _pendingSnapshots = new();
-
-  /// <summary>
-  /// Signaled when all pending snapshots have been matched with their
-  /// prompts. Reset when a snapshot is buffered without a prompt match.
-  /// Used by <see cref="Game.WaitForPendingProcessing"/> to wait for
-  /// the <c>set_Prompt</c> IPC to deliver after the drain loop finishes.
-  /// </summary>
-  internal readonly ManualResetEventSlim PromptCorrelated = new(true);
+  internal ManualResetEventSlim PromptCorrelated { get; } = new(true);
 
   /// <summary>
   /// The most recent snapshot received from the processor pipeline.
@@ -61,103 +39,135 @@ public sealed class PromptProcessor : IGameStateProcessor
   public GameStateSnapshot? LastSnapshot { get; private set; }
 
   /// <summary>
-  /// The most recent prompt received from the game event.
+  /// The most recent prompt materialized from a gameplay-hook capture.
   /// </summary>
   public GamePrompt? LastPrompt { get; private set; }
 
-  public void Initialize(Game game)
-  {
-    _game = game;
-    _gameId = game.Id; // Cache — avoids IPC on every prompt event
-    s_GamePromptChanged += OnGamePromptChanged;
-
-    // Seed the initial prompt (e.g. keep/mulligan) that was already set on
-    // the game before we subscribed to set_Prompt. Options are read lazily
-    // via IPC — the remote GamePrompt is pinned by the DRO and its
-    // m_options is never cleared (new object created per state update).
-    var currentPrompt = game.Prompt;
-    if (currentPrompt != null)
-    {
-      _pendingPrompts[currentPrompt.Nonce] = currentPrompt;
-    }
-  }
+  public void Initialize(Game game) => ObjectDisposedException.ThrowIf(_disposed, this);
 
   public void Process(GameContext context)
   {
+    if (_disposed)
+      return;
     LastSnapshot = context.Current;
-    int nonce = context.Current.Nonce;
-
-    // Prompt arrived before snapshot — correlate now.
-    if (_pendingPrompts.TryRemove(nonce, out var prompt))
+    try
     {
+      var captured = context.CapturedPrompt
+        ?? throw new InvalidOperationException("Gameplay callback omitted its captured prompt.");
+      if (captured.Kind == RemoteBatchValueKind.Null)
+      {
+        if (LastSnapshot.InteractionTimestamp != 0 || LastSnapshot.PromptedPlayer != byte.MaxValue ||
+            !string.IsNullOrEmpty(LastSnapshot.PromptText))
+          throw new InvalidOperationException("Gameplay message has a prompt identity but native capture has no prompt.");
+        LastPrompt = null;
+        PromptCorrelated.Set();
+        return;
+      }
+      var prompt = MaterializePrompt(captured, context);
+      if (prompt.Timestamp != LastSnapshot.InteractionTimestamp ||
+          prompt.PromptedPlayer != LastSnapshot.PromptedPlayer || prompt.Text != LastSnapshot.PromptText)
+        throw new InvalidOperationException("Captured prompt identity differs from the gameplay snapshot.");
       LastPrompt = prompt;
+      PromptCorrelated.Set();
       context.Emit(new PromptChangedEventArgs(LastSnapshot, LastPrompt));
     }
-    else
+    catch
     {
-      // Snapshot arrived before prompt — buffer for late correlation.
-      // Reset the signal so callers can wait for the set_Prompt IPC.
-      _pendingSnapshots[nonce] = (LastSnapshot, context);
       PromptCorrelated.Reset();
+      throw;
     }
   }
 
-  private void OnGamePromptChanged(Game game, GamePrompt prompt)
+  private static GamePrompt MaterializePrompt(RemoteBatchValue value, GameContext context)
   {
-    // Filter to only this game. _gameId is cached from Initialize() to avoid
-    // IPC on the stored _game reference, which can become stale.
-    if (game.Id != _gameId) return;
-
-    int nonce = prompt.Nonce;
-
-    // Snapshot was already processed — correlate now.
-    if (_pendingSnapshots.TryRemove(nonce, out var pending))
+    var captured = (RemoteBatchObject)RemoteBatchObject.FromValue(value)!;
+    var options = new Dictionary<ActionType, IReadOnlyList<IPromptOption>>();
+    foreach (var group in captured.GetDictionary<ActionType, object?[]>("Options"))
     {
-      LastPrompt = prompt;
-      pending.Context.Emit(
-        new PromptChangedEventArgs(pending.Snapshot, LastPrompt));
+      var actions = group.Value.Cast<RemoteBatchObject>()
+        .Select(action =>
+        {
+          var resolved = (RemoteBatchObject)ResolveReferences(action, context)!;
+          return GameAction.MaterializeCaptured(resolved);
+        })
+        .ToArray();
+      if (actions.Any(action => action == null))
+        throw new NotSupportedException("Captured prompt contains an unsupported action type.");
+      options[group.Key] = Array.AsReadOnly(actions.Cast<IPromptOption>().ToArray());
+    }
+    return new GamePrompt(captured,
+      new ReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>>(options));
+  }
 
-      // Signal that all pending snapshots have been matched.
-      if (_pendingSnapshots.IsEmpty)
-        PromptCorrelated.Set();
-    }
-    else
+  private static object? ResolveReferences(object? value, GameContext context)
+  {
+    if (value is object?[] sequence)
+      return sequence.Select(item => ResolveReferences(item, context)).ToArray();
+    if (value is not RemoteBatchObject item)
+      return value;
+    if (item.NativeType?.FullName == "WotC.MtGO.Client.Model.Play.GameCard")
     {
-      // Prompt arrived before snapshot — buffer for correlation in Process().
-      _pendingPrompts[nonce] = prompt;
+      ulong address = item.LogicalAddress
+        ?? throw new InvalidOperationException("Captured action card has no logical address.");
+      var card = context.Current.Cards.Values.Concat(context.Current.HiddenCards.Values)
+        .Concat(context.Current.RevealedCards.Values)
+        .DistinctBy(card => ((GameCardPartial)Unbind(card)).LogicalAddress)
+        .SingleOrDefault(card => ((object)Unbind(card)) is GameCardPartial partial
+          && partial.LogicalAddress == address);
+      // Auxiliary native cards have no server snapshot row. Keep their detached
+      // identity and captured members rather than binding them to an unrelated ID.
+      return card is null ? item : Unbind(card);
     }
+    if (item.NativeType?.FullName == "WotC.MtGO.Client.Model.Play.GamePlayer")
+    {
+      int userId = item.Get<RemoteBatchObject>("User").Get<int>("Id");
+      return Unbind(context.Current.Players.Values.Single(player => player.UserId == userId));
+    }
+    return new RemoteBatchObject(item.Members.ToDictionary(pair => pair.Key,
+      pair => ResolveReferences(pair.Value, context)), item.NativeType, item.LogicalAddress);
+  }
+
+  internal static RemoteHookCapture CreateGameplayCapture()
+  {
+    var scalar = RemoteBatchProjection.Value();
+    var action = GameAction.CreateCaptureProjection();
+
+    // Preserve the prompt's native action groups in the detached value.
+    var prompt = RemoteBatchProjection.ObjectScalars();
+    prompt.Members["Timestamp"] = new() { Path = "Timestamp", Projection = scalar };
+    prompt.Members["Options"] = new()
+    {
+      Path = "Options",
+      Projection = RemoteBatchProjection.Dictionary(
+        scalar, RemoteBatchProjection.Sequence(action))
+    };
+
+    // The hook supplies its game instance (-1) and gameplay message (argument 0).
+    var batch = new RemoteBatch();
+    var instance = batch.Input(ObjectOrRemoteAddress.Null);
+    var message = batch.Input(ObjectOrRemoteAddress.Null);
+
+    batch.Output("gameId", batch.Read(message, "GameID"));
+    batch.Output("timestamp", batch.Read(message, "GameStateTimestamp"));
+    batch.Output("turnNumber", batch.Read(instance, "CurrentTurn"));
+    batch.Output("phase", batch.Read(instance, "CurrentPhase"));
+    batch.Output("prompt", batch.Read(instance, "Prompt"), prompt);
+
+    // Capture resolved cards at the same native completion point as the prompt.
+    // Reconstructing copies against the live game can mutate its zones.
+    GameCardCapture.AppendGameplayCapture(batch, message, instance);
+    return new()
+    {
+      Batch = batch.ToRequest(),
+      Inputs = [-1, 0],
+      CaptureOnExit = true
+    };
   }
 
   public void Dispose()
   {
-    s_GamePromptChanged -= OnGamePromptChanged;
-    _pendingPrompts.Clear();
-    _pendingSnapshots.Clear();
+    _disposed = true;
+    PromptCorrelated.Set();
   }
 
-  /// <summary>
-  /// Ensures the static <c>GamePromptChanged</c> hook is installed
-  /// so that prompt detection is active.
-  /// </summary>
-  public static void EnsureHookInitialized() =>
-    s_GamePromptChanged.EnsureInitialize();
-
-  /// <summary>
-  /// Event triggered when the current game prompt changes in any active game.
-  /// </summary>
-  private static EventHookProxy<Game, GamePrompt> s_GamePromptChanged =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game>(),
-      "set_Prompt",
-      new((instance, args) =>
-      {
-        Game game = new(instance);
-
-        dynamic prompt = args[0]; // IGamePrompt
-        prompt.__timestamp = instance.__timestamp;
-        GamePrompt gamePrompt = new(prompt);
-
-        return (game, gamePrompt);
-      })
-    );
 }

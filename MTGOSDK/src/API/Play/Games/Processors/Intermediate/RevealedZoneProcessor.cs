@@ -7,75 +7,56 @@ using System.Collections.Generic;
 using System.Linq;
 
 using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 /// <summary>
-/// Tracks cards that enter or leave a Revealed or Pile zone and emits
-/// <see cref="RevealedCardsEventArgs"/> when any change is detected.
-/// <para>
-/// Scry, tutor, and other "look at top of library" effects send the
-/// temporarily-visible cards via ThingElements with <c>SourceId = -1</c>
-/// and their actual zone (typically <c>Library</c>). The
-/// <c>IsTransientHiddenCard</c> filter in <see cref="GameProcessor"/> catches
-/// these and places them in <c>_HiddenCards</c>, so they appear in
-/// <see cref="GameStateSnapshot.HiddenCards"/> of each snapshot.
-/// </para>
-/// <para>
-/// Arrivals and departures are detected by diffing the filtered HiddenCards
-/// between the current and previous snapshots — no separate hook or
-/// departure message is needed.
-/// </para>
+/// Emits arrivals and departures for captured reveals and exposed library cards.
 /// </summary>
+/// <remarks>
+/// Native revealed-zone objects have logical addresses even when their server IDs
+/// are unassigned. Comparing those addresses preserves distinct copies of a card.
+/// Departures follow captured zone membership and retain the last captured values.
+/// </remarks>
 public sealed class RevealedZoneProcessor : IIntermediateTickProcessor
 {
-  /// <summary>
-  /// Cards that were in the revealed zone on the previous tick.
-  /// Cleared after departures so that cards stuck in _HiddenCards
-  /// (with unchanging SourceId == -1) are re-detected as arrivals
-  /// on subsequent reveal activations.
-  /// </summary>
-  private HashSet<int> _activeRevealIds = new();
-
-  public void Initialize(Game game) { }
+  private Dictionary<ulong, GameCard> _activeReveals = new();
 
   public void Process(GameContext context)
   {
-    // Filter out:
-    //   - Negative-ID "reveal markers" (opcode 4635) that mark the chosen card
-    //   - SUBC cards (adventure/split halves) to avoid double-counting
-    var subCards = context.SubCardIds;
-    var current = context.Current.HiddenCards.Values
-      .Where(c => c.Id > 0 && !subCards.Contains(c.Id)
-                  && (c.Zone?.Name is "Revealed" or "Pile1" or "Pile2" or "Pile3"
-                      || (c.Zone?.Name == "Library" && c.SourceId == -1)))
-      .Concat(context.RevealedZoneCards.Where(c => c.Id > 0 && !subCards.Contains(c.Id)))
-      .ToList();
+    var current = new Dictionary<ulong, GameCard>(context.Current.RevealedCards);
 
-    var currIds = current.Select(c => c.Id).ToHashSet();
+    // Library and pile reveals still arrive as ThingElements. Exclude unused
+    // faces, and merge by native identity when a card also occurs in a reveal zone.
+    foreach (var card in context.Current.HiddenCards.Values.Where(card =>
+      card.Id > 0 && !context.SubCardIds.Contains(card.Id)
+      && (card.Zone?.Name is "Revealed" or "Pile1" or "Pile2" or "Pile3"
+          || (card.Zone?.Name == "Library" && card.SourceId == -1))))
+    {
+      ulong address = ((GameCardPartial)Unbind(card)).LogicalAddress
+        ?? throw new InvalidOperationException("Hidden reveal capture has no logical address.");
+      current.TryAdd(address, card);
+    }
 
-    var arrived  = current.Where(c => !_activeRevealIds.Contains(c.Id)).ToList();
-    var departed = _activeRevealIds.Where(id => !currIds.Contains(id)).ToList();
+    var arrived = current.Where(pair => !_activeReveals.ContainsKey(pair.Key))
+      .Select(pair => pair.Value).ToList();
+    var departed = _activeReveals.Where(pair => !current.ContainsKey(pair.Key))
+      .Select(pair => pair.Value).ToList();
 
-    if (arrived.Count == 0 && departed.Count == 0) return;
-
-    // Resolve departed GameCard objects from previous snapshot
-    var departedCards = departed
-      .Select(id => context.Previous.HiddenCards.TryGetValue(id, out var c) ? c : null)
-      .Where(c => c != null)
-      .ToList()!;
-
-    // Update active set: add arrivals, remove departures
-    foreach (var c in arrived) _activeRevealIds.Add(c.Id);
-    foreach (var id in departed) _activeRevealIds.Remove(id);
+    // Retain this tick's detached values even when membership is unchanged.
+    _activeReveals = current;
+    if (arrived.Count == 0 && departed.Count == 0)
+      return;
 
     context.Emit(new RevealedCardsEventArgs
     {
       Arrived  = arrived,
-      Departed = departedCards!,
-      Current  = current,
+      Departed = departed,
+      Current  = current.Values.ToList(),
     });
   }
 }

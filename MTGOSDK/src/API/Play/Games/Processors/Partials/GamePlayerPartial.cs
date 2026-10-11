@@ -158,7 +158,10 @@ public class GamePlayerPartial : DynamicObject
     {
       int activePlayer = (int)(playerStatusElement.ActivePlayer ?? 0);
       int gamePlayerCount = 0;
-      try { gamePlayerCount = (int)game.PlayersInServerOrder.Count; }
+      try
+      {
+        gamePlayerCount = (int)game.PlayersInServerOrder.Count;
+      }
       catch (Exception ex)
       {
         MTGOSDK.Core.Logging.Log.Warning(ex,
