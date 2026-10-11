@@ -163,27 +163,32 @@ public class SnapshotRuntime : IDisposable
     return found;
   }
 
+  /// <summary>
+  /// Gets the object's logical address without retaining it or acquiring a pin.
+  /// The weak identity mapping remains valid for the native object's lifetime.
+  /// </summary>
+  public ulong GetObjectToken(object instance)
+  {
+    if (instance is null) throw new ArgumentNullException(nameof(instance));
+    return _objectToToken.GetValue(instance,
+      _ => new BoxedToken((ulong)Interlocked.Increment(ref _nextToken))).Token;
+  }
+
   public ulong PinObject(object instance)
   {
     lock (_pinnedObjectsLock)
     {
-      var boxedToken = _objectToToken.GetValue(instance, obj =>
-      {
-        var token = (ulong) Interlocked.Increment(ref _nextToken);
-        _pinnedObjects[token] = new PinnedObjectEntry(obj);
-        Log.Debug($"[SnapshotRuntime] PinObject: NEW token={token} for type={obj?.GetType().Name}, poolSize={_pinnedObjects.Count}");
-        return new BoxedToken(token);
-      });
-
-      if (!_pinnedObjects.TryGetValue(boxedToken.Token, out var entry))
+      ulong token = GetObjectToken(instance);
+      if (!_pinnedObjects.TryGetValue(token, out var entry))
       {
         entry = new PinnedObjectEntry(instance);
-        _pinnedObjects[boxedToken.Token] = entry;
+        _pinnedObjects[token] = entry;
+        Log.Debug($"[SnapshotRuntime] PinObject: NEW token={token} for type={instance.GetType().Name}, poolSize={_pinnedObjects.Count}");
       }
 
       int refCount = entry.AddReference();
-      Log.Debug($"[SnapshotRuntime] PinObject: returning token={boxedToken.Token}, refCount={refCount}");
-      return boxedToken.Token;
+      Log.Debug($"[SnapshotRuntime] PinObject: returning token={token}, refCount={refCount}");
+      return token;
     }
   }
 
@@ -210,7 +215,7 @@ public class SnapshotRuntime : IDisposable
         return false;
       }
 
-      _objectToToken.Remove(entry.Instance);
+      // Release retention; the weak mapping preserves identity if MTGO still owns the object.
       Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} REMOVED, poolSize={_pinnedObjects.Count}");
       return true;
     }

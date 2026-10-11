@@ -11,6 +11,7 @@ using MessagePack;
 
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -618,6 +619,42 @@ public class DiverCommunicator : IDisposable
     byte[] body = MessagePackSerializer.Serialize(request);
     return _tcp.SendRequestAsync<Interactions.Object.BatchCollectionResponse>(
       "/batch_collection", body);
+  }
+
+  /// <summary>
+  /// Executes a composed reflection batch in one IPC request.
+  /// </summary>
+  public RemoteBatchResult ExecuteBatch(RemoteBatchRequest request) =>
+    ExecuteBatchAsync(request).GetAwaiter().GetResult();
+
+  /// <summary>
+  /// Sends one batch request and asynchronously awaits the result. The Diver still
+  /// executes native calls synchronously and applies any ambient UI dispatch setting
+  /// to the whole batch.
+  /// </summary>
+  public async Task<RemoteBatchResult> ExecuteBatchAsync(RemoteBatchRequest request)
+  {
+    // Clone so ambient dispatch settings and concurrent execution cannot mutate
+    // a caller's recorded description.
+    var copy = MessagePackSerializer.Deserialize<RemoteBatchRequest>(
+      MessagePackSerializer.Serialize(request));
+    copy.ForceUIThread |= ForceUIThread;
+    EnsureConnected();
+    Interlocked.Increment(ref s_totalRequests);
+    var sw = Stopwatch.StartNew();
+    try
+    {
+      return await _tcp.SendRequestAsync<RemoteBatchResult>("/batch_execute",
+        MessagePackSerializer.Serialize(copy)).ConfigureAwait(false);
+    }
+    finally
+    {
+      sw.Stop();
+      var metrics = s_ipcMetrics.GetOrAdd("batch_execute", _ => new EndpointMetrics());
+      Interlocked.Increment(ref metrics.Count);
+      Interlocked.Add(ref metrics.TotalTicks, sw.ElapsedTicks);
+      Interlocked.Exchange(ref metrics.LastTicks, sw.ElapsedTicks);
+    }
   }
 
   public void EventSubscribe(

@@ -6,6 +6,7 @@
 using System.Collections;
 using System.Diagnostics;
 using System.Dynamic;
+using System.Linq.Expressions;
 using System.Reflection;
 
 using MTGOSDK.Core.Compiler;
@@ -124,6 +125,31 @@ public abstract class DLRWrapper : SerializableBase
     return TypeProxy<T>.As(obj)
       ?? throw new InvalidOperationException(
           $"Unable to bind {obj.GetType().Name} to {typeof(T).Name}.");
+  }
+
+  /// <summary>
+  /// Checks whether an object's metadata advertises the named member.
+  /// </summary>
+  /// <remarks>
+  /// Unwraps interface proxies before checking local or remote metadata.
+  /// Dynamic providers must advertise their members through the DLR.
+  /// This does not invoke the member or read its value.
+  /// </remarks>
+  public static bool HasMember(object obj, string name)
+  {
+    if (obj is null) throw new ArgumentNullException(nameof(obj));
+    if (name is null) throw new ArgumentNullException(nameof(name));
+
+    object target = obj is DLRWrapper wrapper ? Unbind(wrapper) : Unbind(obj);
+    if (target is DynamicRemoteObject remote)
+      return remote.HasMember(name);
+    if (target is IDynamicMetaObjectProvider provider)
+      return provider.GetMetaObject(Expression.Constant(target))
+        .GetDynamicMemberNames().Contains(name, StringComparer.Ordinal);
+
+    var type = target.GetType();
+    return type.GetMember(name, BindingFlags.Public | BindingFlags.Instance).Length > 0
+      || type.GetInterfaces().Any(contract => contract.GetMember(name).Length > 0);
   }
 
   /// <summary>

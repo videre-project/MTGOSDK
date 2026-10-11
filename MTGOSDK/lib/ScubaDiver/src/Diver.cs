@@ -16,6 +16,7 @@ using MessagePack;
 using MTGOSDK.Core.Diagnostics;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Memory.Snapshot;
+using MTGOSDK.Core.Remoting.Batching;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
@@ -30,6 +31,8 @@ public partial class Diver : IDisposable
 {
   private SnapshotRuntime _runtime;
   private TcpServer _tcpServer;
+  private readonly BatchExecutionEndpoint _batchExecutionEndpoint;
+  private readonly BatchExecutor _batchExecutor;
 
   private static readonly AsyncLocal<byte[]> _cachedRequestBody = new();
 
@@ -44,6 +47,12 @@ public partial class Diver : IDisposable
 
   public Diver()
   {
+    _batchExecutor = new BatchExecutor(
+      type => BatchExecutionEndpoint.ResolveLoadedType(type, name => _runtime.ResolveType(name)),
+      input => _runtime.ParseParameterObject(input), instance => _runtime.GetObjectToken(instance));
+    _batchExecutionEndpoint = new BatchExecutionEndpoint(_batchExecutor,
+      action => STAThread.IsDispatcherThread ? action() : STAThread.Execute(action));
+
     // TCP handlers for request dispatch
     _tcpHandlers = new Dictionary<string, Func<byte[], byte[]>>()
     {
@@ -64,6 +73,7 @@ public partial class Diver : IDisposable
       {"/get_item", _ => MakeArrayItemResponse()},
       {"/batch_members", _ => MakeBatchMembersResponse()},
       {"/batch_collection", _ => MakeBatchCollectionResponse()},
+      {"/batch_execute", body => _batchExecutionEndpoint.Handle(body)},
       {"/event_subscribe", _ => MakeEventSubscribeResponse()},
       {"/event_unsubscribe", _ => MakeEventUnsubscribeResponse()},
       {"/hook_method", _ => MakeHookMethodResponse()},
