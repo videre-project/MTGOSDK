@@ -108,9 +108,11 @@ public sealed class RemoteBatch : RemoteBatchScope
     return copy;
   }
 
-  public RemoteBatchResult Execute(DiverCommunicator connection) => connection.ExecuteBatch(ToRequest());
+  public RemoteBatchResult Execute(DiverCommunicator connection) =>
+    ExecuteAsync(connection).GetAwaiter().GetResult();
+
   public Task<RemoteBatchResult> ExecuteAsync(DiverCommunicator connection) =>
-    connection.ExecuteBatchAsync(ToRequest());
+    connection.ExecuteDetachedBatchAsync(ToRequest());
   public RemoteBatchResult Execute(RemoteHandle connection) => Execute(connection.Communicator);
   public Task<RemoteBatchResult> ExecuteAsync(RemoteHandle connection) => ExecuteAsync(connection.Communicator);
 }

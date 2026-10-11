@@ -651,18 +651,24 @@ public class DiverCommunicator : IDisposable
   /// </summary>
   public async Task<RemoteBatchResult> ExecuteBatchAsync(RemoteBatchRequest request)
   {
-    // Clone so ambient dispatch settings and concurrent execution cannot mutate
-    // a caller's recorded description.
     var copy = MessagePackSerializer.Deserialize<RemoteBatchRequest>(
       MessagePackSerializer.Serialize(request));
-    copy.ForceUIThread |= ForceUIThread;
+    return await ExecuteDetachedBatchAsync(copy).ConfigureAwait(false);
+  }
+
+  /// <summary>
+  /// Takes ownership of an already detached request from the batch builder.
+  /// </summary>
+  internal async Task<RemoteBatchResult> ExecuteDetachedBatchAsync(RemoteBatchRequest request)
+  {
+    request.ForceUIThread |= ForceUIThread;
     EnsureConnected();
     Interlocked.Increment(ref s_totalRequests);
     var sw = Stopwatch.StartNew();
     try
     {
       return await _tcp.SendRequestAsync<RemoteBatchResult>("/batch_execute",
-        MessagePackSerializer.Serialize(copy)).ConfigureAwait(false);
+        MessagePackSerializer.Serialize(request)).ConfigureAwait(false);
     }
     finally
     {
