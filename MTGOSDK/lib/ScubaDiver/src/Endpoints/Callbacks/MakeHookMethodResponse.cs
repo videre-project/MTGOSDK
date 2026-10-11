@@ -77,20 +77,7 @@ public partial class Diver : IDisposable
         return QuickError("Invalid hook capture inputs; capture runs on the native hook thread.");
       try
       {
-        if (captureDescription.Scope?.IsStateBoundary == true && !captureDescription.CaptureOnExit)
-          throw new ArgumentException("State boundaries must capture on completion.");
-        BatchExecutor.Validate(captureDescription.Batch);
-        CaptureScopeManager.Validate(captureDescription.Scope, captureDescription.Batch);
-        if (captureDescription.Scope != null &&
-            captureDescription.Scope.OwnerInput >= captureDescription.Inputs.Count)
-          throw new ArgumentException("The scope owner must be bound to a native hook parameter.");
-        if (captureDescription.Scope != null && (pos != HarmonyPatchPosition.Postfix))
-          throw new ArgumentException("Scoped hooks deliver completion captures at the postfix position.");
-        captureDescription.Filters ??= new();
-        if (captureDescription.Filters.Count != 0 && captureDescription.Scope == null)
-          throw new ArgumentException("Native capture filters require a capture scope.");
-        captureFilter = new HookCaptureFilter(captureDescription.Filters, methodInfo,
-          name => _runtime.ResolveType(name), _batchExecutor);
+        captureFilter = BindHookCapture(captureDescription, methodInfo, pos);
       }
       catch (Exception error)
       {
@@ -138,41 +125,8 @@ public partial class Diver : IDisposable
         Capture = request.Capture
       };
 
-      // Capture before queueing delivery so the callback receives values from
-      // this native invocation.
-      Action<object, object[], RemoteCaptureSequence, Exception> completeCapture = (obj, args, sequence, nativeError) =>
-      {
-        if (!IsCallbackActive(token))
-          return;
-
-        DateTime timestamp = DateTime.UtcNow;
-        var eventKey = (resolvedType.FullName, methodName);
-        dynamic mappedArgs = args;
-        if (sequence == null && !GlobalEvents.IsValidEvent(eventKey, obj, args, out mappedArgs))
-        {
-          return;
-        }
-
-        RemoteBatchResult captured = null;
-        RemoteBatchError captureError = null;
-        if (request.Capture is { } description)
-        {
-          captured = ExecuteCallbackCapture(description.Batch, () =>
-            description.Inputs.Select((index, slot) =>
-              new KeyValuePair<int, object>(slot, index == -1 ? obj : args[index]))
-              .ToDictionary(binding => binding.Key, binding => binding.Value),
-            nativeError, $"hook {resolvedType.FullName}.{methodName}", out captureError);
-        }
-
-        if (request.Capture?.IncludeParameters == false)
-        {
-          QueueCallback(token, timestamp, captured, captureError, sequence);
-        }
-        else
-        {
-          QueueCallback(token, timestamp, captured, captureError, sequence, obj, (object)mappedArgs);
-        }
-      };
+      var eventKey = (Type: resolvedType.FullName, Name: methodName);
+      var completeCapture = CreateHookCaptureCallback(token, eventKey, request.Capture);
       HarmonyWrapper.HookCallback patchCallback = (obj, args) => completeCapture(obj, args, null, null);
       registration.RegisteredProxy = patchCallback;
 
@@ -180,35 +134,10 @@ public partial class Diver : IDisposable
       try
       {
         var wrapper = HarmonyWrapper.Instance;
-        if (request.Capture?.Scope is { } scope)
+        if (request.Capture?.Scope != null)
         {
-          wrapper.AddScopeHook(methodInfo, (obj, args) =>
-          {
-            if (!IsCallbackActive(token))
-              return null;
-            if (!GlobalEvents.IsValidEvent((resolvedType.FullName, methodName), obj, args, out _))
-              return null;
-            if (!captureFilter.TryMatch(obj, args, out var captureRoot))
-              return null;
-            int index = request.Capture.Inputs[scope.OwnerInput];
-            object owner = index == -1 ? captureRoot : args[index];
-            if (scope.OwnerPath != null)
-              owner = _batchExecutor.Read(owner, scope.OwnerPath);
-            if (request.Capture.Filters.Count != 0 &&
-                !_captureScopes.HasSubscribers(scope.Group, owner, captureRoot))
-              return null;
-            var exit = _captureScopes.Enter(scope.Group, owner, request.Capture.CaptureOnExit,
-              (sequence, error) => completeCapture(captureRoot, args, sequence, error), scope.IsStateBoundary);
-            if (exit != null && request.Capture.Filters.Count != 0)
-              _captureScopes.MarkChanged(scope.Group, owner, methodName);
-            // CaptureOnExit delivers the initial capture that lets a client attach
-            // to this owner. It has no stream sequence because registration has not
-            // established a baseline yet.
-            if (exit == null && request.Capture.CaptureOnExit && request.Capture.Filters.Count == 0 &&
-                !_captureScopes.HasSubscribers(scope.Group, owner))
-              return error => completeCapture(obj, args, null, error);
-            return exit;
-          });
+          wrapper.AddScopeHook(methodInfo,
+            CreateHookScopeCallback(token, eventKey, request.Capture, captureFilter, completeCapture));
         }
         else wrapper.AddHook(methodInfo, pos, patchCallback);
       }
@@ -226,4 +155,100 @@ public partial class Diver : IDisposable
       return WrapSuccess(erResults);
     }
   }
+
+  //
+  // Hook capture binding and validation.
+  //
+
+  private HookCaptureFilter BindHookCapture(RemoteHookCapture capture,
+    MethodBase methodInfo, HarmonyPatchPosition position)
+  {
+    if (capture.Scope?.IsStateBoundary == true && !capture.CaptureOnExit)
+      throw new ArgumentException("State boundaries must capture on completion.");
+    BatchExecutor.Validate(capture.Batch);
+    CaptureScopeManager.Validate(capture.Scope, capture.Batch);
+    if (capture.Scope != null &&
+        capture.Scope.OwnerInput >= capture.Inputs.Count)
+      throw new ArgumentException("The scope owner must be bound to a native hook parameter.");
+    if (capture.Scope != null && (position != HarmonyPatchPosition.Postfix))
+      throw new ArgumentException("Scoped hooks deliver completion captures at the postfix position.");
+    capture.Filters ??= new();
+    if (capture.Filters.Count != 0 && capture.Scope == null)
+      throw new ArgumentException("Native capture filters require a capture scope.");
+    return new HookCaptureFilter(capture.Filters, methodInfo,
+      name => _runtime.ResolveType(name), _batchExecutor);
+  }
+
+  //
+  // Native capture and invocation scope callbacks.
+  //
+
+  private Action<object, object[], RemoteCaptureSequence, Exception> CreateHookCaptureCallback(
+    int token, (string Type, string Name) eventKey, RemoteHookCapture capture) =>
+    (obj, args, sequence, nativeError) =>
+    {
+      if (!IsCallbackActive(token))
+        return;
+
+      DateTime timestamp = DateTime.UtcNow;
+      dynamic mappedArgs = args;
+      if (sequence == null && !GlobalEvents.IsValidEvent(eventKey, obj, args, out mappedArgs))
+      {
+        return;
+      }
+
+      RemoteBatchResult captured = null;
+      RemoteBatchError captureError = null;
+      if (capture != null)
+      {
+        captured = ExecuteCallbackCapture(capture.Batch, () =>
+          capture.Inputs.Select((index, slot) =>
+            new KeyValuePair<int, object>(slot, index == -1 ? obj : args[index]))
+            .ToDictionary(binding => binding.Key, binding => binding.Value),
+          nativeError, $"hook {eventKey.Type}.{eventKey.Name}", out captureError);
+      }
+
+      if (capture?.IncludeParameters == false)
+      {
+        QueueCallback(token, timestamp, captured, captureError, sequence);
+      }
+      else
+      {
+        QueueCallback(token, timestamp, captured, captureError, sequence, obj, (object)mappedArgs);
+      }
+    };
+
+  private Func<object, object[], Action<Exception>> CreateHookScopeCallback(
+    int token, (string Type, string Name) eventKey, RemoteHookCapture capture,
+    HookCaptureFilter filter,
+    Action<object, object[], RemoteCaptureSequence, Exception> completeCapture) =>
+    (obj, args) =>
+    {
+      var scope = capture.Scope;
+      if (!IsCallbackActive(token))
+        return null;
+      if (!GlobalEvents.IsValidEvent(eventKey, obj, args, out _))
+        return null;
+      if (!filter.TryMatch(obj, args, out var captureRoot))
+        return null;
+      int index = capture.Inputs[scope.OwnerInput];
+      object owner = index == -1 ? captureRoot : args[index];
+      if (scope.OwnerPath != null)
+        owner = _batchExecutor.Read(owner, scope.OwnerPath);
+      if (capture.Filters.Count != 0 &&
+          !_captureScopes.HasSubscribers(scope.Group, owner, captureRoot))
+        return null;
+      var exit = _captureScopes.Enter(scope.Group, owner, capture.CaptureOnExit,
+        (sequence, error) => completeCapture(captureRoot, args, sequence, error), scope.IsStateBoundary);
+      if (exit != null && capture.Filters.Count != 0)
+        _captureScopes.MarkChanged(scope.Group, owner, eventKey.Name);
+
+      // CaptureOnExit delivers the initial capture that lets a client attach
+      // to this owner. It has no stream sequence because registration has not
+      // established a baseline yet.
+      if (exit == null && capture.CaptureOnExit && capture.Filters.Count == 0 &&
+          !_captureScopes.HasSubscribers(scope.Group, owner))
+        return error => completeCapture(obj, args, null, error);
+      return exit;
+    };
 }
