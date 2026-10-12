@@ -38,7 +38,13 @@ public partial class Diver : IDisposable
     if (request.ObjAddress == 0)
     {
       dumpedObjType = _runtime.ResolveType(request.TypeFullName);
-      FieldInfo staticFieldInfo = dumpedObjType.GetField(request.FieldName);
+      if (dumpedObjType == null)
+        return QuickError($"Couldn't resolve type '{request.TypeFullName}'.");
+
+      // Non-public and inherited static fields too, as for instance fields.
+      FieldInfo staticFieldInfo = dumpedObjType.GetFieldRecursive(request.FieldName);
+      if (staticFieldInfo == null)
+        return QuickError("Couldn't find field in type.");
       if (!staticFieldInfo.IsStatic)
         return QuickError("Trying to get field with a null target but the field was not a static one");
 
@@ -62,7 +68,6 @@ public partial class Diver : IDisposable
       
       if (fieldInfo == null)
       {
-        Debugger.Launch();
         Log.Debug("[Diver] Failed to Resolved field :/");
         return QuickError("Couldn't find field in type.");
       }
@@ -81,7 +86,11 @@ public partial class Diver : IDisposable
     }
 
     ObjectOrRemoteAddress returnValue;
-    if (results.GetType().IsPrimitiveEtc())
+    if (results is null)
+    {
+      returnValue = ObjectOrRemoteAddress.Null; // a null field value (for example an event without subscribers)
+    }
+    else if (results.GetType().IsPrimitiveEtc())
     {
       returnValue = ObjectOrRemoteAddress.FromObj(results);
     }

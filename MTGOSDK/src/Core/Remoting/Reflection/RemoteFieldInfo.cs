@@ -74,17 +74,18 @@ public class RemoteFieldInfo(
     }
     else
     {
-      if (oora.IsRemoteAddress)
+      // The null sentinel is a remote address of 0, so it is checked first.
+      if (oora.IsNull)
+      {
+        return null;
+      }
+      else if (oora.IsRemoteAddress)
       {
         var remoteObject = App.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
         dynamic dro = remoteObject.Dynamify();
         dro.__timestamp = oora.Timestamp;
 
         return dro;
-      }
-      else if (oora.IsNull)
-      {
-        return null;
       }
       // Primitive
       return PrimitivesEncoder.Decode(oora.EncodedObject, oora.Type);
