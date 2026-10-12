@@ -82,27 +82,6 @@ public sealed class GameReferenceResolver : IDisposable
     }
   }
 
-  internal int? LocalPlayerId
-  {
-    get
-    {
-      lock (_lock)
-      {
-        if (_disposed || _game == null)
-          return null;
-        try
-        {
-          dynamic game = _game;
-          return (int)game.Players[game.LocalPlayerIndex].Id;
-        }
-        catch
-        {
-          return null;
-        }
-      }
-    }
-  }
-
   //
   // Card adapters and reference resolution
   //

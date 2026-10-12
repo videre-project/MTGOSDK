@@ -141,9 +141,10 @@ cannot create an unobserved sequence gap. Ordinary event callbacks keep their
 subscription filters. Grouped and standalone captures retain existing subscription
 source tokens by event name in `EventSources`; this creates no new remote handles.
 A new scene attachment establishes its baseline explicitly. Standalone
-notifications also detach their values synchronously and use this same stream;
-`capture.scoped` distinguishes them from grouped completions. Registered boundaries
-do not imply that every native mutation executes within an enrolled call.
+notifications also detach their values synchronously and use this same stream.
+`RemoteCaptureSequence.Scoped` identifies completions grouped by an enrolled
+invocation. Registered boundaries do not imply that every native mutation
+executes within an enrolled call.
 
 Card, player, and option-button property changes use one shared hook on native
 `NotifyPropertyChangedImplementation.OnPropertyChanged(string)`. Caller-supplied
@@ -295,8 +296,10 @@ var offlineCard = new GameCard(new GameCardPartial(properties, game, capturedOut
 ```
 
 The former `FromProperties` reconstruction factory and unused multi-request
-`GameCard.Create` wrapper are removed. The native construction operations now
-live in the capture batch. There is no compatibility reconstruction path.
+`GameCard.Create` wrapper are removed. Gameplay capture reads existing resolved
+cards rather than constructing them.
+Standalone property capture creates a native property-container copy. There is
+no compatibility reconstruction path.
 
 Construction belongs to the processor layer. `GameCard` exposes neither snapshot
 nor placeholder factories; its ordinary constructor wraps the supplied object.

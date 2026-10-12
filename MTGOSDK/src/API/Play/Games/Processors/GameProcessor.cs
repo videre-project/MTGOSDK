@@ -326,7 +326,7 @@ public sealed class GameProcessor : IDisposable
       {
         processor.Initialize(Game);
       }
-      catch (Exception error)
+      catch
       {
         try
         {
@@ -918,7 +918,6 @@ public sealed class GameProcessor : IDisposable
 
     // Publish one combined update after every processor has applied this message.
     processors.OfType<PromptProcessor>().FirstOrDefault()?.Complete(context);
-
 
     // Retain the state used to compare the next message.
     _previous = current;

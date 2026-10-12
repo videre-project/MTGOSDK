@@ -329,13 +329,13 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
     foreach (var card in interaction.Cards)
       hash.Add(card);
 
-
     var options = CaptureOptions(prompt, interaction);
 
     // Resolve action card/player identities against this event's server snapshot.
     // The native action data and eligibility stay unchanged by this local binding.
+    var cardLookup = CreateCardLookup(context);
     var cards = interaction.Cards.ToDictionary(pair => pair.Key,
-      pair => pair.Value.Resolve(value => ResolveReferences(value, context)));
+      pair => pair.Value.Resolve(value => ResolveReferences(value, context, cardLookup)));
     interaction = interaction with
     {
       Cards = new ReadOnlyDictionary<ulong, CardInteractionSnapshot>(cards)
@@ -356,42 +356,51 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
   private static GamePrompt MaterializePrompt(RemoteBatchValue value, GameContext context)
   {
     var captured = (RemoteBatchObject)RemoteBatchObject.FromValue(value)!;
+    var cards = CreateCardLookup(context);
     var options = new Dictionary<ActionType, IReadOnlyList<IPromptOption>>();
     foreach (var group in captured.GetDictionary<ActionType, object?[]>("Options"))
     {
       var actions = group.Value.Cast<RemoteBatchObject>()
         .Select(action =>
         {
-          var resolved = (RemoteBatchObject)ResolveReferences(action, context)!;
-          return GameAction.MaterializeCaptured(resolved);
+          var resolved = (RemoteBatchObject)ResolveReferences(action, context, cards)!;
+          return (IPromptOption)GameAction.MaterializeCaptured(resolved);
         })
         .ToArray();
-      if (actions.Any(action => action == null))
-        throw new NotSupportedException("Captured prompt contains an unsupported action type.");
-      options[group.Key] = Array.AsReadOnly(actions.Cast<IPromptOption>().ToArray());
+      options[group.Key] = Array.AsReadOnly(actions);
     }
     return new GamePrompt(captured,
       new ReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>>(options));
   }
 
-  private static object? ResolveReferences(object? value, GameContext context)
+  private static Dictionary<ulong, GameCardPartial> CreateCardLookup(GameContext context)
+  {
+    var cards = new Dictionary<ulong, GameCardPartial>();
+    foreach (var card in context.Current.Cards.Values
+      .Concat(context.Current.HiddenCards.Values)
+      .Concat(context.Current.RevealedCards.Values))
+    {
+      var partial = (GameCardPartial)Unbind(card);
+      if (partial.LogicalAddress is ulong address)
+        cards.TryAdd(address, partial);
+    }
+    return cards;
+  }
+
+  private static object? ResolveReferences(object? value, GameContext context,
+    IReadOnlyDictionary<ulong, GameCardPartial> cards)
   {
     if (value is object?[] sequence)
-      return sequence.Select(item => ResolveReferences(item, context)).ToArray();
+      return sequence.Select(item => ResolveReferences(item, context, cards)).ToArray();
     if (value is not RemoteBatchObject item)
       return value;
     if (item.NativeType?.FullName == "WotC.MtGO.Client.Model.Play.GameCard")
     {
       ulong address = item.LogicalAddress
         ?? throw new InvalidOperationException("Captured action card has no logical address.");
-      var card = context.Current.Cards.Values.Concat(context.Current.HiddenCards.Values)
-        .Concat(context.Current.RevealedCards.Values)
-        .DistinctBy(card => ((GameCardPartial)Unbind(card)).LogicalAddress)
-        .SingleOrDefault(card => ((object)Unbind(card)) is GameCardPartial partial
-          && partial.LogicalAddress == address);
       // Auxiliary native cards have no server snapshot row. Keep their detached
       // identity and captured members rather than binding them to an unrelated ID.
-      return card is null ? item : Unbind(card);
+      return cards.TryGetValue(address, out var card) ? card : item;
     }
     if (item.NativeType?.FullName == "WotC.MtGO.Client.Model.Play.GamePlayer")
     {
@@ -399,7 +408,7 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
       return Unbind(context.Current.Players.Values.Single(player => player.UserId == userId));
     }
     return new RemoteBatchObject(item.Members.ToDictionary(pair => pair.Key,
-      pair => ResolveReferences(pair.Value, context)), item.NativeType, item.LogicalAddress);
+      pair => ResolveReferences(pair.Value, context, cards)), item.NativeType, item.LogicalAddress);
   }
 
   //

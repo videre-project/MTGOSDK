@@ -167,12 +167,6 @@ namespace MTGOSDK.API.Play.Games.Processors.Partials
       IEnumerable<OrderedCombatParticipant> orders) => orders
         .OrderBy(order => order.Order).Select(order => (order.Order, order.Target.Id));
 
-    internal int[] GetAttackingOrderIds() =>
-      CombatValues(AttackingOrders).Select(value => value.TargetId).ToArray();
-
-    internal int[] GetBlockingOrderIds() =>
-      CombatValues(BlockingOrders).Select(value => value.TargetId).ToArray();
-
     public override bool Equals(object? obj) => obj is GameCardPartial other
       && _snapshot.Equals(other._snapshot) && _propertyValues.Equals(other._propertyValues)
       && HasResolvedState == other.HasResolvedState
@@ -322,7 +316,7 @@ namespace MTGOSDK.API.Play.Games.Processors
 
       // Source indices repeat across collections. Record the operation identity
       // so decoding can distinguish reveal rows even when a row has failed.
-      int collectionId = batch.ToRequest().Operations.Last().Id;
+      int collectionId = batch.Operations[^1].Id;
       batch.Output("revealedZoneCollectionId", batch.Input(collectionId));
     }
 
