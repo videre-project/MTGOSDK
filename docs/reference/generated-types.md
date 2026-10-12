@@ -21,7 +21,9 @@ public enum ActionType
   // Remaining native members appear here in the actual file.
   //#pragma import enum WotC.MtGO.Client.Model.Play.ActionType end
 
-  /// <summary>SDK-only client prompt button without a native game action.</summary>
+  /// <summary>
+  /// SDK-only client prompt button without a native game action.
+  /// </summary>
   PromptControl = int.MaxValue
 }
 ```
@@ -91,10 +93,10 @@ import region. Spell and planeswalker subtypes use the current native
 `SUBTYPEID0` are not vendored into the enum.
 Artifact subtypes are read from the native `ARTIFACT_TYPEID0` range and interpreted
 using `MagicArtifactType`; unverified artifact boolean flags are not retained.
-Snapshot parsing maps known property names to the SDK's local enum keys and keeps
-the native numeric ID and name for unknown properties, allowing capture to tolerate
-an incomplete enum. A difference between native and SDK declarations alone does
-not establish that snapshot processing is broken.
+Snapshot parsing retains each native numeric property ID and its native name,
+including properties absent from the SDK enum. It does not remap IDs by name,
+so capture tolerates an incomplete enum. A difference between native and SDK
+declarations alone does not establish that snapshot processing is broken.
 
 The imports also replace previously stale copies: `ActionModifiers`,
 `ActionTargetRequirements`, and `FunctionKey` gain current native members;
