@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Remoting.Batching;
 
 
@@ -18,6 +19,7 @@ namespace MTGOSDK.API.Play.Games.Processors.Snapshots;
 public sealed class CardInteractionSnapshot : IEquatable<CardInteractionSnapshot>
 {
   private readonly RemoteBatchObject _captured;
+  private readonly GameCardPartial? _resolvedCard;
 
   /// <summary>
   /// The native card object's Diver logical address, independent of MTGO IDs.
@@ -50,12 +52,17 @@ public sealed class CardInteractionSnapshot : IEquatable<CardInteractionSnapshot
   /// </summary>
   public IReadOnlyList<CardAction> Actions { get; }
 
-  internal GameCard Card => new(_captured.Get<RemoteBatchObject>("card"));
+  // Only correlated publications bind the owner to captured gameplay state.
+  internal GameCard? Card =>
+    field ??= _resolvedCard is null
+      ? null
+      : new GameCard(_resolvedCard);
 
   internal CardInteractionSnapshot(RemoteBatchObject captured,
     Func<object?, object?>? resolve = null)
   {
     _captured = captured;
+    _resolvedCard = resolve?.Invoke(captured.Get<RemoteBatchObject>("card")) as GameCardPartial;
     SourceId = captured.Get<int>("sourceId");
     Selection = new(
       captured.Get<int>("id"),

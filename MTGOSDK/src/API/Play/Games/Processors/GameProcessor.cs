@@ -59,6 +59,11 @@ public sealed class GameProcessor : IDisposable
     lock (s_scopeLock)
       s_scopes.TryGetValue(game, out processor);
     processor?.Dispose();
+
+    if (s_activeProcessors.IsEmpty) return;
+    int gameId = processor?._activeGameId ?? game.Id;
+    if (s_activeProcessors.TryGetValue(gameId, out var active))
+      active.Dispose();
   }
 
   internal static ProcessorEvent<ZoneChangeEventArgs> ZoneChanged(Game game) =>
@@ -205,7 +210,7 @@ public sealed class GameProcessor : IDisposable
   }
 
   /// <summary>
-  /// Lazily attaches the captured card-action registry without starting snapshots.
+  /// Lazily starts correlated state observation for captured card actions.
   /// </summary>
   public CardActionRegistry CardActions
   {
@@ -216,9 +221,12 @@ public sealed class GameProcessor : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_cardActions is null)
         {
+          bool activate = _activeGameId is null;
           var registry = new CardActionRegistry();
           registry.Initialize(Game);
+          registry.Changed += NotifyCardActionsChanged;
           _cardActions = registry;
+          if (activate) Ready();
         }
         return _cardActions;
       }
@@ -250,16 +258,16 @@ public sealed class GameProcessor : IDisposable
     }
   }
 
-  public GameProcessor(Game game)
+  static GameProcessor()
+  {
+    RemoteClient.Disposed += ClearScopes;
+  }
+
+  private GameProcessor(Game game)
   {
     ArgumentNullException.ThrowIfNull(game);
     Game = game;
     _processors = new List<IGameStateProcessor>();
-  }
-
-  public GameProcessor(Game game, params IGameStateProcessor[] processors) : this(game)
-  {
-    foreach (var processor in processors) Register(processor);
   }
 
   private void EnsureActive()
@@ -946,6 +954,52 @@ public sealed class GameProcessor : IDisposable
   // Static routing
   //
 
+  internal static event Action<GameCard, IReadOnlyList<CardAction>>? CardActionsChanged;
+
+  private static void ClearScopes(object? sender, EventArgs args)
+  {
+    GameProcessor[] scopes;
+    lock (s_scopeLock)
+      scopes = s_scopes.Select(pair => pair.Value).ToArray();
+    foreach (var scope in scopes)
+      scope.Dispose();
+
+    s_bufferedHooks.Clear();
+    s_notifiedGames.Clear();
+  }
+
+  internal static void ObserveCardActions()
+  {
+    EnsureHookInitialized();
+    foreach (var processing in s_activeProcessors.Values)
+    {
+      lock (processing._lock)
+      {
+        if (!processing._disposed)
+          _ = processing.CardActions;
+      }
+    }
+  }
+
+  private static void NotifyCardActionsChanged(
+    (GameCard Card, IReadOnlyList<CardAction> Actions) update)
+  {
+    var handlers = CardActionsChanged;
+    if (handlers is null) return;
+
+    foreach (Action<GameCard, IReadOnlyList<CardAction>> handler in handlers.GetInvocationList())
+    {
+      try
+      {
+        handler(update.Card, update.Actions);
+      }
+      catch (Exception error)
+      {
+        Log.Error(error, "GameCard.ActionsChanged handler failed.");
+      }
+    }
+  }
+
   /// <summary>
   /// Maps game IDs to their active <see cref="GameProcessor"/> instances
   /// so the static <c>HandleGamePlayStatus</c> hook can route to the
@@ -1104,6 +1158,19 @@ public sealed class GameProcessor : IDisposable
             && s_notifiedGames.TryAdd(gameId, 0))
         {
           OnNewGame?.Invoke(new Game(instance));
+        }
+
+        // A global card subscription also observes games without per-game subscribers.
+        // Reuse an active scope so the same capture is not processed twice.
+        if (CardActionsChanged is not null)
+        {
+          if (!s_activeProcessors.TryGetValue(gameId, out var processing))
+            processing = ForGame(new Game(instance));
+          lock (processing._lock)
+          {
+            if (!processing._disposed)
+              _ = processing.CardActions;
+          }
         }
 
         if (s_activeProcessors.TryGetValue(gameId, out var processor))

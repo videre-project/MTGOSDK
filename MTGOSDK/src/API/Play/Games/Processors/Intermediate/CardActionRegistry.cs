@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.API.Interface.Controls;
+using MTGOSDK.API.Play.Games.Processors.Events;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.Core.Logging;
@@ -17,16 +18,16 @@ namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
 /// Exposes captured native actions and selection eligibility for one game.
 /// </summary>
 /// <remarks>
-/// Actions and eligibility come from the notification-driven interaction capture.
+/// Actions and eligibility come from completed interaction captures paired with
+/// their gameplay snapshots.
 /// </remarks>
 public sealed class CardActionRegistry : IDisposable
 {
   private readonly object _stateLock = new();
-  private InteractionModeTracker? _tracker;
+  private ProcessorEvent<GameStateChangedEventArgs>? _stateChanged;
   private InteractionStateSnapshot _snapshot = InteractionStateSnapshot.Empty;
   private int _gameId;
   private long _version;
-  private bool _subscribed;
   private bool _disposed;
 
   //
@@ -34,8 +35,12 @@ public sealed class CardActionRegistry : IDisposable
   //
 
   /// <summary>
-  /// Raised when a card's complete current native action list changes.
+  /// Raised when a card's captured native action list changes.
   /// </summary>
+  /// <remarks>
+  /// The card comes from the corresponding gameplay snapshot. Removed cards
+  /// retain their last captured state and report an empty action list.
+  /// </remarks>
   public event Action<(GameCard Card, IReadOnlyList<CardAction> Actions)>? Changed;
 
   /// <summary>
@@ -68,7 +73,7 @@ public sealed class CardActionRegistry : IDisposable
   //
 
   /// <summary>
-  /// Attaches the registry to the game's captured interaction state.
+  /// Attaches the registry to the game's correlated state publications.
   /// </summary>
   public void Initialize(Game game)
   {
@@ -76,17 +81,18 @@ public sealed class CardActionRegistry : IDisposable
 
     lock (_stateLock)
     {
-      if (_disposed)
-        throw new ObjectDisposedException(nameof(CardActionRegistry));
-      if (_subscribed)
+      ObjectDisposedException.ThrowIf(_disposed, this);
+      if (_stateChanged is not null)
         return;
 
       int gameId = game.Id;
-      _tracker = GameProcessor.ForGame(game).InteractionState;
-      _tracker.StateChanged += OnInteractionChanged;
-      _snapshot = _tracker.Snapshot;
+      var processing = GameProcessor.ForGame(game);
+      var stateChanged = game.OnStateChanged;
+      stateChanged += OnStateChanged;
+      _snapshot = processing.GetProcessor<PromptProcessor>()?.LastState?.Interaction
+        ?? InteractionStateSnapshot.Empty;
       _gameId = gameId;
-      _subscribed = true;
+      _stateChanged = stateChanged;
     }
   }
 
@@ -186,8 +192,9 @@ public sealed class CardActionRegistry : IDisposable
   // Captured action-list notifications and lifetime cleanup
   //
 
-  private void OnInteractionChanged(InteractionStateSnapshot snapshot)
+  private void OnStateChanged(GameStateChangedEventArgs update)
   {
+    var snapshot = update.Interaction;
     InteractionStateSnapshot previous;
     lock (_stateLock)
     {
@@ -205,20 +212,30 @@ public sealed class CardActionRegistry : IDisposable
       snapshot.Cards.TryGetValue(address, out var card);
       if (oldCard is not null && card is not null && oldCard.HasSameActions(card))
         continue;
+
       var actions = card?.Actions ?? Array.Empty<CardAction>();
       if (oldCard is null && actions.Count == 0)
         continue;
       if (card is null && oldCard!.Actions.Count == 0)
         continue;
-      var identity = (card ?? oldCard!).Card;
+
+      var owner = (card ?? oldCard!).Card;
+      if (owner is null)
+      {
+        Log.Error("Correlated action card {0} has no gameplay snapshot in game {1}, nonce {2}.",
+          address, _gameId, update.Nonce);
+        continue;
+      }
+
       var handlers = Changed;
       if (handlers is null)
         continue;
-      foreach (Action<(GameCard Card, IReadOnlyList<CardAction> Actions)> handler in handlers.GetInvocationList())
+      foreach (Action<(GameCard Card, IReadOnlyList<CardAction> Actions)> handler in
+        handlers.GetInvocationList())
       {
         try
         {
-          handler((identity, actions));
+          handler((owner, actions));
         }
         catch (Exception error)
         {
@@ -230,22 +247,21 @@ public sealed class CardActionRegistry : IDisposable
 
   public void Dispose()
   {
-    bool subscribed;
+    ProcessorEvent<GameStateChangedEventArgs>? stateChanged;
     lock (_stateLock)
     {
       if (_disposed)
         return;
 
       _disposed = true;
-      subscribed = _subscribed;
-      _subscribed = false;
+      stateChanged = _stateChanged;
+      _stateChanged = null;
       _gameId = 0;
       _snapshot = InteractionStateSnapshot.Empty;
     }
 
-    if (subscribed)
-      _tracker!.StateChanged -= OnInteractionChanged;
-    _tracker = null;
+    if (stateChanged is not null)
+      stateChanged -= OnStateChanged;
 
     Changed = null;
   }

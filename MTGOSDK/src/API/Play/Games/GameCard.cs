@@ -6,14 +6,12 @@
 using System.Collections;
 
 using MTGOSDK.API.Collection;
+using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Batching;
-using MTGOSDK.Core.Remoting.Hooking;
-using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
-using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -28,7 +26,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// Stores an internal reference to the IGameCard object.
   /// </summary>
   internal override dynamic obj =>
-    gameCard is GameCardPartial partial
+    Unbind(gameCard) is GameCardPartial partial
       ? partial
       : Bind<IGameCard>(gameCard);
 
@@ -112,7 +110,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// The zone in which the card is currently located.
   /// </summary>
   public GameZone? Zone =>
-    gameCard is GameCardPartial partial
+    Unbind(this) is GameCardPartial partial
       ? partial.GetZoneWrapper()
       : Optional<GameZone>(@base.Zone);
 
@@ -120,7 +118,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   // IsMutatedOnBattlefield
   // IsAbilityOnTheStack
   public GameZone? ActualZone =>
-    gameCard is GameCardPartial partialActual
+    Unbind(this) is GameCardPartial partialActual
       ? partialActual.GetZoneWrapper()
       : Optional<GameZone>(@base.ActualZone);
 
@@ -134,7 +132,7 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// to track the card's movement history.
   /// </remarks>
   public GameZone? PreviousZone =>
-    gameCard is GameCardPartial partialPrevious
+    Unbind(this) is GameCardPartial partialPrevious
       ? partialPrevious.GetPreviousZoneWrapper()
       : Optional<GameZone>(@base.PreviousZone);
 
@@ -145,8 +143,9 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
     Map<IList, CardAction>(@base.PendingTargets);
 
   public IEnumerable<GameCardAssociation> Associations =>
-    gameCard is GameCardPartial partial
-      ? partial.Associations : Map<GameCardAssociation>(@base.Associations);
+    Unbind(this) is GameCardPartial partial
+      ? partial.Associations
+      : Map<GameCardAssociation>(@base.Associations);
 
   /// <summary>
   /// The card ID this card is visually attached to (equipment target, aura
@@ -203,11 +202,13 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   public IEnumerable<CardCounter> Counters =>
     Map<IList, CardCounter>(Unbind(this).Counters);
 
-  public string TypeLine => gameCard is GameCardPartial
-    ? (string)Unbind(this).TypeLine : ReadTypeLine();
+  public string TypeLine =>
+    Unbind(this) is GameCardPartial card
+      ? (string)((dynamic)card).TypeLine
+      : ReadTypeLine();
 
   public GamePlayer Owner =>
-    gameCard is GameCardPartial partialOwner
+    Unbind(this) is GameCardPartial partialOwner
       ? partialOwner.GetOwnerWrapper()
       : new(@base.Owner);
 
@@ -216,12 +217,12 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// Captured cards use the detached value; live cards read the native player ID.
   /// </summary>
   public int OwnerIndex =>
-    gameCard is GameCardPartial po
-      ? po.OwnerIndex
+    Unbind(this) is GameCardPartial partial
+      ? partial.OwnerIndex
       : (int)@base.Owner.Id;
 
   public GamePlayer Controller =>
-    gameCard is GameCardPartial partialController
+    Unbind(this) is GameCardPartial partialController
       ? partialController.GetControllerWrapper()
       : new(@base.Controller);
 
@@ -230,12 +231,12 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
   /// Captured cards use the detached value; live cards read the native player ID.
   /// </summary>
   public int ControllerIndex =>
-    gameCard is GameCardPartial pc
-      ? pc.ControllerIndex
+    Unbind(this) is GameCardPartial partial
+      ? partial.ControllerIndex
       : (int)@base.Controller.Id;
 
   public GamePlayer? Protector =>
-    gameCard is GameCardPartial partialProtector
+    Unbind(this) is GameCardPartial partialProtector
       ? partialProtector.GetProtectorWrapper()
       : Optional<GamePlayer>(@base.Protector);
 
@@ -365,37 +366,29 @@ public sealed class GameCard(dynamic gameCard) : DLRWrapper<IGameCard>
     new(/* IGameCard */ gameCard, nameof(TypesChanged));
 
   /// <summary>
-  /// Event triggered when the card's <c>Actions</c> collection changes, such as when
-  /// a new action is added or removed from the card's available actions.
+  /// Raised when a card's captured action list changes.
   /// </summary>
-  public static EventHookProxy<GameCard, IReadOnlyList<CardAction>> ActionsChanged =
-    new(
-      "Shiny.Play.Duel.ViewModel.DuelSceneCardViewModel",
-      "Actions_CollectionChanged",
-      new CapturedEventHook((context, _, _) =>
-      {
-        var capture = context.Capture
-          ?? throw new InvalidOperationException("Card actions callback has no native capture.");
-        var card = (RemoteBatchObject)RemoteBatchObject.FromValue(capture.Values["card"])!;
-        var actions = capture.Values["actions"].Items.Select(value =>
-          (CardAction)GameAction.MaterializeCaptured(
-            (RemoteBatchObject)RemoteBatchObject.FromValue(value)!)).ToArray();
-        return (new GameCard(card), Array.AsReadOnly(actions));
-      }),
-      CreateActionsCapture(),
-      HarmonyPatchPosition.Postfix
-    );
-
-  private static RemoteHookCapture CreateActionsCapture()
+  /// <remarks>
+  /// The card belongs to the correlated gameplay snapshot, and the actions come
+  /// from its completed UI capture. Removing a card reports an empty action list
+  /// with its last captured state. Subscribing activates game-state observation.
+  /// </remarks>
+  public static event Action<GameCard, IReadOnlyList<CardAction>> ActionsChanged
   {
-    var batch = new RemoteBatch();
-    var view = batch.Input(ObjectOrRemoteAddress.Null);
-    var scalar = RemoteBatchProjection.Value();
-    batch.Output("card", batch.Read(view, "GameCard"), RemoteBatchProjection.Object(
-      ("Id", "Id", scalar), ("SourceId", "SourceId", scalar), ("Name", "Name", scalar),
-      ("GameInterface", "GameInterface", RemoteBatchProjection.Object(("Id", "Id", scalar)))).WithLogicalAddress());
-    batch.Output("actions", batch.Read(view, "Actions"),
-      RemoteBatchProjection.Sequence(GameAction.CreateCaptureProjection()));
-    return new() { Batch = batch.ToRequest(), Inputs = [-1], IncludeParameters = false };
+    add
+    {
+      if (value is null) return;
+      GameProcessor.CardActionsChanged += value;
+      try
+      {
+        GameProcessor.ObserveCardActions();
+      }
+      catch
+      {
+        GameProcessor.CardActionsChanged -= value;
+        throw;
+      }
+    }
+    remove => GameProcessor.CardActionsChanged -= value;
   }
 }

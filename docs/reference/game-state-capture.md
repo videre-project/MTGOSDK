@@ -368,11 +368,12 @@ captured action descriptions do not act as live handles.
 
 ## Processing ownership
 
-`GameProcessor.ForGame(game)` owns the reference scope, native action registry,
-interaction tracker, snapshot pipeline, and processor-event cleanup for that
-`Game` wrapper. Obtaining it creates no remote hooks. `CardActions` and
-`InteractionState` attach native notifications lazily; registering a processor
-or subscribing to a gameplay event activates snapshot routing.
+`GameProcessor.ForGame(game)` is the sole construction path and owns the
+reference scope, native action registry, interaction tracker, snapshot pipeline,
+and processor-event cleanup for that `Game` wrapper. Obtaining it creates no
+remote hooks. `InteractionState` attaches native notifications lazily. Accessing
+`CardActions` starts correlated snapshot processing if the scope was inactive;
+an already active scope retains its explicit `Ready()` boundary.
 
 ```csharp
 var processing = GameProcessor.ForGame(game);
@@ -476,12 +477,34 @@ captures run synchronously on their native calling thread without redispatch.
 The tracker keeps valid subscriptions if capture fails and replaces them when
 the mode hook observes a recreated scene.
 
+`GameCard.ActionsChanged` reports a full captured `GameCard` with the action list
+from its paired UI capture:
+
+```csharp
+GameCard.ActionsChanged += (card, actions) =>
+{
+  RecordActions(card.Name, card.TypeLine, actions);
+};
+```
+
+The event uses the existing gameplay hook and correlated publication rather than
+an independent `Actions_CollectionChanged` hook. Subscribing attaches the registry
+to active processing scopes. Games without an active scope begin observation on
+their next gameplay message. The subscription does not replay existing action lists.
+Unsubscribing removes the global handler without disposing shared game processing.
+
+`CardActions.Changed` offers the same card and action list for a specific registry.
+The owner and action references resolve by logical address against visible, hidden,
+and revealed cards in the corresponding gameplay snapshot. Removal reports the
+last resolved owner with an empty action list. A missing owner is logged explicitly;
+identity-only values are never presented as a complete `GameCard`.
+
 `CardActions.GetActions()`, `GetSelectable()`, `GetPromptButtons()`, and
-`GetPlayerSelectable()` return the latest
-captured lists without IPC after initial capture. Player entries use the
-native `GamePlayer.Id` (server player index), independent of scene display
-order. Changed lists are replaced, so previously returned lists retain their
-values. Commands still resolve and validate live controls at execution time.
+`GetPlayerSelectable()` return the latest correlated lists without IPC after the
+first completed publication. Player entries use the native `GamePlayer.Id`
+(server player index), independent of scene display order. Changed lists are
+replaced, so previously returned lists retain their values. Commands still resolve
+and validate live controls at execution time.
 Notifications are delivered asynchronously; these are the latest observed
 values, not a guarantee of lossless history or atomicity with a server snapshot.
 Before initial capture, mode is `Undefined` and the captured lists are empty.
@@ -494,7 +517,9 @@ and waiting APIs belong to the processor layer. Custom processors use
 `processing.Register(processor)`.
 
 `game.ClearEvents()` clears native event handlers and delegates processing
-cleanup. Cleanup removes routing and gameplay handlers immediately, then
+cleanup for the game, including a scope activated through the global card event.
+Remote client disposal also releases processing scopes. Cleanup removes routing
+and gameplay handlers immediately, then
 releases owned components after an in-flight snapshot finishes. Subsequent
 access creates a fresh scope; old scopes reject further registration and
 resource access. Event wrappers can be subscribed again against that new scope.
