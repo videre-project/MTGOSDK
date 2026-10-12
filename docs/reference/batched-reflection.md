@@ -72,6 +72,11 @@ handle outside the builder. Raw handle recording reads the token without fetchin
 remote type metadata. Inputs remain valid only while their existing handles do;
 the builder does not extend their remote lifetime.
 
+The builder copies encoded inputs and clears their creation-time metadata.
+Independently recorded capture descriptions can therefore share a native hook.
+This leaves the supplied inputs unchanged and preserves literal values, including
+DateTime values encoded in the payload.
+
 `Read` supports dot-separated property/field paths, including nonpublic and
 inherited members. A null along a path produces null. Missing members produce
 an error. Indexer syntax is unsupported.

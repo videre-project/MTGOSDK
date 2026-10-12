@@ -57,6 +57,13 @@ public class ObjectOrRemoteAddress : IPinResponse
   [Key(7)]
   public DateTime Timestamp = DateTime.Now;
 
+  internal ObjectOrRemoteAddress WithTimestamp(DateTime timestamp)
+  {
+    var copy = (ObjectOrRemoteAddress)MemberwiseClone();
+    copy.Timestamp = timestamp;
+    return copy;
+  }
+
   public static ObjectOrRemoteAddress FromObj(object o) =>
     new()
     {

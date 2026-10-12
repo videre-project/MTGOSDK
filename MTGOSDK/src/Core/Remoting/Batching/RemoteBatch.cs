@@ -46,9 +46,14 @@ public sealed class RemoteBatch : RemoteBatchScope
   /// </summary>
   public RemoteBatchSlot Input(ObjectOrRemoteAddress value)
   {
+    if (value is null) throw new ArgumentNullException(nameof(value));
+
     var slot = new RemoteBatchSlot(this, this,
       new() { Kind = RemoteBatchReferenceKind.Input, Id = _inputs.Count });
-    _inputs.Add(value ?? throw new ArgumentNullException(nameof(value)));
+
+    // Ignore transport timestamps when comparing capture descriptions so clients
+    // can share a hook when they recorded the same inputs at different times.
+    _inputs.Add(value.WithTimestamp(default));
     return slot;
   }
 
