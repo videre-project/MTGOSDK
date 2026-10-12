@@ -108,7 +108,7 @@ public sealed class GameProcessor : IDisposable
   /// <summary>
   /// Native property names excluded from snapshot change detection.
   /// </summary>
-  private static readonly string s_hashExcludedPropertyNames =
+  internal static readonly string HashExcludedPropertyNames =
     string.Join("|", PropertyContainer.HashExcludedProperties);
 
   /// <summary>
@@ -616,14 +616,13 @@ public sealed class GameProcessor : IDisposable
     List<IGameStateProcessor> processors)
   {
     var capturedPrompt = capture.Values["prompt"];
-    // The remote helper returns alternating ThingID/hash pairs in source order.
-    int[] rawHashes = (int[])RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "ComputeThingSnapshotHashes",
-      null,
-      (object)message.ThingElements,
-      s_hashExcludedPropertyNames);
-
+    // Hashes and state elements belong to the same completed native capture.
+    int[] rawHashes = ((object?[])RemoteBatchObject.FromValue(capture.Values["hashes"])!)
+      .Cast<int>().ToArray();
+    var identities = ((object?[])RemoteBatchObject.FromValue(capture.Values["players"])!)
+      .Cast<RemoteBatchObject>().ToArray();
+    var stateElements = ((object?[])RemoteBatchObject.FromValue(capture.Values["stateElements"])!)
+      .Cast<RemoteBatchObject>();
 
     // Select changed card and player rows using hashes from the detached message.
     var current = new Dictionary<int, GameCard>();
@@ -757,17 +756,16 @@ public sealed class GameProcessor : IDisposable
 
     var promptIdentity = (RemoteBatchObject?)RemoteBatchObject.FromValue(capturedPrompt);
     bool hasPromptElement = false;
-    int promptElementCount = 0;
     StateElementType stateType = StateElementType.Invalid;
     var rawDamageAssignments = new List<DamageAssignmentPartial>();
-    foreach (var element in message.OtherStateElements)
+    foreach (var element in stateElements)
     {
-      stateType = Cast<StateElementType>(element.Type);
+      stateType = element.Get<StateElementType>("Type");
       switch (stateType)
       {
         case StateElementType.PlayerStatus:
           Dictionary<int, GamePlayerPartial> parsedPlayers =
-            GamePlayerPartial.ParseFromStatusElement((object) element, (object) instance);
+            GamePlayerPartial.ParseFromStatusElement(element, identities, References);
           foreach (var entry in parsedPlayers)
           {
             if (playerPartials.TryGetValue(entry.Key, out var prior))
@@ -781,32 +779,31 @@ public sealed class GameProcessor : IDisposable
         case StateElementType.TurnStep:
         case StateElementType.InteractState:
           hasPromptElement = true;
-          promptElementCount++;
-          turnNumber = element.TurnNumber ?? 0;
-          currentPhase = Cast<GamePhase>(element.CurrentPhase ?? 0);
-          promptedPlayer = element.PromptedPlayer ?? byte.MaxValue;
+          turnNumber = element.Get<int>("TurnNumber");
+          currentPhase = element.Get<GamePhase>("CurrentPhase");
+          promptedPlayer = element.Get<byte>("PromptedPlayer");
           promptText = MTGOSDK.API.MtgoTextNormalizer.NormalizeText(
-            GamePrompt.RemoveMarkup(element.PromptText ?? string.Empty));
-          interactionTimestamp = element.TimeStamp ?? 0;
+            GamePrompt.RemoveMarkup(element.Get<string?>("PromptText") ?? string.Empty));
+          interactionTimestamp = element.Get<uint>("TimeStamp");
           break;
         case StateElementType.DamageAssignment:
         {
           var distributions = new List<DistributionPartial>();
-          dynamic thingsToDamage = element.ThingsToDamage;
+          var thingsToDamage = element.Get<object?[]?>("ThingsToDamage");
           if (thingsToDamage != null)
           {
-            foreach (dynamic info in thingsToDamage)
+            foreach (RemoteBatchObject info in thingsToDamage)
             {
               distributions.Add(new DistributionPartial(
-                thingId: (int)info.ThingId,
-                amount:  (int)info.Amount,
-                minimum: (int)info.Minimum,
-                maximum: (int)info.Maximum));
+                thingId: info.Get<int>("ThingId"),
+                amount:  info.Get<int>("Amount"),
+                minimum: info.Get<int>("Minimum"),
+                maximum: info.Get<int>("Maximum")));
             }
           }
           rawDamageAssignments.Add(new DamageAssignmentPartial(
-            damagingThingId: (int)element.DamagingThingId,
-            damageToDeal:    (int)element.DamageToDeal,
+            damagingThingId: element.Get<int>("DamagingThingId"),
+            damageToDeal:    element.Get<int>("DamageToDeal"),
             distributions:   distributions));
           break;
         }
@@ -824,7 +821,7 @@ public sealed class GameProcessor : IDisposable
     GamePlayerPartial.ApplyMessageState(
       playerPartials,
       playerProperties,
-      (int)message.PriorityPlayer);
+      capture.Values["priorityPlayer"].GetScalar<int>());
 
     // Convert GamePlayerPartial to GamePlayer wrappers
     var players = new Dictionary<int, GamePlayer>(playerPartials.Count);

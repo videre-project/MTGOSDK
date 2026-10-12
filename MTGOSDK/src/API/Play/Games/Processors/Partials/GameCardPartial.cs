@@ -286,19 +286,25 @@ namespace MTGOSDK.API.Play.Games.Processors
     /// Values are serialized before MTGO can process the next gameplay message.
     /// </summary>
     internal static void AppendGameplayCapture(
-      RemoteBatch batch, RemoteBatchSlot message, RemoteBatchSlot game)
+      RemoteBatch batch, RemoteBatchSlot message, RemoteBatchSlot game, string excludedHashProperties)
     {
       DefinePropertiesProjection(batch);
       batch.DefineProjection("definition", DefinitionProjection());
       var thingNumber = batch.Input((uint)MagicProperty.THINGNUMBER);
       var missingId = batch.Input(-1);
 
-      batch.ForEach(batch.Read(message, "ThingElements"), row =>
+      var elements = batch.Read(message, "ThingElements");
+      var hashes = new RemoteBatchMethod(
+        new RemoteBatchType("MTGOSDK.Core.Remoting.Interop.CollectionHelpers"), "ComputeThingSnapshotHashes",
+        RemoteBatchType.From(typeof(object)), RemoteBatchType.From(typeof(string)));
+      batch.Output("hashes", batch.CallStatic(hashes, elements, batch.Input(excludedHashProperties)));
+
+      batch.ForEach(elements, row =>
       {
         var properties = row.Read("Properties");
         var id = row.Call(properties, s_thingNumber, thingNumber, missingId);
-        // Native lookup returns null for players; their message properties are
-        // still captured. Read and output projections preserve successful nulls.
+        // Player rows retain their message properties even though native card
+        // lookup returns null. Their card projections preserve that null value.
         var card = row.Call(game, s_findCard, id);
         AppendCardOutputs(row, card, properties, row.Read("FromZone"));
       });

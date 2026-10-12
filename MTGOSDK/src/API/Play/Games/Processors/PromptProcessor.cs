@@ -443,11 +443,18 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
     batch.Output("timestamp", batch.Read(message, "GameStateTimestamp"));
     batch.Output("turnNumber", batch.Read(instance, "CurrentTurn"));
     batch.Output("phase", batch.Read(instance, "CurrentPhase"));
+    batch.Output("priorityPlayer", batch.Read(message, "PriorityPlayer"));
+    batch.Output("stateElements", batch.Read(message, "OtherStateElements"),
+      RemoteBatchProjection.Sequence(CreateStateElementProjection()));
+    batch.Output("players", batch.Read(instance, "PlayersInServerOrder"),
+      RemoteBatchProjection.Sequence(RemoteBatchProjection.Object(
+        ("Name", "User.Name", scalar))));
     batch.Output("prompt", batch.Read(instance, "Prompt"), prompt);
 
     // Capture resolved cards at the same native completion point as the prompt.
     // Reconstructing copies against the live game can mutate its zones.
-    GameCardCapture.AppendGameplayCapture(batch, message, instance);
+    GameCardCapture.AppendGameplayCapture(batch, message, instance,
+      GameProcessor.HashExcludedPropertyNames);
     return new()
     {
       Batch = batch.ToRequest(),
@@ -460,6 +467,51 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
         IsStateBoundary = true
       }
     };
+  }
+
+  private static RemoteBatchProjection CreateStateElementProjection()
+  {
+    var scalar = RemoteBatchProjection.Value();
+    var sequence = RemoteBatchProjection.Sequence();
+    var type = (Name: "Type", Path: "Type", Projection: scalar);
+    var projection = RemoteBatchProjection.Object(type);
+
+    // Unhandled elements still retain their type and position in the message.
+    // Each recognized native type adds only the fields its processor consumes.
+    const string prefix = "WotC.MtGO.Client.Model.Play.";
+    projection.RuntimeTypes[prefix + "PlayerStatusElement"] = RemoteBatchProjection.Object(type,
+      ("ActivePlayer",     "ActivePlayer",     scalar),
+      ("Lifes",            "Lifes",            sequence),
+      ("HandCounts",       "HandCounts",       sequence),
+      ("LibraryCounts",    "LibraryCounts",    sequence),
+      ("GraveyardCounts",  "GraveyardCounts",  sequence),
+      ("TimeLeft",         "TimeLeft",         sequence));
+
+    var prompt = RemoteBatchProjection.Object(type,
+      ("TurnNumber",       "TurnNumber",       scalar),
+      ("CurrentPhase",     "CurrentPhase",     scalar),
+      ("PromptedPlayer",   "PromptedPlayer",   scalar),
+      ("PromptText",       "PromptText",       scalar),
+      ("TimeStamp",        "TimeStamp",        scalar));
+    projection.RuntimeTypes[prefix + "TurnStepElement"] = prompt;
+    projection.RuntimeTypes[prefix + "InteractStateElement"] = prompt;
+
+    projection.RuntimeTypes[prefix + "ManaPoolElement"] = RemoteBatchProjection.Object(type,
+      ("PlayerNumber", "PlayerNumber", scalar),
+      ("Mana", "Mana", RemoteBatchProjection.Sequence(RemoteBatchProjection.Object(
+        ("Color",  "Color",  scalar),
+        ("Amount", "Amount", scalar)))));
+
+    projection.RuntimeTypes[prefix + "DamageAssignmentElement"] = RemoteBatchProjection.Object(type,
+      ("DamagingThingId", "DamagingThingId", scalar),
+      ("DamageToDeal",    "DamageToDeal",    scalar),
+      ("ThingsToDamage", "ThingsToDamage", RemoteBatchProjection.Sequence(
+        RemoteBatchProjection.Object(
+          ("ThingId", "ThingId", scalar),
+          ("Amount",  "Amount",  scalar),
+          ("Minimum", "Minimum", scalar),
+          ("Maximum", "Maximum", scalar)))));
+    return projection;
   }
 
   //
