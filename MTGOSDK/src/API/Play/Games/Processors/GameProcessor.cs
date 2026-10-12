@@ -90,7 +90,6 @@ public sealed class GameProcessor : IDisposable
 
   private sealed class PendingHook(
     dynamic instance,
-    dynamic message,
     uint timestamp,
     DateTime actionTimestamp,
     RemoteBatchResult capture,
@@ -98,7 +97,6 @@ public sealed class GameProcessor : IDisposable
   {
     public RemoteCaptureSequence? Sequence { get; } = sequence;
     public dynamic Instance { get; } = instance;
-    public dynamic Message { get; } = message;
     public RemoteBatchResult Capture { get; } = capture;
     public uint Timestamp { get; } = timestamp;
     public DateTime ActionTimestamp { get; } = actionTimestamp;
@@ -473,7 +471,6 @@ public sealed class GameProcessor : IDisposable
   /// </summary>
   public void EnqueuePendingHook(
     dynamic instance,
-    dynamic message,
     (uint Game, DateTime Action) ts,
     RemoteBatchResult capture,
     RemoteCaptureSequence? sequence = null)
@@ -487,7 +484,7 @@ public sealed class GameProcessor : IDisposable
         _pendingHooks[ts.Game] = queue;
       }
 
-      queue.Enqueue(new PendingHook(instance, message, ts.Game, ts.Action, capture, sequence));
+      queue.Enqueue(new PendingHook(instance, ts.Game, ts.Action, capture, sequence));
 
       if (!_pendingDrainScheduled)
       {
@@ -527,14 +524,13 @@ public sealed class GameProcessor : IDisposable
 
           ProcessGameplayStatus(
             pending.Instance,
-            pending.Message,
             pending.Timestamp,
             pending.ActionTimestamp,
             pending.Capture,
             pending.Sequence,
             processors);
 
-          // Limit bursts of remoting requests when several snapshots are queued.
+          // Yield between bursts when several captures are queued.
           if (++processedThisCycle % 3 == 0)
             await Task.Delay(50);
         }
@@ -602,13 +598,12 @@ public sealed class GameProcessor : IDisposable
   }
 
   /// <summary>
-  /// Builds a snapshot from a gameplay-status message, then dispatches
+  /// Builds a snapshot from captured gameplay values, then dispatches
   /// it to the registered state processors.
   /// Called from the single drain task — no concurrent access to snapshot state.
   /// </summary>
   private void ProcessGameplayStatus(
     dynamic instance,
-    dynamic message,
     uint ts,
     DateTime actionTs,
     RemoteBatchResult capture,
@@ -982,7 +977,7 @@ public sealed class GameProcessor : IDisposable
     {
       while (queue.TryDequeue(out var hook))
       {
-        processor.EnqueuePendingHook((object)hook.Instance, (object)hook.Message,
+        processor.EnqueuePendingHook((object)hook.Instance,
           (hook.Timestamp, hook.ActionTimestamp), hook.Capture, hook.Sequence);
       }
     }
@@ -1090,7 +1085,6 @@ public sealed class GameProcessor : IDisposable
       "HandleGamePlayStatus",
       new CapturedEventHook((capture, instance, args) =>
       {
-        dynamic message = args[0];
         var captured = capture.Capture
           ?? throw new InvalidOperationException("Gameplay hook did not provide its capture.");
         var values = captured.Values;
@@ -1114,13 +1108,13 @@ public sealed class GameProcessor : IDisposable
 
         if (s_activeProcessors.TryGetValue(gameId, out var processor))
         {
-          processor.EnqueuePendingHook(instance, message, ts, captured, capture.CaptureSequence);
+          processor.EnqueuePendingHook(instance, ts, captured, capture.CaptureSequence);
         }
         else
         {
           // Buffer for replay when Activate() is called.
           var queue = s_bufferedHooks.GetOrAdd(gameId, _ => new());
-          queue.Enqueue(new PendingHook(instance, message, ts.Item1, ts.Item2,
+          queue.Enqueue(new PendingHook(instance, ts.Item1, ts.Item2,
             captured, capture.CaptureSequence));
         }
 
