@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections;
-
 using WotC.MtGO.Client.Model.Play;
 
 
@@ -28,7 +26,8 @@ public sealed class CardSelectorAction(dynamic cardSelectorAction) : GameAction
   //
 
   public List<CardSelectorChoice> Choices =>
-    Map<IList, CardSelectorChoice>((object)Unbind(this).Choices, item => new CardSelectorChoice(item)).ToList();
+    Map<CardSelectorChoice>((object)Unbind(this).Choices,
+      item => new CardSelectorChoice(item)).ToList();
 
   // TODO: Map CTN to GameCard
   //       (i.e. ICardDataManager.GetCardDefinitionForTextureNumber(CTN))
