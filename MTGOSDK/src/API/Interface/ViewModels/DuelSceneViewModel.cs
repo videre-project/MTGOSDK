@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Diagnostics;
-
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Reflection;
 
@@ -124,35 +122,27 @@ public sealed class DuelSceneViewModel(dynamic duelSceneViewModel)
   public static DuelSceneViewModel? ForGame(Game game)
   {
     ArgumentNullException.ThrowIfNull(game);
-    using var activity = s_activitySource.StartActivity("DuelSceneViewModel.ForGame");
 
     dynamic? owner = Unbind(s_playScene).GetViewModelForJoinable(Unbind(game).Match);
     if (owner is null)
-    {
-      activity?.SetTag("scene.lookup.result", "WindowAbsent");
       return null;
-    }
 
     int gameId = game.Id;
     dynamic? scene = owner.m_duelSceneViewModel;
     if (scene is not null && scene.GameId == gameId && !scene.IsDisposed)
     {
-      activity?.SetTag("scene.lookup.result", "CurrentScene");
       return new DuelSceneViewModel(scene);
     }
 
     scene = owner.m_delayedDuelSceneViewModel;
     if (scene is not null && scene.GameId == gameId && !scene.IsDisposed)
     {
-      activity?.SetTag("scene.lookup.result", "DelayedScene");
       return new DuelSceneViewModel(scene);
     }
 
-    activity?.SetTag("scene.lookup.result", "SceneAbsent");
     return null;
   }
 
-  private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
   private static readonly IPlaySceneViewModel s_playScene =
     ObjectProvider.Get<IPlaySceneViewModel>();
 }
