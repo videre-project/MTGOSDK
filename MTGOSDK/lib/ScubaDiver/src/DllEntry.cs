@@ -11,6 +11,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 
+using Microsoft.Extensions.Logging;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Resources;
 
@@ -162,12 +163,22 @@ public class DllEntry
       }
 
       // Configure logging options to write to a dedicated log file sink.
+      // Debug logging writes several lines per request (each with a caller
+      // lookup and a flush) inside the host process, so the diver logs at
+      // Information unless MTGOSDK_DIVER_LOG_LEVEL selects another level.
       Bootstrapper.ExtractDir = "MTGOSDK";
+      LogLevel level = Enum.TryParse(
+          Environment.GetEnvironmentVariable("MTGOSDK_DIVER_LOG_LEVEL"),
+          ignoreCase: true, out LogLevel configured)
+        ? configured
+        : LogLevel.Information;
+      LoggerBase.MinimumLevel = level;
       FileLoggerOptions options = new()
       {
         LogDirectory = Path.Combine(Bootstrapper.AppDataDir, "Logs"),
         FileName = $"Diver-{port}.log",
         MaxAge = TimeSpan.FromDays(3),
+        LogLevel = level,
       };
       LoggerBase.SetProviderInstance(new FileLoggerProvider(options));
 

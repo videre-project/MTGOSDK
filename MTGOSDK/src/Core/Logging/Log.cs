@@ -30,23 +30,23 @@ public class Log : LoggerBase
   // ILogger Extensions
   //
 
-  public static void Trace(string? message, params object?[] args) =>
-    s_logger.LogTrace(message, args);
-  public static void Trace(EventId eventId, string? message, params object?[] args) =>
-    s_logger.LogTrace(eventId, message, args);
-  public static void Trace(Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogTrace(exception, message, args);
-  public static void Trace(EventId eventId, Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogTrace(eventId, exception, message, args);
+  public static void Trace(string? message, params object?[] args)
+    { if (IsLevelEnabled(LogLevel.Trace)) s_logger.LogTrace(message, args); }
+  public static void Trace(EventId eventId, string? message, params object?[] args)
+    { if (IsLevelEnabled(LogLevel.Trace)) s_logger.LogTrace(eventId, message, args); }
+  public static void Trace(Exception? exception, string? message, params object?[] args)
+    { if (IsLevelEnabled(LogLevel.Trace)) s_logger.LogTrace(exception, message, args); }
+  public static void Trace(EventId eventId, Exception? exception, string? message, params object?[] args)
+    { if (IsLevelEnabled(LogLevel.Trace)) s_logger.LogTrace(eventId, exception, message, args); }
 
-  public static void Debug(string? message, params object?[] args) =>
-    s_logger.LogDebug(message, args);
-  public static void Debug(EventId eventId, string? message, params object?[] args) =>
-    s_logger.LogDebug(eventId, message, args);
-  public static void Debug(Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogDebug(exception, message, args);
-  public static void Debug(EventId eventId, Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogDebug(eventId, exception, message, args);
+  public static void Debug(string? message, params object?[] args)
+    { if (IsLevelEnabled(LogLevel.Debug)) s_logger.LogDebug(message, args); }
+  public static void Debug(EventId eventId, string? message, params object?[] args)
+    { if (IsLevelEnabled(LogLevel.Debug)) s_logger.LogDebug(eventId, message, args); }
+  public static void Debug(Exception? exception, string? message, params object?[] args)
+    { if (IsLevelEnabled(LogLevel.Debug)) s_logger.LogDebug(exception, message, args); }
+  public static void Debug(EventId eventId, Exception? exception, string? message, params object?[] args)
+    { if (IsLevelEnabled(LogLevel.Debug)) s_logger.LogDebug(eventId, exception, message, args); }
 
   public static void Information(string? message, params object?[] args) =>
     s_logger.LogInformation(message, args);
