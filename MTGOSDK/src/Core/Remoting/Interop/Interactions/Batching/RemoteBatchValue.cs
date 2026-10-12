@@ -11,7 +11,7 @@ namespace MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 /// <summary>
 /// Represents a projected value whose kind determines which encoded contents to read.
 /// </summary>
-[MessagePackObject]
+[MessagePackObject(AllowPrivate = true, SuppressSourceGeneration = true)]
 public sealed class RemoteBatchValue
 {
   [Key(0)]
@@ -26,14 +26,37 @@ public sealed class RemoteBatchValue
   [Key(3)]
   public string? EnumName { get; set; }
 
+  // Serialize the backing collections directly so unused value kinds do not
+  // allocate them. Public collection access still returns a mutable empty value.
   [Key(4)]
-  public List<RemoteBatchValue> Items { get; set; } = [];
+  private List<RemoteBatchValue>? _items;
+
+  [IgnoreMember]
+  public List<RemoteBatchValue> Items
+  {
+    get => _items ??= [];
+    set => _items = value;
+  }
 
   [Key(5)]
-  public Dictionary<string, RemoteBatchValue> Members { get; set; } = new();
+  private Dictionary<string, RemoteBatchValue>? _members;
+
+  [IgnoreMember]
+  public Dictionary<string, RemoteBatchValue> Members
+  {
+    get => _members ??= new();
+    set => _members = value;
+  }
 
   [Key(6)]
-  public List<RemoteBatchDictionaryEntry> Entries { get; set; } = [];
+  private List<RemoteBatchDictionaryEntry>? _entries;
+
+  [IgnoreMember]
+  public List<RemoteBatchDictionaryEntry> Entries
+  {
+    get => _entries ??= [];
+    set => _entries = value;
+  }
 
   [Key(7)]
   public RemoteBatchType? UnderlyingType { get; set; }
