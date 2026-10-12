@@ -24,13 +24,11 @@ public partial class Diver : IDisposable
 
     Log.Debug($"[Diver][MakeEventUnsubscribeResponse] Called! Token: {token}");
 
-    if (_remoteEventHandler.TryRemove(token, out RegisteredEventHandlerInfo eventInfo))
-    {
-      _activeCallbacks.TryRemove(token, out _);
-      try { RemoveEventHandler(eventInfo.EventInfo, eventInfo.Target, eventInfo.RegisteredProxy); }
-      finally { eventInfo.CaptureScopeSubscription?.Dispose(); }
+    // Only the client that subscribed (or a connection that never registered)
+    // removes a subscription; one removed with its registration is unknown.
+    if (TakeClientSubscription(token, hook: false) != SubscriptionOwner.NotOwned &&
+        RemoveEventSubscription(token))
       return s_okResponse;
-    }
     return QuickError("Unknown token for event callback subscription");
   }
 }

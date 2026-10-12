@@ -46,6 +46,19 @@ public class DiverDiagnostics
   /// </summary>
   [Key(10)]
   public HostProcessStats HostProcess { get; set; }
+
+  /// <summary>
+  /// Registered client processes, with the pin references each holds.
+  /// </summary>
+  [Key(11)]
+  public Dictionary<int, int> ClientPinReferences { get; set; }
+
+  /// <summary>
+  /// Clients removed so far (unregistered, or their process exited), with
+  /// their pin references released.
+  /// </summary>
+  [Key(12)]
+  public int ClientsRemoved { get; set; }
 }
 
 [MessagePackObject]

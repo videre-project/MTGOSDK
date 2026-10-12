@@ -323,14 +323,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   public virtual DateTime __timestamp { get => m_timestamp; set => m_timestamp = value; }
   private DateTime m_timestamp = DateTime.Now;
 
-  /// <summary>
-  /// Holds strong references to child DROs returned from property/method access.
-  /// This prevents children from being GC'd (and unpinned) while the parent is alive.
-  /// </summary>
-  // Property serialization can fetch multiple remote children concurrently.
-  // Keep this cache concurrent so parallel SerializeAs calls cannot corrupt it.
-  private readonly ConcurrentDictionary<ulong, DynamicRemoteObject> __childRefs = new();
-
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
   private List<MemberInfo> __membersInner = null;
@@ -353,9 +345,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     // Destructor - we need to make sure we don't leave dangling references to
     // remote objects. This is important because the remote object might be
     // disposed of and we don't want to keep a reference to it.
-
-    // Clear child references first - they'll be GC'd and released separately
-    __childRefs.Clear();
 
     if (__ro != null && __ro.IsValid)
     {
@@ -394,14 +383,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
     var dro = ro.Dynamify() as DynamicRemoteObject;
     dro.__timestamp = oora.Timestamp;
 
-    TrackChildReference(oora.RemoteAddress, dro);
-
     return dro;
-  }
-
-  private void TrackChildReference(ulong remoteAddress, DynamicRemoteObject dro)
-  {
-    __childRefs[remoteAddress] = dro;
   }
 
   /// <summary>
@@ -1053,8 +1035,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         var remoteObject = __ra.GetRemoteObjectFromField(item.RemoteAddress, item.Type);
         var dro = remoteObject.Dynamify() as DynamicRemoteObject;
         dro.__timestamp = item.Timestamp;
-
-        TrackChildReference(item.RemoteAddress, dro);
 
         return dro;
       }

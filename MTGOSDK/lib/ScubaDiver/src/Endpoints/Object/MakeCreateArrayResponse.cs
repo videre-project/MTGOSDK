@@ -66,7 +66,7 @@ public partial class Diver : IDisposable
     if (createdArray == null)
       return QuickError("Array.CreateInstance returned null");
 
-    ulong pinAddr = _runtime.PinObject(createdArray);
+    ulong pinAddr = _runtime.PinObject(createdArray, RequestClient);
     int hashCode = createdArray.GetHashCode();
     var res = ObjectOrRemoteAddress.FromToken(
       pinAddr,

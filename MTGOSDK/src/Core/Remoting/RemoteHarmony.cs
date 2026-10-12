@@ -129,31 +129,43 @@ public class RemoteHarmony
   {
     LocalHookCallback hookProxy = (HookContext context, ObjectOrRemoteAddress instance, ObjectOrRemoteAddress[] args) =>
     {
+      // This client owns one pin reference to each object argument: resolving
+      // it takes the reference over; anything left unresolved returns it.
       if (hook.Capture?.IncludeParameters == false)
       {
+        _app.Communicator.ReleaseCallbackArguments(context, [instance, .. args]);
         hook.HookAction.DynamicInvoke(context, null, Array.Empty<object>());
         return;
       }
 
-      DynamicRemoteObject droInstance;
-      if (instance.IsNull)
+      DynamicRemoteObject droInstance = null;
+      RemoteObject ro;
+      ObjectOrRemoteAddress[] owned = [instance, .. args];
+      int settled = 0; // owned[..settled] were taken over (or returned on failure)
+      try
       {
-        droInstance = null;
-      }
-      else
-      {
-        RemoteObject roInstance = this._app.GetRemoteObjectFromField(instance.RemoteAddress, instance.Type);
-        droInstance = roInstance.Dynamify();
-        droInstance.__timestamp = context.Timestamp; // Preserve oora timestamp
-      }
+        settled = 1;
+        if (!instance.IsNull)
+        {
+          RemoteObject roInstance = this._app.GetRemoteObjectFromField(instance.RemoteAddress, instance.Type,
+            context.OwnsParameters);
+          droInstance = roInstance.Dynamify();
+          droInstance.__timestamp = context.Timestamp; // Preserve oora timestamp
+        }
 
-      if (args.Length != 1)
-      {
-        throw new NotImplementedException("Unexpected arguments forwarded to callback from the diver.");
+        if (args.Length != 1)
+        {
+          throw new NotImplementedException("Unexpected arguments forwarded to callback from the diver.");
+        }
+        // The Diver passes method arguments as one remote object array. Decode
+        // its elements into local values and proxies before invoking the callback.
+        settled = 2;
+        ro = _app.GetRemoteObjectFromField(args[0].RemoteAddress, args[0].Type, context.OwnsParameters);
       }
-      // The Diver passes method arguments as one remote object array. Decode
-      // its elements into local values and proxies before invoking the callback.
-      RemoteObject ro = _app.GetRemoteObjectFromField(args[0].RemoteAddress, args[0].Type);
+      finally
+      {
+        _app.Communicator.ReleaseCallbackArguments(context, owned.Skip(settled));
+      }
       dynamic dro = ro.Dynamify();
       if (!ro.GetType().IsArray)
       {

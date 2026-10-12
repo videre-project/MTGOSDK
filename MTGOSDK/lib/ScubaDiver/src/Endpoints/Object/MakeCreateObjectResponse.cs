@@ -75,7 +75,7 @@ public partial class Diver : IDisposable
     }
     else
     {
-      ulong pinAddr = _runtime.PinObject(createdObject);
+      ulong pinAddr = _runtime.PinObject(createdObject, RequestClient);
       int hashCode = createdObject.GetHashCode();
       res = ObjectOrRemoteAddress.FromToken(pinAddr, createdObject.GetType().FullName, hashCode);
     }

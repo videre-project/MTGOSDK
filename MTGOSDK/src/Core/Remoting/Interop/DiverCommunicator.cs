@@ -36,6 +36,10 @@ public class DiverCommunicator : IDisposable
 
   private readonly TcpCommunicator _tcp;
   private int? _process_id = null;
+  private volatile bool _registered;
+
+  // This communicator's own registration within its process.
+  private readonly string _clientId = Guid.NewGuid().ToString("N");
   private Exception? _lastError;
 
   public Exception? LastError => _lastError;
@@ -56,6 +60,9 @@ public class DiverCommunicator : IDisposable
 
   private static readonly AsyncLocal<bool> s_forceUIThread = new();
   private volatile bool _isDisposed = false;
+
+  // Pin references returned in the background (see ReleaseLater), in order.
+  private readonly ChannelScheduler _releaseScheduler = new(1);
 
   //
   // IPC diagnostics
@@ -156,9 +163,13 @@ public class DiverCommunicator : IDisposable
   /// </summary>
   public int PendingRequestCount => _tcp.PendingRequestCount;
 
+  /// <summary>
+  /// Unregisters this client. Does nothing if it is not connected or not
+  /// registered (for example after <see cref="TryUnregisterClient"/>).
+  /// </summary>
   public bool Disconnect()
   {
-    if (!IsConnected) return false;
+    if (!IsConnected || !_registered) return false;
     return UnregisterClient(_process_id);
   }
 
@@ -186,12 +197,11 @@ public class DiverCommunicator : IDisposable
   }
 
   /// <summary>
-  /// Connect to the Diver via TCP.
+  /// Connect to the Diver via TCP. A registered client's new connection is
+  /// registered again before any other request is sent on it.
   /// </summary>
-  public async Task ConnectAsync(CancellationToken cancellationToken = default)
-  {
-    await _tcp.ConnectAsync(cancellationToken).ConfigureAwait(false);
-  }
+  public Task ConnectAsync(CancellationToken cancellationToken = default) =>
+    ConnectRegisteredAsync(cancellationToken);
 
   /// <summary>
   /// Handles callbacks (events/hooks) received from the Diver.
@@ -226,7 +236,8 @@ public class DiverCommunicator : IDisposable
       {
         Capture = request.Capture,
         CaptureError = request.CaptureError,
-        CaptureSequence = request.CaptureSequence
+        CaptureSequence = request.CaptureSequence,
+        OwnsParameters = request.ParametersPinnedPerRecipient
       };
       if (request.CaptureSequence is not null && CaptureCompleted is { } handlers)
         foreach (Action<HookContext> handler in handlers.GetInvocationList())
@@ -238,6 +249,9 @@ public class DiverCommunicator : IDisposable
       if (request.Parameters.Count > 0)
         request.Parameters[0].Timestamp = request.Timestamp;
 
+      // A current Diver pins each object argument once for every client it sends
+      // the callback to. A handler takes over this client's references (see
+      // ReleaseCallbackArguments); a callback without one returns them here.
       if (_tokensToEventHandlers.TryGetValue(request.Token, out LocalEventCallback callback))
       {
         if (request.Parameters.Count > 1)
@@ -251,8 +265,52 @@ public class DiverCommunicator : IDisposable
              request.Parameters.FirstOrDefault() ?? ObjectOrRemoteAddress.Null,
              [.. request.Parameters.Skip(1)]);
       }
+      else
+      {
+        ReleaseCallbackArguments(context, request.Parameters);
+      }
     }
   }
+
+  /// <summary>
+  /// Returns this client's pin reference to each object argument of a callback
+  /// that will not be resolved to a RemoteObject (which would take it over).
+  /// Nothing is returned here to a Diver that pinned the arguments once for
+  /// all recipients (<see cref="HookContext.OwnsParameters"/> is false).
+  /// </summary>
+  internal void ReleaseCallbackArguments(HookContext context, IEnumerable<ObjectOrRemoteAddress> arguments)
+  {
+    if (!context.OwnsParameters) return;
+    foreach (var argument in arguments)
+    {
+      if (argument is null || !argument.IsRemoteAddress || argument.IsNull || argument.IsType)
+        continue;
+      ReleaseLater(argument.RemoteAddress);
+    }
+  }
+
+  /// <summary>
+  /// Returns one pin reference in the background, so the caller (a read or the
+  /// in-order callback queue) does not wait for the round trip. The caller must
+  /// own the reference; holding it a little longer is harmless.
+  /// </summary>
+  /// <remarks>
+  /// After <see cref="Dispose"/> a release is dropped: the Diver releases this
+  /// client's references when it unregisters or its process exits.
+  /// </remarks>
+  internal void ReleaseLater(ulong address) =>
+    _releaseScheduler.Enqueue(() =>
+    {
+      if (_isDisposed) return;
+      try
+      {
+        UnpinObject(address);
+      }
+      catch (Exception ex)
+      {
+        Log.Debug("Failed to return pin reference {Address}: {Message}", address, ex.Message);
+      }
+    });
 
   private static ReadOnlyMemory<byte> Serialize<T>(T value) =>
     MessagePackSerializer.Serialize(value);
@@ -266,8 +324,35 @@ public class DiverCommunicator : IDisposable
       throw new ObjectDisposedException(nameof(DiverCommunicator), "MTGO process has closed");
 
     if (!_tcp.IsConnected)
+      ConnectRegisteredAsync(CancellationToken.None).GetAwaiter().GetResult();
+  }
+
+  /// <summary>
+  /// Connects (unless connected). A registered client's new connection is
+  /// registered again as its first request, before any other request can be
+  /// sent on it, so it receives callbacks and the pins taken and returned
+  /// over it stay counted as this client's. If that registration fails, the
+  /// connection is closed and the error is thrown; the next request retries.
+  /// </summary>
+  private async Task ConnectRegisteredAsync(CancellationToken cancellationToken)
+  {
+    Func<Func<string, byte[], Task>, Task>? handshake = null;
+    if (_registered && _process_id is int pid)
     {
-      _tcp.ConnectAsync().GetAwaiter().GetResult();
+      byte[] registration = MessagePackSerializer.Serialize(
+        new RegisterClientRequest { ProcessId = pid, ClientId = _clientId });
+      handshake = send => send("/register_client", registration);
+    }
+
+    try
+    {
+      await _tcp.ConnectAsync(handshake, cancellationToken).ConfigureAwait(false);
+    }
+    catch (Exception ex) when (handshake != null && ex is not OperationCanceledException)
+    {
+      Log.Warning($"Failed to register the reconnected Diver connection: {ex.Message}");
+      throw new InvalidOperationException(
+        "The reconnected Diver connection could not be registered; the request was not sent.", ex);
     }
   }
 
@@ -397,8 +482,9 @@ public class DiverCommunicator : IDisposable
 
     try
     {
-      var request = new RegisterClientRequest { ProcessId = _process_id.Value };
+      var request = new RegisterClientRequest { ProcessId = _process_id.Value, ClientId = _clientId };
       SendRequest("register_client", request);
+      _registered = true;
       return true;
     }
     catch (Exception ex)
@@ -414,7 +500,7 @@ public class DiverCommunicator : IDisposable
 
     try
     {
-      var request = new UnregisterClientRequest { ProcessId = _process_id.Value };
+      var request = new UnregisterClientRequest { ProcessId = _process_id.Value, ClientId = _clientId };
       SendRequest("unregister_client", request);
       return true;
     }
@@ -424,6 +510,38 @@ public class DiverCommunicator : IDisposable
     }
     finally
     {
+      _registered = false;
+      _process_id = null;
+    }
+  }
+
+  /// <summary>
+  /// Unregisters this client if it is registered and connected, waiting at
+  /// most <paramref name="timeout"/> for the Diver: when the client is being
+  /// disposed, so the Diver releases its pins and subscriptions at once
+  /// instead of when its process exits. Never reconnects; false if the
+  /// Diver did not confirm in time.
+  /// </summary>
+  public bool TryUnregisterClient(TimeSpan timeout)
+  {
+    if (!_registered || _process_id is not int pid || !_tcp.IsConnected)
+      return false;
+    try
+    {
+      using var cts = new CancellationTokenSource(timeout);
+      var request = new UnregisterClientRequest { ProcessId = pid, ClientId = _clientId };
+      _tcp.SendRequestAsync("/unregister_client", MessagePackSerializer.Serialize(request), cts.Token)
+        .GetAwaiter().GetResult();
+      return true;
+    }
+    catch (Exception ex)
+    {
+      Log.Debug("Unregistering from the Diver did not complete: {Message}", ex.Message);
+      return false;
+    }
+    finally
+    {
+      _registered = false;
       _process_id = null;
     }
   }
@@ -592,7 +710,9 @@ public class DiverCommunicator : IDisposable
   }
 
   /// <summary>
-  /// Fetches properties for all items in a collection in a single IPC call.
+  /// Fetches properties for all items in a collection in a single IPC call,
+  /// pinning each item and returning its token (the caller owns one pin
+  /// reference per returned token and must return the ones it does not use).
   /// </summary>
   /// <param name="collectionAddr">Address of the IEnumerable collection.</param>
   /// <param name="collectionTypeName">Type name of the collection.</param>
@@ -603,27 +723,60 @@ public class DiverCommunicator : IDisposable
     ulong collectionAddr,
     string collectionTypeName,
     string pathsDelimited,
-    int maxItems = 0)
+    int maxItems = 0) =>
+    GetBatchCollectionMembers(collectionAddr, collectionTypeName, pathsDelimited, maxItems, pinItems: true);
+
+  /// <summary>
+  /// Fetches properties for all items in a collection in a single IPC call.
+  /// </summary>
+  /// <param name="collectionAddr">Address of the IEnumerable collection.</param>
+  /// <param name="collectionTypeName">Type name of the collection.</param>
+  /// <param name="pathsDelimited">Pipe-delimited property paths.</param>
+  /// <param name="maxItems">Maximum items to process (0 = no limit).</param>
+  /// <param name="pinItems">
+  /// Whether to pin each item and return its token; the caller then owns one
+  /// pin reference per returned token and must return the ones it does not use.
+  /// </param>
+  /// <returns>Response containing all items' property values.</returns>
+  public Interactions.Object.BatchCollectionResponse GetBatchCollectionMembers(
+    ulong collectionAddr,
+    string collectionTypeName,
+    string pathsDelimited,
+    int maxItems,
+    bool pinItems)
   {
     var request = new Interactions.Object.BatchCollectionRequest
     {
       CollectionAddress = collectionAddr,
       CollectionTypeName = collectionTypeName,
       PathsDelimited = pathsDelimited,
-      MaxItems = maxItems
+      MaxItems = maxItems,
+      SkipItemPins = !pinItems
     };
     return SendRequest<Interactions.Object.BatchCollectionResponse>("batch_collection", request);
   }
 
   /// <summary>
-  /// Async variant of <see cref="GetBatchCollectionMembers"/> that does not
-  /// block a thread pool thread while waiting for the IPC response.
+  /// Async variant of <see cref="GetBatchCollectionMembers(ulong, string, string, int)"/>
+  /// that does not block a thread pool thread while waiting for the IPC response.
   /// </summary>
   public Task<Interactions.Object.BatchCollectionResponse> GetBatchCollectionMembersAsync(
     ulong collectionAddr,
     string collectionTypeName,
     string pathsDelimited,
-    int maxItems = 0)
+    int maxItems = 0) =>
+    GetBatchCollectionMembersAsync(collectionAddr, collectionTypeName, pathsDelimited, maxItems, pinItems: true);
+
+  /// <summary>
+  /// Async variant of <see cref="GetBatchCollectionMembers(ulong, string, string, int, bool)"/>
+  /// that does not block a thread pool thread while waiting for the IPC response.
+  /// </summary>
+  public Task<Interactions.Object.BatchCollectionResponse> GetBatchCollectionMembersAsync(
+    ulong collectionAddr,
+    string collectionTypeName,
+    string pathsDelimited,
+    int maxItems,
+    bool pinItems)
   {
     EnsureConnected();
     var request = new Interactions.Object.BatchCollectionRequest
@@ -631,7 +784,8 @@ public class DiverCommunicator : IDisposable
       CollectionAddress = collectionAddr,
       CollectionTypeName = collectionTypeName,
       PathsDelimited = pathsDelimited,
-      MaxItems = maxItems
+      MaxItems = maxItems,
+      SkipItemPins = !pinItems
     };
     byte[] body = MessagePackSerializer.Serialize(request);
     return _tcp.SendRequestAsync<Interactions.Object.BatchCollectionResponse>(
@@ -720,6 +874,10 @@ public class DiverCommunicator : IDisposable
     {
       SendRequest("event_unsubscribe", request);
     }
+    catch (Core.Exceptions.ExternalErrorException ex) when (!_registered && ex.Message.Contains("Unknown token")) // the Diver's unsubscribe/unhook error
+    {
+      // This client unregistered: the Diver removed its subscription with it.
+    }
     catch (ObjectDisposedException ex) when (IsRemoteShutdown(ex))
     {
       // The local callback maps have already been cleaned up. Once MTGO/Diver
@@ -787,6 +945,10 @@ public class DiverCommunicator : IDisposable
     {
       SendRequest("unhook_method", request);
     }
+    catch (Core.Exceptions.ExternalErrorException ex) when (!_registered && ex.Message.Contains("Unknown token")) // the Diver's unsubscribe/unhook error
+    {
+      // This client unregistered: the Diver removed its hook with it.
+    }
     catch (ObjectDisposedException ex) when (IsRemoteShutdown(ex))
     {
       // The local callback maps have already been cleaned up. Once MTGO/Diver
@@ -825,8 +987,13 @@ public class DiverCommunicator : IDisposable
 
   public delegate void LocalEventCallback(HookContext context, ObjectOrRemoteAddress[] args);
 
+  /// <summary>
+  /// Closes the connection. Queued pin releases are drained first, which can
+  /// wait for the Diver for a few seconds if it does not answer.
+  /// </summary>
   public void Dispose()
   {
+    _releaseScheduler.Dispose();
     _tcp?.Dispose();
   }
 }

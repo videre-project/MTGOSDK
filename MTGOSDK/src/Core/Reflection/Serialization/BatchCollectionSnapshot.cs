@@ -42,7 +42,9 @@ internal static class RemoteBatchCollection
         dro.__ro.RemoteToken,
         dro.__type?.FullName ?? "Unknown",
         string.Join("|", pathList),
-        maxItems);
+        maxItems,
+        // Only the columns are read; no item is wrapped.
+        pinItems: false);
     }
     catch
     {

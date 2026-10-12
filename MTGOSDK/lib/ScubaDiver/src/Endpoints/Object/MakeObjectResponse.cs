@@ -37,10 +37,12 @@ public partial class Diver : IDisposable
         objAddr,
         pinningRequested,
         typeName,
-        hashCodeFallback ? userHashcode : null
+        hashCodeFallback ? userHashcode : null,
+        RequestClient
       );
 
       od = ObjectDumpFactory.Create(instance, objAddr, pinnedAddress);
+      od.ReferenceTaken = pinningRequested;
     }
     catch (Exception e)
     {

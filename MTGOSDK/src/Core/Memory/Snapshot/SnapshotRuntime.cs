@@ -72,8 +72,22 @@ public class SnapshotRuntime : IDisposable
 
     public object Instance { get; } = instance;
     public int AddReference() => ++_refCount;
-    public int ReleaseReference() => --_refCount;
+    public int ReleaseReference(int count = 1) => _refCount -= count;
+
+    /// <summary>
+    /// References taken for no registered client (for example over a
+    /// connection that never registered); the rest are counted per client.
+    /// </summary>
+    public int Unattributed;
   }
+
+  /// <summary>
+  /// Each registered client's references, by token. A client that ends
+  /// without returning them (its process exited or was killed) can then be
+  /// reclaimed alone, without dropping the references other clients hold.
+  /// Guarded by <see cref="_pinnedObjectsLock"/>.
+  /// </summary>
+  private readonly Dictionary<int, Dictionary<ulong, int>> _clientReferences = new();
 
   /// <summary>
   /// The number of objects currently pinned (held by strong references).
@@ -159,7 +173,7 @@ public class SnapshotRuntime : IDisposable
   {
     bool found = _pinnedObjects.TryGetValue(token, out var entry);
     instance = found ? entry.Instance : null;
-    Log.Debug($"[SnapshotRuntime] TryGetPinnedObject(token={token}) => found={found}, poolSize={_pinnedObjects.Count}");
+    Log.Debug("[SnapshotRuntime] TryGetPinnedObject(token={Token}) => found={Found}", token, found);
     return found;
   }
 
@@ -174,7 +188,15 @@ public class SnapshotRuntime : IDisposable
       _ => new BoxedToken((ulong)Interlocked.Increment(ref _nextToken))).Token;
   }
 
-  public ulong PinObject(object instance)
+  /// <summary>Takes one unattributed pin reference to the object.</summary>
+  public ulong PinObject(object instance) => PinObject(instance, null);
+
+  /// <summary>
+  /// Takes one pin reference to the object for <paramref name="client"/> (a
+  /// registered client's process id, see <see cref="AddClient"/>), or
+  /// unattributed when null or not registered.
+  /// </summary>
+  public ulong PinObject(object instance, int? client)
   {
     lock (_pinnedObjectsLock)
     {
@@ -183,55 +205,163 @@ public class SnapshotRuntime : IDisposable
       {
         entry = new PinnedObjectEntry(instance);
         _pinnedObjects[token] = entry;
-        Log.Debug($"[SnapshotRuntime] PinObject: NEW token={token} for type={instance.GetType().Name}, poolSize={_pinnedObjects.Count}");
+        Log.Debug("[SnapshotRuntime] PinObject: NEW token={Token}, poolSize={PoolSize}", token, _pinnedObjects.Count);
       }
 
       int refCount = entry.AddReference();
-      Log.Debug($"[SnapshotRuntime] PinObject: returning token={token}, refCount={refCount}");
+      // A client that is not registered (any more) cannot be reclaimed by id.
+      if (client is int owner && _clientReferences.TryGetValue(owner, out var references))
+      {
+        references.TryGetValue(token, out int held);
+        references[token] = held + 1;
+      }
+      else
+      {
+        entry.Unattributed++;
+      }
+      Log.Debug("[SnapshotRuntime] PinObject: token={Token}, refCount={RefCount}, client={Client}", token, refCount, client);
       return token;
     }
   }
 
-  public bool UnpinObject(ulong token)
+  /// <summary>Returns one unattributed pin reference.</summary>
+  public bool UnpinObject(ulong token) => UnpinObject(token, null);
+
+  /// <summary>
+  /// Returns one pin reference that <paramref name="client"/> holds (or an
+  /// unattributed one). A client cannot return a reference only other
+  /// clients hold, and a client that is no longer registered returns
+  /// nothing, so a late or repeated release (for example after its
+  /// references were reclaimed) never takes another client's object away.
+  /// </summary>
+  public bool UnpinObject(ulong token, int? client)
   {
     lock (_pinnedObjectsLock)
     {
-      Log.Debug($"[SnapshotRuntime] UnpinObject(token={token})");
+      Log.Debug("[SnapshotRuntime] UnpinObject(token={Token}, client={Client})", token, client);
       if (!_pinnedObjects.TryGetValue(token, out var entry))
       {
-        Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} NOT FOUND in pool");
+        Log.Debug("[SnapshotRuntime] UnpinObject: token={Token} NOT FOUND in pool", token);
         return false;
       }
 
-      int refCount = entry.ReleaseReference();
-      if (refCount > 0)
+      Dictionary<ulong, int> references = null;
+      if (client is int owner && !_clientReferences.TryGetValue(owner, out references))
       {
-        Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} decremented, refCount={refCount}, poolSize={_pinnedObjects.Count}");
-        return true;
-      }
-
-      if (!_pinnedObjects.TryRemove(token, out _))
-      {
+        // Not a registered client (any more): its references were released.
+        Log.Debug("[SnapshotRuntime] UnpinObject: token={Token}, client={Client} is not registered", token, client);
         return false;
       }
 
-      // Release retention; the weak mapping preserves identity if MTGO still owns the object.
-      Log.Debug($"[SnapshotRuntime] UnpinObject: token={token} REMOVED, poolSize={_pinnedObjects.Count}");
+      if (references != null && references.TryGetValue(token, out int held))
+      {
+        if (held == 1) references.Remove(token);
+        else references[token] = held - 1;
+      }
+      else if (entry.Unattributed > 0)
+      {
+        // For example a callback delivered before its connection registered.
+        entry.Unattributed--;
+      }
+      else
+      {
+        Log.Debug("[SnapshotRuntime] UnpinObject: token={Token} holds no reference of client={Client}", token, client);
+        return false;
+      }
+
+      return ReleaseLocked(token, entry, 1);
+    }
+  }
+
+  /// <summary>
+  /// Starts counting references for a registered client (its process id).
+  /// Releases from a client that is not registered are refused.
+  /// </summary>
+  public void AddClient(int client)
+  {
+    lock (_pinnedObjectsLock)
+    {
+      if (!_clientReferences.ContainsKey(client))
+        _clientReferences[client] = new Dictionary<ulong, int>();
+    }
+  }
+
+  private bool ReleaseLocked(ulong token, PinnedObjectEntry entry, int count)
+  {
+    int refCount = entry.ReleaseReference(count);
+    if (refCount > 0)
+    {
+      Log.Debug("[SnapshotRuntime] UnpinObject: token={Token} decremented, refCount={RefCount}", token, refCount);
       return true;
     }
+
+    if (!_pinnedObjects.TryRemove(token, out _))
+    {
+      return false;
+    }
+
+    // Release retention; the weak mapping preserves identity if MTGO still owns the object.
+    Log.Debug("[SnapshotRuntime] UnpinObject: token={Token} REMOVED, poolSize={PoolSize}", token, _pinnedObjects.Count);
+    return true;
   }
 
   /// <summary>
   /// Queue a non-blocking unpin request by token. With dictionary-based tracking,
   /// this is equivalent to immediate unpinning.
   /// </summary>
-  public void QueueUnpinObject(ulong token) => UnpinObject(token);
+  public void QueueUnpinObject(ulong token) => UnpinObject(token, null);
+
+  /// <inheritdoc cref="QueueUnpinObject(ulong)"/>
+  public void QueueUnpinObject(ulong token, int? client) => UnpinObject(token, client);
+
+  /// <summary>
+  /// Stops counting a client that has left or whose process has exited, and
+  /// returns every pin reference it still holds. References of other clients
+  /// and unattributed ones are kept; later releases from it are refused.
+  /// </summary>
+  /// <returns>The number of references returned.</returns>
+  public int RemoveClient(int client)
+  {
+    lock (_pinnedObjectsLock)
+    {
+      if (!_clientReferences.TryGetValue(client, out var references))
+        return 0;
+      _clientReferences.Remove(client);
+
+      int released = 0;
+      foreach (var reference in references)
+      {
+        if (!_pinnedObjects.TryGetValue(reference.Key, out var entry))
+          continue;
+        ReleaseLocked(reference.Key, entry, reference.Value);
+        released += reference.Value;
+      }
+      Log.Debug("[SnapshotRuntime] RemoveClient(client={Client}): {Released} references, poolSize={PoolSize}", client, released, _pinnedObjects.Count);
+      return released;
+    }
+  }
+
+  /// <summary>
+  /// The number of pin references <paramref name="client"/> holds.
+  /// </summary>
+  public int GetClientReferenceCount(int client)
+  {
+    lock (_pinnedObjectsLock)
+    {
+      return _clientReferences.TryGetValue(client, out var references)
+        ? references.Values.Sum()
+        : 0;
+    }
+  }
 
   public void UnpinAllObjects()
   {
     lock (_pinnedObjectsLock)
     {
       _pinnedObjects.Clear();
+      // Registered clients stay registered, now holding nothing.
+      foreach (var references in _clientReferences.Values)
+        references.Clear();
     }
   }
 
@@ -404,7 +534,25 @@ public class SnapshotRuntime : IDisposable
     ulong objAddr,
     bool pinningRequested,
     string typeName,
-    int? hashcode = null)
+    int? hashcode = null) =>
+    GetHeapObject(objAddr, pinningRequested, typeName, hashcode, null);
+
+  /// <summary>
+  /// Gets an object from the heap as <see cref="GetHeapObject(ulong, bool, string, int?)"/>
+  /// does, pinning it (if requested) for a registered client.
+  /// </summary>
+  /// <param name="objAddr">The object address.</param>
+  /// <param name="pinningRequested">Whether to pin the object.</param>
+  /// <param name="typeName">The expected type name.</param>
+  /// <param name="hashcode">The object hash code.</param>
+  /// <param name="client">The registered client the pin is taken for.</param>
+  /// <returns>The object instance and pinned address.</returns>
+  public (object instance, ulong pinnedAddress) GetHeapObject(
+    ulong objAddr,
+    bool pinningRequested,
+    string typeName,
+    int? hashcode,
+    int? client)
   {
     bool hashCodeFallback = hashcode.HasValue;
 
@@ -412,7 +560,9 @@ public class SnapshotRuntime : IDisposable
     if (TryGetPinnedObject(objAddr, out object pinnedObj))
     {
       Log.Debug($"[SnapshotRuntime] Object 0x{objAddr:X} found in pinned pool");
-      return (pinnedObj, objAddr);
+      // A requested pin is this caller's own reference, even when another
+      // client already holds the object.
+      return (pinnedObj, pinningRequested ? PinObject(pinnedObj, client) : objAddr);
     }
     Log.Debug($"[SnapshotRuntime] Object 0x{objAddr:X} NOT in pinned pool, falling back to ClrMD lookup");
 
@@ -511,7 +661,7 @@ public class SnapshotRuntime : IDisposable
     ulong pinnedAddress = 0;
     if (pinningRequested)
     {
-      pinnedAddress = PinObject(instance);
+      pinnedAddress = PinObject(instance, client);
     }
 
     return (instance, pinnedAddress);

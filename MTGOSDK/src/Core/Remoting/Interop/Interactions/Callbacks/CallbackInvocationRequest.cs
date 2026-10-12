@@ -30,4 +30,15 @@ public class CallbackInvocationRequest
 
   [Key(5)]
   public RemoteCaptureSequence CaptureSequence { get; set; }
+
+  /// <summary>
+  /// Set by a Diver that pins each object parameter once for every client it
+  /// sends the callback to: the receiving client owns one reference to each and
+  /// returns what it does not keep. A Diver without it (false when absent) pins
+  /// once for all recipients: a client then returns no reference for an
+  /// argument it does not wrap, and a new proxy adopts the shared reference
+  /// (returned when the proxy is released), as before.
+  /// </summary>
+  [Key(6)]
+  public bool ParametersPinnedPerRecipient { get; set; }
 }

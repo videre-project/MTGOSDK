@@ -134,7 +134,11 @@ public class RemoteFieldInfo(
     ro ??= (obj as DynamicRemoteObject)?.__ro;
     if (ro != null)
     {
-      ro.SetField(Name, remoteNewValue);
+      // The Diver returns the field's new value and pins it for this client;
+      // nothing here wraps it, so that reference is returned.
+      ObjectOrRemoteAddress result = ro.SetField(Name, remoteNewValue);
+      if (result is { IsRemoteAddress: true, IsNull: false, IsType: false })
+        (App ?? RemoteClient.@client)?.Communicator?.ReleaseLater(result.RemoteAddress);
       return;
     }
 

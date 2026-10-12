@@ -20,12 +20,43 @@ public class RemoteObject : IObjectReference
 {
   private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
 
-  public void AddReference() => _ref?.AddReference();
+  // A RemoteObject is shared by every wrapper of its token that the cache hands
+  // out: each holder takes one reference (the constructor counts the first)
+  // and releases it once. The object releases its single share of the
+  // RemoteObjectRef exactly once, when the last holder releases it or when it
+  // is finalized, whichever comes first. (Releasing on the first holder's
+  // release left the other holders' shares counted, so the ref was never
+  // unpinned; releasing from both the finalizer and a holder would release
+  // another live object's share.)
+  // Holder acquisition and the final release are one transition under
+  // _lifetimeLock, so a holder can never be added once the release is decided.
+  private readonly object _lifetimeLock = new();
+  private int _holders = 1;
+  private bool _released;
+
+  /// <summary>
+  /// Takes one more holder; false once the object has been released (the
+  /// caller must then obtain another object).
+  /// </summary>
+  internal bool TryAddReference()
+  {
+    lock (_lifetimeLock)
+    {
+      if (_released) return false;
+      _holders++;
+      return true;
+    }
+  }
+
+  public void AddReference() => TryAddReference();
 
   public void ReleaseReference(bool useJitter = false)
   {
-    if (_isDisposed) return;
-    _isDisposed = true;
+    lock (_lifetimeLock)
+    {
+      if (_released || --_holders > 0) return;
+      _released = true;
+    }
 
     _ref?.ReleaseReference(useJitter);
   }
@@ -35,18 +66,35 @@ public class RemoteObject : IObjectReference
   /// </summary>
   internal void SuppressUnpin()
   {
-    if (_isDisposed) return;
-    _isDisposed = true;
+    lock (_lifetimeLock)
+    {
+      if (_released) return;
+      _released = true;
+    }
     _ref?.SuppressUnpin();
   }
 
-  public bool IsValid => _ref != null && _ref.IsValid && !_isDisposed;
-
-  private bool _isDisposed = false;
+  public bool IsValid
+  {
+    get
+    {
+      lock (_lifetimeLock)
+      {
+        return !_released && _ref != null && _ref.IsValid;
+      }
+    }
+  }
 
   ~RemoteObject()
   {
-    if (IsValid)
+    // Unreachable, so no holder can release it any more: release the share
+    // unless a holder already did.
+    lock (_lifetimeLock)
+    {
+      if (_released) return;
+      _released = true;
+    }
+    if (_ref != null && _ref.IsValid)
     {
       GCTimer.Enqueue(new QueuedRemoteObjectReference(_ref));
     }
@@ -142,13 +190,25 @@ public class RemoteObject : IObjectReference
     void callbackProxy(HookContext context, ObjectOrRemoteAddress[] args)
     {
       DynamicRemoteObject[] droParameters = new DynamicRemoteObject[args.Length];
-      for (int i = 0; i < args.Length; i++)
+      int resolved = 0;
+      try
       {
-        RemoteObject ro = _app.GetRemoteObjectFromField(args[i].RemoteAddress, args[i].Type);
-        DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
-        dro.__timestamp = args[i].Timestamp;
+        for (; resolved < args.Length; resolved++)
+        {
+          // Takes over this client's pin reference to the argument.
+          RemoteObject ro = _app.GetRemoteObjectFromField(args[resolved].RemoteAddress, args[resolved].Type,
+            context.OwnsParameters);
+          DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
+          dro.__timestamp = args[resolved].Timestamp;
 
-        droParameters[i] = dro;
+          droParameters[resolved] = dro;
+        }
+      }
+      finally
+      {
+        // An argument left unresolved (after a failure) still holds a reference.
+        if (resolved < args.Length)
+          _app.Communicator.ReleaseCallbackArguments(context, args.Skip(resolved + 1));
       }
 
       // Call the callback with the proxied parameters (using DynamicRemoteObjects)

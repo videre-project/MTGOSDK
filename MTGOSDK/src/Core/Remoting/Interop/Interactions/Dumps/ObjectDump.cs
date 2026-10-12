@@ -42,4 +42,12 @@ public class ObjectDump
   public List<MemberDump> Properties { get; set; }
   [Key(9)]
   public int HashCode { get; set; }
+
+  /// <summary>
+  /// Whether the Diver took a pin reference for this request (it was asked to
+  /// pin). An older Diver did not when the object was already pinned, so false
+  /// tells a client it must not return one.
+  /// </summary>
+  [Key(10)]
+  public bool ReferenceTaken { get; set; }
 }
