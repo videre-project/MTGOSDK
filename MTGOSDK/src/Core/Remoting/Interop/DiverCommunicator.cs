@@ -437,6 +437,10 @@ public class DiverCommunicator : IDisposable
   /// Sends a request and returns the response.
   /// </summary>
   private T SendRequest<T>(string endpoint, object request = null,
+    CancellationToken cancellationToken = default) =>
+    SendRequestAsync<T>(endpoint, request, cancellationToken).GetAwaiter().GetResult();
+
+  private async Task<T> SendRequestAsync<T>(string endpoint, object request = null,
     CancellationToken cancellationToken = default)
   {
     EnsureConnected(cancellationToken);
@@ -446,7 +450,8 @@ public class DiverCommunicator : IDisposable
     var sw = Stopwatch.StartNew();
     try
     {
-      return _tcp.SendRequestAsync<T>("/" + endpoint, body, cancellationToken).GetAwaiter().GetResult();
+      return await _tcp.SendRequestAsync<T>("/" + endpoint, body, cancellationToken)
+        .ConfigureAwait(false);
     }
     finally
     {
@@ -990,6 +995,18 @@ public class DiverCommunicator : IDisposable
       throw new InvalidOperationException("Event callback is not registered.");
     SendRequest("event_property_filter", new EventPropertyFilterRequest
     { Token = token, PropertyNames = propertyNames });
+  }
+
+  internal Task<RemoteCaptureSequence> RequestEventCaptureAsync(
+    LocalEventCallback callback, bool forceUIThread)
+  {
+    if (!_eventHandlersToToken.TryGetValue(callback, out int token))
+      throw new InvalidOperationException("Event callback is not registered.");
+    return SendRequestAsync<RemoteCaptureSequence>("event_capture", new EventCaptureRequest
+    {
+      Token = token,
+      ForceUIThread = forceUIThread || ForceUIThread
+    });
   }
 
   public void EventUnsubscribe(LocalEventCallback callback)

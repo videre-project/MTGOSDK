@@ -325,6 +325,13 @@ internal class RemoteObjectRef
     _communicator.SetEventPropertyFilter(callbackProxy, propertyNames);
   }
 
+  internal Task<RemoteCaptureSequence> RequestEventCaptureAsync(
+    DiverCommunicator.LocalEventCallback callback, bool forceUIThread)
+  {
+    ThrowIfReleased();
+    return _communicator.RequestEventCaptureAsync(callback, forceUIThread);
+  }
+
   public void EventUnsubscribe(
     string eventName,
     DiverCommunicator.LocalEventCallback callbackProxy)

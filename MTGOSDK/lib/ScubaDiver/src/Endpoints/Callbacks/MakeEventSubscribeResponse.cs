@@ -150,7 +150,12 @@ public partial class Diver : IDisposable
       ref s_lastCallbackQueueDelayTicks, queueDelay.Ticks);
 
     if (!IsCallbackActive(token))
-      return false;
+    {
+      if (sequence is null) return false;
+      // After unsubscription, shared observers still need this queued completion
+      // to preserve stream order. Send its captured values without pinning arguments.
+      parameters = Array.Empty<object>();
+    }
 
     // Every registered recipient owns one pin reference to each object
     // argument, counted for its registration, and returns it with /unpin (a
@@ -340,6 +345,33 @@ public partial class Diver : IDisposable
 
     int token = AssignCallbackToken();
     _activeCallbacks[token] = 0;
+
+    if (request.Capture?.Scope is { } captureScope)
+    {
+      registration.CaptureCurrent = () =>
+      {
+        if (!IsCallbackActive(token))
+          throw new ObjectDisposedException("Event subscription");
+
+        RemoteCaptureSequence completed = null;
+        _captureScopes.Complete(captureScope.Group, scopeOwner, sequence =>
+        {
+          sequence.Requested = true;
+          sequence.SourceToken = objAddr;
+
+          DateTime timestamp = DateTime.UtcNow;
+          var captured = ExecuteCallbackCapture(request.Capture.Batch, () =>
+            request.Capture.Inputs.ToDictionary(binding => binding.Key,
+              binding => binding.Value == 0 ? target : null),
+            null, $"requested capture {resolvedType.FullName}.{eventName}", out var error);
+
+          QueueCallback(token, timestamp, captured, error, sequence);
+          completed = sequence;
+        });
+
+        return completed ?? throw new InvalidOperationException("Event capture stream has ended.");
+      };
+    }
 
     EventHandler eventHandler = (obj, args) =>
     {

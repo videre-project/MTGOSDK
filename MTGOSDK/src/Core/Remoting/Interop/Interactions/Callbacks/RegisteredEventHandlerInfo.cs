@@ -32,6 +32,12 @@ public class RegisteredEventHandlerInfo
   public IDisposable CaptureScopeSubscription { get; set; }
 
   /// <summary>
+  /// Captures the retained subscription inputs and queues their detached values
+  /// in the native completion stream. No native event is raised.
+  /// </summary>
+  public Func<RemoteCaptureSequence> CaptureCurrent { get; set; }
+
+  /// <summary>
   /// Endpoint listening for invocations of the event
   /// </summary>
   public IPEndPoint Endpoint { get; set; }

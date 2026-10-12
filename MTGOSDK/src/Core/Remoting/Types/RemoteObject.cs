@@ -266,6 +266,14 @@ public class RemoteObject : IObjectReference
     _ref.SetEventPropertyFilter(proxy, propertyNames);
   }
 
+  internal Task<RemoteCaptureSequence> RequestEventCaptureAsync(
+    Delegate callback, bool forceUIThread)
+  {
+    if (!_eventCallbacksAndProxies.TryGetValue(callback, out var proxy))
+      throw new InvalidOperationException("Event callback is not registered.");
+    return _ref.RequestEventCaptureAsync(proxy, forceUIThread);
+  }
+
   public void EventUnsubscribe(string eventName, Delegate callback)
   {
     if (_eventCallbacksAndProxies.TryRemove(callback, out DiverCommunicator.LocalEventCallback callbackProxy))

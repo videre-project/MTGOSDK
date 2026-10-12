@@ -287,3 +287,27 @@ measured with the actual event source. Capture errors reach subscribers explicit
 Capture removes the delivery-time reread of mutable state. It does not provide
 rollback, stop unrelated concurrent writers, or imply globally ordered callback
 delivery across independently scheduled event sources.
+
+### Requesting an initial capture
+
+A scoped property subscription can capture its retained inputs without raising a
+native event:
+
+```csharp
+RemoteCaptureSequence completion = await subscription.CaptureAsync(forceUIThread: true);
+```
+
+The Diver executes the subscription's existing batch, assigns its position in the
+native completion stream, and queues the detached result through the existing
+callback. The response identifies that queued completion; it does not wait for SDK
+callback delivery. Sender inputs use the subscribed source. Event-argument inputs
+are null, and the property-name output is empty, because no native notification
+occurred. The property router delivers the requested capture to its observers.
+The callback's `RemoteCaptureSequence.Requested` flag and `SourceToken` distinguish
+it from a native notification. Capture failures are reported through
+`HookContext.CaptureError`.
+
+`forceUIThread` dispatches this requested capture only. Ordinary notifications
+continue to capture on their native calling thread. A queued completion remains
+visible to shared-stream observers if its original subscriber detaches before
+callback delivery, preserving the stream's ordering.

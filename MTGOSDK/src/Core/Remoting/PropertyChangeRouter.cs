@@ -28,6 +28,16 @@ public interface IPropertyChangeSubscription : IDisposable
 
   IReadOnlyCollection<string> TrackedProperties { get; }
 
+  /// <summary>
+  /// Requests an ordered capture from a scoped property subscription.
+  /// </summary>
+  /// <remarks>
+  /// The values arrive through the subscription's existing callback stream. The
+  /// returned sequence acknowledges queueing and does not await local delivery.
+  /// This request raises no native event, so event-argument inputs are null.
+  /// </remarks>
+  Task<RemoteCaptureSequence> CaptureAsync(bool forceUIThread = false);
+
   void AddTrackedProperties(params string[] propertyNames);
 
   bool RemoveTrackedProperties(params string[] propertyNames);
@@ -87,6 +97,17 @@ public sealed class PropertyChangeRouter : IDisposable
     }
 
     public event EventHandler<RemotePropertyChangedEventArgs>? PropertyChanged;
+
+    public Task<RemoteCaptureSequence> CaptureAsync(bool forceUIThread = false)
+    {
+      lock (registration.UpdateLock)
+      {
+        ThrowIfDisposed();
+        lock (_router._gate)
+          _router.ThrowIfDetached(registration);
+        return registration.Proxy!.CaptureAsync(forceUIThread);
+      }
+    }
 
     public void AddTrackedProperties(params string[] propertyNames)
     {

@@ -87,6 +87,17 @@ internal sealed class RemotePropertyChangeProxy :
     return capture;
   }
 
+  internal Task<RemoteCaptureSequence> CaptureAsync(bool forceUIThread)
+  {
+    if (Volatile.Read(ref _isDisposed) != 0)
+      throw new ObjectDisposedException(nameof(RemotePropertyChangeProxy));
+    if (!_hasCapture)
+      throw new InvalidOperationException("The property subscription has no capture description.");
+    if (CaptureSequence is null)
+      throw new InvalidOperationException("Requested capture requires a scoped property subscription.");
+    return _remoteObject.RequestEventCaptureAsync(_callback, forceUIThread);
+  }
+
   internal void SetTrackedProperties(string[] propertyNames)
   {
     if (_hasCapture && (_propertyNames is null || !_propertyNames.SequenceEqual(propertyNames)))

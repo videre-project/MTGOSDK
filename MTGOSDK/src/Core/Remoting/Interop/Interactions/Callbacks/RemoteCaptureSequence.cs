@@ -40,7 +40,8 @@ public sealed class RemoteCaptureSequence
   public string[] EventNames { get; set; } = Array.Empty<string>();
 
   /// <summary>
-  /// Identifies the source of a standalone event. Scoped captures leave this zero.
+  /// Identifies the source of a standalone event or requested capture.
+  /// Scoped notification captures leave this zero.
   /// </summary>
   [Key(5)]
   public ulong SourceToken { get; set; }
@@ -70,4 +71,10 @@ public sealed class RemoteCaptureSequence
   /// </summary>
   [Key(9)]
   public Dictionary<string, ulong[]> EventSources { get; set; } = new();
+
+  /// <summary>
+  /// True when a caller requests the retained capture without a native notification.
+  /// </summary>
+  [Key(10)]
+  public bool Requested { get; set; }
 }
