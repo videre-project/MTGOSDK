@@ -28,7 +28,7 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// </remarks>
 public sealed class LogMessageProcessor : IGameStateProcessor, IDisposable
 {
-  private readonly object _messageGate = new();
+  private readonly object _messageLock = new();
   private volatile bool _disposed;
   private string _localFileName = null!;
 
@@ -137,7 +137,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor, IDisposable
 
     // History and native notifications can deliver the same message.
     var key = (message.User?.Name, message.Timestamp, message.Text);
-    lock (_messageGate)
+    lock (_messageLock)
     {
       if (_disposed || !_seenMessages.Add(key))
         return;
@@ -151,7 +151,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor, IDisposable
   private void TryCorrelatePending(GameContext context)
   {
     List<Message> pending;
-    lock (_messageGate)
+    lock (_messageLock)
     {
       pending = new List<Message>(_pendingMessages);
       _pendingMessages.Clear();
@@ -174,7 +174,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor, IDisposable
     finally
     {
       // Preserve unmatched messages if a timestamp read or correlation fails.
-      lock (_messageGate)
+      lock (_messageLock)
         if (!_disposed)
           _pendingMessages.InsertRange(0, pending);
     }
@@ -240,7 +240,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor, IDisposable
 
   public void Dispose()
   {
-    lock (_messageGate)
+    lock (_messageLock)
     {
       if (_disposed)
         return;

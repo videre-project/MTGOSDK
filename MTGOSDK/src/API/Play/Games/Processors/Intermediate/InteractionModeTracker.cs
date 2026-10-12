@@ -151,7 +151,7 @@ public sealed class InteractionModeTracker : IDisposable
     string Name,
     EventProxy Changes);
 
-  private sealed record CaptureReadiness(Guid StreamId, bool Ready, long FirstSequence);
+  private sealed record CaptureReadiness(Guid StreamId, bool Ready, long? FirstSequence);
 
   // Subscription changes, scene replacement, and disposal share this lock.
   // Acquire it before _captureLock whenever an operation needs both locks.
@@ -173,7 +173,6 @@ public sealed class InteractionModeTracker : IDisposable
   private volatile bool _initialized;
   private bool _subscribed;
   private DiverCommunicator? _captureConnection;
-  private bool _hasCapturedState;
   private CaptureReadiness? _captureReadiness;
   private bool _disposed;
 
@@ -197,8 +196,9 @@ public sealed class InteractionModeTracker : IDisposable
   internal bool RequiresCapture(RemoteCaptureSequence sequence)
   {
     var readiness = Volatile.Read(ref _captureReadiness);
-    return readiness is { Ready: true } && sequence.StreamId == readiness.StreamId
-      && sequence.NotificationSequence >= readiness.FirstSequence;
+    return readiness is { Ready: true, FirstSequence: long first }
+      && sequence.StreamId == readiness.StreamId
+      && sequence.NotificationSequence >= first;
   }
 
   /// <summary>
@@ -338,7 +338,6 @@ public sealed class InteractionModeTracker : IDisposable
       {
         _captureQueue.Reset(baseline);
         _scene = scene;
-        _hasCapturedState = false;
         Volatile.Write(ref _captureReadiness, new(baseline.StreamId, false, 0));
       }
     }
@@ -386,7 +385,6 @@ public sealed class InteractionModeTracker : IDisposable
     _viewToken = token;
     lock (_captureLock)
     {
-      _hasCapturedState = false;
       if (_captureReadiness is { } readiness)
         Volatile.Write(ref _captureReadiness, readiness with { Ready = false });
     }
@@ -398,24 +396,31 @@ public sealed class InteractionModeTracker : IDisposable
   private async Task CaptureInitialStateAsync(DynamicRemoteObject view,
     CancellationTokenSource cancellation)
   {
-    InteractionStateSnapshot? changedState = null;
     try
     {
       await UIDispatcher.WaitForReadyAsync(view, cancellation.Token).ConfigureAwait(false);
+      IPropertyChangeSubscription? subscription;
       lock (_subscriptionLock)
       {
         if (_disposed || cancellation.IsCancellationRequested || _initialCapture != cancellation)
           return;
-        changedState = CaptureInitialStateLocked();
+        subscription = PrepareInitialCaptureLocked();
       }
+      if (subscription is not null)
+        await subscription.CaptureAsync(forceUIThread: true).ConfigureAwait(false);
     }
     catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
     {
       // Scene replacement or disposal cancels readiness for the previous view.
     }
+    catch (ObjectDisposedException) when (cancellation.IsCancellationRequested)
+    {
+      // The old scene's subscription may detach while its request is pending.
+    }
     catch (Exception error)
     {
-      Log.Error(error, "Failed to capture initial client UI state for game {0}.", _gameId);
+      if (!cancellation.IsCancellationRequested)
+        Log.Error(error, "Failed to capture initial client UI state for game {0}.", _gameId);
     }
     finally
     {
@@ -423,7 +428,6 @@ public sealed class InteractionModeTracker : IDisposable
         if (_initialCapture == cancellation) _initialCapture = null;
       cancellation.Dispose();
     }
-    NotifyChanged(changedState);
   }
 
   private void ObserveCollectionLocked(DynamicRemoteObject collection, string name)
@@ -568,34 +572,18 @@ public sealed class InteractionModeTracker : IDisposable
     CaptureObservedState(args.CaptureContext!);
   }
 
-  private InteractionStateSnapshot? CaptureInitialStateLocked()
+  private IPropertyChangeSubscription? PrepareInitialCaptureLocked()
   {
     lock (_captureLock)
     {
       var readiness = _captureReadiness! with
-      { Ready = true, FirstSequence = _captureQueue.NextSequence };
+      { Ready = true, FirstSequence = null };
       Volatile.Write(ref _captureReadiness, readiness);
     }
 
     ObserveCardCollectionsLocked();
 
-    // Native captures can be applied while subscriptions are being bound. If a
-    // capture has already supplied the state, skip the initial read to preserve
-    // its position in the native sequence.
-    lock (_captureLock)
-    {
-      if (_hasCapturedState)
-      {
-        return null;
-      }
-
-      // Hold _captureLock through the initial read and its application. Captures
-      // arriving during that read are applied afterwards, preserving their order.
-      var batch = CreateCaptureBatch(_scene!);
-      batch.ForceUIThread = true;
-      var result = batch.Execute(RemoteClient.@client);
-      return ApplyCaptureLocked(result, null);
-    }
+    return _textChanges;
   }
 
   //
@@ -618,6 +606,7 @@ public sealed class InteractionModeTracker : IDisposable
     // Retain the native prompt identity with the displayed text and mode so the
     // processor can correlate this interaction capture with its server snapshot.
     batch.Output("gameId", batch.Read(scene, "GameId"));
+    batch.Output("scene", scene, RemoteBatchProjection.Object().WithLogicalAddress());
     batch.Output("mode", batch.Read(scene, "InteractionState.Mode"));
     batch.Output("text", batch.Read(scene, "PromptBox.Text"));
     batch.Output("prompt", batch.Read(scene, "Game.Prompt"),
@@ -683,24 +672,41 @@ public sealed class InteractionModeTracker : IDisposable
 
   private InteractionStateSnapshot? AcceptCaptureLocked(HookContext context)
   {
-    if (_captureReadiness is not { Ready: true })
+    if (_captureReadiness is not { Ready: true } readiness)
       return null;
+
+    var sequence = context.CaptureSequence
+      ?? throw new InvalidOperationException("Native interaction notification has no completion sequence.");
+
     // The queue also orders gameplay boundary captures. GameProcessor handles
     // their server data, so they advance the sequence without updating UI values.
-    if (context.CaptureSequence?.IsStateBoundary == true)
+    if (sequence.IsStateBoundary)
       return null;
+
+    if (readiness.FirstSequence is null)
+    {
+      if (!sequence.Requested || sequence.SourceToken != _textChanges?.Token)
+        return null;
+      readiness = readiness with { FirstSequence = sequence.Sequence };
+      Volatile.Write(ref _captureReadiness, readiness);
+    }
+    if (sequence.Sequence < readiness.FirstSequence)
+      return null;
+
     if (context.CaptureError is { } error)
       throw new InvalidOperationException($"Native interaction capture failed: {error.Message}");
     var result = context.Capture
       ?? throw new InvalidOperationException("Native interaction notification has no detached capture.");
-    if (result.Values["gameId"].GetScalar<int>() != _gameId)
+    if (result.Values["gameId"].GetScalar<int>() != _gameId
+      || result.Values["scene"].LogicalAddress != _scene!.__ro.RemoteToken)
       return null;
-    return ApplyCaptureLocked(result, context);
+
+    return ApplyCaptureLocked(result, sequence);
   }
 
-  private InteractionStateSnapshot? ApplyCaptureLocked(RemoteBatchResult result, HookContext? context)
+  private InteractionStateSnapshot? ApplyCaptureLocked(
+    RemoteBatchResult result, RemoteCaptureSequence sequence)
   {
-
     var mode = (InteractionMode)result.Values["mode"].GetScalar<int>();
     if (!Enum.IsDefined(mode))
       mode = InteractionMode.Undefined;
@@ -737,17 +743,16 @@ public sealed class InteractionModeTracker : IDisposable
           if (cards.TryGetValue(card.LogicalAddress, out var existing) && !existing.Equals(card))
             throw new InvalidOperationException(
               $"Conflicting captured views for logical address {card.LogicalAddress}" +
-              $" (Id: {card.CardId}, SourceId: {card.SourceId}, Name: {card.Card.Name}, Row: {row.SourceIndex}).");
+              $" (Id: {card.CardId}, SourceId: {card.SourceId}, Name: {card.Name}, Row: {row.SourceIndex}).");
           cards[card.LogicalAddress] = card;
         }
         ReadRows(row.Rows);
       }
     }
     ReadRows(result.Rows);
-    _hasCapturedState = true;
     var previous = Volatile.Read(ref _captured);
-    if (previous.PromptNonce == promptNonce && previous.StateRevision == (context?.CaptureSequence?.StateRevision ?? 0)
-      && previous.CaptureStream == (context?.CaptureSequence?.StreamId ?? Guid.Empty)
+    if (previous.PromptNonce == promptNonce && previous.StateRevision == sequence.StateRevision
+      && previous.CaptureStream == sequence.StreamId
       && previous.Mode == mode
       && previous.PromptBoxText == text && previous.Buttons.SequenceEqual(buttons)
       && previous.Players.SequenceEqual(players) && previous.Cards.SequenceEqual(cards))
@@ -757,9 +762,9 @@ public sealed class InteractionModeTracker : IDisposable
       Array.AsReadOnly(buttons), Array.AsReadOnly(players),
       new ReadOnlyDictionary<ulong, CardInteractionSnapshot>(cards), previous.Version + 1)
     {
-      CaptureStream = context?.CaptureSequence?.StreamId ?? Guid.Empty,
-      StateRevision = context?.CaptureSequence?.StateRevision ?? 0,
-      CaptureSequence = context?.CaptureSequence?.Sequence ?? 0
+      CaptureStream = sequence.StreamId,
+      StateRevision = sequence.StateRevision,
+      CaptureSequence = sequence.Sequence
     };
     Volatile.Write(ref _captured, captured);
     // Enqueue while holding _captureLock so notifications follow the order in

@@ -36,6 +36,11 @@ public sealed class CardInteractionSnapshot : IEquatable<CardInteractionSnapshot
   public int SourceId { get; }
 
   /// <summary>
+  /// The card name captured with its native identity.
+  /// </summary>
+  public string Name => _captured.Get<RemoteBatchObject>("card").Get<string>("Name");
+
+  /// <summary>
   /// The card's action and selection eligibility at capture time.
   /// </summary>
   public CardSelectable Selection { get; }

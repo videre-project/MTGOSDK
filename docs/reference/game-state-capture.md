@@ -177,10 +177,19 @@ detaching the handler; local delivery applies each subscription's own filter.
 Null or empty notification names mean that all properties changed. An empty
 subscription filter observes none. Relevant capture failures remain explicit.
 
-Initial attachment uses one dispatched batch after UI readiness. Fixed zone
-collection subscriptions are attached at readiness and refreshed when players
-change. These setup reads do not supply the prompt identity or UI values of a
-delivered notification.
+Initial attachment requests one capture from the retained property subscription
+after UI readiness. The Diver dispatches that request to the UI thread, detaches
+its values, and queues it in the same native completion stream as notifications.
+The requested callback identifies its source subscription and native sequence
+position. The tracker starts there through the ordinary ordered callback path,
+independently of when the request acknowledgement arrives, and preserves every
+later completion. No unsequenced read can overtake a delayed notification.
+Captures from replaced scenes advance the stream without replacing the current
+scene's values.
+
+Fixed zone collection subscriptions are attached at readiness and refreshed when
+players change. These setup reads do not supply the prompt identity or UI values
+of a delivered notification.
 
 Screen-position reads access WPF elements and call `PointToScreen`. Native
 control clicks and AlphaMTG's selection/input operations also retain UI dispatch.
@@ -398,8 +407,9 @@ for the same snapshot produce no additional unified event. No debounce timer or
 wait for an empty processing queue is involved. Existing `OnPromptChanged`
 subscribers continue to receive the server nonce.
 
-`update.Interaction.Cards` maps card IDs to their captured `SourceId`, `Actions`,
-and `Selection` (`HasActions`, `IsSelectable`, `IsTargetable`, `IsTargeted`).
+`update.Interaction.Cards` maps Diver logical addresses to captured `CardId`,
+`SourceId`, `Name`, `Actions`, and `Selection` (`HasActions`, `IsSelectable`,
+`IsTargetable`, `IsTargeted`).
 Action properties and target identities are detached inside the native notification.
 Action card/player references are then resolved against that update's server
 snapshot. Empty action lists and removed card views replace previous values.
@@ -409,12 +419,13 @@ they do not introduce additional choices for the same card identity.
 ```csharp
 game.OnStateChanged += update =>
 {
-  foreach (var (id, card) in update.Interaction.Cards)
-    RecordCandidates(update.Nonce, id, card.SourceId, card.Actions, card.Selection);
+  foreach (var (address, card) in update.Interaction.Cards)
+    RecordCandidates(update.Nonce, address, card.CardId, card.SourceId,
+      card.Actions, card.Selection);
 };
 ```
 
-The tracker also observes completed native `UpdateSelectableState` and
+The tracker also observes completed native `UpdateViews` and
 `UpdateZoneViews` calls. These cover card-only eligibility/action changes and
 native target-list edits while mode and prompt text stay fixed. Such changes
 advance the unified event nonce. Repeated equivalent captures do not.
@@ -454,7 +465,7 @@ operation status, covering completion before the callback subscription. An
 unloaded result waits for a load notification before another check; no repeated
 IPC polling or five-second synchronous dispatch wait is used for readiness.
 
-Fixed zone collection subscription setup and initial value capture begin
+Fixed zone collection subscription setup and the initial capture request begin
 only after this readiness check succeeds. Mode, text, and collection
 notifications cannot publish interaction state before that gate succeeds.
 Initialization waits separately from server snapshot processing and is cancelled
