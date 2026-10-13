@@ -81,6 +81,7 @@ jobs:
 
       # Generate SLSA attestations for the NuGet packages (.nupkg and .snupkg)
       - name: Generate SLSA Attestations
+        if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
         id: attestations
         uses: actions/attest-build-provenance@v2
         with:
