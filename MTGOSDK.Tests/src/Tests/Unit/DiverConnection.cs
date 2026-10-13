@@ -18,8 +18,11 @@ using System.Threading.Tasks;
 
 using MessagePack;
 
+using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 
 
 namespace MTGOSDK.UnitTests;
@@ -43,6 +46,11 @@ public class DiverConnection
 
     /// <summary>Decides when to answer: the connection index and endpoint.</summary>
     public Func<int, string, Task<bool>> Answer { get; set; } = (_, _) => Task.FromResult(false);
+
+    /// <summary>
+    /// The response body for an endpoint (null: a success without data).
+    /// </summary>
+    public Func<string, byte[]?> Body { get; set; } = _ => null;
 
     public Peer()
     {
@@ -118,7 +126,7 @@ public class DiverConnection
       try
       {
         if (!await Answer(index, endpoint)) return;
-        byte[] body = MessagePackSerializer.Serialize(DiverResponse<object>.Success(null!));
+        byte[] body = Body(endpoint) ?? MessagePackSerializer.Serialize(DiverResponse<object>.Success(null!));
         var frame = new byte[11 + body.Length];
         BinaryPrimitives.WriteInt32LittleEndian(frame, id);
         frame[4] = (byte)TcpMessageType.Response;
@@ -283,6 +291,327 @@ public class DiverConnection
     finally
     {
       answerRegistration.TrySetResult(false);
+      client.Cancel();
+    }
+  }
+
+  /// <summary>
+  /// A peer that answers everything: subscriptions and hooks with new tokens,
+  /// and unregistrations with <paramref name="removed"/> as the Diver's answer.
+  /// </summary>
+  private static Peer SubscriptionPeer(Func<bool> removed)
+  {
+    int tokens = 0;
+    return new Peer
+    {
+      Answer = (_, _) => Task.FromResult(true),
+      Body = endpoint => endpoint switch
+      {
+        "/event_subscribe" or "/hook_method" => MessagePackSerializer.Serialize(
+          DiverResponse<EventRegistrationResults>.Success(
+            new EventRegistrationResults { Token = Interlocked.Increment(ref tokens) })),
+        "/unregister_client" => MessagePackSerializer.Serialize(
+          DiverResponse<UnregisterClientResponse>.Success(
+            new UnregisterClientResponse { WasRemoved = removed() })),
+        _ => null,
+      },
+    };
+  }
+
+  private static readonly DiverCommunicator.LocalEventCallback s_noEvent = (_, _) => { };
+
+  /// <summary>
+  /// A new hook callback that does nothing (a distinct instance on each call).
+  /// </summary>
+  private static LocalHookCallback NoHook()
+  {
+    var instance = new object();
+    return (_, _, _) => GC.KeepAlive(instance);
+  }
+
+  [Test]
+  public async Task Test_CleanupAfterAConfirmedUnregister_SendsNothing()
+  {
+    using var peer = SubscriptionPeer(() => true);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      var onEvent = s_noEvent;
+      var onHook = NoHook();
+      client.EventSubscribe(1, "Changed", onEvent);
+      // Registering again keeps the same registration in the Diver.
+      Assert.That(client.RegisterClient(), Is.True);
+      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, onHook);
+      Assert.That(client.UnregisterClient(), Is.True);
+
+      // The connection drops; cleanup would go out on a new, unregistered one.
+      peer.Close(0);
+      await Until(() => !client.IsConnected, "the client sees the drop");
+      Assert.That(() => client.EventUnsubscribe(onEvent), Throws.Nothing);
+      Assert.That(() => client.UnhookMethod(onHook), Throws.Nothing);
+      Assert.That(peer.Accepted, Is.EqualTo(1), "the Diver removed both with the registration");
+    }
+    finally
+    {
+      client.Cancel();
+    }
+  }
+
+  [Test]
+  public void Test_ARetiredHookSharingATokenWithALiveOne_LeavesTheLiveOne()
+  {
+    using var peer = SubscriptionPeer(() => true);
+    // One native hook: the Diver gives every share of it the same token.
+    peer.Body = endpoint => endpoint switch
+    {
+      "/hook_method" => MessagePackSerializer.Serialize(
+        DiverResponse<EventRegistrationResults>.Success(new EventRegistrationResults { Token = 7 })),
+      "/unregister_client" => MessagePackSerializer.Serialize(
+        DiverResponse<UnregisterClientResponse>.Success(new UnregisterClientResponse { WasRemoved = true })),
+      _ => null,
+    };
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      var retired = NoHook();
+      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, retired);
+      Assert.That(client.UnregisterClient(), Is.True);
+      Assert.That(client.RegisterClient(), Is.True);
+      var live = NoHook();
+      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, live);
+
+      client.UnhookMethod(retired);
+      Assert.That(peer.Requests(0), Does.Not.Contain("/unhook_method"), "the retired share is gone already");
+      Assert.That(client.GetCallbackMapDiagnostics().HookTokenEntries, Is.EqualTo(1),
+        "the live hook still receives the token's callbacks");
+
+      client.UnhookMethod(live);
+      Assert.That(peer.Requests(0).Last(), Is.EqualTo("/unhook_method"));
+    }
+    finally
+    {
+      client.Cancel();
+    }
+  }
+
+  [Test]
+  public async Task Test_CleanupOverlappingAnUnregister_WaitsAndThenSendsNothing()
+  {
+    var unregistered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    using var peer = SubscriptionPeer(() => true);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      var old = NoHook();
+      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, old);
+
+      // The unregister is under way (its answer held) when the old hook's
+      // cleanup starts: the epoch has not ended yet.
+      peer.Answer = (_, endpoint) => endpoint == "/unregister_client" ? unregistered.Task : Task.FromResult(true);
+      var unregistering = Task.Run(() => client.UnregisterClient());
+      await Until(() => peer.Requests(0).Contains("/unregister_client"), "the unregister is sent");
+      var cleanup = Task.Run(() => client.UnhookMethod(old));
+      await Task.Delay(500);
+      Assert.That(peer.Requests(0), Does.Not.Contain("/unhook_method"),
+        "no cleanup is sent while the registration changes");
+
+      // Confirmed: the Diver removed the hook with the registration, so a
+      // cleanup sent now (on whatever registration comes next) could only
+      // remove another share.
+      unregistered.SetResult(true);
+      Assert.That(await unregistering, Is.True);
+      await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
+      Assert.That(peer.Requests(0), Does.Not.Contain("/unhook_method"));
+    }
+    finally
+    {
+      unregistered.TrySetResult(false);
+      client.Cancel();
+    }
+  }
+
+  [Test]
+  public async Task Test_CleanupWaitingForTheLock_ReturnsOnceItsEpochEnds()
+  {
+    using var peer = SubscriptionPeer(() => true);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    using var release = new ManualResetEventSlim();
+    using var held = new ManualResetEventSlim();
+    Thread? holder = null;
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      var old = NoHook();
+      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, old);
+
+      // A newer request of this client holds the registration lock and does
+      // not finish (as a subscription the Diver never answers would).
+      object registrationLock = typeof(DiverCommunicator)
+        .GetField("_registrationLock", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(client)!;
+      holder = new Thread(() =>
+      {
+        lock (registrationLock) { held.Set(); release.Wait(); }
+      });
+      holder.Start();
+      held.Wait();
+
+      // The old hook's cleanup starts while its epoch is current, so it waits.
+      var cleanup = Task.Run(() => client.UnhookMethod(old));
+      await Task.Delay(300);
+      Assert.That(cleanup.IsCompleted, Is.False, "an active cleanup waits for the lock");
+
+      // The epoch ends (as a confirmed unregister ends it): the cleanup returns
+      // although the lock is still held, and sends nothing.
+      SetField(client, "_epoch", 0L);
+      await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
+      Assert.That(peer.Requests(0), Does.Not.Contain("/unhook_method"));
+    }
+    finally
+    {
+      release.Set();
+      holder?.Join();
+      client.Cancel();
+    }
+  }
+
+  [Test]
+  public async Task Test_ASubscriptionOverlappingATimedOutUnregister_KeepsItsEpoch()
+  {
+    var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    using var peer = SubscriptionPeer(() => true);
+    peer.Answer = (_, endpoint) => endpoint == "/event_subscribe" ? answer.Task : Task.FromResult(true);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      var onEvent = s_noEvent;
+      var subscribing = Task.Run(() => client.EventSubscribe(1, "Changed", onEvent));
+      await Until(() => peer.Requests(0).Contains("/event_subscribe"), "the subscription is sent");
+
+      // Disposal gives up while the subscription is unanswered.
+      Assert.That(client.TryUnregisterClient(TimeSpan.FromMilliseconds(300)), Is.False);
+      answer.SetResult(true);
+      await subscribing;
+
+      // The Diver made it under the registration; a confirmed unregister removes it.
+      Assert.That(client.UnregisterClient(), Is.True);
+      peer.Close(0);
+      await Until(() => !client.IsConnected, "the client sees the drop");
+      Assert.That(() => client.EventUnsubscribe(onEvent), Throws.Nothing);
+      Assert.That(peer.Accepted, Is.EqualTo(1), "nothing is sent for it");
+    }
+    finally
+    {
+      answer.TrySetResult(false);
+      client.Cancel();
+    }
+  }
+
+  [Test]
+  public async Task Test_RetiredCleanup_DoesNotWaitForAnotherSubscription()
+  {
+    var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    using var peer = SubscriptionPeer(() => true);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      DiverCommunicator.LocalEventCallback retired = (_, _) => { };
+      client.EventSubscribe(1, "Changed", retired);
+      Assert.That(client.UnregisterClient(), Is.True);
+      Assert.That(client.RegisterClient(), Is.True);
+
+      // A newer subscription waits for a Diver that does not answer.
+      peer.Answer = (_, endpoint) => endpoint == "/event_subscribe" ? answer.Task : Task.FromResult(true);
+      DiverCommunicator.LocalEventCallback waiting = (_, _) => { };
+      var subscribing = Task.Run(() => client.EventSubscribe(1, "Changed", waiting));
+      await Until(() => peer.Requests(0).Count(e => e == "/event_subscribe") == 2, "the newer subscription is sent");
+
+      var cleanup = Task.Run(() => client.EventUnsubscribe(retired));
+      Assert.That(await Task.WhenAny(cleanup, Task.Delay(TimeSpan.FromSeconds(5))), Is.SameAs(cleanup),
+        "the retired cleanup does not wait for the newer subscription");
+      await cleanup;
+      Assert.That(peer.Requests(0), Does.Not.Contain("/event_unsubscribe"));
+
+      answer.SetResult(true);
+      await subscribing;
+    }
+    finally
+    {
+      answer.TrySetResult(false);
+      client.Cancel();
+    }
+  }
+
+  [Test]
+  public void Test_CleanupAfterAnUnconfirmedUnregister_IsSent()
+  {
+    using var peer = SubscriptionPeer(() => false);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      var onEvent = s_noEvent;
+      client.EventSubscribe(1, "Changed", onEvent);
+      Assert.That(client.UnregisterClient(), Is.True);
+
+      client.EventUnsubscribe(onEvent);
+      Assert.That(peer.Requests(0).Last(), Is.EqualTo("/event_unsubscribe"));
+    }
+    finally
+    {
+      client.Cancel();
+    }
+  }
+
+  [Test]
+  public void Test_ASubscriptionMadeWhileUnregistered_StillSendsItsCleanup()
+  {
+    using var peer = SubscriptionPeer(() => true);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      // Not the registration's: the Diver does not remove it when the client
+      // unregisters, so the client sends the request. (A Diver counts such a
+      // subscription as an unregistered connection's, and this connection is
+      // now its removed registration's: it takes nothing; that limitation is
+      // older than this test.)
+      var onHook = NoHook();
+      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, onHook);
+      Assert.That(client.RegisterClient(), Is.True);
+      Assert.That(client.UnregisterClient(), Is.True);
+
+      client.UnhookMethod(onHook);
+      Assert.That(peer.Requests(0).Last(), Is.EqualTo("/unhook_method"));
+    }
+    finally
+    {
+      client.Cancel();
+    }
+  }
+
+  [Test]
+  public void Test_ANewRegistrationAfterAConfirmedUnregister_IsCleanedUp()
+  {
+    using var peer = SubscriptionPeer(() => true);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      Assert.That(client.UnregisterClient(), Is.True);
+      // A new registration (and epoch) after the first was removed.
+      Assert.That(client.RegisterClient(), Is.True);
+      var onEvent = s_noEvent;
+      client.EventSubscribe(1, "Changed", onEvent);
+
+      client.EventUnsubscribe(onEvent);
+      Assert.That(peer.Requests(0).Last(), Is.EqualTo("/event_unsubscribe"));
+    }
+    finally
+    {
       client.Cancel();
     }
   }

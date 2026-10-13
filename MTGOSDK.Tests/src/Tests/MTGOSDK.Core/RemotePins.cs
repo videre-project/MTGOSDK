@@ -428,6 +428,48 @@ public class RemotePins : BaseFixture
     }
   }
 
+  [Test]
+  public async Task Test_LateEventUnsubscribe_KeepsAnotherClientsSubscription()
+  {
+    using var firstStandIn = StartStandIn();
+    using var secondStandIn = StartStandIn();
+    var first = ConnectOther(firstStandIn);
+    var second = ConnectOther(secondStandIn);
+    try
+    {
+      dynamic component = RemoteClient.CreateInstance("System.ComponentModel.Component");
+      var fired = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+      DiverCommunicator.LocalEventCallback firstHandler = (_, args) => ReleaseArguments(first, args);
+      DiverCommunicator.LocalEventCallback secondHandler = (_, args) =>
+      {
+        ReleaseArguments(second, args);
+        fired.TrySetResult(true);
+      };
+      first.EventSubscribe(Token(component), "Disposed", firstHandler);
+      second.EventSubscribe(Token(component), "Disposed", secondHandler);
+
+      // The first client leaves (its subscription is removed with it), then
+      // cleans up late, as a client that did not see the confirmation would:
+      // the Diver accepts it and removes nothing of the second client's.
+      Assert.That(first.UnregisterClient(firstStandIn.Id), Is.True);
+      ((System.Collections.IDictionary)PrivateField(typeof(DiverCommunicator), "_eventEpochs")
+        .GetValue(first)!).Clear();
+      Assert.That(() => first.EventUnsubscribe(firstHandler), Throws.Nothing);
+
+      component.Dispose();
+      Assert.That(await fired.Task.WaitAsync(TimeSpan.FromSeconds(10)), Is.True,
+        "the second client's subscription still fires");
+      second.EventUnsubscribe(secondHandler);
+    }
+    finally
+    {
+      Close(first);
+      Close(second);
+      firstStandIn.Kill();
+      secondStandIn.Kill();
+    }
+  }
+
   /// <summary>Returns a callback's object references, as a handler that keeps none does.</summary>
   private static void ReleaseArguments(DiverCommunicator client, IEnumerable<ObjectOrRemoteAddress> arguments)
   {

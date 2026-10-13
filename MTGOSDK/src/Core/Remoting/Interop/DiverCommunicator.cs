@@ -40,6 +40,23 @@ public class DiverCommunicator : IDisposable
 
   // This communicator's own registration within its process.
   private readonly string _clientId = Guid.NewGuid().ToString("N");
+
+  // Registration epochs: one per registration of this client in the Diver.
+  // An epoch starts with the first registration while none is current, is
+  // kept by later registrations (the Diver keeps the same registration for
+  // this client) and ends only when the Diver confirms the client was removed.
+  // Every epoch other than the current one (0: none) has ended. Registrations,
+  // unregistrations and subscriptions hold the lock across their request;
+  // the current epoch is changed only under it and read without it.
+  private readonly object _registrationLock = new();
+  private long _epochs;
+  private long _epoch;
+
+  // The epoch each event callback and hook callback was subscribed under (none:
+  // subscribed while unregistered). The Diver removed those of an ended epoch
+  // with the registration, so they need no remote cleanup.
+  private readonly ConcurrentDictionary<LocalEventCallback, long> _eventEpochs = new();
+  private readonly ConcurrentDictionary<LocalHookCallback, long> _hookEpochs = new();
   private Exception? _lastError;
 
   public Exception? LastError => _lastError;
@@ -477,43 +494,70 @@ public class DiverCommunicator : IDisposable
 
   public bool RegisterClient(int? process_id = null)
   {
-    _process_id = process_id ?? Process.GetCurrentProcess().Id;
-    _lastError = null;
+    lock (_registrationLock)
+    {
+      _process_id = process_id ?? Process.GetCurrentProcess().Id;
+      _lastError = null;
 
-    try
-    {
-      var request = new RegisterClientRequest { ProcessId = _process_id.Value, ClientId = _clientId };
-      SendRequest("register_client", request);
-      _registered = true;
-      return true;
-    }
-    catch (Exception ex)
-    {
-      _lastError = ex;
-      return false;
+      try
+      {
+        var request = new RegisterClientRequest { ProcessId = _process_id.Value, ClientId = _clientId };
+        SendRequest("register_client", request);
+        _registered = true;
+        if (_epoch == 0) Volatile.Write(ref _epoch, ++_epochs);
+        return true;
+      }
+      catch (Exception ex)
+      {
+        _lastError = ex;
+        return false;
+      }
     }
   }
 
   public bool UnregisterClient(int? process_id = null)
   {
-    _process_id = process_id ?? Process.GetCurrentProcess().Id;
+    lock (_registrationLock)
+    {
+      _process_id = process_id ?? Process.GetCurrentProcess().Id;
+      long epoch = _epoch;
 
-    try
-    {
-      var request = new UnregisterClientRequest { ProcessId = _process_id.Value, ClientId = _clientId };
-      SendRequest("unregister_client", request);
-      return true;
-    }
-    catch
-    {
-      return false;
-    }
-    finally
-    {
-      _registered = false;
-      _process_id = null;
+      try
+      {
+        var request = new UnregisterClientRequest { ProcessId = _process_id.Value, ClientId = _clientId };
+        EndEpochIfRemoved(epoch, request, SendRequest<UnregisterClientResponse>("unregister_client", request));
+        return true;
+      }
+      catch
+      {
+        return false;
+      }
+      finally
+      {
+        _registered = false;
+        _process_id = null;
+      }
     }
   }
+
+  /// <summary>
+  /// Ends <paramref name="epoch"/> once the Diver confirmed it removed this
+  /// client's registration (and so its subscriptions and hooks). A request
+  /// without a client id is an older client's (as the tests emulate one): the
+  /// Diver keeps its subscriptions, so its epoch does not end.
+  /// Call under <see cref="_registrationLock"/>.
+  /// </summary>
+  private void EndEpochIfRemoved(long epoch, UnregisterClientRequest request, UnregisterClientResponse response)
+  {
+    if (response.WasRemoved && request.ClientId != null && epoch != 0 && _epoch == epoch)
+      Volatile.Write(ref _epoch, 0);
+  }
+
+  /// <summary>
+  /// Whether a subscription made under <paramref name="epoch"/> was removed by
+  /// the Diver with its registration. Never waits for a request in progress.
+  /// </summary>
+  private bool HasEnded(long epoch) => Volatile.Read(ref _epoch) != epoch;
 
   /// <summary>
   /// Unregisters this client if it is registered and connected, waiting at
@@ -526,12 +570,26 @@ public class DiverCommunicator : IDisposable
   {
     if (!_registered || _process_id is not int pid || !_tcp.IsConnected)
       return false;
+    var watch = Stopwatch.StartNew();
+    // A subscription or registration still waiting for the Diver holds the
+    // lock; disposal does not wait for it beyond the timeout.
+    bool locked = false;
     try
     {
-      using var cts = new CancellationTokenSource(timeout);
+      Monitor.TryEnter(_registrationLock, timeout, ref locked);
+      if (!locked)
+      {
+        Log.Debug("Unregistering from the Diver did not start in time.");
+        return false;
+      }
+      long epoch = _epoch;
+      TimeSpan left = timeout - watch.Elapsed;
+      using var cts = new CancellationTokenSource(left > TimeSpan.Zero ? left : TimeSpan.Zero);
       var request = new UnregisterClientRequest { ProcessId = pid, ClientId = _clientId };
-      _tcp.SendRequestAsync("/unregister_client", MessagePackSerializer.Serialize(request), cts.Token)
+      var response = _tcp.SendRequestAsync<UnregisterClientResponse>(
+        "/unregister_client", MessagePackSerializer.Serialize(request), cts.Token)
         .GetAwaiter().GetResult();
+      EndEpochIfRemoved(epoch, request, response);
       return true;
     }
     catch (Exception ex)
@@ -543,6 +601,7 @@ public class DiverCommunicator : IDisposable
     {
       _registered = false;
       _process_id = null;
+      if (locked) Monitor.Exit(_registrationLock);
     }
   }
 
@@ -847,10 +906,18 @@ public class DiverCommunicator : IDisposable
       Capture = capture,
       PropertyNames = propertyNames
     };
-    var regRes = SendRequest<EventRegistrationResults>("event_subscribe", request);
-    _tokensToEventHandlers[regRes.Token] = callback;
-    _eventHandlersToToken[callback] = regRes.Token;
-    return regRes.CaptureSequence;
+    // The epoch it is made under, taken before the request: no registration
+    // change overlaps it.
+    lock (_registrationLock)
+    {
+      long epoch = _registered ? _epoch : 0;
+      var regRes = SendRequest<EventRegistrationResults>("event_subscribe", request);
+      if (epoch != 0) _eventEpochs[callback] = epoch;
+      else _eventEpochs.TryRemove(callback, out _);
+      _tokensToEventHandlers[regRes.Token] = callback;
+      _eventHandlersToToken[callback] = regRes.Token;
+      return regRes.CaptureSequence;
+    }
   }
 
   internal void SetEventPropertyFilter(LocalEventCallback callback, string[] propertyNames)
@@ -866,30 +933,61 @@ public class DiverCommunicator : IDisposable
     if (!TryRemoveEventCallback(callback, out int token))
       throw new Exception("EventUnsubscribe: callback not found");
 
-    if (_isDisposed)
-      return;
+    _eventEpochs.TryRemove(callback, out long epoch);
+    SendCleanup(epoch, "event_unsubscribe", new EventUnsubscriptionRequest { Token = token });
+  }
 
-    var request = new EventUnsubscriptionRequest { Token = token };
+  /// <summary>
+  /// Sends the remote cleanup of a callback subscribed under <paramref name="epoch"/>
+  /// (0: while unregistered), unless the Diver removed it with this client's
+  /// registration (the epoch ended). A cleanup that is sent holds the
+  /// registration lock and checks again, so no registration change overlaps
+  /// it (it would otherwise carry the request on a newer registration and
+  /// remove that registration's share of a shared hook). While it waits for
+  /// the lock it keeps checking, so a cleanup whose epoch ends meanwhile
+  /// returns without waiting for another request in progress.
+  /// </summary>
+  private void SendCleanup(long epoch, string endpoint, object request)
+  {
+    bool locked = false;
     try
     {
-      SendRequest("event_unsubscribe", request);
-    }
-    catch (Core.Exceptions.ExternalErrorException ex) when (!_registered && ex.Message.Contains("Unknown token")) // the Diver's unsubscribe/unhook error
-    {
-      // This client unregistered: the Diver removed its subscription with it.
+      while (!locked)
+      {
+        if (epoch != 0 && HasEnded(epoch))
+          return;
+        if (_isDisposed)
+          return;
+        Monitor.TryEnter(_registrationLock, s_cleanupLockSlice, ref locked);
+      }
+      if (epoch != 0 && HasEnded(epoch))
+        return;
+
+      SendRequest(endpoint, request);
     }
     catch (ObjectDisposedException ex) when (IsRemoteShutdown(ex))
     {
       // The local callback maps have already been cleaned up. Once MTGO/Diver
-      // is gone, there is no remote subscription left to remove.
+      // is gone, there is no remote subscription or hook left to remove.
+    }
+    finally
+    {
+      if (locked) Monitor.Exit(_registrationLock);
     }
   }
+
+  /// <summary>
+  /// How long a cleanup waits for the registration lock before checking its
+  /// epoch again.
+  /// </summary>
+  private static readonly TimeSpan s_cleanupLockSlice = TimeSpan.FromMilliseconds(50);
 
   private bool TryRemoveEventCallback(LocalEventCallback callback, out int token)
   {
     if (_eventHandlersToToken.TryRemove(callback, out token))
     {
-      _tokensToEventHandlers.TryRemove(token, out _);
+      // Only while the token is still this callback's (a later subscription may share it).
+      ((ICollection<KeyValuePair<int, LocalEventCallback>>)_tokensToEventHandlers).Remove(new(token, callback));
       return true;
     }
 
@@ -898,7 +996,8 @@ public class DiverCommunicator : IDisposable
       if (entry.Value != callback)
         continue;
 
-      if (_tokensToEventHandlers.TryRemove(entry.Key, out _))
+      // Only that entry: the token may have been given to a later callback meanwhile.
+      if (((ICollection<KeyValuePair<int, LocalEventCallback>>)_tokensToEventHandlers).Remove(entry))
       {
         token = entry.Key;
         _eventHandlersToToken.TryRemove(callback, out _);
@@ -926,10 +1025,18 @@ public class DiverCommunicator : IDisposable
       Capture = capture
     };
 
-    var regRes = SendRequest<EventRegistrationResults>("hook_method", req);
-    _tokensToHookCallbacks[regRes.Token] = callback;
-    _hookCallbacksToTokens[callback] = regRes.Token;
-    return true;
+    // The epoch it is made under, taken before the request: no registration
+    // change overlaps it.
+    lock (_registrationLock)
+    {
+      long epoch = _registered ? _epoch : 0;
+      var regRes = SendRequest<EventRegistrationResults>("hook_method", req);
+      if (epoch != 0) _hookEpochs[callback] = epoch;
+      else _hookEpochs.TryRemove(callback, out _);
+      _tokensToHookCallbacks[regRes.Token] = callback;
+      _hookCallbacksToTokens[callback] = regRes.Token;
+      return true;
+    }
   }
 
   public void UnhookMethod(LocalHookCallback callback)
@@ -937,23 +1044,8 @@ public class DiverCommunicator : IDisposable
     if (!TryRemoveHookCallback(callback, out int token))
       throw new Exception("UnhookMethod: callback not found");
 
-    if (_isDisposed)
-      return;
-
-    var request = new HookUnsubscriptionRequest { Token = token };
-    try
-    {
-      SendRequest("unhook_method", request);
-    }
-    catch (Core.Exceptions.ExternalErrorException ex) when (!_registered && ex.Message.Contains("Unknown token")) // the Diver's unsubscribe/unhook error
-    {
-      // This client unregistered: the Diver removed its hook with it.
-    }
-    catch (ObjectDisposedException ex) when (IsRemoteShutdown(ex))
-    {
-      // The local callback maps have already been cleaned up. Once MTGO/Diver
-      // is gone, there is no remote hook left to remove.
-    }
+    _hookEpochs.TryRemove(callback, out long epoch);
+    SendCleanup(epoch, "unhook_method", new HookUnsubscriptionRequest { Token = token });
   }
 
   private bool IsRemoteShutdown(ObjectDisposedException ex) =>
@@ -965,7 +1057,9 @@ public class DiverCommunicator : IDisposable
   {
     if (_hookCallbacksToTokens.TryRemove(callback, out token))
     {
-      _tokensToHookCallbacks.TryRemove(token, out _);
+      // Only while the token is still this callback's: a later hook of the same
+      // method (by this client again) shares the Diver's token.
+      ((ICollection<KeyValuePair<int, LocalHookCallback>>)_tokensToHookCallbacks).Remove(new(token, callback));
       return true;
     }
 
@@ -974,7 +1068,8 @@ public class DiverCommunicator : IDisposable
       if (entry.Value != callback)
         continue;
 
-      if (_tokensToHookCallbacks.TryRemove(entry.Key, out _))
+      // Only that entry: the token may have been given to a later callback meanwhile.
+      if (((ICollection<KeyValuePair<int, LocalHookCallback>>)_tokensToHookCallbacks).Remove(entry))
       {
         token = entry.Key;
         _hookCallbacksToTokens.TryRemove(callback, out _);
