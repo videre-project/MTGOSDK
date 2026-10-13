@@ -72,21 +72,29 @@ public class BatchSerialization
     Assert.That(error!.GetBaseException(), Is.SameAs(source.Failure));
   }
 
-  [Test]
-  public void InterfaceMaterializationPreservesEnumValuesAndSequences()
+  [TestCase(State.Ready, 1, "Ready")]
+  [TestCase((State)8, 8, "8")]
+  public void InterfaceMaterializationPreservesEnumValuesAndSequences(
+    State state, int number, string name)
   {
     var batch = new RemoteBatch();
     batch.Output("item", batch.Input(ObjectOrRemoteAddress.FromToken(1, "source")),
       RemoteBatchProjection.Object(
         ("State", "State", RemoteBatchProjection.Value()),
+        ("Number", "State", RemoteBatchProjection.Value()),
+        ("UnsignedNumber", "State", RemoteBatchProjection.Value()),
+        ("StateName", "State", RemoteBatchProjection.Value()),
         ("Labels", "Labels", RemoteBatchProjection.Value()),
         ("EnumerableLabels", "Labels", RemoteBatchProjection.Value()),
         ("ReadOnlyLabels", "Labels", RemoteBatchProjection.Value())));
-    var result = Execute(batch, new { State = (State)8, Labels = new[] { "a", "b" } });
+    var result = Execute(batch, new { State = state, Labels = new[] { "a", "b" } });
     var values = result.Values["item"].Members.ToDictionary(member => member.Key,
       member => RemoteBatchObject.FromValue(member.Value));
     var row = InterfaceProxyBuilder.Create<IRow>(values);
-    Assert.That((int)row.State, Is.EqualTo(8));
+    Assert.That((int)row.State, Is.EqualTo(number));
+    Assert.That(row.Number, Is.EqualTo(number));
+    Assert.That(row.UnsignedNumber, Is.EqualTo((uint)number));
+    Assert.That(row.StateName, Is.EqualTo(name));
     Assert.That(row.Labels, Is.EqualTo(new[] { "a", "b" }));
     Assert.That(row.EnumerableLabels, Is.EqualTo(new[] { "a", "b" }));
     Assert.That(row.ReadOnlyLabels, Is.EqualTo(new[] { "a", "b" }));
@@ -144,6 +152,9 @@ public class BatchSerialization
   public interface IRow
   {
     State State { get; }
+    int Number { get; }
+    uint UnsignedNumber { get; }
+    string StateName { get; }
     IList<string> Labels { get; }
     IEnumerable<string> EnumerableLabels { get; }
     IReadOnlyList<string> ReadOnlyLabels { get; }

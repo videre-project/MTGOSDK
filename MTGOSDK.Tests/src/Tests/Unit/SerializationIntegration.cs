@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,6 +18,7 @@ using MTGOSDK.API.Trade;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Serialization;
 
+using AttributeAnnotation = WotC.MtGO.Client.Model.Collection.AttributeAnnotation;
 using ITradePost = WotC.MtGO.Client.Model.Trade.ITradePost;
 
 
@@ -76,6 +78,22 @@ public class SerializationIntegration
     }
 
     public event PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
+  }
+
+  [TestCase(AttributeAnnotation.DeckbuildingColorGreen, 16u)]
+  [TestCase(AttributeAnnotation.DeckbuildingColorWhite | AttributeAnnotation.DeckbuildingColorGreen, 17u)]
+  public void CollectionSnapshotsPreserveAnnotationBits(AttributeAnnotation annotation, uint expected)
+  {
+    using var peer = new SerializationPeer();
+    var items = peer.Add(new[]
+    {
+      new { CatalogId = 65378, Annotation = new { EnumValue = annotation }, Quantity = 2 }
+    });
+    var row = DLRWrapper.SerializeDroAs<ICardGroupingItemSnapshot>(items,
+      new[] { "CatalogId", "Annotation.EnumValue", "Quantity" }).Single();
+    Assert.That(row.CatalogId, Is.EqualTo(65378));
+    Assert.That(row.Quantity, Is.EqualTo(2));
+    Assert.That(row.Annotation, Is.EqualTo(expected));
   }
 
   [TestCase(false)]

@@ -146,9 +146,12 @@ public static class InterfaceProxyBuilder
       return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
 
     if (value is RemoteBatchEnum capturedEnum)
-      return targetType.IsEnum
-        ? Enum.ToObject(targetType, capturedEnum.EnumValue)
-        : ConvertValue(capturedEnum.ToString(), targetType);
+    {
+      if (targetType.IsEnum)
+        return Enum.ToObject(targetType, capturedEnum.EnumValue);
+      value = targetType == typeof(string)
+        ? capturedEnum.ToString() : capturedEnum.EnumValue;
+    }
 
     var valueType = value.GetType();
     
