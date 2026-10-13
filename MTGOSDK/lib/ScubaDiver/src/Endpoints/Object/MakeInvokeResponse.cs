@@ -147,7 +147,7 @@ public partial class Diver : IDisposable
     }
     else
     {
-      ulong resultsAddress = _runtime.PinObject(results, RequestClient);
+      ulong resultsAddress = PinForRequest(results);
       Type resultsType = results.GetType();
       int hashCode = results.GetHashCode();
       returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.FullName ?? resultsType.Name, hashCode);

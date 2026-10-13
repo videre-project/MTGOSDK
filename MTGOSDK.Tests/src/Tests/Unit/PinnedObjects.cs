@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Memory.Snapshot;
 
 
@@ -112,15 +113,48 @@ public class PinnedObjects
   }
 
   [Test]
-  public void Test_AnUnregisteredClientsPin_IsUnattributed()
+  public void Test_APinForAnUnknownOrRemovedClient_IsRefused()
   {
     const int unknown = 1003;
-    ulong token = s_runtime.PinObject(new object(), unknown);
+    var instance = new object();
+    ulong token = s_runtime.GetObjectToken(instance);
 
+    Assert.That(s_runtime.TryPinObject(instance, unknown, out _), Is.False);
+    Assert.That(() => s_runtime.PinObject(instance, unknown), Throws.InstanceOf<PinRefusedException>());
+    s_runtime.RemoveClient(ClientA);
+    Assert.That(s_runtime.TryPinObject(instance, ClientA, out _), Is.False, "removed");
+    Assert.That(IsPinned(token), Is.False, "nothing was pinned");
     Assert.That(s_runtime.GetClientReferenceCount(unknown), Is.EqualTo(0));
-    Assert.That(s_runtime.UnpinObject(token, unknown), Is.False, "not a registered client");
-    Assert.That(s_runtime.UnpinObject(token, null), Is.True);
-    Assert.That(IsPinned(token), Is.False);
+    Assert.That(s_runtime.UnpinObject(token, null), Is.False, "nothing unattributed either");
+  }
+
+  [Test]
+  public void Test_APinTakenBeforeItsClientIsRemoved_IsReclaimed()
+  {
+    var instance = new object();
+    ulong token = s_runtime.PinObject(instance, ClientA);
+    Assert.That(s_runtime.PinObject(instance, ClientB), Is.EqualTo(token));
+
+    Assert.That(s_runtime.RemoveClient(ClientA), Is.EqualTo(1));
+    Assert.That(IsPinned(token), Is.True, "B still holds it");
+    Assert.That(s_runtime.UnpinObject(token, ClientB), Is.True);
+    Assert.That(IsPinned(token), Is.False, "no reference is left behind");
+  }
+
+  [Test]
+  public void Test_ARemovalBetweenSeveralPins_LeavesNoReference()
+  {
+    // A request (or callback) pinning several objects for A while A is removed.
+    var first = new object();
+    var second = new object();
+    ulong firstToken = s_runtime.PinObject(first, ClientA);
+    s_runtime.RemoveClient(ClientA);
+    Assert.That(s_runtime.TryPinObject(second, ClientA, out _), Is.False);
+
+    Assert.That(IsPinned(firstToken), Is.False, "reclaimed with the removal");
+    Assert.That(IsPinned(s_runtime.GetObjectToken(second)), Is.False, "refused");
+    Assert.That(s_runtime.UnpinObject(firstToken, ClientA), Is.False, "the cleanup of the failed request is harmless");
+    Assert.That(s_runtime.GetClientReferenceCount(ClientB), Is.EqualTo(0), "B is untouched");
   }
 
   [Test]

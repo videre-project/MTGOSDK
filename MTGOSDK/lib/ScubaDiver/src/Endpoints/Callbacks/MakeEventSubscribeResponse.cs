@@ -157,58 +157,29 @@ public partial class Diver : IDisposable
     // client without a handler for the token returns it at once), so a client
     // that exits before returning it is reclaimed. The references are taken
     // before the callback is sent, so no recipient can release an argument
-    // another one is still reading. Connections without a registration (see
-    // CallbackRecipient) are told they do not own a reference; when one of
-    // them subscribed to this token, they share one unattributed reference,
-    // as every recipient did before.
-    var remoteParams = new ObjectOrRemoteAddress[parameters.Length];
-    var pinnedTokens = new List<ulong>(parameters.Length);
-    var owners = new Dictionary<Guid, (bool Receives, int? Client)>();
-    bool shared = false;
+    // another one is still reading. A recipient removed meanwhile is refused
+    // its references and is not sent the callback (see CallbackArguments).
+    // Connections without a registration (see CallbackRecipient) are told they
+    // do not own a reference; when one of them subscribed to this token, they
+    // share one unattributed reference, as every recipient did before.
+    CallbackArguments.Prepared prepared = null;
     SendTcpCallback(
       recipients =>
       {
-        // A recipient removed since it was selected gets no reference: it could
-        // not return one (its releases are refused).
-        foreach (Guid recipient in recipients)
-          owners[recipient] = CallbackRecipient(recipient);
-        // Without such a subscriber, the shared reference would never be returned.
-        shared = owners.Values.Any(owner => owner.Receives && owner.Client == null) &&
-          HasUnregisteredSubscriber(token);
-        for (int i = 0; i < parameters.Length; i++)
-        {
-          object parameter = parameters[i];
-          if (parameter == null)
-          {
-            remoteParams[i] = ObjectOrRemoteAddress.Null;
-          }
-          else if (parameter.GetType().IsPrimitiveEtc())
-          {
-            remoteParams[i] = ObjectOrRemoteAddress.FromObj(parameter);
-          }
-          else
-          {
-            string typeName = parameter.GetType().FullName;
-            int hashCode = parameter.GetHashCode();
-            ulong addr = _runtime.GetObjectToken(parameter);
-            foreach (Guid recipient in recipients)
-              if (owners[recipient] is { Receives: true, Client: int client })
-                addr = _runtime.PinObject(parameter, client);
-            if (shared)
-              addr = _runtime.PinObject(parameter, null);
-            pinnedTokens.Add(addr);
-            remoteParams[i] = ObjectOrRemoteAddress.FromToken(
-              addr,
-              typeName,
-              hashCode);
-          }
-        }
+        prepared = CallbackArguments.Prepare(
+          parameters,
+          recipients,
+          CallbackRecipient,
+          () => HasUnregisteredSubscriber(token),
+          _runtime.TryPinObject,
+          _runtime.UnpinObject,
+          _runtime.GetObjectToken);
 
         CallbackInvocationRequest Callback(bool owned) => new()
         {
           Token = token,
           Timestamp = timestamp,
-          Parameters = [.. remoteParams],
+          Parameters = [.. prepared.Parameters],
           Capture = capture,
           CaptureError = captureError,
           CaptureSequence = sequence,
@@ -216,19 +187,22 @@ public partial class Diver : IDisposable
         };
         var ownedCallback = Callback(owned: true);
         var sharedCallback = Callback(owned: false);
-        return recipient => owners[recipient].Client is int ? ownedCallback : sharedCallback;
+        return recipient =>
+          prepared.Owners.ContainsKey(recipient) ? ownedCallback :
+          prepared.SharedRecipients.Contains(recipient) ? sharedCallback :
+          null;
       },
       unsent =>
       {
-        foreach (ulong addr in pinnedTokens)
+        if (prepared == null) return;
+        foreach (ulong addr in prepared.Tokens)
           foreach (Guid recipient in unsent)
-            if (owners.TryGetValue(recipient, out var owner) && owner is { Receives: true, Client: int client })
+            if (prepared.Owners.TryGetValue(recipient, out int client))
               _runtime.UnpinObject(addr, client);
         // The shared reference goes when no connection without a registration got it.
-        bool sharedSent = owners.Any(owner =>
-          owner.Value is { Receives: true, Client: null } && !unsent.Contains(owner.Key));
-        if (shared && !sharedSent)
-          foreach (ulong addr in pinnedTokens)
+        bool sharedSent = prepared.SharedRecipients.Any(recipient => !unsent.Contains(recipient));
+        if (prepared.Shared && !sharedSent)
+          foreach (ulong addr in prepared.Tokens)
             _runtime.UnpinObject(addr, null);
       },
       IsCallbackRecipient);

@@ -179,7 +179,8 @@ public class TcpServer : IDisposable
   /// Takes the references for the given recipient connections before anything
   /// is sent, so they exist before any recipient can release its own, and
   /// returns the callback each recipient gets (recipients given the same
-  /// instance share one serialized body).
+  /// instance share one serialized body), or null for a recipient that is
+  /// not to be sent it (and is not reported unsent).
   /// </param>
   /// <param name="releaseUnsent">
   /// Called with the recipient connections the callback could not be queued for.
@@ -197,6 +198,7 @@ public class TcpServer : IDisposable
     if (recipients.Length == 0) return 0;
 
     var sent = new HashSet<Guid>();
+    var skipped = new HashSet<Guid>();
     try
     {
       var callbackFor = prepare(recipients.Select(recipient => recipient.Key).ToArray());
@@ -205,6 +207,11 @@ public class TcpServer : IDisposable
       foreach (var recipient in recipients)
       {
         var callback = callbackFor(recipient.Key);
+        if (callback == null)
+        {
+          skipped.Add(recipient.Key);
+          continue;
+        }
         byte[] body = bodies.FirstOrDefault(entry => ReferenceEquals(entry.Callback, callback)).Body;
         if (body == null)
         {
@@ -220,7 +227,7 @@ public class TcpServer : IDisposable
     }
 
     var unsent = recipients
-      .Where(recipient => !sent.Contains(recipient.Key))
+      .Where(recipient => !sent.Contains(recipient.Key) && !skipped.Contains(recipient.Key))
       .Select(recipient => recipient.Key)
       .ToArray();
     if (unsent.Length > 0)

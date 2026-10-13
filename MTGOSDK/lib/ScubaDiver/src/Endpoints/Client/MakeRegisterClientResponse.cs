@@ -97,19 +97,25 @@ public partial class Diver : IDisposable
   private static readonly TimeSpan s_clientMonitorPeriod = TimeSpan.FromSeconds(10);
 
   /// <summary>
-  /// The registration the current request's connection belongs to (its pin
-  /// accounting key), or null for a connection that never registered.
+  /// Whom the current request's pins are counted for, resolved now (see
+  /// <see cref="RequestOwner.Resolve"/>).
   /// </summary>
-  private int? RequestClient =>
-    s_requestConnection.Value is Guid connection ? ConnectionClient(connection) : null;
-
-  private int? ConnectionClient(Guid connection)
+  private RequestOwner CurrentRequestOwner
   {
-    lock (_registeredPidsLock)
+    get
     {
-      return _connectionClients.TryGetValue(connection, out var client) ? client.Id : null;
+      if (s_requestConnection.Value is not Guid connection) return RequestOwner.Unregistered;
+      lock (_registeredPidsLock)
+      {
+        return RequestOwner.Resolve(
+          _connectionClients.TryGetValue(connection, out var client) ? client.Id : null,
+          _tcpServer?.IsOpen(connection) == true);
+      }
     }
   }
+
+  /// <summary>Takes one pin reference for the current request (see <see cref="RequestOwner.Pin"/>).</summary>
+  private ulong PinForRequest(object instance) => CurrentRequestOwner.Pin(_runtime, instance);
 
 
   /// <summary>

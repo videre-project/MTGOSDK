@@ -82,9 +82,10 @@ public class SnapshotRuntime : IDisposable
   }
 
   /// <summary>
-  /// Each registered client's references, by token. A client that ends
-  /// without returning them (its process exited or was killed) can then be
-  /// reclaimed alone, without dropping the references other clients hold.
+  /// Each registered client's references, by token, keyed by its registration
+  /// id (see <see cref="AddClient"/>). A client that ends without returning
+  /// them (its process exited or was killed) can then be reclaimed alone,
+  /// without dropping the references other clients hold.
   /// Guarded by <see cref="_pinnedObjectsLock"/>.
   /// </summary>
   private readonly Dictionary<int, Dictionary<ulong, int>> _clientReferences = new();
@@ -193,14 +194,40 @@ public class SnapshotRuntime : IDisposable
 
   /// <summary>
   /// Takes one pin reference to the object for <paramref name="client"/> (a
-  /// registered client's process id, see <see cref="AddClient"/>), or
-  /// unattributed when null or not registered.
+  /// registration id, see <see cref="AddClient"/>), or an unattributed one
+  /// when it is null.
   /// </summary>
+  /// <exception cref="PinRefusedException">
+  /// <paramref name="client"/> is unknown or was removed: nothing is pinned.
+  /// </exception>
   public ulong PinObject(object instance, int? client)
+  {
+    if (!TryPinObject(instance, client, out ulong token))
+      throw new PinRefusedException(client!.Value);
+    return token;
+  }
+
+  /// <summary>
+  /// Takes one pin reference to the object as <see cref="PinObject(object, int?)"/>
+  /// does, or returns false, pinning and counting nothing, when
+  /// <paramref name="client"/> is not null and unknown or removed. The check
+  /// and the reference are made under the lock <see cref="RemoveClient"/>
+  /// takes, so a removal either comes first (the pin is refused) or reclaims
+  /// the reference: a removed client never holds a reference it cannot return.
+  /// </summary>
+  public bool TryPinObject(object instance, int? client, out ulong token)
   {
     lock (_pinnedObjectsLock)
     {
-      ulong token = GetObjectToken(instance);
+      Dictionary<ulong, int> references = null;
+      if (client is int owner && !_clientReferences.TryGetValue(owner, out references))
+      {
+        Log.Debug("[SnapshotRuntime] PinObject: client={Client} is not registered; refused", client);
+        token = 0;
+        return false;
+      }
+
+      token = GetObjectToken(instance);
       if (!_pinnedObjects.TryGetValue(token, out var entry))
       {
         entry = new PinnedObjectEntry(instance);
@@ -209,8 +236,7 @@ public class SnapshotRuntime : IDisposable
       }
 
       int refCount = entry.AddReference();
-      // A client that is not registered (any more) cannot be reclaimed by id.
-      if (client is int owner && _clientReferences.TryGetValue(owner, out var references))
+      if (references != null)
       {
         references.TryGetValue(token, out int held);
         references[token] = held + 1;
@@ -220,7 +246,7 @@ public class SnapshotRuntime : IDisposable
         entry.Unattributed++;
       }
       Log.Debug("[SnapshotRuntime] PinObject: token={Token}, refCount={RefCount}, client={Client}", token, refCount, client);
-      return token;
+      return true;
     }
   }
 
@@ -274,8 +300,8 @@ public class SnapshotRuntime : IDisposable
   }
 
   /// <summary>
-  /// Starts counting references for a registered client (its process id).
-  /// Releases from a client that is not registered are refused.
+  /// Starts counting references for a client's registration (its id, never
+  /// reused). Pins and releases for an id that is not registered are refused.
   /// </summary>
   public void AddClient(int client)
   {
@@ -315,9 +341,10 @@ public class SnapshotRuntime : IDisposable
   public void QueueUnpinObject(ulong token, int? client) => UnpinObject(token, client);
 
   /// <summary>
-  /// Stops counting a client that has left or whose process has exited, and
-  /// returns every pin reference it still holds. References of other clients
-  /// and unattributed ones are kept; later releases from it are refused.
+  /// Stops counting a client's registration (it left, or its process has
+  /// exited), and returns every pin reference it still holds. References of
+  /// other clients and unattributed ones are kept; later pins and releases for
+  /// it are refused.
   /// </summary>
   /// <returns>The number of references returned.</returns>
   public int RemoveClient(int client)
@@ -342,7 +369,7 @@ public class SnapshotRuntime : IDisposable
   }
 
   /// <summary>
-  /// The number of pin references <paramref name="client"/> holds.
+  /// The number of pin references the registration <paramref name="client"/> holds.
   /// </summary>
   public int GetClientReferenceCount(int client)
   {
@@ -545,7 +572,10 @@ public class SnapshotRuntime : IDisposable
   /// <param name="pinningRequested">Whether to pin the object.</param>
   /// <param name="typeName">The expected type name.</param>
   /// <param name="hashcode">The object hash code.</param>
-  /// <param name="client">The registered client the pin is taken for.</param>
+  /// <param name="client">
+  /// The registration the pin is taken for (null: unattributed); a pin for
+  /// one that is unknown or removed is refused (<see cref="PinRefusedException"/>).
+  /// </param>
   /// <returns>The object instance and pinned address.</returns>
   public (object instance, ulong pinnedAddress) GetHeapObject(
     ulong objAddr,

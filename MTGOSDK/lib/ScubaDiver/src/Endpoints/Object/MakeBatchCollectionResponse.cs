@@ -54,18 +54,19 @@ public partial class Diver : IDisposable
     for (int c = 0; c < schema.Length; c++)
       columnLists[c] = new List<string>();
 
-    // A failed read returns no tokens, so the references it took are released.
+    // A failed read returns no tokens, so the references it took are released,
+    // by the owner they were taken for.
+    RequestOwner owner = CurrentRequestOwner;
     try
     {
       int count = 0;
-      int? client = RequestClient;
       foreach (var item in enumerable)
       {
         if (count >= maxItems) break;
 
         // Pin only when the client will wrap the token (and so release it).
         if (!request.SkipItemPins)
-          itemTokens.Add(_runtime.PinObject(item, client));
+          itemTokens.Add(owner.Pin(_runtime, item));
 
         if (itemTypeName == null && item != null)
           itemTypeName = item.GetType().FullName;
@@ -147,7 +148,7 @@ public partial class Diver : IDisposable
     catch
     {
       foreach (ulong token in itemTokens)
-        _runtime.UnpinObject(token, RequestClient);
+        owner.Unpin(_runtime, token);
       throw;
     }
   }

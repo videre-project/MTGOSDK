@@ -36,6 +36,14 @@
     <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Diver code without Diver dependencies, tested without an MTGO client -->
+    <Compile Include="$(MSBuildThisFileDirectory)..\MTGOSDK\lib\ScubaDiver\src\Endpoints\Callbacks\CallbackArguments.cs"
+             Link="src\Tests\Unit\Linked\CallbackArguments.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\MTGOSDK\lib\ScubaDiver\src\Endpoints\Client\RequestOwner.cs"
+             Link="src\Tests\Unit\Linked\RequestOwner.cs" />
+  </ItemGroup>
+
   <!-- Use the MTGOSDK package from the local feed if it exists -->
   <ItemGroup Condition="'$(UseLocalFeed)' == 'true'">
     <PackageReference Include="MTGOSDK" />
