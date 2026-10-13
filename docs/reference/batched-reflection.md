@@ -97,6 +97,63 @@ scopes. Void calls run for their effects, but their results cannot be used as
 values. Constructor results are request-local and are not automatically disposed;
 record an explicit `Dispose` call when necessary.
 
+## Collection queries
+
+Collection operations compose with reads and calls inside the same request:
+
+```csharp
+var batch = new RemoteBatch();
+var items = batch.Read(batch.Input(existingRoot), "Items");
+var available = batch.WhereProperty(items, "LockedQuantity",
+    ComparisonOperator.LessThan, "Quantity");
+var ordered = batch.OrderBy(available, "Name");
+batch.Output("count", batch.Count(ordered));
+batch.ForEach(ordered, row =>
+{
+    row.Output("id", row.Read("Id"));
+    row.Output("name", row.Read("Name"));
+});
+var result = await batch.ExecuteAsync(connection);
+```
+
+`Where` compares a member path with an input or earlier result. `WhereProperty`
+compares two paths on the same item. Both support the six `ComparisonOperator`
+values and use the target runtime's default object comparer. Filters omit null
+items; null member values participate in comparisons normally.
+
+`WhereAssignableTo` resolves a caller-supplied native type identity and includes
+instances implementing that type or interface. `WhereEnumName` compares enum
+names without case sensitivity. `WhereContains` uses ordinal substring matching
+and can optionally respect case. All member paths use the executor's existing
+cached property/field reader, including nested paths and nonpublic members.
+
+`OrderBy` reads each item's key once and preserves source order for equal keys.
+Null keys sort first in ascending order and last in descending order. `Count`
+uses ICollection.Count when available and otherwise enumerates without returning
+item values. A collection source must be enumerable and cannot be a string.
+ForEach indices refer to the collection supplied to it, including any preceding
+filtering or sorting. Query intermediates remain local to the request.
+
+### Live result ownership
+
+A caller that needs native access to a query result can explicitly retain one
+root value rather than record a detached output:
+
+```csharp
+var remoteCollection = await batch.ExecuteReferenceAsync(ordered, connection);
+```
+
+Here `connection` is a `RemoteHandle`. The returned `RemoteObject` follows the
+same reference lifetime and release behavior as an ordinary remote invocation.
+Only the requested root object is pinned; its contained items keep their native
+identities without receiving separate pins. A null root returns null. Primitive
+value types and child-row results cannot be retained through this terminal.
+
+The wire request uses `ReferenceOutput` to select the root and returns its handle
+in `RemoteBatchResult.Reference`. Ordinary Execute requests leave this field
+unset and return detached values. Hook and event capture registrations reject
+reference outputs so callback capture retains its existing ownership behavior.
+
 ## Projections and returned values
 
 `Output(name, slot)` defaults to a value projection, accepting null, supported

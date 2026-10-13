@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 
 
@@ -36,7 +37,7 @@ public class RemoteBatchScope
     ? new(Owner, this, new() { Kind = RemoteBatchReferenceKind.Item, Id = _itemScope.Value })
     : throw new InvalidOperationException("Item is available only in a ForEach body.");
 
-  private RemoteBatchReference Reference(RemoteBatchSlot slot)
+  protected RemoteBatchReference Reference(RemoteBatchSlot slot)
   {
     if (slot.Owner != Owner)
       throw new ArgumentException("Reference belongs to another batch.");
@@ -102,6 +103,85 @@ public class RemoteBatchScope
       Method = method,
       Arguments = arguments.Select(Reference).ToArray()
     });
+
+  /// <summary>
+  /// Filters a collection by comparing a member path with a batch value.
+  /// </summary>
+  public RemoteBatchSlot Where(RemoteBatchSlot source, string path,
+    ComparisonOperator comparison, RemoteBatchSlot value) => Where(source, new()
+    {
+      Kind = RemoteBatchPredicateKind.Comparison,
+      Path = path,
+      Operator = comparison,
+      Value = Reference(value)
+    });
+
+  /// <summary>
+  /// Filters a collection by comparing two member paths on each item.
+  /// </summary>
+  public RemoteBatchSlot WhereProperty(RemoteBatchSlot source, string leftPath,
+    ComparisonOperator comparison, string rightPath) => Where(source, new()
+    {
+      Kind = RemoteBatchPredicateKind.Comparison,
+      Path = leftPath,
+      OtherPath = rightPath,
+      Operator = comparison
+    });
+
+  /// <summary>
+  /// Keeps nonnull collection items assignable to the supplied native type.
+  /// </summary>
+  public RemoteBatchSlot WhereAssignableTo(RemoteBatchSlot source, RemoteBatchType type) =>
+    Where(source, new() { Kind = RemoteBatchPredicateKind.AssignableTo, Type = type });
+
+  /// <summary>
+  /// Filters a collection by an enum member's name, ignoring case.
+  /// </summary>
+  public RemoteBatchSlot WhereEnumName(RemoteBatchSlot source, string path, string name) =>
+    Where(source, new()
+    {
+      Kind = RemoteBatchPredicateKind.EnumName,
+      Path = path,
+      Value = Reference(Owner.Input(name))
+    });
+
+  /// <summary>
+  /// Filters a collection by a substring in a string member path.
+  /// </summary>
+  public RemoteBatchSlot WhereContains(RemoteBatchSlot source, string path, string text,
+    bool ignoreCase = true) => Where(source, new()
+    {
+      Kind = RemoteBatchPredicateKind.StringContains,
+      Path = path,
+      Value = Reference(Owner.Input(text)),
+      IgnoreCase = ignoreCase
+    });
+
+  private RemoteBatchSlot Where(RemoteBatchSlot source, RemoteBatchPredicate predicate) =>
+    Add(new()
+    {
+      Kind = RemoteBatchOperationKind.Where,
+      Target = Reference(source),
+      Predicate = predicate
+    });
+
+  /// <summary>
+  /// Orders collection items by a member path, preserving source order for equal keys.
+  /// </summary>
+  public RemoteBatchSlot OrderBy(RemoteBatchSlot source, string path, bool descending = false) =>
+    Add(new()
+    {
+      Kind = RemoteBatchOperationKind.OrderBy,
+      Target = Reference(source),
+      Path = path,
+      Descending = descending
+    });
+
+  /// <summary>
+  /// Counts a collection without serializing or pinning its items.
+  /// </summary>
+  public RemoteBatchSlot Count(RemoteBatchSlot source) =>
+    Add(new() { Kind = RemoteBatchOperationKind.Count, Target = Reference(source) });
 
   /// <summary>
   /// Records a named output, serialized by value in the target process.

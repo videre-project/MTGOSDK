@@ -18,6 +18,7 @@ using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Batching;
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -192,6 +193,27 @@ public class RemotePins : BaseFixture
     {
       Communicator.UnpinObject(value.RemoteAddress);
     }
+  }
+
+  [Test]
+  public async Task Test_RetainedBatchResult_ReturnsItsPinOnRelease()
+  {
+    var batch = new RemoteBatch();
+    var created = batch.Create(new RemoteBatchMethod(new RemoteBatchType(ListType), ".ctor"));
+    var result = await batch.ExecuteReferenceAsync(created, RemoteClient.@client!);
+    Assert.That(result, Is.Not.Null);
+    ulong token = result!.RemoteToken;
+    try
+    {
+      Assert.That(IsPinned(token), Is.True);
+    }
+    finally
+    {
+      result.ReleaseReference();
+    }
+    Assert.That(await Eventually(() => !IsPinned(token), TimeSpan.FromSeconds(10)), Is.True,
+      "releasing the returned RemoteObject returns the retained batch result's pin");
+    GC.KeepAlive(result);
   }
 
   [Test]

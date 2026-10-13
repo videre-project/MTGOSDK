@@ -59,7 +59,10 @@ public partial class Diver : IDisposable
   {
     _batchExecutor = new BatchExecutor(
       type => BatchExecutionEndpoint.ResolveLoadedType(type, name => _runtime.ResolveType(name)),
-      input => _runtime.ParseParameterObject(input), instance => _runtime.GetObjectToken(instance));
+      input => _runtime.ParseParameterObject(input),
+      instance => _runtime.GetObjectToken(instance),
+      instance => ObjectOrRemoteAddress.FromToken(
+        PinForRequest(instance), instance.GetType().FullName));
     _batchExecutionEndpoint = new BatchExecutionEndpoint(_batchExecutor,
       action => STAThread.IsDispatcherThread ? action() : STAThread.Execute(action));
     _eventCaptureEndpoint = new EventCaptureEndpoint(token =>

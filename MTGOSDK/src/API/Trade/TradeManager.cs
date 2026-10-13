@@ -4,6 +4,7 @@
 **/
 
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Batching;
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Types;
 
@@ -125,11 +126,9 @@ public static class TradeManager
     string? messageSearch = null)
     where TInterface : class
   {
-    DynamicRemoteObject posts = SortPostsByPosterName(
-      GetFilteredPosts(
-        format,
-        posterNameSearch,
-        messageSearch));
+    var (batch, filtered) = CreatePostsQuery(format, posterNameSearch, messageSearch);
+    var ordered = batch.OrderBy(filtered, "Poster.Name");
+    var posts = batch.ExecuteReference(ordered, RemoteClient.@client)!.Dynamify();
 
     return SerializeDroAs<TInterface, TradePost>(
       posts,
@@ -142,81 +141,25 @@ public static class TradeManager
     string? posterNameSearch = null,
     string? messageSearch = null)
   {
-    DynamicRemoteObject posts = GetFilteredPosts(
-      format,
-      posterNameSearch,
-      messageSearch);
-
-    return RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "Count",
-      args: new object[] { posts }
-    );
+    var (batch, posts) = CreatePostsQuery(format, posterNameSearch, messageSearch);
+    batch.Output("count", batch.Count(posts));
+    return batch.Execute(RemoteClient.@client).Values["count"].GetScalar<int>();
   }
 
-  private static DynamicRemoteObject GetFilteredPosts(
+  private static (RemoteBatch Batch, RemoteBatchSlot Posts) CreatePostsQuery(
     TradePostFormat? format,
     string? posterNameSearch,
     string? messageSearch)
   {
-    DynamicRemoteObject allPosts = (DynamicRemoteObject)Unbind(s_marketplace).AllPosts;
-    DynamicRemoteObject posts = format switch
-    {
-      TradePostFormat.Message =>
-        FilterPostsByFormat(allPosts, TradePostFormat.Message),
-      TradePostFormat.OfferedWantedList =>
-        FilterPostsByFormat(allPosts, TradePostFormat.OfferedWantedList),
-      _ => allPosts
-    };
+    var batch = new RemoteBatch();
+    var posts = batch.Read(batch.Input(Unbind(s_marketplace)), "AllPosts");
+    if (format is TradePostFormat.Message or TradePostFormat.OfferedWantedList)
+      posts = batch.WhereEnumName(posts, "Format", format.Value.ToString());
     if (!string.IsNullOrWhiteSpace(posterNameSearch))
-      posts = FilterPostsByPosterName(posts, posterNameSearch.Trim());
+      posts = batch.WhereContains(posts, "Poster.Name", posterNameSearch.Trim());
     if (!string.IsNullOrWhiteSpace(messageSearch))
-      posts = FilterPostsByMessage(posts, messageSearch.Trim());
-
-    return posts;
-  }
-
-  private static DynamicRemoteObject FilterPostsByFormat(
-    DynamicRemoteObject posts,
-    TradePostFormat format)
-  {
-    return RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "WherePropertyEnumName",
-      args: new object[] { posts, "Format", format.ToString() }
-    );
-  }
-
-  private static DynamicRemoteObject FilterPostsByPosterName(
-    DynamicRemoteObject posts,
-    string posterNameSearch)
-  {
-    return RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "WherePropertyStringContains",
-      args: new object[] { posts, "Poster.Name", posterNameSearch, true }
-    );
-  }
-
-  private static DynamicRemoteObject FilterPostsByMessage(
-    DynamicRemoteObject posts,
-    string messageSearch)
-  {
-    return RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "WherePropertyStringContains",
-      args: new object[] { posts, "RawMessage", messageSearch, true }
-    );
-  }
-
-  private static DynamicRemoteObject SortPostsByPosterName(
-    DynamicRemoteObject posts)
-  {
-    return RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "OrderByProperty",
-      args: new object[] { posts, "Poster.Name", false }
-    );
+      posts = batch.WhereContains(posts, "RawMessage", messageSearch.Trim());
+    return (batch, posts);
   }
 
   /// <summary>

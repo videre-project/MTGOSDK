@@ -32,6 +32,12 @@ public sealed class RemoteBatchRequest
   public bool ForceUIThread { get; set; }
 
   /// <summary>
+  /// An explicitly retained root value. Omitted for detached capture requests.
+  /// </summary>
+  [Key(5)]
+  public RemoteBatchReference? ReferenceOutput { get; set; }
+
+  /// <summary>
   /// Copies the wire description and preserves ownership of local input handles.
   /// </summary>
   internal RemoteBatchRequest Copy()

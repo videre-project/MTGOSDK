@@ -22,14 +22,16 @@ namespace MTGOSDK.Core.Remoting.Batching;
 /// Reflection bindings are cached so later executions can reuse the metadata.
 /// </para>
 /// <para>
-/// The caller supplies type and input resolvers, along with an optional logical-address
-/// provider. The caller also handles transport and UI dispatch around execution.
+/// The caller supplies type and input resolvers. Optional providers assign logical
+/// identities and retain explicitly requested root results. The caller handles
+/// transport and UI dispatch around execution.
 /// </para>
 /// </remarks>
 public sealed class BatchExecutor(
   Func<RemoteBatchType, Type> resolveType,
   Func<ObjectOrRemoteAddress, object?> resolveInput,
-  Func<object, ulong>? getObjectToken = null)
+  Func<object, ulong>? getObjectToken = null,
+  Func<object, ObjectOrRemoteAddress>? retainObject = null)
 {
   private const BindingFlags Members = BindingFlags.Public | BindingFlags.NonPublic |
     BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
@@ -109,7 +111,16 @@ public sealed class BatchExecutor(
   {
     var serializer = new BatchValueSerializer(request, Read, Resolve, getObjectToken);
     var result = new RemoteBatchResult();
-    ExecuteSequence(request.Operations, new Scope(), inputs, serializer, result.Values, result.Rows);
+    var scope = new Scope();
+    ExecuteSequence(request.Operations, scope, inputs, serializer, result.Values, result.Rows);
+    if (request.ReferenceOutput != null)
+    {
+      var value = Value(request.ReferenceOutput, scope, inputs);
+      if (value?.GetType().IsValueType == true)
+        throw new ArgumentException("A retained output must be a reference object.");
+      result.Reference = value == null ? ObjectOrRemoteAddress.Null
+        : (retainObject ?? throw new InvalidOperationException("The executor cannot retain objects."))(value);
+    }
     return result;
   }
 
@@ -152,6 +163,25 @@ public sealed class BatchExecutor(
             scope.Results.Add(operation.Id, method.ReturnType == typeof(void) ? s_voidResult : value);
             break;
 
+          case RemoteBatchOperationKind.Where:
+            scope.Results.Add(operation.Id, Filter(operation.Id, Target(), operation.Predicate!,
+              reference => Value(reference, scope, inputs)));
+            break;
+
+          case RemoteBatchOperationKind.OrderBy:
+            var source = EnumerateCollection(Collection(Target()), operation.Id);
+            var comparer = Comparer<object?>.Default;
+            scope.Results.Add(operation.Id, operation.Descending
+              ? source.OrderByDescending(item => Read(item, operation.Path!), comparer).ToList()
+              : source.OrderBy(item => Read(item, operation.Path!), comparer).ToList());
+            break;
+
+          case RemoteBatchOperationKind.Count:
+            var collection = Collection(Target());
+            scope.Results.Add(operation.Id, collection is ICollection counted
+              ? counted.Count : EnumerateCollection(collection, operation.Id).Count());
+            break;
+
           case RemoteBatchOperationKind.Output:
             outputs.Add(operation.OutputName!,
               serializer.Serialize(Target(), operation.Projection, operation.OutputName!));
@@ -175,6 +205,97 @@ public sealed class BatchExecutor(
         throw new BatchOperationException(operation.Id, error);
       }
     }
+  }
+
+  private static IEnumerable Collection(object? value) =>
+    value is IEnumerable collection && value is not string ? collection
+      : throw new ArgumentException("Collection operation requires an enumerable source.");
+
+  /// <summary>
+  /// Keeps source enumeration failures distinct from errors processing an item.
+  /// </summary>
+  private static IEnumerable<object?> EnumerateCollection(IEnumerable source, int operationId)
+  {
+    IEnumerator enumerator;
+    try
+    {
+      enumerator = source.GetEnumerator();
+    }
+    catch (Exception error)
+    {
+      throw new BatchSourceException(operationId, error);
+    }
+
+    try
+    {
+      while (true)
+      {
+        object? item;
+        try
+        {
+          if (!enumerator.MoveNext()) break;
+          item = enumerator.Current;
+        }
+        catch (Exception error)
+        {
+          throw new BatchSourceException(operationId, error);
+        }
+        yield return item;
+      }
+    }
+    finally
+    {
+      try
+      {
+        (enumerator as IDisposable)?.Dispose();
+      }
+      catch (Exception error)
+      {
+        throw new BatchSourceException(operationId, error);
+      }
+    }
+  }
+
+  private List<object> Filter(int operationId, object? source, RemoteBatchPredicate predicate,
+    Func<RemoteBatchReference, object?> value)
+  {
+    var type = predicate.Kind == RemoteBatchPredicateKind.AssignableTo ? Resolve(predicate.Type!) : null;
+    var expected = predicate.Value == null ? null : value(predicate.Value);
+    var comparison = predicate.IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    var result = new List<object>();
+    foreach (var item in EnumerateCollection(Collection(source), operationId))
+    {
+      if (item == null) continue;
+      bool matches = predicate.Kind switch
+      {
+        RemoteBatchPredicateKind.AssignableTo => type!.IsInstanceOfType(item),
+        RemoteBatchPredicateKind.EnumName => string.Equals(
+          Read(item, predicate.Path!)?.ToString(), (string?)expected, comparison),
+        RemoteBatchPredicateKind.StringContains => expected is string text &&
+          Read(item, predicate.Path!)?.ToString()?.IndexOf(text, comparison) >= 0,
+        RemoteBatchPredicateKind.Comparison => Compare(
+          Read(item, predicate.Path!), predicate.OtherPath == null
+            ? expected : Read(item, predicate.OtherPath), predicate.Operator),
+        _ => throw new ArgumentException("Unknown collection predicate.")
+      };
+      if (matches) result.Add(item);
+    }
+    return result;
+  }
+
+  private static bool Compare(object? left, object? right, ComparisonOperator comparison)
+  {
+    int order = Comparer<object?>.Default.Compare(left, right);
+    return comparison switch
+    {
+      ComparisonOperator.Equal => order == 0,
+      ComparisonOperator.NotEqual => order != 0,
+      ComparisonOperator.GreaterThan => order > 0,
+      ComparisonOperator.GreaterThanOrEqual => order >= 0,
+      ComparisonOperator.LessThan => order < 0,
+      ComparisonOperator.LessThanOrEqual => order <= 0,
+      _ => throw new ArgumentException("Unknown comparison operator.")
+    };
   }
 
   private void ExecuteRows(RemoteBatchOperation operation, object? source, Scope parent,

@@ -63,7 +63,7 @@ public sealed class BatchExecutionEndpoint
       var request = MessagePackSerializer.Deserialize<RemoteBatchRequest>(body);
       var result = request.ForceUIThread
         ? _dispatch(() => _executor.Execute(request)) : _executor.Execute(request);
-      return MessagePackSerializer.Serialize(DiverResponse<RemoteBatchResult>.Success(result));
+      return Diver.WrapSuccess(result);
     }
     catch (Exception ex)
     {

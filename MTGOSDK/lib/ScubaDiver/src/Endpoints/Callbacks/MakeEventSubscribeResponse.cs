@@ -304,6 +304,8 @@ public partial class Diver : IDisposable
       try
       {
         BatchExecutor.Validate(description.Batch);
+        if (description.Batch.ReferenceOutput != null)
+          throw new ArgumentException("Callback captures require detached outputs.");
         CaptureScopeManager.Validate(description.Scope, description.Batch);
         if (description.Scope != null && description.Inputs.ContainsKey(description.Scope.OwnerInput))
           throw new ArgumentException("Event scope owner must be a retained batch input.");
