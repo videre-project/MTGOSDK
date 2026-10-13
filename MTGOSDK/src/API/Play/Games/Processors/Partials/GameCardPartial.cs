@@ -286,7 +286,7 @@ namespace MTGOSDK.API.Play.Games.Processors
     /// Values are serialized before MTGO can process the next gameplay message.
     /// </summary>
     internal static void AppendGameplayCapture(
-      RemoteBatch batch, RemoteBatchSlot message, RemoteBatchSlot game, string excludedHashProperties)
+      RemoteBatch batch, RemoteBatchSlot message, RemoteBatchSlot game)
     {
       DefinePropertiesProjection(batch);
       batch.DefineProjection("definition", DefinitionProjection());
@@ -294,15 +294,11 @@ namespace MTGOSDK.API.Play.Games.Processors
       var missingId = batch.Input(-1);
 
       var elements = batch.Read(message, "ThingElements");
-      var hashes = new RemoteBatchMethod(
-        new RemoteBatchType("MTGOSDK.Core.Remoting.Interop.CollectionHelpers"), "ComputeThingSnapshotHashes",
-        RemoteBatchType.From(typeof(object)), RemoteBatchType.From(typeof(string)));
-      batch.Output("hashes", batch.CallStatic(hashes, elements, batch.Input(excludedHashProperties)));
-
       batch.ForEach(elements, row =>
       {
         var properties = row.Read("Properties");
         var id = row.Call(properties, s_thingNumber, thingNumber, missingId);
+        row.Output("id", id);
         // Player rows retain their message properties even though native card
         // lookup returns null. Their card projections preserve that null value.
         var card = row.Call(game, s_findCard, id);
@@ -452,7 +448,7 @@ namespace MTGOSDK.API.Play.Games.Processors
       return new(row.SourceIndex, properties, values);
     }
 
-    private static void CheckRow(RemoteBatchRow row)
+    internal static void CheckRow(RemoteBatchRow row)
     {
       if (row.Error is { } error)
         throw new InvalidOperationException(

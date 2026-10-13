@@ -109,12 +109,6 @@ public sealed class GameProcessor : IDisposable
   }
 
   /// <summary>
-  /// Native property names excluded from snapshot change detection.
-  /// </summary>
-  internal static readonly string HashExcludedPropertyNames =
-    string.Join("|", PropertyContainer.HashExcludedProperties);
-
-  /// <summary>
   /// Small holdback window that allows near-simultaneous out-of-order hooks
   /// to accumulate before we apply them in timestamp order.
   /// </summary>
@@ -619,15 +613,12 @@ public sealed class GameProcessor : IDisposable
     List<IGameStateProcessor> processors)
   {
     var capturedPrompt = capture.Values["prompt"];
-    // Hashes and state elements belong to the same completed native capture.
-    int[] rawHashes = ((object?[])RemoteBatchObject.FromValue(capture.Values["hashes"])!)
-      .Cast<int>().ToArray();
     var identities = ((object?[])RemoteBatchObject.FromValue(capture.Values["players"])!)
       .Cast<RemoteBatchObject>().ToArray();
     var stateElements = ((object?[])RemoteBatchObject.FromValue(capture.Values["stateElements"])!)
       .Cast<RemoteBatchObject>();
 
-    // Select changed card and player rows using hashes from the detached message.
+    // Hash captured properties locally and materialize only changed card and player rows.
     var current = new Dictionary<int, GameCard>();
     var currentHashes = new Dictionary<int, int>();
     var currentIneligibleHashes = new Dictionary<int, int>();
@@ -635,14 +626,16 @@ public sealed class GameProcessor : IDisposable
 
     var indicesToMaterialize = new List<int>();
     var playerIndicesToMaterialize = new List<int>();
-    int dataPairs = rawHashes.Length / 2;
+    int revealedCollection = capture.Values["revealedZoneCollectionId"].GetScalar<int>();
 
-    for (int i = 0; i < dataPairs; i++)
+    foreach (var row in capture.Rows.Where(row => row.CollectionOperationId != revealedCollection))
     {
-      int thingId  = rawHashes[i * 2];
-      int currHash = rawHashes[i * 2 + 1];
+      GameCardCapture.CheckRow(row);
 
+      int i = row.SourceIndex;
+      int thingId = row.Values["id"].GetScalar<int>();
       if (thingId < 0) continue;
+      int currHash = PropertyContainer.GetSnapshotHash(row.Values["properties"]);
 
       currentHashes[thingId] = currHash;
 

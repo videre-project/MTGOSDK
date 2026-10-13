@@ -59,12 +59,14 @@ lives in AlphaMTG's `GameController`.
    abilities, and definition. Player rows retain their message properties and
    have a successful null card value.
 4. The batch also captures the ordered state elements, priority player, roster
-   names, and property hashes. The callback transports these values with the
-   card rows and correlated prompt.
-5. The SDK uses the captured hashes to select changed card and player rows, then
-   parses the detached state elements locally. Missing, repeated, or failed
-   selected rows reject the capture. Player User references use the game
-   reference cache rather than repeated roster navigation.
+   names, and each row's ThingNumber. The callback transports these values with
+   the card rows and correlated prompt.
+5. The SDK hashes the detached property dictionaries locally to select changed
+   card and player rows, then parses the detached state elements. Change detection
+   excludes transient client properties only at the outer container and includes
+   recursive child values regardless of dictionary entry order. Failed gameplay
+   rows reject the capture. Player User references use the game reference cache
+   rather than repeated roster navigation.
 
 Capturing values does not construct native cards or call their property resolver.
 Constructing a temporary card against the live game is unsafe: native resolution
@@ -76,7 +78,8 @@ The hook runs on its originating native thread without a dispatcher request or
 nested IPC. Each message projects all of its rows; the SDK subsequently reuses
 unchanged local adapters. Projection runs before callback delivery at the native completion
 point. Rows and intermediate objects are not
-pinned. Hashing runs inside this batch. Resolving an uncached live player or zone
+pinned. Snapshot change detection uses the already captured values without an
+additional native property traversal. Resolving an uncached live player or zone
 reference remains a separate operation.
 
 ## Dispatch in the capture path

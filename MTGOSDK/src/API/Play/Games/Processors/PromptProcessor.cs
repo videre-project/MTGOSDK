@@ -453,8 +453,7 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
 
     // Capture resolved cards at the same native completion point as the prompt.
     // Reconstructing copies against the live game can mutate its zones.
-    GameCardCapture.AppendGameplayCapture(batch, message, instance,
-      GameProcessor.HashExcludedPropertyNames);
+    GameCardCapture.AppendGameplayCapture(batch, message, instance);
     return new()
     {
       Batch = batch.ToRequest(),

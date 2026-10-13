@@ -125,8 +125,8 @@ public class PropertyContainer : DLRWrapper<object>
   //
 
   /// <summary>
-  /// Properties excluded by GameProcessor's native snapshot hash so transient
-  /// client state does not force card capture.
+  /// Properties excluded from snapshot change detection so transient client
+  /// state does not force card materialization.
   /// </summary>
   public static readonly HashSet<MagicProperty> HashExcludedProperties =
   [
@@ -134,6 +134,43 @@ public class PropertyContainer : DLRWrapper<object>
     MagicProperty.AUTOTARGETED,
     MagicProperty.CARD_BEING_PLAYED,
   ];
+
+  /// <summary>
+  /// Hashes detached property dictionaries before constructing card wrappers.
+  /// Only the outer container excludes transient client properties.
+  /// </summary>
+  internal static int GetSnapshotHash(RemoteBatchValue value, bool excludeTransient = true)
+  {
+    if (value.Kind != RemoteBatchValueKind.Object)
+      throw new InvalidDataException("Expected a structured property container.");
+
+    int hash = 0;
+    foreach (var (name, dictionary) in value.Members)
+    {
+      if (dictionary.Kind != RemoteBatchValueKind.Dictionary)
+        throw new InvalidDataException($"Expected a property dictionary for '{name}'.");
+      foreach (var entry in dictionary.Entries)
+      {
+        var property = (MagicProperty)entry.Key.GetScalar<uint>();
+        if (excludeTransient && HashExcludedProperties.Contains(property)) continue;
+
+        int content;
+        if (entry.Value.Kind == RemoteBatchValueKind.Object)
+        {
+          content = GetSnapshotHash(entry.Value, excludeTransient: false);
+        }
+        else
+        {
+          var bytes = new HashCode();
+          if (entry.Value.ScalarData != null)
+            foreach (byte item in entry.Value.ScalarData) bytes.Add(item);
+          content = bytes.ToHashCode();
+        }
+        hash ^= HashCode.Combine(name, property, entry.Value.Kind, content);
+      }
+    }
+    return hash;
+  }
 
   //
   // Equality and property access
