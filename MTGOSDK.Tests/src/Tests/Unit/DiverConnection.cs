@@ -288,6 +288,70 @@ public class DiverConnection
   }
 
   [Test]
+  public async Task Test_HandshakeCompletingAfterCancellation_ClosesTheConnection()
+  {
+    using var peer = new Peer();
+    peer.Answer = (_, _) => Task.FromResult(true);
+    var tcp = new TcpCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+      var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+      using var cancel = new CancellationTokenSource();
+      // A handshake that does not observe the token: it completes normally.
+      var attempt = tcp.ConnectAsync(async _ =>
+      {
+        started.SetResult();
+        await release.Task;
+      }, cancel.Token);
+      await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+      // An ordinary request waits for the handshake.
+      var waiting = tcp.SendRequestAsync("/ping", []);
+      cancel.Cancel();
+      release.SetResult();
+
+      Assert.That(async () => await attempt.WaitAsync(TimeSpan.FromSeconds(5)),
+        Throws.InstanceOf<OperationCanceledException>(), "the cancelled attempt fails");
+      Assert.That(async () => await waiting.WaitAsync(TimeSpan.FromSeconds(5)),
+        Throws.Exception, "a request waiting for the handshake fails");
+      Assert.That(tcp.IsConnected, Is.False, "its connection was closed");
+      Assert.That(peer.Requests(0), Is.Empty, "no ordinary request reached the peer");
+
+      // The next attempt connects.
+      await tcp.ConnectAsync();
+      await tcp.SendRequestAsync("/ping", []);
+      Assert.That(peer.Requests(1), Is.EqualTo(new[] { "/ping" }));
+    }
+    finally
+    {
+      tcp.Dispose();
+    }
+  }
+
+  [Test]
+  public async Task Test_CancellingAfterAConnect_KeepsTheConnection()
+  {
+    using var peer = new Peer();
+    peer.Answer = (_, _) => Task.FromResult(true);
+    var tcp = new TcpCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      using var cancel = new CancellationTokenSource();
+      await tcp.ConnectAsync(send => send("/register_client", []), cancel.Token);
+      cancel.Cancel();
+
+      await tcp.SendRequestAsync("/ping", []);
+      Assert.That(tcp.IsConnected, Is.True, "the token does not outlive the attempt");
+      Assert.That(peer.Requests(0), Is.EqualTo(new[] { "/register_client", "/ping" }));
+    }
+    finally
+    {
+      tcp.Dispose();
+    }
+  }
+
+  [Test]
   public async Task Test_RequestOfAClosedConnection_IsNeverSentOnTheNext()
   {
     using var peer = new Peer();

@@ -108,22 +108,25 @@ public class TcpCommunicator : TcpPipelineBase
       // Published now; other requests wait until the handshake is done.
       _session = session;
 
-      if (handshake != null)
+      try
       {
-        try
+        if (handshake != null)
         {
           await handshake((endpoint, body) =>
             SendAsync<object>(session, endpoint, body, beforeReady: true, cancellationToken))
             .ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-          _session = null;
-          await session.CloseAsync(ex).ConfigureAwait(false);
-          throw;
-        }
+        // A handshake can complete without observing the token; a cancelled
+        // attempt still closes its connection.
+        cancellationToken.ThrowIfCancellationRequested();
+        session.MarkReady();
       }
-      session.MarkReady();
+      catch (Exception ex)
+      {
+        _session = null;
+        await session.CloseAsync(ex).ConfigureAwait(false);
+        throw;
+      }
       Log.Debug("[TcpCommunicator] Connected to {host}:{port}", _hostname, _port);
     }
     finally
