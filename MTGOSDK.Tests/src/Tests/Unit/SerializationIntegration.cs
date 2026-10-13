@@ -87,7 +87,7 @@ public class SerializationIntegration
     using var peer = new SerializationPeer();
     var items = peer.Add(new[]
     {
-      new { CatalogId = 65378, Annotation = new { EnumValue = annotation }, Quantity = 2 }
+      new { CatalogId = 65378, Annotation = annotation, Quantity = 2 }
     });
     var row = DLRWrapper.SerializeDroAs<ICardGroupingItemSnapshot>(items,
       new[] { "CatalogId", "Annotation.EnumValue", "Quantity" }).Single();

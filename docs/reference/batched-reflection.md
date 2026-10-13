@@ -80,6 +80,8 @@ DateTime values encoded in the payload.
 `Read` supports dot-separated property/field paths, including nonpublic and
 inherited members. A null along a path produces null. Missing members produce
 an error. Indexer syntax is unsupported.
+`EnumValue` reads an enum's underlying numeric value, matching the access path
+exposed by SDK enum proxies and the existing batch member endpoints.
 
 Method descriptors require the declaring type, exact parameter types, and any
 generic method arguments. Null arguments do not trigger overload inference.

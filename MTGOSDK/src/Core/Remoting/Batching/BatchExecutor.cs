@@ -375,6 +375,7 @@ public sealed class BatchExecutor(
   /// <summary>
   /// Reads a dot-separated property or field path through inherited and nonpublic
   /// members. Reading stops at a null value and returns null. A missing member throws.
+  /// An <c>EnumValue</c> segment on an enum returns its underlying numeric value.
   /// </summary>
   public object? Read(object? source, string path)
   {
@@ -383,6 +384,11 @@ public sealed class BatchExecutor(
       if (source == null)
         return null;
       var type = source.GetType();
+      if (type.IsEnum && segment == nameof(RemoteBatchEnum.EnumValue))
+      {
+        source = Convert.ChangeType(source, Enum.GetUnderlyingType(type));
+        continue;
+      }
       var member = _members.GetOrAdd((type, segment), key =>
       {
         foreach (var candidate in Hierarchy(key.Type))
