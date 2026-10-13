@@ -107,17 +107,10 @@ public abstract class SerializableBase : IJsonSerializable
         $"The specified type {interfaceType} must be an interface.");
     }
 
-    // Hydrate: batch-fetch all primitive properties for this interface
-    // before parallel property access to minimize IPC calls
-    if (this is DLRWrapper wrapper)
-    {
-      var paths = AccessPathAnalyzer.GetBatchablePathsForInterface(
-        this.GetType(), interfaceType);
-      if (paths.Length > 0)
-      {
-        wrapper.HydrateForInterface<TInterface>(paths);
-      }
-    }
+    var wrapper = this as DLRWrapper;
+    var paths = wrapper is null ? Array.Empty<string>()
+      : AccessPathAnalyzer.GetBatchablePathsForInterface(GetType(), interfaceType);
+    using var hydration = wrapper?.UseSerializationProxy(wrapper.CaptureForInterface<TInterface>(paths));
 
     // Use the fast path: get or build property mappings
     var sourceType = this.GetType();
@@ -196,8 +189,8 @@ public abstract class SerializableBase : IJsonSerializable
   }
 
   /// <summary>
-  /// Asynchronously serializes the object to a specified interface type.
-  /// Uses Task.WhenAll to overlap IPC latency across properties.
+  /// Captures batchable native members asynchronously, then converts the requested
+  /// wrapper properties to the specified interface type.
   /// </summary>
   /// <typeparam name="TInterface">The interface type to serialize to.</typeparam>
   /// <param name="include">Properties to include.</param>
@@ -209,7 +202,7 @@ public abstract class SerializableBase : IJsonSerializable
   /// (e.g., SerializeAllAsync with Parallel.ForEachAsync). Property fetches
   /// are sequential within each item to avoid thread pool contention.
   /// </remarks>
-  public Task<TInterface> SerializeAsAsync<TInterface>(
+  public async Task<TInterface> SerializeAsAsync<TInterface>(
     IList<string> include = default,
     IList<string> exclude = default,
     bool strict = false)
@@ -220,6 +213,13 @@ public abstract class SerializableBase : IJsonSerializable
       throw new ArgumentException(
         $"The specified type {interfaceType} must be an interface.");
     }
+
+    var wrapper = this as DLRWrapper;
+    var paths = wrapper is null ? Array.Empty<string>()
+      : AccessPathAnalyzer.GetBatchablePathsForInterface(GetType(), interfaceType);
+    var captured = wrapper is null ? null
+      : await wrapper.CaptureForInterfaceAsync<TInterface>(paths).ConfigureAwait(false);
+    using var hydration = wrapper?.UseSerializationProxy(captured);
 
     // Use the fast path: get or build property mappings (same as sync version)
     var sourceType = this.GetType();
@@ -275,7 +275,7 @@ public abstract class SerializableBase : IJsonSerializable
         : value;
     }
 
-    return Task.FromResult((TInterface)BindExpandoToInterface(expando, interfaceType));
+    return (TInterface)BindExpandoToInterface(expando, interfaceType);
   }
 
   /// <summary>

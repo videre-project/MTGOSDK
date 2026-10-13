@@ -5,6 +5,8 @@
 
 using System.Dynamic;
 
+using MTGOSDK.Core.Remoting.Types;
+
 
 namespace MTGOSDK.Core.Reflection.Proxy;
 
@@ -19,6 +21,7 @@ namespace MTGOSDK.Core.Reflection.Proxy;
 public sealed class CachingRemoteProxy : DynamicObject
 {
   private readonly dynamic _realRemote;
+  private readonly Lazy<object?>? _deferredRemote;
   private readonly Dictionary<string, object?> _cache;
   private readonly string? _pathPrefix;
   private readonly Dictionary<string, string>? _interfaceToRemotePath;
@@ -40,6 +43,12 @@ public sealed class CachingRemoteProxy : DynamicObject
     _cache = cache ?? new Dictionary<string, object?>();
     _pathPrefix = pathPrefix;
     _interfaceToRemotePath = interfaceToRemotePath;
+  }
+
+  private CachingRemoteProxy(Func<object?> resolveRemote, Dictionary<string, object?> cache)
+    : this(null!, cache, null, null)
+  {
+    _deferredRemote = new Lazy<object?>(resolveRemote);
   }
 
   /// <summary>
@@ -75,46 +84,13 @@ public sealed class CachingRemoteProxy : DynamicObject
         nestedCache[nestedKey] = _cache[path];
       }
       
-      // Also get the nested DRO for fallback (for properties not in cache)
-      dynamic? nestedDro = null;
-      if (_realRemote != null)
-      {
-        try
-        {
-          dynamic targetObj = _realRemote;
-          if (!string.IsNullOrEmpty(_pathPrefix))
-          {
-            // Navigate through path prefix first
-            var prefixCallSite = System.Runtime.CompilerServices.CallSite<Func<
-              System.Runtime.CompilerServices.CallSite, object, object>>.Create(
-              Microsoft.CSharp.RuntimeBinder.Binder.GetMember(
-                Microsoft.CSharp.RuntimeBinder.CSharpBinderFlags.None,
-                _pathPrefix,
-                typeof(object),
-                new[] { Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo.Create(
-                  Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfoFlags.None, null) }));
-            targetObj = prefixCallSite.Target(prefixCallSite, _realRemote);
-          }
-          // Navigate to the nested object (e.g., PlayFormat)
-          var nestedCallSite = System.Runtime.CompilerServices.CallSite<Func<
-            System.Runtime.CompilerServices.CallSite, object, object>>.Create(
-            Microsoft.CSharp.RuntimeBinder.Binder.GetMember(
-              Microsoft.CSharp.RuntimeBinder.CSharpBinderFlags.None,
-              binder.Name,
-              typeof(object),
-              new[] { Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo.Create(
-                Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfoFlags.None, null) }));
-          nestedDro = nestedCallSite.Target(nestedCallSite, targetObj);
-        }
-        catch { /* Navigation failed, no fallback available */ }
-      }
-      
-      result = new CachingRemoteProxy(nestedDro!, nestedCache);
+      result = new CachingRemoteProxy(() => ResolveNestedRemote(binder.Name), nestedCache);
       return true;
     }
 
     // Fall through to real remote if not cached
-    if (_realRemote != null)
+    dynamic? realRemote = _realRemote ?? _deferredRemote?.Value;
+    if (realRemote != null)
     {
       // Resolve the remote member name to use for the binder call
       var binderName = (_interfaceToRemotePath != null && _interfaceToRemotePath.TryGetValue(binder.Name, out var mappedName))
@@ -123,7 +99,7 @@ public sealed class CachingRemoteProxy : DynamicObject
 
       // If there's a path prefix, navigate to the nested object first
       // e.g., for pathPrefix="PlayerEvent", access _realRemote.PlayerEvent.PropertyName
-      dynamic targetObj = _realRemote;
+      dynamic targetObj = realRemote;
       if (!string.IsNullOrEmpty(_pathPrefix))
       {
         // Navigate through the path prefix to get the nested object
@@ -135,7 +111,7 @@ public sealed class CachingRemoteProxy : DynamicObject
             typeof(object),
             new[] { Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo.Create(
               Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfoFlags.None, null) }));
-        targetObj = prefixCallSite.Target(prefixCallSite, _realRemote);
+        targetObj = prefixCallSite.Target(prefixCallSite, realRemote);
       }
 
       if (targetObj == null)
@@ -178,6 +154,23 @@ public sealed class CachingRemoteProxy : DynamicObject
 
     result = null;
     return false;
+  }
+
+  private object? ResolveNestedRemote(string name)
+  {
+    object? remote = _realRemote ?? _deferredRemote?.Value;
+    if (remote == null) return null;
+    try
+    {
+      if (!string.IsNullOrEmpty(_pathPrefix) &&
+          !DynamicRemoteObject.TryGetDynamicMember(remote, _pathPrefix, out remote))
+        return null;
+      return DynamicRemoteObject.TryGetDynamicMember(remote, name, out var value) ? value : null;
+    }
+    catch
+    {
+      return null;
+    }
   }
 
   /// <summary>

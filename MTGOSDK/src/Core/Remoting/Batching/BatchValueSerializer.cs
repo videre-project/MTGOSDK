@@ -128,17 +128,24 @@ internal sealed class BatchValueSerializer(
             foreach (var member in projection.Members)
             {
               var memberPath = path + "." + member.Key;
-              object? memberValue;
               try
               {
-                memberValue = read(value, member.Value.Path);
+                var memberValue = read(value, member.Value.Path);
+                result.Members.Add(member.Key, Serialize(memberValue, member.Value.Projection,
+                  memberPath, depth + 1, ancestors));
+              }
+              catch (Exception) when (member.Value.IgnoreErrors)
+              {
+                continue;
+              }
+              catch (BatchProjectionException)
+              {
+                throw;
               }
               catch (Exception error)
               {
                 throw new BatchProjectionException(memberPath, error);
               }
-              result.Members.Add(member.Key, Serialize(memberValue, member.Value.Projection,
-                memberPath, depth + 1, ancestors));
             }
             return result;
 

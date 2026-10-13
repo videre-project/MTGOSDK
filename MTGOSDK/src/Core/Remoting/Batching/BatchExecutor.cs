@@ -182,6 +182,11 @@ public sealed class BatchExecutor(
               ? counted.Count : EnumerateCollection(collection, operation.Id).Count());
             break;
 
+          case RemoteBatchOperationKind.Take:
+            scope.Results.Add(operation.Id,
+              EnumerateCollection(Collection(Target()), operation.Id).Take((int)Arguments()[0]!));
+            break;
+
           case RemoteBatchOperationKind.Output:
             outputs.Add(operation.OutputName!,
               serializer.Serialize(Target(), operation.Projection, operation.OutputName!));

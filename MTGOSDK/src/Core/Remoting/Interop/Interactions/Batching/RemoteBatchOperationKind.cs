@@ -16,4 +16,5 @@ public enum RemoteBatchOperationKind
   Where,
   OrderBy,
   Count,
+  Take,
 }

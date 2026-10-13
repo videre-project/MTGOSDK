@@ -184,6 +184,17 @@ public class RemoteBatchScope
     Add(new() { Kind = RemoteBatchOperationKind.Count, Target = Reference(source) });
 
   /// <summary>
+  /// Takes up to the requested number of source items without reading later items.
+  /// </summary>
+  public RemoteBatchSlot Take(RemoteBatchSlot source, int count) =>
+    Add(new()
+    {
+      Kind = RemoteBatchOperationKind.Take,
+      Target = Reference(source),
+      Arguments = [Reference(Owner.Input(count))]
+    });
+
+  /// <summary>
   /// Records a named output, serialized by value in the target process.
   /// </summary>
   public void Output(string name, RemoteBatchSlot value, RemoteBatchProjection? projection = null) =>

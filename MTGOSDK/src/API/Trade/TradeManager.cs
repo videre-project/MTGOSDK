@@ -166,18 +166,21 @@ public static class TradeManager
   /// Async variant of <see cref="SerializePostsAs{TInterface}"/> that does not block
   /// a thread pool thread while waiting for the batch IPC response.
   /// </summary>
-  public static Task<IList<TInterface>> SerializePostsAsAsync<TInterface>(
+  public static async Task<IList<TInterface>> SerializePostsAsAsync<TInterface>(
     int maxItems = 0,
     TradePostFormat? format = null,
     string? posterNameSearch = null,
     string? messageSearch = null)
     where TInterface : class
-    => Task.FromResult<IList<TInterface>>(
-      SerializePostsAs<TInterface>(
-        maxItems,
-        format,
-        posterNameSearch,
-        messageSearch).ToList());
+  {
+    var (batch, filtered) = CreatePostsQuery(format, posterNameSearch, messageSearch);
+    var ordered = batch.OrderBy(filtered, "Poster.Name");
+    var reference = await batch.ExecuteReferenceAsync(ordered, RemoteClient.@client)
+      .ConfigureAwait(false);
+    var posts = reference!.Dynamify();
+    return await SerializeDroAsAsync<TInterface, TradePost>(posts, "", maxItems)
+      .ConfigureAwait(false);
+  }
 
   //
   // IMarketPlace wrapper events

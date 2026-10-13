@@ -82,6 +82,12 @@ internal static class BatchRequestValidator
           CheckReference(operation.Target);
           break;
 
+        case RemoteBatchOperationKind.Take:
+          CheckReference(operation.Target);
+          if (operation.Arguments.Length != 1)
+            throw new ArgumentException("Take requires one count argument.");
+          break;
+
         case RemoteBatchOperationKind.Create:
         case RemoteBatchOperationKind.Call:
         case RemoteBatchOperationKind.CallStatic:

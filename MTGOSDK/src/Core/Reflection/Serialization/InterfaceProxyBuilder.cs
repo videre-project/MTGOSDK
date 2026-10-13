@@ -8,6 +8,8 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
 
+using MTGOSDK.Core.Remoting.Batching;
+
 
 namespace MTGOSDK.Core.Reflection.Serialization;
 
@@ -143,10 +145,37 @@ public static class InterfaceProxyBuilder
     if (value == null)
       return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
 
+    if (value is RemoteBatchEnum capturedEnum)
+      return targetType.IsEnum
+        ? Enum.ToObject(targetType, capturedEnum.EnumValue)
+        : ConvertValue(capturedEnum.ToString(), targetType);
+
     var valueType = value.GetType();
     
     if (targetType.IsAssignableFrom(valueType))
       return value;
+
+    if (value is object?[] items)
+    {
+      var elementType = targetType.IsArray ? targetType.GetElementType()
+        : targetType.IsGenericType && targetType.GetGenericArguments().Length == 1
+          ? targetType.GetGenericArguments()[0] : null;
+      if (elementType != null)
+      {
+        var listType = typeof(List<>).MakeGenericType(elementType);
+        if (targetType.IsArray || targetType.IsAssignableFrom(listType))
+        {
+          var convertedItems = (System.Collections.IList)Activator.CreateInstance(listType)!;
+          foreach (var item in items)
+            convertedItems.Add(ConvertValue(item, elementType));
+          if (!targetType.IsArray) return convertedItems;
+
+          var array = Array.CreateInstance(elementType, convertedItems.Count);
+          convertedItems.CopyTo(array, 0);
+          return array;
+        }
+      }
+    }
 
     // Handle IList<string> from List<string>
     if (targetType.IsGenericType && 
