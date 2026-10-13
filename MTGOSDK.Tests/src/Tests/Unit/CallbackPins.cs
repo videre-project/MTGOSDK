@@ -83,8 +83,7 @@ public class CallbackPins
       _runtime.UnpinObject,
       _runtime.GetObjectToken);
 
-    Assert.That(prepared.Dropped, Is.EquivalentTo(new[] { s_a }), "A is not sent the callback");
-    Assert.That(prepared.Owners.Keys, Is.EquivalentTo(new[] { s_b }));
+    Assert.That(prepared.Owners.Keys, Is.EquivalentTo(new[] { s_b }), "A is not sent the callback");
     Assert.That(prepared.SharedRecipients, Is.EquivalentTo(new[] { s_older }), "A never falls back to it");
     Assert.That(prepared.Shared, Is.True);
     Assert.That(unattributed, Has.Count.EqualTo(3), "one shared reference per object argument");
@@ -164,7 +163,8 @@ public class CallbackPins
       _runtime.UnpinObject,
       _runtime.GetObjectToken);
 
-    Assert.That(prepared.Dropped, Is.EquivalentTo(new[] { s_removed }));
+    Assert.That(prepared.Owners.Keys, Is.EquivalentTo(new[] { s_b }));
+    Assert.That(prepared.SharedRecipients, Is.Empty);
     Assert.That(prepared.Shared, Is.False, "no recipient without a registration");
     Assert.That(_runtime.GetClientReferenceCount(ClientB), Is.EqualTo(1));
     Assert.That(_runtime.UnpinObject(prepared.Tokens[0], ClientB), Is.True);

@@ -26,42 +26,36 @@ internal static class CallbackArguments
   public delegate bool TryPin(object instance, int? client, out ulong token);
 
   /// <summary>
-  /// The encoded arguments and the references taken for them.
+  /// The encoded arguments and the references taken for them. A recipient in
+  /// neither <see cref="Owners"/> nor <see cref="SharedRecipients"/> is not
+  /// sent the callback: it no longer receives, or its registration was removed
+  /// while the references were taken (what it got before was reclaimed with
+  /// the removal).
   /// </summary>
-  public sealed class Prepared
-  {
-    public ObjectOrRemoteAddress[] Parameters = null!;
-
-    /// <summary>
-    /// The token of each object argument, once per occurrence.
-    /// </summary>
-    public List<ulong> Tokens = null!;
-
-    /// <summary>
-    /// The recipients that own one reference to each object argument (their
-    /// registration ids). A recipient dropped while the references were taken
-    /// is not among them.
-    /// </summary>
-    public Dictionary<Guid, int> Owners = null!;
-
-    /// <summary>
-    /// The recipients without a registration that receive the callback with
-    /// the shared reference (or, without one, no reference).
-    /// </summary>
-    public HashSet<Guid> SharedRecipients = null!;
-
-    /// <summary>
-    /// Whether one shared, unattributed reference was taken to each object argument.
-    /// </summary>
-    public bool Shared;
-
-    /// <summary>
-    /// The recipients that are not sent the callback: not receiving any more
-    /// when resolved, or whose registration was removed while the references
-    /// were taken (what they got before was reclaimed with the removal).
-    /// </summary>
-    public HashSet<Guid> Dropped = null!;
-  }
+  /// <param name="Parameters">
+  /// The encoded arguments, in the order they were passed to the callback.
+  /// </param>
+  /// <param name="Tokens">
+  /// The token of each object argument, once per occurrence.
+  /// </param>
+  /// <param name="Owners">
+  /// The recipients that own one reference to each object argument (their
+  /// registration ids). A recipient dropped while the references were taken
+  /// is not among them.
+  /// </param>
+  /// <param name="SharedRecipients">
+  /// The recipients without a registration that receive the callback with
+  /// the shared reference (or, without one, no reference).
+  /// </param>
+  /// <param name="Shared">
+  /// Whether one shared, unattributed reference was taken to each object argument.
+  /// </param>
+  public sealed record Prepared(
+    ObjectOrRemoteAddress[] Parameters,
+    List<ulong> Tokens,
+    Dictionary<Guid, int> Owners,
+    HashSet<Guid> SharedRecipients,
+    bool Shared);
 
   /// <summary>
   /// Encodes <paramref name="parameters"/> for <paramref name="recipients"/>.
@@ -88,12 +82,11 @@ internal static class CallbackArguments
   {
     var owners = new Dictionary<Guid, int>();
     var sharedRecipients = new HashSet<Guid>();
-    var dropped = new HashSet<Guid>();
     foreach (Guid recipient in recipients)
     {
       var (receives, client) = recipientOf(recipient);
-      if (!receives) dropped.Add(recipient);
-      else if (client is int id) owners[recipient] = id;
+      if (!receives) continue;
+      if (client is int id) owners[recipient] = id;
       else sharedRecipients.Add(recipient);
     }
     // Without such a subscriber, the shared reference would never be returned.
@@ -131,7 +124,6 @@ internal static class CallbackArguments
           else
           {
             owners.Remove(owner.Key);
-            dropped.Add(owner.Key);
             token = tokenOf(parameter);
           }
         }
@@ -154,14 +146,6 @@ internal static class CallbackArguments
       throw;
     }
 
-    return new Prepared
-    {
-      Parameters = encoded,
-      Tokens = tokens,
-      Owners = owners,
-      SharedRecipients = sharedRecipients,
-      Shared = shared,
-      Dropped = dropped,
-    };
+    return new Prepared(encoded, tokens, owners, sharedRecipients, shared);
   }
 }
