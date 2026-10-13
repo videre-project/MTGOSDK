@@ -30,57 +30,57 @@ public class Log : LoggerBase
   // ILogger Extensions
   //
 
-  public static void Trace(string? message, params object?[] args)
-    { if (IsLevelEnabled(LogLevel.Trace)) s_logger.LogTrace(message, args); }
-  public static void Trace(EventId eventId, string? message, params object?[] args)
-    { if (IsLevelEnabled(LogLevel.Trace)) s_logger.LogTrace(eventId, message, args); }
-  public static void Trace(Exception? exception, string? message, params object?[] args)
-    { if (IsLevelEnabled(LogLevel.Trace)) s_logger.LogTrace(exception, message, args); }
-  public static void Trace(EventId eventId, Exception? exception, string? message, params object?[] args)
-    { if (IsLevelEnabled(LogLevel.Trace)) s_logger.LogTrace(eventId, exception, message, args); }
+  public static void Trace(string? message, params object?[] args) =>
+    GetLogger(LogLevel.Trace).LogTrace(message, args);
+  public static void Trace(EventId eventId, string? message, params object?[] args) =>
+    GetLogger(LogLevel.Trace).LogTrace(eventId, message, args);
+  public static void Trace(Exception? exception, string? message, params object?[] args) =>
+    GetLogger(LogLevel.Trace).LogTrace(exception, message, args);
+  public static void Trace(EventId eventId, Exception? exception, string? message, params object?[] args) =>
+    GetLogger(LogLevel.Trace).LogTrace(eventId, exception, message, args);
 
-  public static void Debug(string? message, params object?[] args)
-    { if (IsLevelEnabled(LogLevel.Debug)) s_logger.LogDebug(message, args); }
-  public static void Debug(EventId eventId, string? message, params object?[] args)
-    { if (IsLevelEnabled(LogLevel.Debug)) s_logger.LogDebug(eventId, message, args); }
-  public static void Debug(Exception? exception, string? message, params object?[] args)
-    { if (IsLevelEnabled(LogLevel.Debug)) s_logger.LogDebug(exception, message, args); }
-  public static void Debug(EventId eventId, Exception? exception, string? message, params object?[] args)
-    { if (IsLevelEnabled(LogLevel.Debug)) s_logger.LogDebug(eventId, exception, message, args); }
+  public static void Debug(string? message, params object?[] args) =>
+    GetLogger(LogLevel.Debug).LogDebug(message, args);
+  public static void Debug(EventId eventId, string? message, params object?[] args) =>
+    GetLogger(LogLevel.Debug).LogDebug(eventId, message, args);
+  public static void Debug(Exception? exception, string? message, params object?[] args) =>
+    GetLogger(LogLevel.Debug).LogDebug(exception, message, args);
+  public static void Debug(EventId eventId, Exception? exception, string? message, params object?[] args) =>
+    GetLogger(LogLevel.Debug).LogDebug(eventId, exception, message, args);
 
   public static void Information(string? message, params object?[] args) =>
-    s_logger.LogInformation(message, args);
+    GetLogger(LogLevel.Information).LogInformation(message, args);
   public static void Information(EventId eventId, string? message, params object?[] args) =>
-    s_logger.LogInformation(eventId, message, args);
+    GetLogger(LogLevel.Information).LogInformation(eventId, message, args);
   public static void Information(Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogInformation(exception, message, args);
+    GetLogger(LogLevel.Information).LogInformation(exception, message, args);
   public static void Information(EventId eventId, Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogInformation(eventId, exception, message, args);
+    GetLogger(LogLevel.Information).LogInformation(eventId, exception, message, args);
 
   public static void Warning(string? message, params object?[] args) =>
-    s_logger.LogWarning(message, args);
+    GetLogger(LogLevel.Warning).LogWarning(message, args);
   public static void Warning(EventId eventId, string? message, params object?[] args) =>
-    s_logger.LogWarning(eventId, message, args);
+    GetLogger(LogLevel.Warning).LogWarning(eventId, message, args);
   public static void Warning(Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogWarning(exception, message, args);
+    GetLogger(LogLevel.Warning).LogWarning(exception, message, args);
   public static void Warning(EventId eventId, Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogWarning(eventId, exception, message, args);
+    GetLogger(LogLevel.Warning).LogWarning(eventId, exception, message, args);
 
   public static void Error(string? message, params object?[] args) =>
-    s_logger.LogError(message, args);
+    GetLogger(LogLevel.Error).LogError(message, args);
   public static void Error(EventId eventId, string? message, params object?[] args) =>
-    s_logger.LogError(eventId, message, args);
+    GetLogger(LogLevel.Error).LogError(eventId, message, args);
   public static void Error(Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogError(exception, message, args);
+    GetLogger(LogLevel.Error).LogError(exception, message, args);
   public static void Error(EventId eventId, Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogError(eventId, exception, message, args);
+    GetLogger(LogLevel.Error).LogError(eventId, exception, message, args);
 
   public static void Critical(string? message, params object?[] args) =>
-    s_logger.LogCritical(message, args);
+    GetLogger(LogLevel.Critical).LogCritical(message, args);
   public static void Critical(EventId eventId, string? message, params object?[] args) =>
-    s_logger.LogCritical(eventId, message, args);
+    GetLogger(LogLevel.Critical).LogCritical(eventId, message, args);
   public static void Critical(Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogCritical(exception, message, args);
+    GetLogger(LogLevel.Critical).LogCritical(exception, message, args);
   public static void Critical(EventId eventId, Exception? exception, string? message, params object?[] args) =>
-    s_logger.LogCritical(eventId, exception, message, args);
+    GetLogger(LogLevel.Critical).LogCritical(eventId, exception, message, args);
 }
