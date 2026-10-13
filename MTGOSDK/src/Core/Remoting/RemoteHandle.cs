@@ -208,7 +208,9 @@ public class RemoteHandle : DLRWrapper, IDisposable
       }
     }
 
-    /// <summary>Takes a holder on the cached, live RemoteObject for an address.</summary>
+    /// <summary>
+    /// Takes a holder on the cached, live RemoteObject for an address.
+    /// </summary>
     private bool TryAcquireCached(ulong address, out RemoteObject remoteObject)
     {
       remoteObject = null!;

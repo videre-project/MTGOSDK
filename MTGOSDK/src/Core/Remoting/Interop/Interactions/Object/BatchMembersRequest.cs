@@ -54,7 +54,11 @@ public class BatchMembersResponse
   /// <summary>
   /// Encoded values, parallel to <see cref="Schema"/>.
   /// Values are encoded as strings using PrimitivesEncoder where possible.
-  /// Non-primitive values return their remote address as string prefixed with '@'.
+  /// A non-primitive value is an '@'-prefixed token that only identifies it:
+  /// the response takes no pin reference for it, so the token is not
+  /// guaranteed to resolve in a later request (it does only while some other
+  /// pin reference to the object exists). Read the member through regular
+  /// remote access to get a reference to it.
   /// Null entries indicate null or unresolvable values.
   /// </summary>
   [Key(2)]

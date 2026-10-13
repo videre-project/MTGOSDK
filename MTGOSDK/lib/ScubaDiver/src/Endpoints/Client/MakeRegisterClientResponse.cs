@@ -31,7 +31,9 @@ public partial class Diver : IDisposable
     public int Id { get; } = id;
     public int Pid { get; } = pid;
 
-    /// <summary>The process id and the client's own id within it.</summary>
+    /// <summary>
+    /// The process id and the client's own id within it.
+    /// </summary>
     public string Key { get; } = key;
 
     /// <summary>
@@ -40,10 +42,14 @@ public partial class Diver : IDisposable
     /// </summary>
     public DateTime? StartTimeUtc { get; } = startTimeUtc;
 
-    /// <summary>Its connections that are still open.</summary>
+    /// <summary>
+    /// Its connections that are still open.
+    /// </summary>
     public HashSet<Guid> Connections { get; } = new();
 
-    /// <summary>Its event subscriptions and hook shares (token, is a hook).</summary>
+    /// <summary>
+    /// Its event subscriptions and hook shares (token, is a hook).
+    /// </summary>
     public List<(int Token, bool Hook)> Subscriptions { get; } = new();
 
     public bool Removed { get; set; }
@@ -114,7 +120,9 @@ public partial class Diver : IDisposable
     }
   }
 
-  /// <summary>Takes one pin reference for the current request (see <see cref="RequestOwner.Pin"/>).</summary>
+  /// <summary>
+  /// Takes one pin reference for the current request (see <see cref="RequestOwner.Pin"/>).
+  /// </summary>
   private ulong PinForRequest(object instance) => CurrentRequestOwner.Pin(_runtime, instance);
 
 

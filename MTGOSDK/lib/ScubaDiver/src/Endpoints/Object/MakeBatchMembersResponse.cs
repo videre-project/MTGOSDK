@@ -79,8 +79,9 @@ public partial class Diver : IDisposable
         }
         else
         {
-          // A logical address only: clients read non-primitives through the
-          // object itself, so a pin here would never be released.
+          // A token that identifies the value, without a pin (see
+          // BatchMembersResponse.Values): clients read non-primitives through
+          // the object itself, so a pin here would never be released.
           ulong address = _runtime.GetObjectToken(value);
           values[i] = $"@{address}";
           schemaTypes[i] = value.GetType().FullName ?? value.GetType().Name;

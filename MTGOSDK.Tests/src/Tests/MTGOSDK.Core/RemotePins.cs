@@ -37,7 +37,9 @@ public class RemotePins : BaseFixture
   private static DiverCommunicator Communicator =>
     RemoteClient.@client!.Communicator;
 
-  /// <summary>Whether the Diver still holds the ArrayList behind a token.</summary>
+  /// <summary>
+  /// Whether the Diver still holds the ArrayList behind a token.
+  /// </summary>
   private static bool IsPinned(ulong token)
   {
     try
@@ -51,7 +53,9 @@ public class RemotePins : BaseFixture
     }
   }
 
-  /// <summary>The pin references a registered client holds.</summary>
+  /// <summary>
+  /// The pin references a registered client holds.
+  /// </summary>
   private static int ClientPins(int processId) =>
     RemoteClient.GetDiverDiagnostics()!.ClientPinReferences!.TryGetValue(processId, out int count)
       ? count
@@ -74,7 +78,9 @@ public class RemotePins : BaseFixture
   private static ulong Token(dynamic remote) =>
     ((DynamicRemoteObject)remote).__ro.RemoteToken;
 
-  /// <summary>A process whose id a second client registers with.</summary>
+  /// <summary>
+  /// A process whose id a second client registers with.
+  /// </summary>
   private static Process StartStandIn() =>
     Process.Start(new ProcessStartInfo("ping", "-n 120 127.0.0.1")
     {
@@ -89,7 +95,9 @@ public class RemotePins : BaseFixture
     return other;
   }
 
-  /// <summary>Closes the second client's connection (without unregistering).</summary>
+  /// <summary>
+  /// Closes the second client's connection (without unregistering).
+  /// </summary>
   private static void Close(DiverCommunicator other) => other.Dispose();
 
   private static FieldInfo PrivateField(Type type, string name) =>
@@ -134,7 +142,9 @@ public class RemotePins : BaseFixture
     return probe;
   }
 
-  /// <summary>Whether the Diver still holds the object behind a token.</summary>
+  /// <summary>
+  /// Whether the Diver still holds the object behind a token.
+  /// </summary>
   private static bool IsPinned(ulong token, string typeName)
   {
     try
@@ -187,7 +197,9 @@ public class RemotePins : BaseFixture
     GC.KeepAlive(parent);
   }
 
-  /// <summary>A separate frame, so no local keeps the child proxy reachable.</summary>
+  /// <summary>
+  /// A separate frame, so no local keeps the child proxy reachable.
+  /// </summary>
   private static ulong ReadChildToken(dynamic parent)
   {
     dynamic child = parent[0];
@@ -378,7 +390,9 @@ public class RemotePins : BaseFixture
     GC.KeepAlive(list);
   }
 
-  /// <summary>A separate frame, so no local keeps the value's proxy reachable.</summary>
+  /// <summary>
+  /// A separate frame, so no local keeps the value's proxy reachable.
+  /// </summary>
   private static void SetToNewObject(FieldInfo field, dynamic list) =>
     field.SetValue((object)list, (object)RemoteClient.CreateInstance("System.Object"));
 
@@ -470,7 +484,9 @@ public class RemotePins : BaseFixture
     }
   }
 
-  /// <summary>Returns a callback's object references, as a handler that keeps none does.</summary>
+  /// <summary>
+  /// Returns a callback's object references, as a handler that keeps none does.
+  /// </summary>
   private static void ReleaseArguments(DiverCommunicator client, IEnumerable<ObjectOrRemoteAddress> arguments)
   {
     foreach (var argument in arguments)

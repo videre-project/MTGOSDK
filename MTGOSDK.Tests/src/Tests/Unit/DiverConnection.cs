@@ -44,7 +44,9 @@ public class DiverConnection
     private readonly List<TcpClient> _connections = new();
     private readonly List<List<string>> _requests = new();
 
-    /// <summary>Decides when to answer: the connection index and endpoint.</summary>
+    /// <summary>
+    /// Decides when to answer: the connection index and endpoint.
+    /// </summary>
     public Func<int, string, Task<bool>> Answer { get; set; } = (_, _) => Task.FromResult(false);
 
     /// <summary>
@@ -62,14 +64,18 @@ public class DiverConnection
 
     public int Accepted { get { lock (_connections) return _connections.Count; } }
 
-    /// <summary>The endpoints received so far on one connection.</summary>
+    /// <summary>
+    /// The endpoints received so far on one connection.
+    /// </summary>
     public string[] Requests(int connection)
     {
       lock (_connections)
         return connection < _requests.Count ? _requests[connection].ToArray() : [];
     }
 
-    /// <summary>Closes one connection from the peer's side.</summary>
+    /// <summary>
+    /// Closes one connection from the peer's side.
+    /// </summary>
     public void Close(int connection)
     {
       lock (_connections) _connections[connection].Close();
@@ -166,7 +172,9 @@ public class DiverConnection
     (TcpCommunicator)typeof(DiverCommunicator)
       .GetField("_tcp", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(client)!;
 
-  /// <summary>The transport's current connection.</summary>
+  /// <summary>
+  /// The transport's current connection.
+  /// </summary>
   private static object Session(DiverCommunicator client) =>
     typeof(TcpCommunicator)
       .GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(Transport(client))!;

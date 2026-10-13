@@ -1216,7 +1216,8 @@ public abstract class DLRWrapper : SerializableBase
       }
       else if (encodedValue.StartsWith("@"))
       {
-        // This is a remote address - skip non-primitives
+        // A non-primitive's token (no pin was taken for it): skip it; the
+        // member is read through the remote object instead.
         continue;
       }
       else

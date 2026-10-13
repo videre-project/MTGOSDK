@@ -27,7 +27,9 @@ public partial class Diver : IDisposable
   /// </summary>
   private readonly Dictionary<int, int> _unregisteredSubscriptions = new();
 
-  /// <summary>Whether a connection without a registration handles this token's callbacks.</summary>
+  /// <summary>
+  /// Whether a connection without a registration handles this token's callbacks.
+  /// </summary>
   private bool HasUnregisteredSubscriber(int token)
   {
     lock (_registeredPidsLock) return _unregisteredSubscriptions.ContainsKey(token);
@@ -116,7 +118,9 @@ public partial class Diver : IDisposable
       Log.Information($"[Diver] Removed {subscriptions.Count} subscription(s) of client {client.Pid}.");
   }
 
-  /// <summary>Removes an event subscription's handler; false for an unknown token.</summary>
+  /// <summary>
+  /// Removes an event subscription's handler; false for an unknown token.
+  /// </summary>
   private bool RemoveEventSubscription(int token)
   {
     if (!_remoteEventHandler.TryRemove(token, out var registration))

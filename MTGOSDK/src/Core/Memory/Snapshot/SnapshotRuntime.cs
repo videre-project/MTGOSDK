@@ -189,7 +189,9 @@ public class SnapshotRuntime : IDisposable
       _ => new BoxedToken((ulong)Interlocked.Increment(ref _nextToken))).Token;
   }
 
-  /// <summary>Takes one unattributed pin reference to the object.</summary>
+  /// <summary>
+  /// Takes one unattributed pin reference to the object.
+  /// </summary>
   public ulong PinObject(object instance) => PinObject(instance, null);
 
   /// <summary>
@@ -250,7 +252,9 @@ public class SnapshotRuntime : IDisposable
     }
   }
 
-  /// <summary>Returns one unattributed pin reference.</summary>
+  /// <summary>
+  /// Returns one unattributed pin reference.
+  /// </summary>
   public bool UnpinObject(ulong token) => UnpinObject(token, null);
 
   /// <summary>

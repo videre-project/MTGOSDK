@@ -67,7 +67,9 @@ internal readonly struct RequestOwner
     return runtime.PinObject(instance, Registration);
   }
 
-  /// <summary>Returns one of this owner's pin references (nothing for a gone connection).</summary>
+  /// <summary>
+  /// Returns one of this owner's pin references (nothing for a gone connection).
+  /// </summary>
   public bool Unpin(SnapshotRuntime runtime, ulong token) =>
     !IsGone && runtime.UnpinObject(token, Registration);
 }

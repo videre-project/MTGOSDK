@@ -20,15 +20,21 @@ namespace ScubaDiver;
 /// </summary>
 internal static class CallbackArguments
 {
-  /// <summary>Takes one pin reference, or refuses one for a removed registration.</summary>
+  /// <summary>
+  /// Takes one pin reference, or refuses one for a removed registration.
+  /// </summary>
   public delegate bool TryPin(object instance, int? client, out ulong token);
 
-  /// <summary>The encoded arguments and the references taken for them.</summary>
+  /// <summary>
+  /// The encoded arguments and the references taken for them.
+  /// </summary>
   public sealed class Prepared
   {
     public ObjectOrRemoteAddress[] Parameters = null!;
 
-    /// <summary>The token of each object argument, once per occurrence.</summary>
+    /// <summary>
+    /// The token of each object argument, once per occurrence.
+    /// </summary>
     public List<ulong> Tokens = null!;
 
     /// <summary>
@@ -44,7 +50,9 @@ internal static class CallbackArguments
     /// </summary>
     public HashSet<Guid> SharedRecipients = null!;
 
-    /// <summary>Whether one shared, unattributed reference was taken to each object argument.</summary>
+    /// <summary>
+    /// Whether one shared, unattributed reference was taken to each object argument.
+    /// </summary>
     public bool Shared;
 
     /// <summary>
