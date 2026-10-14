@@ -1057,8 +1057,8 @@ public class RemoteLifetimes
     var callbackState = await recorded.Task.WaitAsync(TimeSpan.FromSeconds(5));
     await peer.SubscribeEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
     await Task.Run(peer.Client.Dispose).WaitAsync(TimeSpan.FromSeconds(5));
-    Assert.ThrowsAsync<TaskCanceledException>(async () =>
-      await subscribing.WaitAsync(TimeSpan.FromSeconds(5)));
+    await Assert.ThatAsync(() => subscribing.WaitAsync(TimeSpan.FromSeconds(5)),
+      Throws.TypeOf<TaskCanceledException>());
     Collect();
     Assert.That(callbackState.IsAlive, Is.False, "failed subscription state is released after disposal");
   }

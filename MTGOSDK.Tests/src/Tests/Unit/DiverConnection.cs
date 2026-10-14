@@ -750,7 +750,7 @@ public class DiverConnection
       Assert.That(client.IsConnected, Is.False);
       Assert.DoesNotThrow(client.Cancel);
       Assert.DoesNotThrow(client.Dispose);
-      Assert.ThrowsAsync<ObjectDisposedException>(() => client.ConnectAsync());
+      await Assert.ThatAsync(() => client.ConnectAsync(), Throws.TypeOf<ObjectDisposedException>());
       Assert.That(peer.Accepted, Is.EqualTo(1), "disposal cannot open another connection");
     }
     finally
