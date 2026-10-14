@@ -25,6 +25,7 @@ public sealed class RemoteBatch : RemoteBatchScope
 {
   internal int NextId;
   private readonly List<ObjectOrRemoteAddress> _inputs = [];
+  private List<RemoteObject>? _retainedInputs;
   private readonly Dictionary<string, RemoteBatchProjection> _projections = new();
 
   /// <summary>
@@ -56,6 +57,7 @@ public sealed class RemoteBatch : RemoteBatchScope
 
   /// <summary>
   /// Records a supported literal or raw remote handle without remote discovery.
+  /// Object inputs remain retained for the lifetime of the batch.
   /// </summary>
   public RemoteBatchSlot Input(object? value)
   {
@@ -65,10 +67,18 @@ public sealed class RemoteBatch : RemoteBatchScope
       throw new ArgumentException("Pass an existing raw remote handle instead of a wrapper.", nameof(value));
     // Use the existing handle token so recording an input does not fetch
     // remote type metadata.
-    if (value is RemoteObject remote)
-      return Input(ObjectOrRemoteAddress.FromToken(remote.RemoteToken, typeof(object).FullName!));
-    if (value is DynamicRemoteObject dynamicRemote)
-      return Input(ObjectOrRemoteAddress.FromToken(dynamicRemote.__ro.RemoteToken, typeof(object).FullName!));
+    var remote = value switch
+    {
+      RemoteObject instance => instance,
+      DynamicRemoteObject instance => instance.__ro,
+      _ => null
+    };
+    if (remote is not null)
+    {
+      var retained = remote.Retain();
+      (_retainedInputs ??= []).Add(retained);
+      return Input(ObjectOrRemoteAddress.FromToken(retained.RemoteToken, typeof(object).FullName!));
+    }
     if (value != null && TypeProxy<dynamic>.IsProxy(value))
       throw new ArgumentException("Pass an existing raw remote handle instead of a proxy.", nameof(value));
     return Input(RemoteFunctionsInvokeHelper.CreateRemoteParameter(value!));
@@ -81,7 +91,9 @@ public sealed class RemoteBatch : RemoteBatchScope
     _projections.Add(name, projection);
 
   /// <summary>
-  /// Copies the recorded batch into an independent wire request.
+  /// Copies the recorded batch into an independent wire request. The copy does
+  /// not retain object inputs, so the caller must keep this batch alive until
+  /// the request finishes.
   /// </summary>
   public RemoteBatchRequest ToRequest() => MessagePackSerializer.Deserialize<RemoteBatchRequest>(
     MessagePackSerializer.Serialize(CreateRequest()));
@@ -118,8 +130,18 @@ public sealed class RemoteBatch : RemoteBatchScope
   public RemoteBatchResult Execute(DiverCommunicator connection) =>
     ExecuteAsync(connection).GetAwaiter().GetResult();
 
-  public Task<RemoteBatchResult> ExecuteAsync(DiverCommunicator connection) =>
-    connection.ExecuteDetachedBatchAsync(ToRequest());
+  public async Task<RemoteBatchResult> ExecuteAsync(DiverCommunicator connection)
+  {
+    try
+    {
+      return await connection.ExecuteDetachedBatchAsync(ToRequest()).ConfigureAwait(false);
+    }
+    finally
+    {
+      GC.KeepAlive(this);
+    }
+  }
+
   public RemoteBatchResult Execute(RemoteHandle connection) => Execute(connection.Communicator);
   public Task<RemoteBatchResult> ExecuteAsync(RemoteHandle connection) => ExecuteAsync(connection.Communicator);
 }

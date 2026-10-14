@@ -36,29 +36,38 @@ internal sealed class RemotePropertyChangeProxy :
   public RemotePropertyChangeProxy(RemoteObject remoteObject, RemoteEventCapture? capture = null,
     string[]? propertyNames = null)
   {
-    _remoteObject = remoteObject ??
+    if (remoteObject is null)
       throw new ArgumentNullException(nameof(remoteObject));
-    _hasCapture = capture is not null;
-    _propertyNames = capture?.Scope is null ? propertyNames : Array.Empty<string>();
-    if (capture is null)
+    _remoteObject = remoteObject.Retain();
+    try
     {
-      _callback = (Action<dynamic, dynamic>)OnRemotePropertyChanged;
-      _remoteObject.EventSubscribe(nameof(INotifyPropertyChanged.PropertyChanged), _callback);
-    }
-    else
-    {
-      Action<HookContext> callback = context =>
+      _hasCapture = capture is not null;
+      _propertyNames = capture?.Scope is null ? propertyNames : Array.Empty<string>();
+      if (capture is null)
       {
-        if (Volatile.Read(ref _isDisposed) != 0) return;
-        var nameValue = context.Capture?.Values["event.propertyName"];
-        string? name = nameValue?.Kind == RemoteBatchValueKind.Scalar
-          ? nameValue.GetScalar<string>() : null;
-        PropertyChanged?.Invoke(this,
-          new RemotePropertyChangedEventArgs(_remoteObject.RemoteToken, name ?? "", this)
-          { CaptureContext = context });
-      };
-      _callback = callback;
-      CaptureSequence = _remoteObject.EventSubscribe(nameof(INotifyPropertyChanged.PropertyChanged), callback, capture, _propertyNames);
+        _callback = (Action<dynamic, dynamic>)OnRemotePropertyChanged;
+        _remoteObject.EventSubscribe(nameof(INotifyPropertyChanged.PropertyChanged), _callback);
+      }
+      else
+      {
+        Action<HookContext> callback = context =>
+        {
+          if (Volatile.Read(ref _isDisposed) != 0) return;
+          var nameValue = context.Capture?.Values["event.propertyName"];
+          string? name = nameValue?.Kind == RemoteBatchValueKind.Scalar
+            ? nameValue.GetScalar<string>() : null;
+          PropertyChanged?.Invoke(this,
+            new RemotePropertyChangedEventArgs(_remoteObject.RemoteToken, name ?? "", this)
+            { CaptureContext = context });
+        };
+        _callback = callback;
+        CaptureSequence = _remoteObject.EventSubscribe(nameof(INotifyPropertyChanged.PropertyChanged), callback, capture, _propertyNames);
+      }
+    }
+    catch
+    {
+      _remoteObject.ReleaseReference();
+      throw;
     }
   }
 
@@ -116,6 +125,10 @@ internal sealed class RemotePropertyChangeProxy :
       Log.Debug(ex, "Failed to unsubscribe remote PropertyChanged callback for token={Token}", _remoteObject.RemoteToken);
     }
 
-    PropertyChanged = null;
+    finally
+    {
+      PropertyChanged = null;
+      _remoteObject.ReleaseReference();
+    }
   }
 }

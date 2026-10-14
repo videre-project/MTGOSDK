@@ -48,6 +48,20 @@ public class RemoteObject : IObjectReference
     }
   }
 
+  /// <summary>
+  /// Creates a separate local owner of the same remote reference.
+  /// The returned object can be released independently of this one.
+  /// </summary>
+  internal RemoteObject Retain()
+  {
+    lock (_lifetimeLock)
+    {
+      if (_released)
+        throw new ObjectDisposedException(nameof(RemoteObject));
+      return new RemoteObject(_ref, _app);
+    }
+  }
+
   public void AddReference() => TryAddReference();
 
   public void ReleaseReference(bool useJitter = false)
