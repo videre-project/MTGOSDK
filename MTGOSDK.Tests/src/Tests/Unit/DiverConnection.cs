@@ -737,6 +737,27 @@ public class DiverConnection
     }
   }
 
+  [Test]
+  public async Task Test_Disposal_ClosesTheConnectionAndPreventsReuse()
+  {
+    using var peer = new Peer { Answer = (_, _) => Task.FromResult(true) };
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    try
+    {
+      await client.ConnectAsync();
+      Assert.That(client.CheckAliveness(), Is.True);
+      client.Dispose();
+      Assert.That(client.IsConnected, Is.False);
+      Assert.DoesNotThrow(client.Cancel);
+      Assert.DoesNotThrow(client.Dispose);
+      Assert.ThrowsAsync<ObjectDisposedException>(() => client.ConnectAsync());
+      Assert.That(peer.Accepted, Is.EqualTo(1), "disposal cannot open another connection");
+    }
+    finally
+    {
+      client.Dispose();
+    }
+  }
 
   [Test]
   public async Task Test_ActiveCleanup_WaitsForASlowSubscription()

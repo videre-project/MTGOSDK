@@ -41,6 +41,7 @@ public class TcpCommunicator : TcpPipelineBase
   // Request ids stay unique across connections.
   private int _nextRequestId = 0;
   private volatile bool _supportsPinOwnership;
+  private int _disposed;
 
   internal bool SupportsPinOwnership => _supportsPinOwnership;
 
@@ -98,6 +99,8 @@ public class TcpCommunicator : TcpPipelineBase
     await _connectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
     try
     {
+      if (Volatile.Read(ref _disposed) != 0)
+        throw new ObjectDisposedException(nameof(TcpCommunicator));
       if (IsConnected) return;
 
       // A dropped connection ends before the new one starts: its pending
@@ -233,6 +236,7 @@ public class TcpCommunicator : TcpPipelineBase
   /// </summary>
   public override void Dispose()
   {
+    if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
     _cts.Cancel();
     _callbackScheduler.Dispose();
 
@@ -281,10 +285,11 @@ public class TcpCommunicator : TcpPipelineBase
 
       try
       {
+        using var attempt = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, cancellationToken);
         // Cancelling abandons the attempt by closing the socket.
-        using (cancellationToken.Register(() => _client.Dispose()))
+        using (attempt.Token.Register(() => _client.Dispose()))
           await _client.ConnectAsync(hostname, port).ConfigureAwait(false);
-        cancellationToken.ThrowIfCancellationRequested();
+        attempt.Token.ThrowIfCancellationRequested();
         _stream = _client.GetStream();
       }
       catch

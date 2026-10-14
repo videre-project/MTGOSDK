@@ -19,6 +19,7 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 using MTGOSDK.Core.Remoting.Types;
 
+
 namespace MTGOSDK.Core.Remoting.Interop;
 
 /// <summary>
@@ -99,6 +100,7 @@ public class DiverCommunicator : IDisposable
 
   private static readonly AsyncLocal<bool> s_forceUIThread = new();
   private volatile bool _isDisposed = false;
+  private int _disposeStarted;
 
   // Pin references returned in the background (see ReleaseLater), in order.
   private readonly ChannelScheduler _releaseScheduler = new(1);
@@ -212,7 +214,7 @@ public class DiverCommunicator : IDisposable
     return UnregisterClient(_process_id);
   }
 
-  public void Cancel() => _tcp?.Dispose();
+  public void Cancel() => Dispose();
 
   public DiverCommunicator(
     string hostname,
@@ -224,15 +226,13 @@ public class DiverCommunicator : IDisposable
     // Register callback handler for incoming events/hooks from Diver
     _tcp.SetCallbackHandler(HandleCallback);
 
-    RemoteClient.Disposed += (s, e) =>
-    {
-      _isDisposed = true;
-      SyncThread.Enqueue(() =>
-      {
-        Cancel();
-        _process_id = null;
-      });
-    };
+    RemoteClient.Disposed += OnRemoteClientDisposed;
+  }
+
+  private void OnRemoteClientDisposed(object? sender, EventArgs args)
+  {
+    _isDisposed = true;
+    SyncThread.Enqueue(Dispose);
   }
 
   /// <summary>
@@ -411,6 +411,8 @@ public class DiverCommunicator : IDisposable
   /// </summary>
   private async Task ConnectRegisteredAsync(CancellationToken cancellationToken)
   {
+    if (_isDisposed)
+      throw new ObjectDisposedException(nameof(DiverCommunicator));
     Func<Func<string, byte[], Task>, Task>? handshake = null;
     if (_registered && _process_id is int pid)
     {
@@ -995,6 +997,7 @@ public class DiverCommunicator : IDisposable
     if (!TryRemoveCallback(callback, _tokensToEventHandlers, _eventHandlersToToken,
       out int token, out var inputs))
     {
+      if (_isDisposed) return;
       throw new Exception("EventUnsubscribe: callback not found");
     }
 
@@ -1097,6 +1100,7 @@ public class DiverCommunicator : IDisposable
     if (!TryRemoveCallback(callback, _tokensToHookCallbacks, _hookCallbacksToTokens,
       out int token, out var inputs))
     {
+      if (_isDisposed) return;
       throw new Exception("UnhookMethod: callback not found");
     }
 
@@ -1161,7 +1165,31 @@ public class DiverCommunicator : IDisposable
   /// </summary>
   public void Dispose()
   {
-    _releaseScheduler.Dispose();
-    _tcp?.Dispose();
+    if (Interlocked.Exchange(ref _disposeStarted, 1) != 0) return;
+    RemoteClient.Disposed -= OnRemoteClientDisposed;
+    try
+    {
+      _releaseScheduler.Dispose();
+    }
+    finally
+    {
+      _isDisposed = true;
+      _tcp.Dispose();
+      // Closing TCP completes any pending registration or subscription request
+      // before its maps are cleared under the same lock used to publish them.
+      lock (_registrationLock)
+      {
+        _registered = false;
+        _process_id = null;
+        _pendingUnregister = null;
+        _tokensToEventHandlers.Clear();
+        _eventHandlersToToken.Clear();
+        _tokensToHookCallbacks.Clear();
+        _hookCallbacksToTokens.Clear();
+        _eventEpochs.Clear();
+        _hookEpochs.Clear();
+        CaptureCompleted = null;
+      }
+    }
   }
 }

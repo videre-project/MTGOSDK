@@ -104,6 +104,8 @@ public class RemoteLifetimes
     public TaskCompletionSource<bool>? ContinueInvocation { get; set; }
     public TaskCompletionSource<bool>? UnpinEntered { get; set; }
     public TaskCompletionSource<bool>? ContinueUnpin { get; set; }
+    public TaskCompletionSource<bool>? SubscribeEntered { get; set; }
+    public TaskCompletionSource<bool>? ContinueSubscribe { get; set; }
     public TaskCompletionSource<bool>? UnsubscribeEntered { get; set; }
     public TaskCompletionSource<bool>? ContinueUnsubscribe { get; set; }
     private RemoteBatchRequest? _capture;
@@ -165,6 +167,11 @@ public class RemoteLifetimes
       {
         UnpinEntered!.TrySetResult(true);
         await ContinueUnpin.Task;
+      }
+      if (endpoint == "/event_subscribe" && ContinueSubscribe is not null)
+      {
+        SubscribeEntered!.TrySetResult(true);
+        await ContinueSubscribe.Task;
       }
       if (endpoint == "/event_unsubscribe" && ContinueUnsubscribe is not null)
       {
@@ -347,6 +354,7 @@ public class RemoteLifetimes
 
     public void Dispose()
     {
+      ContinueSubscribe?.TrySetResult(true);
       ContinueInvocation?.TrySetResult(true);
       ContinueUnpin?.TrySetResult(true);
       ContinueUnsubscribe?.TrySetResult(true);
@@ -663,6 +671,7 @@ public class RemoteLifetimes
     Assert.That(peer.IsPinned(token), Is.False);
   }
 
+
   private static async Task DrainPinReturns(PinPeer peer)
   {
     var scheduler = (ChannelScheduler)typeof(DiverCommunicator)
@@ -948,6 +957,40 @@ public class RemoteLifetimes
   }
 
   [MethodImpl(MethodImplOptions.NoInlining)]
+  private static WeakReference RegisterTemporaryCapture(PinPeer peer, bool hook = false,
+    Action<WeakReference>? recorded = null)
+  {
+    var input = (DynamicRemoteObject)peer.Add(new Item()).Dynamify();
+    var batch = new RemoteBatch();
+    batch.Output("name", batch.Read(batch.Input((object)input), "Name"));
+    var capture = new RemoteEventCapture { Batch = batch.ToRequest() };
+    var callbackState = new object();
+    var stateReference = new WeakReference(callbackState);
+    recorded?.Invoke(stateReference);
+    if (hook)
+      peer.Client.HookMethod(typeof(Item).FullName!, nameof(Item.Echo), HarmonyPatchPosition.Postfix,
+        (_, _, _) => GC.KeepAlive(callbackState), capture: new RemoteHookCapture { Batch = capture.Batch });
+    else
+      peer.Client.EventSubscribe(input.__ro.RemoteToken, "PropertyChanged",
+        (_, _) => GC.KeepAlive(callbackState), capture);
+    return stateReference;
+  }
+
+  [TestCase(false)]
+  [TestCase(true)]
+  public void Test_DisposingCommunicator_ReleasesCallbackState(bool hook)
+  {
+    using var peer = new PinPeer();
+    var callbackState = RegisterTemporaryCapture(peer, hook);
+    Collect();
+    Assert.That(callbackState.IsAlive, Is.True, "the active subscription retains its callback state");
+    Assert.That(peer.Client.UnregisterClient(), Is.True);
+    peer.Client.Dispose();
+    Collect();
+    Assert.That(callbackState.IsAlive, Is.False, "disposal releases caller-owned callback state");
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
   private static object? AccessTemporaryTarget(PinPeer peer, string path)
   {
     var remote = peer.Add(new Item());
@@ -1004,4 +1047,46 @@ public class RemoteLifetimes
     target.ReleaseReference();
   }
 
+  [Test]
+  public async Task Test_DisposalDuringSubscription_ReleasesPendingCallbackState()
+  {
+    using var peer = new PinPeer { SubscribeEntered = Signal(), ContinueSubscribe = Signal() };
+    var recorded = new TaskCompletionSource<WeakReference>(TaskCreationOptions.RunContinuationsAsynchronously);
+    var subscribing = Task.Run(() => RegisterTemporaryCapture(peer,
+      recorded: owner => recorded.SetResult(owner)));
+    var callbackState = await recorded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    await peer.SubscribeEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    await Task.Run(peer.Client.Dispose).WaitAsync(TimeSpan.FromSeconds(5));
+    Assert.ThrowsAsync<TaskCanceledException>(async () =>
+      await subscribing.WaitAsync(TimeSpan.FromSeconds(5)));
+    Collect();
+    Assert.That(callbackState.IsAlive, Is.False, "failed subscription state is released after disposal");
+  }
+
+  [TestCase(false)]
+  [TestCase(true)]
+  public void Test_DisposedCommunicator_AllowsLateSubscriptionCleanup(bool hook)
+  {
+    using var peer = new PinPeer();
+    DiverCommunicator.LocalEventCallback callback = (_, _) => { };
+    LocalHookCallback hookCallback = (_, _, _) => { };
+    if (hook)
+      peer.Client.HookMethod(typeof(Item).FullName!, nameof(Item.Echo),
+        HarmonyPatchPosition.Postfix, hookCallback);
+    else
+    {
+      var target = peer.Add(new Item());
+      peer.Client.EventSubscribe(target.RemoteToken, "PropertyChanged", callback);
+      GC.KeepAlive(target);
+    }
+    peer.Client.UnregisterClient();
+    peer.Client.Dispose();
+    var requests = peer.Requests;
+    Assert.DoesNotThrow(() =>
+    {
+      if (hook) peer.Client.UnhookMethod(hookCallback);
+      else peer.Client.EventUnsubscribe(callback);
+    });
+    Assert.That(peer.Requests, Is.EqualTo(requests), "late cleanup sends nothing on a disposed connection");
+  }
 }
