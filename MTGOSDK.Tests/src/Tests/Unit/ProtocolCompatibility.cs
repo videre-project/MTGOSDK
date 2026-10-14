@@ -7,6 +7,7 @@ using System;
 
 using MessagePack;
 
+using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
@@ -42,6 +43,21 @@ public class ProtocolCompatibility
     [Key(1)] public int Token { get; set; }
   }
 
+  [MessagePackObject]
+  public class OldResponse<T>
+  {
+    [Key(0)] public bool IsError { get; set; }
+    [Key(1)] public string? ErrorMessage { get; set; }
+    [Key(2)] public string? ErrorStackTrace { get; set; }
+    [Key(3)] public T Data { get; set; } = default!;
+  }
+
+  [MessagePackObject]
+  public class OldUnpinRequest
+  {
+    [Key(0)] public ulong Address { get; set; }
+  }
+
   private static T Read<T>(object old) =>
     MessagePackSerializer.Deserialize<T>(MessagePackSerializer.Serialize(old.GetType(), old));
 
@@ -69,7 +85,33 @@ public class ProtocolCompatibility
   {
     var request = Read<CallbackInvocationRequest>(new OldCallbackInvocationRequest { Token = 5 });
     Assert.That(request.Token, Is.EqualTo(5));
+    Assert.That(request.PinOwner, Is.Null);
     Assert.That(request.ParametersPinnedPerRecipient, Is.False,
       "an argument that is not wrapped returns no reference to a Diver that pinned once for all recipients");
   }
+
+  [Test]
+  public void Test_OlderResponse_HasNoPinOwner()
+  {
+    var response = Read<DiverResponse<int>>(new OldResponse<int> { Data = 7 });
+    Assert.That(response.Data, Is.EqualTo(7));
+    Assert.That(response.PinOwner, Is.Null);
+  }
+
+  [Test]
+  public void Test_OlderClient_CanReadAResponseWithPinOwnership()
+  {
+    var response = Read<OldResponse<int>>(new DiverResponse<int> { Data = 7, PinOwner = "client" });
+    Assert.That(response.Data, Is.EqualTo(7));
+    Assert.That(response.IsError, Is.False);
+  }
+
+  [Test]
+  public void Test_OlderRelease_UsesItsConnectionsOwner()
+  {
+    var request = Read<UnpinRequest>(new OldUnpinRequest { Address = 7 });
+    Assert.That(request.Address, Is.EqualTo(7));
+    Assert.That(request.PinOwner, Is.Null);
+  }
+
 }

@@ -1,0 +1,544 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+using System;
+using System.Buffers;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
+
+using MessagePack;
+using ScubaDiver;
+
+using MTGOSDK.Core;
+using MTGOSDK.Core.Memory;
+using MTGOSDK.Core.Memory.Snapshot;
+using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
+using MTGOSDK.Core.Remoting.Types;
+
+namespace MTGOSDK.UnitTests;
+
+/// <summary>
+/// Exercises SDK holders against a protocol peer backed by the production pin table.
+/// Requests can be held at receipt boundaries to control collection and registration.
+/// </summary>
+[NonParallelizable]
+public class RemoteLifetimes
+{
+  public sealed class Item
+  {
+    public string Name { get; set; } = "retained";
+  }
+
+  public sealed class RetryItem { }
+
+  [MessagePackObject]
+  public sealed class ExpectedUnpin
+  {
+    [Key(0)] public ulong Address { get; set; }
+    [Key(1)] public string? PinOwner { get; set; }
+  }
+
+  private sealed class PinPeer : IDisposable
+  {
+    private readonly DiverConnection.Peer _peer = new();
+    private readonly SnapshotRuntime _runtime = new();
+    private readonly Dictionary<string, int> _clients = new();
+    private readonly Dictionary<int, string> _connections = new();
+    private readonly object _lock = new();
+    private int _nextClient;
+    public RemoteHandle Handle { get; }
+    public DiverCommunicator Client => Handle.Communicator;
+    public int Pins { get { lock (_lock) return _clients.Values.Sum(_runtime.GetClientReferenceCount); } }
+    public int ObjectReads { get; private set; }
+    public int TypeFailures { get; set; }
+    public bool TakeObjectReference { get; set; } = true;
+    public bool RejectRepeatedObjectReads { get; set; }
+    public bool FailSubscribe { get; set; }
+    public bool LoseUnregisterResponse { get; set; }
+    public bool RemoveBeforeDrop { get; set; } = true;
+    public string? LastRegistration { get; private set; }
+    public TaskCompletionSource<bool>? BatchEntered { get; set; }
+    public TaskCompletionSource<bool>? ContinueBatch { get; set; }
+    public bool DelayNextUnregister { get; set; }
+    public TaskCompletionSource<bool>? UnregisterEntered { get; set; }
+    public TaskCompletionSource<bool>? ContinueUnregister { get; set; }
+    public TaskCompletionSource<bool>? DelayedUnregisterCompleted { get; set; }
+    public TaskCompletionSource<bool>? ObjectEntered { get; set; }
+    public TaskCompletionSource<bool>? ContinueObject { get; set; }
+
+    public PinPeer()
+    {
+      _peer.Answer = (_, _) => Task.FromResult(true);
+      _peer.Respond = Respond;
+      Handle = RemoteHandle.Connect(Process.GetCurrentProcess(), (ushort)_peer.Port);
+    }
+
+    public void DropConnection() => _peer.Close(_peer.Accepted - 1);
+
+    public bool IsPinned(ulong token) => _runtime.TryGetPinnedObject(token, out _);
+
+    public ulong Pin(object value)
+    {
+      lock (_lock) return _runtime.PinObject(value, _clients[LastRegistration!]);
+    }
+
+    public RemoteObject Add(Item item) =>
+      Handle.GetRemoteObjectFromField(Pin(item), typeof(Item).FullName!);
+
+    public string[] Requests => Enumerable.Range(0, _peer.Accepted)
+      .SelectMany(_peer.Requests).ToArray();
+
+    private byte[] Success<T>(T data, string? owner)
+    {
+      var buffer = new ArrayBufferWriter<byte>();
+      var writer = new MessagePackWriter(buffer);
+      writer.WriteArrayHeader(5);
+      writer.Write(false);
+      writer.WriteNil();
+      writer.WriteNil();
+      MessagePackSerializer.Serialize(ref writer, data);
+      writer.Write(owner);
+      writer.Flush();
+      return buffer.WrittenSpan.ToArray();
+    }
+
+    private async Task<byte[]?> Respond(int connection, string endpoint, byte[] body)
+    {
+      // The owner is captured at request entry, before any controlled wait.
+      string owner;
+      lock (_lock) owner = _connections.GetValueOrDefault(connection, "");
+      bool delayedUnregister = false;
+      if (endpoint == "/unregister_client")
+      {
+        lock (_lock)
+        {
+          delayedUnregister = DelayNextUnregister;
+          DelayNextUnregister = false;
+        }
+        if (delayedUnregister)
+        {
+          UnregisterEntered!.TrySetResult(true);
+          await ContinueUnregister!.Task;
+        }
+      }
+      if (endpoint == "/batch_execute" && ContinueBatch is not null)
+      {
+        BatchEntered!.TrySetResult(true);
+        await ContinueBatch.Task;
+      }
+      if (endpoint == "/object" && ContinueObject is not null)
+      {
+        byte[] response;
+        lock (_lock) response = DumpObject(body, owner);
+        ObjectEntered!.TrySetResult(true);
+        await ContinueObject.Task;
+        return response;
+      }
+      lock (_lock)
+      {
+        switch (endpoint)
+        {
+          case "/ping": return Success("pong", owner);
+          case "/register_client":
+            var register = MessagePackSerializer.Deserialize<RegisterClientRequest>(body);
+            string key = $"{register.ProcessId}/{register.ClientId}";
+            if (!_clients.TryGetValue(key, out int id))
+            {
+              _clients.Add(key, id = ++_nextClient);
+              _runtime.AddClient(id);
+            }
+            _connections[connection] = LastRegistration = key;
+            return Success<object?>(null, owner);
+          case "/unregister_client":
+            var unregister = MessagePackSerializer.Deserialize<UnregisterClientRequest>(body);
+            string removedKey = $"{unregister.ProcessId}/{unregister.ClientId}";
+            if (LoseUnregisterResponse && !RemoveBeforeDrop)
+            {
+              LoseUnregisterResponse = false;
+              _peer.Close(connection);
+              return null;
+            }
+            bool removed = _clients.Remove(removedKey, out int removedId);
+            if (removed) _runtime.RemoveClient(removedId);
+            if (delayedUnregister) DelayedUnregisterCompleted!.TrySetResult(true);
+            if (LoseUnregisterResponse)
+            {
+              LoseUnregisterResponse = false;
+              _peer.Close(connection);
+              return null;
+            }
+            return Success(new UnregisterClientResponse { WasRemoved = removed }, owner);
+          case "/domains": return Success(new DomainDump("pins", []), owner);
+          case "/type":
+            if (TypeFailures > 0)
+            {
+              TypeFailures--;
+              return MessagePackSerializer.Serialize(DiverResponse<object>.FromError("metadata unavailable"));
+            }
+            var type = MessagePackSerializer.Deserialize<TypeDumpRequest>(body);
+            var actual = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(type.TypeFullName))
+              .First(t => t is not null)!;
+            return Success(TypeDump.ParseType(actual), owner);
+          case "/object": return DumpObject(body, owner);
+          case "/event_subscribe":
+            return FailSubscribe ? MessagePackSerializer.Serialize(DiverResponse<object>.FromError("subscribe failed"))
+              : Success(new EventRegistrationResults { Token = 1 }, owner);
+          case "/event_unsubscribe": return Success<object?>(null, owner);
+          case "/unpin":
+            var pin = MessagePackSerializer.Deserialize<ExpectedUnpin>(body);
+            if (_clients.TryGetValue(owner, out int client))
+              RequestOwner.Of(client).Unpin(_runtime, pin.Address, pin.PinOwner, owner);
+            return Success<object?>(null, owner);
+          case "/batch_execute":
+            var batch = MessagePackSerializer.Deserialize<RemoteBatchRequest>(body);
+            var executor = new BatchExecutor(_ => typeof(Item), input =>
+              _runtime.TryGetPinnedObject(input.RemoteAddress, out var target) ? target
+                : throw new InvalidOperationException("batch input was unpinned"));
+            return Success(executor.Execute(batch), owner);
+          default: throw new NotSupportedException(endpoint);
+        }
+      }
+    }
+
+    private byte[] DumpObject(byte[] body, string owner)
+    {
+      ObjectReads++;
+      if (RejectRepeatedObjectReads && ObjectReads > 1)
+        return MessagePackSerializer.Serialize(DiverResponse<object>.FromError("object lookup failed"));
+      var request = MessagePackSerializer.Deserialize<ObjectDumpRequest>(body);
+      _runtime.TryGetPinnedObject(request.Address, out var value);
+      if (request.PinRequest && TakeObjectReference) _runtime.PinObject(value, _clients[owner]);
+      return Success(new ObjectDump
+      {
+        Type = request.TypeName, PinnedAddress = request.Address,
+        ReferenceTaken = request.PinRequest && TakeObjectReference
+      }, owner);
+    }
+
+    public void Dispose()
+    {
+      ContinueBatch?.TrySetResult(true);
+      ContinueObject?.TrySetResult(true);
+      ContinueUnregister?.TrySetResult(true);
+      var client = Client;
+      Handle.Dispose();
+      client.Dispose();
+      _peer.Dispose();
+      _runtime.Dispose();
+    }
+  }
+
+  private static TaskCompletionSource<bool> Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+  private static async Task Until(Func<bool> predicate)
+  {
+    var watch = Stopwatch.StartNew();
+    while (!predicate() && watch.Elapsed < TimeSpan.FromSeconds(5)) await Task.Delay(10);
+    Assert.That(predicate(), Is.True, "the expected lifetime transition completed");
+  }
+
+  private static void Collect()
+  {
+    GC.Collect();
+    GC.WaitForPendingFinalizers();
+    GC.Collect();
+  }
+
+  private static IDisposable Subscribe(RemoteObject remote) =>
+    (IDisposable)typeof(RemoteObject).Assembly.GetType(
+      "MTGOSDK.Core.Remoting.Interop.RemotePropertyChangeProxy")!
+      .GetConstructors().Single().Invoke([remote, null, null]);
+
+  private static RemoteObject Retain(RemoteObject remote) =>
+    (RemoteObject)typeof(RemoteObject).GetMethod("Retain",
+      BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(remote, null)!;
+
+  [TestCase(true)]
+  [TestCase(false)]
+  public async Task Test_RetainedObject_CanBeReleasedIndependently(bool releaseOriginalFirst)
+  {
+    using var peer = new PinPeer();
+    var original = peer.Add(new Item());
+    ulong token = original.RemoteToken;
+    int requests = peer.Requests.Length;
+    var retained = Retain(original);
+    Assert.That(retained, Is.Not.SameAs(original));
+    Assert.That(retained.RemoteToken, Is.EqualTo(token));
+    Assert.That(peer.Requests, Has.Length.EqualTo(requests), "retention requires no remote request");
+    Assert.That(peer.Pins, Is.EqualTo(1));
+
+    var first = releaseOriginalFirst ? original : retained;
+    var last = releaseOriginalFirst ? retained : original;
+    first.ReleaseReference();
+    first.ReleaseReference();
+    Assert.That(first.IsValid, Is.False);
+    Assert.That(last.IsValid, Is.True);
+    Assert.That(peer.IsPinned(token), Is.True);
+    Assert.That(() => Retain(first), Throws.InstanceOf<TargetInvocationException>()
+      .With.InnerException.TypeOf<ObjectDisposedException>());
+
+    last.ReleaseReference();
+    await Until(() => !peer.IsPinned(token));
+  }
+
+  [Test]
+  public async Task Test_PropertySubscription_OwnsAReferenceUntilDisposed()
+  {
+    using var peer = new PinPeer();
+    var remote = peer.Add(new Item());
+    ulong token = remote.RemoteToken;
+    var subscription = Subscribe(remote);
+    remote.ReleaseReference();
+    Assert.That(peer.IsPinned(token), Is.True, "the subscription keeps the object after the caller releases it");
+    subscription.Dispose();
+    subscription.Dispose();
+    await Until(() => !peer.IsPinned(token));
+    Assert.That(peer.Requests.Count(e => e == "/event_unsubscribe"), Is.EqualTo(1));
+  }
+
+  [Test]
+  public async Task Test_FailedPropertySubscription_ReturnsItsHolder()
+  {
+    using var peer = new PinPeer { FailSubscribe = true };
+    var remote = peer.Add(new Item());
+    ulong token = remote.RemoteToken;
+    Assert.That(() => Subscribe(remote), Throws.InstanceOf<TargetInvocationException>());
+    remote.ReleaseReference();
+    await Until(() => !peer.IsPinned(token));
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static (RemoteBatch Batch, WeakReference Proxy, ulong Token) RecordTemporaryInput(PinPeer peer)
+  {
+    var remote = peer.Add(new Item());
+    var proxy = (DynamicRemoteObject)remote.Dynamify();
+    var batch = new RemoteBatch();
+    batch.Output("name", batch.Read(batch.Input((object)proxy), "Name"));
+    return (batch, new WeakReference(proxy), remote.RemoteToken);
+  }
+
+  [Test]
+  public async Task Test_Batch_KeepsInputThroughAsyncExecutionAfterProxyIsCollected()
+  {
+    using var peer = new PinPeer { BatchEntered = Signal(), ContinueBatch = Signal() };
+    var recorded = RecordTemporaryInput(peer);
+    Collect();
+    Assert.That(recorded.Proxy.IsAlive, Is.False, "the batch owns a separate reference to the input");
+    Assert.That(peer.IsPinned(recorded.Token), Is.True);
+    var executing = recorded.Batch.ExecuteAsync(peer.Client);
+    await peer.BatchEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    Collect();
+    Assert.That(peer.IsPinned(recorded.Token), Is.True, "an awaited request still owns its inputs");
+    peer.ContinueBatch.SetResult(true);
+    var result = await executing.WaitAsync(TimeSpan.FromSeconds(5));
+    Assert.That(result.Values["name"].GetScalar<string>(), Is.EqualTo("retained"));
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static WeakReference RecordRawInput(PinPeer peer, out ulong token)
+  {
+    var remote = peer.Add(new Item());
+    token = remote.RemoteToken;
+    var batch = new RemoteBatch();
+    batch.Output("name", batch.Read(batch.Input((object)remote), "Name"));
+    remote.ReleaseReference();
+    Assert.That(batch.Execute(peer.Client).Values["name"].GetScalar<string>(), Is.EqualTo("retained"));
+    return new WeakReference(batch);
+  }
+
+  [Test]
+  public async Task Test_Batch_OwnsRawInputAndReturnsItWhenCollected()
+  {
+    using var peer = new PinPeer();
+    var batch = RecordRawInput(peer, out ulong token);
+    Collect();
+    Assert.That(batch.IsAlive, Is.False);
+    GCTimer.Start();
+    await Until(() => !peer.IsPinned(token));
+  }
+
+  [Test]
+  public async Task Test_OldHolder_CannotReleaseOrReplaceNewRegistrationsPin()
+  {
+    using var peer = new PinPeer();
+    var item = new Item();
+    var old = peer.Add(item);
+    ulong token = old.RemoteToken;
+    Assert.That(peer.Client.UnregisterClient(), Is.True);
+    Assert.That(peer.Client.RegisterClient(), Is.True);
+    var current = peer.Handle.GetRemoteObjectFromField(peer.Pin(item), typeof(Item).FullName!);
+    Assert.That(old.IsValid, Is.False);
+    Assert.That(() => Retain(old), Throws.InstanceOf<TargetInvocationException>()
+      .With.InnerException.TypeOf<ObjectDisposedException>());
+    Assert.That(current, Is.Not.SameAs(old));
+    old.ReleaseReference();
+    await peer.Client.ConnectAsync();
+    Assert.That(peer.Pins, Is.EqualTo(1), "the new registration's first pin is not surplus");
+    current.ReleaseReference();
+    await Until(() => !peer.IsPinned(token));
+  }
+
+  [TestCase(true)]
+  [TestCase(false)]
+  public async Task Test_LostUnregisterResponse_IsSettledBeforeNewRegistration(bool removed)
+  {
+    using var peer = new PinPeer { RemoveBeforeDrop = removed };
+    var item = new Item();
+    var old = peer.Add(item);
+    string original = peer.LastRegistration!;
+    peer.LoseUnregisterResponse = true;
+    Assert.That(peer.Client.TryUnregisterClient(TimeSpan.FromSeconds(1)), Is.False);
+    Assert.That(old.IsValid, Is.False);
+    Assert.That(peer.Client.RegisterClient(), Is.True);
+    Assert.That(peer.LastRegistration, Is.Not.EqualTo(original));
+    var current = peer.Handle.GetRemoteObjectFromField(peer.Pin(item), typeof(Item).FullName!);
+    old.ReleaseReference();
+    Assert.That(peer.Pins, Is.EqualTo(1));
+    current.ReleaseReference();
+    await Until(() => peer.Pins == 0);
+  }
+
+  [Test]
+  public async Task Test_QueuedRelease_CannotConsumeANewRegistrationsReference()
+  {
+    using var peer = new PinPeer();
+    var item = new Item();
+    ulong token = peer.Pin(item);
+    var scheduler = (ChannelScheduler)typeof(DiverCommunicator)
+      .GetField("_releaseScheduler", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(peer.Client)!;
+    var entered = Signal();
+    var proceed = Signal();
+    scheduler.Enqueue(async () => { entered.SetResult(true); await proceed.Task; });
+    await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    try
+    {
+      typeof(DiverCommunicator).GetMethod("ReleaseLater", BindingFlags.Instance | BindingFlags.NonPublic,
+        null, [typeof(ulong)], null)!.Invoke(peer.Client, [token]);
+      Assert.That(peer.Client.UnregisterClient(), Is.True);
+      Assert.That(peer.Client.RegisterClient(), Is.True);
+      Assert.That(peer.Pin(item), Is.EqualTo(token));
+      var drained = Signal();
+      scheduler.Enqueue(() => drained.SetResult(true));
+      proceed.SetResult(true);
+      await drained.Task.WaitAsync(TimeSpan.FromSeconds(5));
+      Assert.That(peer.Pins, Is.EqualTo(1), "the queued release belongs to the removed registration");
+      peer.Client.UnpinObject(token);
+      Assert.That(peer.IsPinned(token), Is.False);
+    }
+    finally
+    {
+      proceed.TrySetResult(true);
+    }
+  }
+
+  [Test]
+  public async Task Test_LateObjectReceipt_DoesNotReturnTheNewRegistrationsPin()
+  {
+    using var peer = new PinPeer { ObjectEntered = Signal(), ContinueObject = Signal() };
+    var item = new Item();
+    ulong token = peer.Pin(item);
+    var reading = Task.Run(() => peer.Handle.GetRemoteObject(token, typeof(Item).FullName!));
+    await peer.ObjectEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    Assert.That(peer.Client.UnregisterClient(), Is.True);
+    Assert.That(peer.Client.RegisterClient(), Is.True);
+    Assert.That(peer.Pin(item), Is.EqualTo(token));
+    peer.ContinueObject.SetResult(true);
+    var current = await reading.WaitAsync(TimeSpan.FromSeconds(5));
+    Assert.That(current.IsValid, Is.True, "retrying acquired a receipt from the current registration");
+    current.ReleaseReference();
+    await Until(() => peer.Pins == 1);
+    Assert.That(peer.IsPinned(token), Is.True, "the new registration's independent pin remains");
+    peer.Client.UnpinObject(token);
+    Assert.That(peer.IsPinned(token), Is.False);
+  }
+
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task Test_ReleaseAfterConnectionLoss_ReturnsTheOriginalRegistrationsPin(bool delayed)
+  {
+    using var peer = new PinPeer();
+    var remote = peer.Add(new Item());
+    ulong token = remote.RemoteToken;
+    string owner = peer.LastRegistration!;
+    peer.DropConnection();
+    await Until(() => !peer.Client.IsConnected);
+    remote.ReleaseReference(useJitter: delayed);
+    await Until(() => !peer.IsPinned(token));
+    Assert.That(peer.LastRegistration, Is.EqualTo(owner), "reconnecting retains the original registration");
+  }
+
+  [Test]
+  public async Task Test_TimedOutUnregister_CannotRemoveALaterRegistration()
+  {
+    using var peer = new PinPeer
+    {
+      DelayNextUnregister = true, UnregisterEntered = Signal(),
+      ContinueUnregister = Signal(), DelayedUnregisterCompleted = Signal()
+    };
+    var item = new Item();
+    ulong token = peer.Pin(item);
+    var unregistering = Task.Run(() => peer.Client.TryUnregisterClient(TimeSpan.FromMilliseconds(300)));
+    await peer.UnregisterEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    Assert.That(await unregistering, Is.False);
+    Assert.That(peer.Client.IsConnected, Is.True, "only the request timed out");
+    Assert.That(peer.Client.RegisterClient(), Is.True, "pending cleanup completed before registering again");
+    Assert.That(peer.Pin(item), Is.EqualTo(token));
+    peer.ContinueUnregister.SetResult(true);
+    await peer.DelayedUnregisterCompleted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    Assert.That(peer.Pins, Is.EqualTo(1), "the delayed old unregister cannot remove the fresh registration");
+    peer.Client.UnpinObject(token);
+    Assert.That(peer.IsPinned(token), Is.False);
+  }
+
+  [TestCase(1)]
+  [TestCase(3)]
+  public async Task Test_FailedMetadataAttempts_ReturnOnlyTheirAcquiredPins(int failures)
+  {
+    using var peer = new PinPeer { TypeFailures = failures };
+    ulong token = peer.Pin(new RetryItem());
+    if (failures == 3)
+      Assert.That(() => peer.Handle.GetRemoteObject(token, typeof(RetryItem).FullName!),
+        Throws.InstanceOf<InvalidOperationException>());
+    else
+      peer.Handle.GetRemoteObject(token, typeof(RetryItem).FullName!).ReleaseReference();
+    await Until(() => peer.Pins == 1);
+    Assert.That(peer.ObjectReads, Is.EqualTo(Math.Min(failures + 1, 3)));
+    Assert.That(peer.IsPinned(token), Is.True, "the independently owned original pin is intact");
+    peer.Client.UnpinObject(token);
+    Assert.That(peer.IsPinned(token), Is.False);
+  }
+
+  [TestCase(false, false)]
+  [TestCase(true, true)]
+  public async Task Test_FailedObjectReads_DoNotReleaseAPreviousAttemptsPin(bool takeReference, bool rejectRepeated)
+  {
+    using var peer = new PinPeer
+    {
+      TypeFailures = 3, TakeObjectReference = takeReference,
+      RejectRepeatedObjectReads = rejectRepeated
+    };
+    ulong token = peer.Pin(new RetryItem());
+    Assert.That(() => peer.Handle.GetRemoteObject(token, typeof(RetryItem).FullName!),
+      Throws.InstanceOf<InvalidOperationException>());
+    await Until(() => peer.Pins == 1);
+    Assert.That(peer.IsPinned(token), Is.True, "no failed attempt owns the caller's original pin");
+    peer.Client.UnpinObject(token);
+    Assert.That(peer.IsPinned(token), Is.False);
+  }
+
+}

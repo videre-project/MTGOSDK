@@ -37,7 +37,7 @@ public class DiverConnection
   /// Accepts connections, records each request's endpoint per connection, and
   /// answers a request once <see cref="Answer"/> allows it (never, by default).
   /// </summary>
-  private sealed class Peer : IDisposable
+  internal sealed class Peer : IDisposable
   {
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
     private readonly CancellationTokenSource _cts = new();
@@ -53,6 +53,8 @@ public class DiverConnection
     /// The response body for an endpoint (null: a success without data).
     /// </summary>
     public Func<string, byte[]?> Body { get; set; } = _ => null;
+
+    public Func<int, string, byte[], Task<byte[]?>>? Respond { get; set; }
 
     public Peer()
     {
@@ -118,21 +120,31 @@ public class DiverConnection
           int bodyLength = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(7, 4));
           var endpointBytes = new byte[endpointLength];
           await ReadExactlyAsync(stream, endpointBytes);
-          await ReadExactlyAsync(stream, new byte[bodyLength]);
+          var body = new byte[bodyLength];
+          await ReadExactlyAsync(stream, body);
           string endpoint = Encoding.UTF8.GetString(endpointBytes);
           lock (_connections) _requests[index].Add(endpoint);
-          _ = RespondAsync(index, endpoint, id, stream, writeLock);
+          _ = RespondAsync(index, endpoint, body, id, stream, writeLock);
         }
       }
       catch (Exception) { /* closed */ }
     }
 
-    private async Task RespondAsync(int index, string endpoint, int id, NetworkStream stream, SemaphoreSlim writeLock)
+    private async Task RespondAsync(int index, string endpoint, byte[] request, int id, NetworkStream stream, SemaphoreSlim writeLock)
     {
       try
       {
         if (!await Answer(index, endpoint)) return;
-        byte[] body = Body(endpoint) ?? MessagePackSerializer.Serialize(DiverResponse<object>.Success(null!));
+        byte[] body;
+        try
+        {
+          body = (Respond is null ? Body(endpoint) : await Respond(index, endpoint, request))
+            ?? MessagePackSerializer.Serialize(DiverResponse<object>.Success(null!));
+        }
+        catch (Exception error)
+        {
+          body = MessagePackSerializer.Serialize(DiverResponse<object>.FromError(error.Message));
+        }
         var frame = new byte[11 + body.Length];
         BinaryPrimitives.WriteInt32LittleEndian(frame, id);
         frame[4] = (byte)TcpMessageType.Response;

@@ -85,4 +85,26 @@ public class RequestPins
     Assert.That(RequestOwner.Unregistered.Unpin(_runtime, token), Is.True);
     Assert.That(IsPinned(token), Is.False);
   }
+
+  [Test]
+  public void Test_AReleaseForAnEarlierRegistration_KeepsTheCurrentPin()
+  {
+    var instance = new object();
+    ulong token = RequestOwner.Of(ClientA).Pin(_runtime, instance);
+    var owner = RequestOwner.Of(ClientA);
+
+    Assert.That(owner.Unpin(_runtime, token, "previous", "current"), Is.False);
+    Assert.That(IsPinned(token), Is.True, "the current registration still owns its reference");
+    Assert.That(owner.Unpin(_runtime, token, "current", "current"), Is.True);
+    Assert.That(IsPinned(token), Is.False);
+  }
+
+  [Test]
+  public void Test_AReleaseWithoutAnOwner_UsesItsConnection()
+  {
+    ulong token = RequestOwner.Of(ClientA).Pin(_runtime, new object());
+    Assert.That(RequestOwner.Of(ClientA).Unpin(_runtime, token, null, "current"), Is.True);
+    Assert.That(IsPinned(token), Is.False);
+  }
+
 }
