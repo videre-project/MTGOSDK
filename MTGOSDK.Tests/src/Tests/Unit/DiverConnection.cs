@@ -473,7 +473,8 @@ public class DiverConnection
 
       // The epoch ends (as a confirmed unregister ends it): the cleanup returns
       // although the lock is still held, and sends nothing.
-      SetField(client, "_epoch", 0L);
+      typeof(DiverCommunicator).GetMethod("EndRegistration", BindingFlags.Instance | BindingFlags.NonPublic)!
+        .Invoke(client, [new UnregisterClientRequest { ClientId = "retired" }]);
       await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
       Assert.That(peer.Requests(0), Does.Not.Contain("/unhook_method"));
     }
@@ -555,7 +556,7 @@ public class DiverConnection
   }
 
   [Test]
-  public void Test_CleanupAfterAnUnconfirmedUnregister_IsSent()
+  public void Test_CleanupAfterAnAlreadyRemovedRegistration_IsSkipped()
   {
     using var peer = SubscriptionPeer(() => false);
     var client = new DiverCommunicator("127.0.0.1", peer.Port);
@@ -567,7 +568,7 @@ public class DiverConnection
       Assert.That(client.UnregisterClient(), Is.True);
 
       client.EventUnsubscribe(onEvent);
-      Assert.That(peer.Requests(0).Last(), Is.EqualTo("/event_unsubscribe"));
+      Assert.That(peer.Requests(0), Does.Not.Contain("/event_unsubscribe"));
     }
     finally
     {

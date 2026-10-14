@@ -147,7 +147,7 @@ public class RemoteHarmony
         settled = 1;
         if (!instance.IsNull)
         {
-          RemoteObject roInstance = this._app.GetRemoteObjectFromField(instance.RemoteAddress, instance.Type,
+          RemoteObject roInstance = this._app.GetRemoteObjectFromField(instance,
             context.OwnsParameters);
           droInstance = roInstance.Dynamify();
           droInstance.__timestamp = context.Timestamp; // Preserve oora timestamp
@@ -160,7 +160,7 @@ public class RemoteHarmony
         // The Diver passes method arguments as one remote object array. Decode
         // its elements into local values and proxies before invoking the callback.
         settled = 2;
-        ro = _app.GetRemoteObjectFromField(args[0].RemoteAddress, args[0].Type, context.OwnsParameters);
+        ro = _app.GetRemoteObjectFromField(args[0], context.OwnsParameters);
       }
       finally
       {

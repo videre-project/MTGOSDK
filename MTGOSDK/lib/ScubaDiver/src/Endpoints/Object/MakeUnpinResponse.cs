@@ -27,7 +27,7 @@ public partial class Diver : IDisposable
 
     Log.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
     // A client returns only references it holds (or unattributed ones).
-    CurrentRequestOwner.Unpin(_runtime, objAddr);
+    CurrentRequestOwner.Unpin(_runtime, objAddr, request.PinOwner, s_requestPinOwner.Value);
 
     return s_okResponse;
   }

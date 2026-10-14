@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+#nullable enable
+
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Memory.Snapshot;
 
@@ -72,4 +74,12 @@ internal readonly struct RequestOwner
   /// </summary>
   public bool Unpin(SnapshotRuntime runtime, ulong token) =>
     !IsGone && runtime.UnpinObject(token, Registration);
+
+  /// <summary>
+  /// Returns a receipt only through the registration that acquired it. Older
+  /// clients omit the receipt owner and retain the connection-based behavior.
+  /// </summary>
+  public bool Unpin(SnapshotRuntime runtime, ulong token,
+    string? receiptOwner, string? connectionOwner) =>
+    (receiptOwner is null || receiptOwner == connectionOwner) && Unpin(runtime, token);
 }

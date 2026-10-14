@@ -13,6 +13,13 @@ public class UnpinRequest
 {
   [Key(0)]
   public ulong Address { get; set; }
+
+  /// <summary>
+  /// The registration that acquired the pin. Null uses the connection's owner
+  /// for compatibility with clients that do not supply this field.
+  /// </summary>
+  [Key(1)]
+  public string? PinOwner { get; set; }
 }
 
 [MessagePackObject]

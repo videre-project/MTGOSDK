@@ -103,20 +103,20 @@ public partial class Diver : IDisposable
   private static readonly TimeSpan s_clientMonitorPeriod = TimeSpan.FromSeconds(10);
 
   /// <summary>
-  /// Whom the current request's pins are counted for, resolved now (see
-  /// <see cref="RequestOwner.Resolve"/>).
+  /// The registration captured when the current request began. Later changes
+  /// on the same connection cannot transfer the request's pin ownership.
   /// </summary>
-  private RequestOwner CurrentRequestOwner
+  private RequestOwner CurrentRequestOwner =>
+    s_requestOwner.Value ?? ResolveRequestOwner();
+
+  private RequestOwner ResolveRequestOwner()
   {
-    get
+    if (s_requestConnection.Value is not Guid connection) return RequestOwner.Unregistered;
+    lock (_registeredPidsLock)
     {
-      if (s_requestConnection.Value is not Guid connection) return RequestOwner.Unregistered;
-      lock (_registeredPidsLock)
-      {
-        return RequestOwner.Resolve(
-          _connectionClients.TryGetValue(connection, out var client) ? client.Id : null,
-          _tcpServer?.IsOpen(connection) == true);
-      }
+      return RequestOwner.Resolve(
+        _connectionClients.TryGetValue(connection, out var client) ? client.Id : null,
+        _tcpServer?.IsOpen(connection) == true);
     }
   }
 

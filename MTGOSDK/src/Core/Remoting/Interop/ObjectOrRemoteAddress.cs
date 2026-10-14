@@ -6,6 +6,8 @@
 
 using MessagePack;
 
+using MTGOSDK.Core.Remoting.Interop.Interactions;
+
 
 namespace MTGOSDK.Core.Remoting.Interop;
 
@@ -13,9 +15,18 @@ namespace MTGOSDK.Core.Remoting.Interop;
 /// Represents either an encoded object (for primitive types like int, string,
 /// primitive arrays...) or info of a remote object.
 /// </summary>
-[MessagePackObject]
-public class ObjectOrRemoteAddress
+[MessagePackObject(AllowPrivate = true)]
+public class ObjectOrRemoteAddress : IPinResponse
 {
+  [IgnoreMember]
+  internal string? PinOwner { get; set; }
+
+  [IgnoreMember]
+  string? IPinResponse.PinOwner
+  {
+    set => PinOwner = value;
+  }
+
   /// <summary>
   /// Whether <see cref="RemoteAddress"/> or <see cref="EncodedObject"/> are set.
   /// </summary>

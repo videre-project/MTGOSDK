@@ -699,7 +699,11 @@ public abstract class DLRWrapper : SerializableBase
           // GetRemoteObjectFromField takes the item's pin over (or returns it if
           // it fails), so it leaves the iterator's ownership first.
           consumedPins = i + 1;
-          var remoteObject = RemoteClient.@client.GetRemoteObjectFromField(itemToken, itemTypeName);
+          var remoteObject = RemoteClient.@client.GetRemoteObjectFromField(new Remoting.Interop.ObjectOrRemoteAddress
+          {
+            IsRemoteAddress = true, RemoteAddress = itemToken,
+            Type = itemTypeName, PinOwner = response.PinOwner
+          });
           var itemDro = remoteObject.Dynamify() as Remoting.Types.DynamicRemoteObject;
 
           // Create the wrapper instance (e.g., Tournament)
@@ -748,7 +752,7 @@ public abstract class DLRWrapper : SerializableBase
       {
         for (int k = consumedPins; k < itemTokens.Count; k++)
         {
-          try { RemoteClient.@client.Communicator.UnpinObject(itemTokens[k]); }
+          try { RemoteClient.@client.Communicator.ReleaseLater(itemTokens[k], response.PinOwner); }
           catch { /* the client may already be disconnected */ }
         }
       }

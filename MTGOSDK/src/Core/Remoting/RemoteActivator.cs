@@ -53,8 +53,7 @@ public class RemoteActivator(DiverCommunicator communicator, RemoteHandle app)
 
     // Get proxy object
     var remoteObject = app.GetRemoteObjectFromField(
-        invoRes.ReturnedObjectOrAddress.RemoteAddress,
-        invoRes.ReturnedObjectOrAddress.Type);
+        invoRes.ReturnedObjectOrAddress);
 
     return remoteObject;
   }
@@ -71,8 +70,7 @@ public class RemoteActivator(DiverCommunicator communicator, RemoteHandle app)
 
     // Get proxy object
     var remoteObject = app.GetRemoteObjectFromField(
-        invoRes.ReturnedObjectOrAddress.RemoteAddress,
-        invoRes.ReturnedObjectOrAddress.Type);
+        invoRes.ReturnedObjectOrAddress);
 
     return remoteObject;
   }
@@ -106,8 +104,7 @@ public class RemoteActivator(DiverCommunicator communicator, RemoteHandle app)
 
     // Get proxy object
     var remoteObject = app.GetRemoteObjectFromField(
-        invoRes.ReturnedObjectOrAddress.RemoteAddress,
-        invoRes.ReturnedObjectOrAddress.Type);
+        invoRes.ReturnedObjectOrAddress);
 
     return remoteObject;
   }

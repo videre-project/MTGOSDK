@@ -188,7 +188,7 @@ public static class RemoteFunctionsInvokeHelper
     }
     else
     {
-      RemoteObject ro = app.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
+      RemoteObject ro = app.GetRemoteObjectFromField(oora);
       dynamic dro = ro.Dynamify();
       dro.__timestamp = oora.Timestamp;
 

@@ -210,8 +210,7 @@ public class RemoteObject : IObjectReference
         for (; resolved < args.Length; resolved++)
         {
           // Takes over this client's pin reference to the argument.
-          RemoteObject ro = _app.GetRemoteObjectFromField(args[resolved].RemoteAddress, args[resolved].Type,
-            context.OwnsParameters);
+          RemoteObject ro = _app.GetRemoteObjectFromField(args[resolved], context.OwnsParameters);
           DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
           dro.__timestamp = args[resolved].Timestamp;
 

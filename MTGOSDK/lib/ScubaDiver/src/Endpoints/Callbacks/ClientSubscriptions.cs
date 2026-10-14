@@ -51,7 +51,7 @@ public partial class Diver : IDisposable
         _unregisteredSubscriptions[token] = shares + 1;
         return;
       }
-      if (!client.Removed)
+      if (!client.Removed && client.Id == CurrentRequestOwner.Registration)
       {
         client.Subscriptions.Add((token, hook));
         return;
@@ -85,6 +85,7 @@ public partial class Diver : IDisposable
         }
         return SubscriptionOwner.Unregistered;
       }
+      if (client.Id != CurrentRequestOwner.Registration) return SubscriptionOwner.NotOwned;
       return client.Subscriptions.Remove((token, hook)) ? SubscriptionOwner.Owned : SubscriptionOwner.NotOwned;
     }
   }

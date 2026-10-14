@@ -39,18 +39,33 @@ public class DiverCommunicator : IDisposable
   private volatile bool _registered;
 
   // This communicator's own registration within its process.
-  private readonly string _clientId = Guid.NewGuid().ToString("N");
+  private string _clientId = Guid.NewGuid().ToString("N");
 
-  // Registration epochs: one per registration of this client in the Diver.
-  // An epoch starts with the first registration while none is current, is
-  // kept by later registrations (the Diver keeps the same registration for
-  // this client) and ends only when the Diver confirms the client was removed.
-  // Every epoch other than the current one (0: none) has ended. Registrations,
-  // unregistrations and subscriptions hold the lock across their request;
-  // the current epoch is changed only under it and read without it.
+  // Receipts and subscriptions keep the epoch in which they were acquired.
+  // Registering and unregistering publish a new immutable snapshot. Ordinary
+  // reconnects reuse it because the Diver retains that client's registration.
+  // Registration requests and cleanup hold the lock so a cleanup cannot move
+  // onto a different registration while it is being sent.
   private readonly object _registrationLock = new();
   private long _epochs;
-  private long _epoch;
+  private sealed record Registration(long Epoch, string PinOwner);
+  private volatile Registration _registration = new(0, "");
+  private volatile UnregisterClientRequest? _pendingUnregister;
+
+  internal long RegistrationEpoch => _registration.Epoch;
+  internal string PinOwner => _registration.PinOwner;
+
+  internal long GetReceiptEpoch(string? owner)
+  {
+    var registration = _registration;
+    if (owner is not null && owner != registration.PinOwner)
+      throw new ObjectDisposedException(nameof(DiverCommunicator),
+        "The response belongs to an earlier client registration.");
+    return registration.Epoch;
+  }
+
+  internal bool IsRegistrationCurrent(long epoch) =>
+    !HasEnded(epoch) && !_isDisposed;
 
   // The epoch each event callback and hook callback was subscribed under (none:
   // subscribed while unregistered). The Diver removed those of an ended epoch
@@ -228,6 +243,9 @@ public class DiverCommunicator : IDisposable
     if (endpoint == "/invoke_callback")
     {
       var request = MessagePackSerializer.Deserialize<CallbackInvocationRequest>(body);
+      if (request.PinOwner is not null && request.PinOwner != PinOwner) return;
+      foreach (var argument in request.Parameters)
+        argument.PinOwner = request.PinOwner;
       Interlocked.Increment(ref s_callbacksReceived);
       // Normalize both timestamps to UTC before measuring delivery latency because
       // the deserialized DateTime kind may differ from the Diver's original timestamp.
@@ -302,7 +320,7 @@ public class DiverCommunicator : IDisposable
     {
       if (argument is null || !argument.IsRemoteAddress || argument.IsNull || argument.IsType)
         continue;
-      ReleaseLater(argument.RemoteAddress);
+      ReleaseLater(argument.RemoteAddress, argument.PinOwner);
     }
   }
 
@@ -316,12 +334,22 @@ public class DiverCommunicator : IDisposable
   /// client's references when it unregisters or its process exits.
   /// </remarks>
   internal void ReleaseLater(ulong address) =>
+    ReleaseLater(address, RegistrationEpoch);
+
+  internal void ReleaseLater(ulong address, string? owner)
+  {
+    var registration = _registration;
+    if (owner is not null && owner != registration.PinOwner) return;
+    ReleaseLater(address, registration.Epoch);
+  }
+
+  internal void ReleaseLater(ulong address, long epoch) =>
     _releaseScheduler.Enqueue(() =>
     {
       if (_isDisposed) return;
       try
       {
-        UnpinObject(address);
+        UnpinObject(address, epoch);
       }
       catch (Exception ex)
       {
@@ -342,6 +370,19 @@ public class DiverCommunicator : IDisposable
 
     if (!_tcp.IsConnected)
       ConnectRegisteredAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+    if (_pendingUnregister is not null)
+    {
+      lock (_registrationLock)
+      {
+        if (_pendingUnregister is not null)
+        {
+          _tcp.SendRequestAsync<UnregisterClientResponse>("/unregister_client",
+            MessagePackSerializer.Serialize(_pendingUnregister)).GetAwaiter().GetResult();
+          _pendingUnregister = null;
+        }
+      }
+    }
   }
 
   /// <summary>
@@ -467,11 +508,11 @@ public class DiverCommunicator : IDisposable
     return SendRequest<ObjectDump>("object", request);
   }
 
-  public void UnpinObject(ulong address)
-  {
-    var request = new UnpinRequest { Address = address };
-    SendRequest("unpin", request);
-  }
+  public void UnpinObject(ulong address) =>
+    UnpinObject(address, RegistrationEpoch);
+
+  internal void UnpinObject(ulong address, long epoch) =>
+    SendCleanup(epoch, "unpin", new UnpinRequest { Address = address });
 
   public InvocationResults InvokeMethod(
     ulong targetAddr,
@@ -503,8 +544,10 @@ public class DiverCommunicator : IDisposable
       {
         var request = new RegisterClientRequest { ProcessId = _process_id.Value, ClientId = _clientId };
         SendRequest("register_client", request);
+        string owner = _clientId is not null ? $"{_process_id}/{_clientId}" : "";
+        if (_clientId is not null && (!_registered || _registration.PinOwner != owner))
+          _registration = new Registration(++_epochs, owner);
         _registered = true;
-        if (_epoch == 0) Volatile.Write(ref _epoch, ++_epochs);
         return true;
       }
       catch (Exception ex)
@@ -519,45 +562,50 @@ public class DiverCommunicator : IDisposable
   {
     lock (_registrationLock)
     {
-      _process_id = process_id ?? Process.GetCurrentProcess().Id;
-      long epoch = _epoch;
-
+      var request = new UnregisterClientRequest
+      {
+        ProcessId = process_id ?? _process_id ?? Process.GetCurrentProcess().Id,
+        ClientId = _clientId
+      };
       try
       {
-        var request = new UnregisterClientRequest { ProcessId = _process_id.Value, ClientId = _clientId };
-        EndEpochIfRemoved(epoch, request, SendRequest<UnregisterClientResponse>("unregister_client", request));
+        SendRequest<UnregisterClientResponse>("unregister_client", request);
         return true;
       }
       catch
       {
+        if (request.ClientId is not null) _pendingUnregister = request;
         return false;
       }
       finally
       {
-        _registered = false;
-        _process_id = null;
+        EndRegistration(request);
       }
     }
   }
 
   /// <summary>
-  /// Ends <paramref name="epoch"/> once the Diver confirmed it removed this
-  /// client's registration (and so its subscriptions and hooks). A request
-  /// without a client id is an older client's (as the tests emulate one): the
-  /// Diver keeps its subscriptions, so its epoch does not end.
-  /// Call under <see cref="_registrationLock"/>.
+  /// Invalidates local holders once unregistering was attempted. A lost response
+  /// leaves cleanup pending, so the next request confirms that the old client is
+  /// absent before proceeding. A fresh client id prevents a delayed unregister
+  /// from removing a later registration.
   /// </summary>
-  private void EndEpochIfRemoved(long epoch, UnregisterClientRequest request, UnregisterClientResponse response)
+  private void EndRegistration(UnregisterClientRequest request)
   {
-    if (response.WasRemoved && request.ClientId != null && epoch != 0 && _epoch == epoch)
-      Volatile.Write(ref _epoch, 0);
+    _registered = false;
+    _process_id = null;
+    if (request.ClientId is not null)
+    {
+      _registration = new Registration(++_epochs, "");
+      _clientId = Guid.NewGuid().ToString("N");
+    }
   }
 
   /// <summary>
   /// Whether a subscription made under <paramref name="epoch"/> was removed by
   /// the Diver with its registration. Never waits for a request in progress.
   /// </summary>
-  private bool HasEnded(long epoch) => Volatile.Read(ref _epoch) != epoch;
+  private bool HasEnded(long epoch) => _registration.Epoch != epoch;
 
   /// <summary>
   /// Unregisters this client if it is registered and connected, waiting at
@@ -568,7 +616,7 @@ public class DiverCommunicator : IDisposable
   /// </summary>
   public bool TryUnregisterClient(TimeSpan timeout)
   {
-    if (!_registered || _process_id is not int pid || !_tcp.IsConnected)
+    if (!_registered || _process_id is null || !_tcp.IsConnected)
       return false;
     var watch = Stopwatch.StartNew();
     // A subscription or registration still waiting for the Diver holds the
@@ -582,15 +630,26 @@ public class DiverCommunicator : IDisposable
         Log.Debug("Unregistering from the Diver did not start in time.");
         return false;
       }
-      long epoch = _epoch;
+      if (!_registered || _process_id is not int currentPid) return false;
       TimeSpan left = timeout - watch.Elapsed;
       using var cts = new CancellationTokenSource(left > TimeSpan.Zero ? left : TimeSpan.Zero);
-      var request = new UnregisterClientRequest { ProcessId = pid, ClientId = _clientId };
-      var response = _tcp.SendRequestAsync<UnregisterClientResponse>(
-        "/unregister_client", MessagePackSerializer.Serialize(request), cts.Token)
-        .GetAwaiter().GetResult();
-      EndEpochIfRemoved(epoch, request, response);
-      return true;
+      var request = new UnregisterClientRequest { ProcessId = currentPid, ClientId = _clientId };
+      try
+      {
+        _tcp.SendRequestAsync<UnregisterClientResponse>(
+          "/unregister_client", MessagePackSerializer.Serialize(request), cts.Token)
+          .GetAwaiter().GetResult();
+        return true;
+      }
+      catch
+      {
+        if (request.ClientId is not null) _pendingUnregister = request;
+        throw;
+      }
+      finally
+      {
+        EndRegistration(request);
+      }
     }
     catch (Exception ex)
     {
@@ -599,8 +658,6 @@ public class DiverCommunicator : IDisposable
     }
     finally
     {
-      _registered = false;
-      _process_id = null;
       if (locked) Monitor.Exit(_registrationLock);
     }
   }
@@ -910,7 +967,7 @@ public class DiverCommunicator : IDisposable
     // change overlaps it.
     lock (_registrationLock)
     {
-      long epoch = _registered ? _epoch : 0;
+      long epoch = _registered ? RegistrationEpoch : 0;
       var regRes = SendRequest<EventRegistrationResults>("event_subscribe", request);
       if (epoch != 0) _eventEpochs[callback] = epoch;
       else _eventEpochs.TryRemove(callback, out _);
@@ -934,35 +991,38 @@ public class DiverCommunicator : IDisposable
       throw new Exception("EventUnsubscribe: callback not found");
 
     _eventEpochs.TryRemove(callback, out long epoch);
-    SendCleanup(epoch, "event_unsubscribe", new EventUnsubscriptionRequest { Token = token });
+    SendCleanup(epoch, "event_unsubscribe", new EventUnsubscriptionRequest { Token = token },
+      unregisteredSubscription: epoch == 0);
   }
 
   /// <summary>
-  /// Sends the remote cleanup of a callback subscribed under <paramref name="epoch"/>
-  /// (0: while unregistered), unless the Diver removed it with this client's
-  /// registration (the epoch ended). A cleanup that is sent holds the
-  /// registration lock and checks again, so no registration change overlaps
-  /// it (it would otherwise carry the request on a newer registration and
-  /// remove that registration's share of a shared hook). While it waits for
-  /// the lock it keeps checking, so a cleanup whose epoch ends meanwhile
-  /// returns without waiting for another request in progress.
+  /// Sends cleanup only for the registration that acquired the reference or
+  /// subscription. The registration lock covers the request so registering again
+  /// cannot redirect it to another owner. A retired cleanup returns without
+  /// waiting for a registration request already in progress. A subscription
+  /// created before registration can still send cleanup while unregistered.
   /// </summary>
-  private void SendCleanup(long epoch, string endpoint, object request)
+  private void SendCleanup(long epoch, string endpoint, object request,
+    bool unregisteredSubscription = false)
   {
+    bool IsRetired() => HasEnded(epoch) &&
+      !(unregisteredSubscription && PinOwner.Length == 0);
+
     bool locked = false;
     try
     {
       while (!locked)
       {
-        if (epoch != 0 && HasEnded(epoch))
+        if (IsRetired())
           return;
         if (_isDisposed)
           return;
         Monitor.TryEnter(_registrationLock, s_cleanupLockSlice, ref locked);
       }
-      if (epoch != 0 && HasEnded(epoch))
+      if (IsRetired())
         return;
 
+      if (request is UnpinRequest pin) pin.PinOwner = PinOwner;
       SendRequest(endpoint, request);
     }
     catch (ObjectDisposedException ex) when (IsRemoteShutdown(ex))
@@ -1029,7 +1089,7 @@ public class DiverCommunicator : IDisposable
     // change overlaps it.
     lock (_registrationLock)
     {
-      long epoch = _registered ? _epoch : 0;
+      long epoch = _registered ? RegistrationEpoch : 0;
       var regRes = SendRequest<EventRegistrationResults>("hook_method", req);
       if (epoch != 0) _hookEpochs[callback] = epoch;
       else _hookEpochs.TryRemove(callback, out _);
@@ -1045,7 +1105,8 @@ public class DiverCommunicator : IDisposable
       throw new Exception("UnhookMethod: callback not found");
 
     _hookEpochs.TryRemove(callback, out long epoch);
-    SendCleanup(epoch, "unhook_method", new HookUnsubscriptionRequest { Token = token });
+    SendCleanup(epoch, "unhook_method", new HookUnsubscriptionRequest { Token = token },
+      unregisteredSubscription: epoch == 0);
   }
 
   private bool IsRemoteShutdown(ObjectDisposedException ex) =>

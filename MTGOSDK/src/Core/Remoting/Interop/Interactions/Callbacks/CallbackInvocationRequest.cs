@@ -41,4 +41,11 @@ public class CallbackInvocationRequest
   /// </summary>
   [Key(6)]
   public bool ParametersPinnedPerRecipient { get; set; }
+
+  /// <summary>
+  /// The recipient registration that owns the callback's parameter references.
+  /// Null preserves delivery from Divers that omit registration metadata.
+  /// </summary>
+  [Key(7)]
+  public string? PinOwner { get; set; }
 }

@@ -168,29 +168,32 @@ public class RemoteHandle : DLRWrapper, IDisposable
     //  - None: no reference was taken (heap lookups), or a new ref adopted it.
     internal enum PinReceipt { None, Surplus }
 
-    private void SettleReceipt(ulong pinnedAddress, ref PinReceipt receipt)
+    private void SettleReceipt(ulong pinnedAddress, long epoch, ref PinReceipt receipt)
     {
       var pending = receipt;
       receipt = PinReceipt.None;
       if (pending == PinReceipt.None) return;
       // Returned in the background: the caller's ref still holds its own
       // reference, so the object stays pinned for as long as it is held.
-      _app.Communicator.ReleaseLater(pinnedAddress);
+      _app.Communicator.ReleaseLater(pinnedAddress, epoch);
     }
 
     private RemoteObject PublishRemoteObjectRef(
       ulong pinnedAddress,
       Func<RemoteObjectRef> createRef,
+      long epoch,
       ref PinReceipt receipt)
     {
       lock (GetRemoteObjectRefLock(pinnedAddress))
       {
+        if (!_app.Communicator.IsRegistrationCurrent(epoch))
+          throw new ObjectDisposedException(nameof(RemoteObject));
         if (TryGetLiveRemoteObjectRef(pinnedAddress, out var existingRef))
         {
           try
           {
             var shared = new RemoteObject(existingRef, _app);
-            SettleReceipt(pinnedAddress, ref receipt);
+            SettleReceipt(pinnedAddress, epoch, ref receipt);
             return shared;
           }
           catch (ObjectDisposedException)
@@ -269,6 +272,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
         }
       }
 
+      long epoch = _app.Communicator.RegistrationEpoch;
       ObjectDump od = null!;
       TypeDump td = null!;
       Retry(() =>
@@ -276,6 +280,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
         try
         {
           od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
+          epoch = _app.Communicator.GetReceiptEpoch(od.PinOwner);
 
           // Check if we have a cached RemoteType with its SourceTypeDump.
           RemoteType rt = TypeResolver.Instance.ResolveRemoteType(_app, od.Type);
@@ -304,8 +309,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
       var receipt = od.ReferenceTaken ? PinReceipt.Surplus : PinReceipt.None;
       return PublishRemoteObjectRef(
         od.PinnedAddress,
-        () => new RemoteObjectRef(od, td, _app.Communicator),
-        ref receipt);
+        () => new RemoteObjectRef(od, td, _app.Communicator, epoch),
+        epoch, ref receipt);
     }
 
 
@@ -317,6 +322,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
     private RemoteObject GetRemoteObjectFromFieldUncached(
       ulong pinnedAddress,
       string typeName,
+      long epoch,
       ref PinReceipt receipt)
     {
       if (TryGetLiveRemoteObjectRef(pinnedAddress, out var existingRef))
@@ -324,7 +330,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
         try
         {
           var shared = new RemoteObject(existingRef, _app);
-          SettleReceipt(pinnedAddress, ref receipt);
+          SettleReceipt(pinnedAddress, epoch, ref receipt);
           return shared;
         }
         catch (ObjectDisposedException)
@@ -359,8 +365,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
       return PublishRemoteObjectRef(
         pinnedAddress,
-        () => new RemoteObjectRef(pinnedAddress, typeName, td, _app.Communicator),
-        ref receipt);
+        () => new RemoteObjectRef(pinnedAddress, typeName, td, _app.Communicator, epoch),
+        epoch, ref receipt);
     }
 
 
@@ -396,22 +402,24 @@ public class RemoteHandle : DLRWrapper, IDisposable
     public RemoteObject GetRemoteObjectFromField(
       ulong pinnedAddress,
       string typeName,
-      bool ownsReference)
+      bool ownsReference,
+      string? pinOwner = null)
     {
+      long epoch = _app.Communicator.GetReceiptEpoch(pinOwner);
       var receipt = ownsReference ? PinReceipt.Surplus : PinReceipt.None;
       try
       {
         if (TryAcquireCached(pinnedAddress, out var cached))
         {
-          SettleReceipt(pinnedAddress, ref receipt);
+          SettleReceipt(pinnedAddress, epoch, ref receipt);
           return cached;
         }
         return PublishToCache(pinnedAddress,
-          GetRemoteObjectFromFieldUncached(pinnedAddress, typeName, ref receipt));
+          GetRemoteObjectFromFieldUncached(pinnedAddress, typeName, epoch, ref receipt));
       }
       finally
       {
-        SettleReceipt(pinnedAddress, ref receipt); // only after a failure
+        SettleReceipt(pinnedAddress, epoch, ref receipt); // only after a failure
       }
     }
   }
@@ -652,6 +660,11 @@ public class RemoteHandle : DLRWrapper, IDisposable
   {
     return _remoteObjects.GetRemoteObjectFromField(pinnedAddress, typeName, ownsReference);
   }
+
+  internal RemoteObject GetRemoteObjectFromField(ObjectOrRemoteAddress value,
+    bool ownsReference = true) =>
+    _remoteObjects.GetRemoteObjectFromField(value.RemoteAddress, value.Type,
+      ownsReference, value.PinOwner);
 
   public RemoteObjectCacheDiagnostics GetRemoteObjectCacheDiagnostics() =>
     _remoteObjects.GetDiagnostics();

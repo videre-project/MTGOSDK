@@ -175,7 +175,7 @@ public partial class Diver : IDisposable
           _runtime.UnpinObject,
           _runtime.GetObjectToken);
 
-        CallbackInvocationRequest Callback(bool owned) => new()
+        CallbackInvocationRequest Callback(bool owned, string owner) => new()
         {
           Token = token,
           Timestamp = timestamp,
@@ -183,14 +183,24 @@ public partial class Diver : IDisposable
           Capture = capture,
           CaptureError = captureError,
           CaptureSequence = sequence,
-          ParametersPinnedPerRecipient = owned
+          ParametersPinnedPerRecipient = owned,
+          PinOwner = owner
         };
-        var ownedCallback = Callback(owned: true);
-        var sharedCallback = Callback(owned: false);
+        var sharedCallback = Callback(owned: false, "");
         return recipient =>
-          prepared.Owners.ContainsKey(recipient) ? ownedCallback :
-          prepared.SharedRecipients.Contains(recipient) ? sharedCallback :
-          null;
+        {
+          if (prepared.Owners.TryGetValue(recipient, out int owner))
+          {
+            lock (_registeredPidsLock)
+            {
+              if (_connectionClients.TryGetValue(recipient, out var client) &&
+                  client.Id == owner && !client.Removed)
+                return Callback(owned: true, client.Key);
+            }
+            return null;
+          }
+          return prepared.SharedRecipients.Contains(recipient) ? sharedCallback : null;
+        };
       },
       unsent =>
       {

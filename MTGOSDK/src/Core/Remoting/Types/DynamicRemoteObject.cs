@@ -379,7 +379,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
     // Remote object - wrap in DynamicRemoteObject using lightweight path
     // /get_field already pinned the object, so we skip /object call
-    RemoteObject ro = __ra.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
+    RemoteObject ro = __ra.GetRemoteObjectFromField(oora);
     var dro = ro.Dynamify() as DynamicRemoteObject;
     dro.__timestamp = oora.Timestamp;
 
@@ -1032,7 +1032,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       }
       else if (item.IsRemoteAddress)
       {
-        var remoteObject = __ra.GetRemoteObjectFromField(item.RemoteAddress, item.Type);
+        var remoteObject = __ra.GetRemoteObjectFromField(item);
         var dro = remoteObject.Dynamify() as DynamicRemoteObject;
         dro.__timestamp = item.Timestamp;
 

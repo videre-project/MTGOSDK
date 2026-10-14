@@ -27,6 +27,13 @@ public class DiverResponse<T>
   [Key(3)]
   public T Data { get; set; }
 
+  /// <summary>
+  /// The requesting registration's key, or an empty string for shared pins.
+  /// Null means the Diver did not provide registration metadata.
+  /// </summary>
+  [Key(4)]
+  public string? PinOwner { get; set; }
+
   public static DiverResponse<T> Success(T data) => new() { Data = data };
 
   public static DiverResponse<T> FromError(string message, string stackTrace = null) =>

@@ -9,9 +9,18 @@ using MessagePack;
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 
-[MessagePackObject]
-public class ObjectDump
+[MessagePackObject(AllowPrivate = true)]
+public class ObjectDump : IPinResponse
 {
+  [IgnoreMember]
+  internal string? PinOwner { get; set; }
+
+  [IgnoreMember]
+  string? IPinResponse.PinOwner
+  {
+    set => PinOwner = value;
+  }
+
   [Key(0)]
   public ObjectType ObjectType { get; set; }
   [Key(1)]

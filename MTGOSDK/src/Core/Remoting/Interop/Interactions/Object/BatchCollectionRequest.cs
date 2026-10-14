@@ -54,9 +54,18 @@ public class BatchCollectionRequest
 /// in a columnar layout. Property names and types appear once in the schema;
 /// values are stored as <c>Columns[propertyIndex][itemIndex]</c>.
 /// </summary>
-[MessagePackObject]
-public class BatchCollectionResponse
+[MessagePackObject(AllowPrivate = true)]
+public class BatchCollectionResponse : IPinResponse
 {
+  [IgnoreMember]
+  internal string? PinOwner { get; set; }
+
+  [IgnoreMember]
+  string? IPinResponse.PinOwner
+  {
+    set => PinOwner = value;
+  }
+
   /// <summary>
   /// Property path names (e.g., "Name", "Id"). Defines column order.
   /// </summary>

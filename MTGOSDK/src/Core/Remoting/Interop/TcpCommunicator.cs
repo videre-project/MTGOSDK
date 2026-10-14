@@ -195,6 +195,8 @@ public class TcpCommunicator : TcpPipelineBase
         throw new Core.Exceptions.ExternalErrorException(errorMsg);
       }
 
+      if (wrapper.Data is IPinResponse pins)
+        pins.PinOwner = wrapper.PinOwner;
       return wrapper.Data;
     }
     finally

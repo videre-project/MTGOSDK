@@ -81,7 +81,7 @@ public class RemoteFieldInfo(
       }
       else if (oora.IsRemoteAddress)
       {
-        var remoteObject = App.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
+        var remoteObject = App.GetRemoteObjectFromField(oora);
         dynamic dro = remoteObject.Dynamify();
         dro.__timestamp = oora.Timestamp;
 
@@ -138,7 +138,7 @@ public class RemoteFieldInfo(
       // nothing here wraps it, so that reference is returned.
       ObjectOrRemoteAddress result = ro.SetField(Name, remoteNewValue);
       if (result is { IsRemoteAddress: true, IsNull: false, IsType: false })
-        (App ?? RemoteClient.@client)?.Communicator?.ReleaseLater(result.RemoteAddress);
+        (App ?? RemoteClient.@client)?.Communicator?.ReleaseLater(result.RemoteAddress, result.PinOwner);
       return;
     }
 

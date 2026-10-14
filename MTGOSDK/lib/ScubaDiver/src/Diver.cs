@@ -41,6 +41,8 @@ public partial class Diver : IDisposable
 
   private static readonly AsyncLocal<byte[]> s_requestBody = new();
   private static readonly AsyncLocal<Guid?> s_requestConnection = new();
+  private static readonly AsyncLocal<RequestOwner?> s_requestOwner = new();
+  private static readonly AsyncLocal<string> s_requestPinOwner = new();
 
   private readonly Dictionary<string, Func<byte[], byte[]>> _tcpHandlers;
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
@@ -161,6 +163,14 @@ public partial class Diver : IDisposable
     s_requestBody.Value = body;
     s_requestConnection.Value = connection;
     NoteRequest(connection, endpoint);
+    var previousOwner = s_requestOwner.Value;
+    var previousPinOwner = s_requestPinOwner.Value;
+    lock (_registeredPidsLock)
+    {
+      s_requestOwner.Value = ResolveRequestOwner();
+      s_requestPinOwner.Value = _connectionClients.TryGetValue(connection, out var client)
+        ? client.Key : "";
+    }
     long started = Stopwatch.GetTimestamp();
     try
     {
@@ -176,6 +186,8 @@ public partial class Diver : IDisposable
       // Restore the enclosing request if a handler invoked another request locally.
       s_requestBody.Value = previousBody;
       s_requestConnection.Value = previousConnection;
+      s_requestOwner.Value = previousOwner;
+      s_requestPinOwner.Value = previousPinOwner;
       long elapsed = Stopwatch.GetTimestamp() - started;
       var metrics = s_endpointMetrics.GetOrAdd(endpoint, _ => new EndpointMetrics());
       Interlocked.Increment(ref metrics.Count);
@@ -208,8 +220,12 @@ public partial class Diver : IDisposable
     return MessagePackSerializer.Serialize(errResponse);
   }
 
-  public static byte[] WrapSuccess<T>(T data) =>
-    MessagePackSerializer.Serialize(DiverResponse<T>.Success(data));
+  public static byte[] WrapSuccess<T>(T data)
+  {
+    var response = DiverResponse<T>.Success(data);
+    response.PinOwner = s_requestPinOwner.Value;
+    return MessagePackSerializer.Serialize(response);
+  }
 
   /// <summary>
   /// Get the cached request body for the current request.
