@@ -17,7 +17,7 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
-
+using MTGOSDK.Core.Remoting.Types;
 
 namespace MTGOSDK.Core.Remoting.Interop;
 
@@ -84,10 +84,17 @@ public class DiverCommunicator : IDisposable
   /// </summary>
   public event Action<HookContext>? CaptureCompleted;
 
+  private readonly record struct CallbackRegistration<TCallback>(
+    TCallback Callback, IReadOnlyList<RemoteObject>? RetainedInputs) where TCallback : Delegate;
+
+  private static IReadOnlyList<RemoteObject>? GetRetainedInputs(RemoteBatchRequest? batch) =>
+    batch?.Inputs.Where(input => input.RetainedObject is not null)
+      .Select(input => input.RetainedObject!).ToArray();
+
   // Callback handling
-  private readonly ConcurrentDictionary<int, LocalEventCallback> _tokensToEventHandlers = new();
+  private readonly ConcurrentDictionary<int, CallbackRegistration<LocalEventCallback>> _tokensToEventHandlers = new();
   private readonly ConcurrentDictionary<LocalEventCallback, int> _eventHandlersToToken = new();
-  private readonly ConcurrentDictionary<int, LocalHookCallback> _tokensToHookCallbacks = new();
+  private readonly ConcurrentDictionary<int, CallbackRegistration<LocalHookCallback>> _tokensToHookCallbacks = new();
   private readonly ConcurrentDictionary<LocalHookCallback, int> _hookCallbacksToTokens = new();
 
   private static readonly AsyncLocal<bool> s_forceUIThread = new();
@@ -287,16 +294,16 @@ public class DiverCommunicator : IDisposable
       // A current Diver pins each object argument once for every client it sends
       // the callback to. A handler takes over this client's references (see
       // ReleaseCallbackArguments); a callback without one returns them here.
-      if (_tokensToEventHandlers.TryGetValue(request.Token, out LocalEventCallback callback))
+      if (_tokensToEventHandlers.TryGetValue(request.Token, out var subscription))
       {
         if (request.Parameters.Count > 1)
           request.Parameters[1].Timestamp = request.Timestamp;
 
-        callback(context, [.. request.Parameters]);
+        subscription.Callback(context, [.. request.Parameters]);
       }
-      else if (_tokensToHookCallbacks.TryGetValue(request.Token, out LocalHookCallback hook))
+      else if (_tokensToHookCallbacks.TryGetValue(request.Token, out var hook))
       {
-        hook(context,
+        hook.Callback(context,
              request.Parameters.FirstOrDefault() ?? ObjectOrRemoteAddress.Null,
              [.. request.Parameters.Skip(1)]);
       }
@@ -435,32 +442,12 @@ public class DiverCommunicator : IDisposable
       Interlocked.Increment(ref m.Count);
       Interlocked.Add(ref m.TotalTicks, sw.ElapsedTicks);
       Interlocked.Exchange(ref m.LastTicks, sw.ElapsedTicks);
+      GC.KeepAlive(request);
     }
   }
 
-  /// <summary>
-  /// Sends a request without expecting a response.
-  /// </summary>
-  private void SendRequest(string endpoint, object request = null)
-  {
-    EnsureConnected();
-    Interlocked.Increment(ref s_totalRequests);
-
-    byte[] body = request != null ? MessagePackSerializer.Serialize(request) : null;
-    var sw = Stopwatch.StartNew();
-    try
-    {
-      _tcp.SendRequestAsync("/" + endpoint, body).GetAwaiter().GetResult();
-    }
-    finally
-    {
-      sw.Stop();
-      var m = s_ipcMetrics.GetOrAdd(endpoint, _ => new EndpointMetrics());
-      Interlocked.Increment(ref m.Count);
-      Interlocked.Add(ref m.TotalTicks, sw.ElapsedTicks);
-      Interlocked.Exchange(ref m.LastTicks, sw.ElapsedTicks);
-    }
-  }
+  private void SendRequest(string endpoint, object request = null) =>
+    SendRequest<object>(endpoint, request);
 
   public HeapDump DumpHeap(string typeFilter = null, bool dumpHashcodes = true)
   {
@@ -919,12 +906,8 @@ public class DiverCommunicator : IDisposable
   /// executes native calls synchronously and applies any ambient UI dispatch setting
   /// to the whole batch.
   /// </summary>
-  public async Task<RemoteBatchResult> ExecuteBatchAsync(RemoteBatchRequest request)
-  {
-    var copy = MessagePackSerializer.Deserialize<RemoteBatchRequest>(
-      MessagePackSerializer.Serialize(request));
-    return await ExecuteDetachedBatchAsync(copy).ConfigureAwait(false);
-  }
+  public async Task<RemoteBatchResult> ExecuteBatchAsync(RemoteBatchRequest request) =>
+    await ExecuteDetachedBatchAsync(request.Copy()).ConfigureAwait(false);
 
   /// <summary>
   /// Takes ownership of an already detached request from the batch builder.
@@ -947,6 +930,7 @@ public class DiverCommunicator : IDisposable
       Interlocked.Increment(ref metrics.Count);
       Interlocked.Add(ref metrics.TotalTicks, sw.ElapsedTicks);
       Interlocked.Exchange(ref metrics.LastTicks, sw.ElapsedTicks);
+      GC.KeepAlive(request);
     }
   }
 
@@ -956,6 +940,7 @@ public class DiverCommunicator : IDisposable
     LocalEventCallback callback,
     RemoteEventCapture capture = null, string[] propertyNames = null)
   {
+    var inputs = GetRetainedInputs(capture?.Batch);
     var request = new EventSubscriptionRequest
     {
       Address = targetAddr,
@@ -971,7 +956,7 @@ public class DiverCommunicator : IDisposable
       var regRes = SendRequest<EventRegistrationResults>("event_subscribe", request);
       if (epoch != 0) _eventEpochs[callback] = epoch;
       else _eventEpochs.TryRemove(callback, out _);
-      _tokensToEventHandlers[regRes.Token] = callback;
+      _tokensToEventHandlers[regRes.Token] = new(callback, inputs);
       _eventHandlersToToken[callback] = regRes.Token;
       return regRes.CaptureSequence;
     }
@@ -987,12 +972,22 @@ public class DiverCommunicator : IDisposable
 
   public void EventUnsubscribe(LocalEventCallback callback)
   {
-    if (!TryRemoveEventCallback(callback, out int token))
+    if (!TryRemoveCallback(callback, _tokensToEventHandlers, _eventHandlersToToken,
+      out int token, out var inputs))
+    {
       throw new Exception("EventUnsubscribe: callback not found");
+    }
 
     _eventEpochs.TryRemove(callback, out long epoch);
-    SendCleanup(epoch, "event_unsubscribe", new EventUnsubscriptionRequest { Token = token },
-      unregisteredSubscription: epoch == 0);
+    try
+    {
+      SendCleanup(epoch, "event_unsubscribe", new EventUnsubscriptionRequest { Token = token },
+        unregisteredSubscription: epoch == 0);
+    }
+    finally
+    {
+      GC.KeepAlive(inputs);
+    }
   }
 
   /// <summary>
@@ -1037,36 +1032,9 @@ public class DiverCommunicator : IDisposable
   }
 
   /// <summary>
-  /// How long a cleanup waits for the registration lock before checking its
-  /// epoch again.
+  /// How long cleanup waits for the registration lock before checking its epoch.
   /// </summary>
   private static readonly TimeSpan s_cleanupLockSlice = TimeSpan.FromMilliseconds(50);
-
-  private bool TryRemoveEventCallback(LocalEventCallback callback, out int token)
-  {
-    if (_eventHandlersToToken.TryRemove(callback, out token))
-    {
-      // Only while the token is still this callback's (a later subscription may share it).
-      ((ICollection<KeyValuePair<int, LocalEventCallback>>)_tokensToEventHandlers).Remove(new(token, callback));
-      return true;
-    }
-
-    foreach (var entry in _tokensToEventHandlers)
-    {
-      if (entry.Value != callback)
-        continue;
-
-      // Only that entry: the token may have been given to a later callback meanwhile.
-      if (((ICollection<KeyValuePair<int, LocalEventCallback>>)_tokensToEventHandlers).Remove(entry))
-      {
-        token = entry.Key;
-        _eventHandlersToToken.TryRemove(callback, out _);
-        return true;
-      }
-    }
-
-    return false;
-  }
 
   public bool HookMethod(
     string type,
@@ -1076,6 +1044,7 @@ public class DiverCommunicator : IDisposable
     List<string> parametersTypeFullNames = null,
     RemoteHookCapture capture = null)
   {
+    var inputs = GetRetainedInputs(capture?.Batch);
     var req = new HookSubscriptionRequest
     {
       TypeFullName = type,
@@ -1093,7 +1062,7 @@ public class DiverCommunicator : IDisposable
       var regRes = SendRequest<EventRegistrationResults>("hook_method", req);
       if (epoch != 0) _hookEpochs[callback] = epoch;
       else _hookEpochs.TryRemove(callback, out _);
-      _tokensToHookCallbacks[regRes.Token] = callback;
+      _tokensToHookCallbacks[regRes.Token] = new(callback, inputs);
       _hookCallbacksToTokens[callback] = regRes.Token;
       return true;
     }
@@ -1101,12 +1070,22 @@ public class DiverCommunicator : IDisposable
 
   public void UnhookMethod(LocalHookCallback callback)
   {
-    if (!TryRemoveHookCallback(callback, out int token))
+    if (!TryRemoveCallback(callback, _tokensToHookCallbacks, _hookCallbacksToTokens,
+      out int token, out var inputs))
+    {
       throw new Exception("UnhookMethod: callback not found");
+    }
 
     _hookEpochs.TryRemove(callback, out long epoch);
-    SendCleanup(epoch, "unhook_method", new HookUnsubscriptionRequest { Token = token },
-      unregisteredSubscription: epoch == 0);
+    try
+    {
+      SendCleanup(epoch, "unhook_method", new HookUnsubscriptionRequest { Token = token },
+        unregisteredSubscription: epoch == 0);
+    }
+    finally
+    {
+      GC.KeepAlive(inputs);
+    }
   }
 
   private bool IsRemoteShutdown(ObjectDisposedException ex) =>
@@ -1114,26 +1093,35 @@ public class DiverCommunicator : IDisposable
     ex.ObjectName == nameof(DiverCommunicator) ||
     ex.Message.Contains("MTGO process has closed", StringComparison.OrdinalIgnoreCase);
 
-  private bool TryRemoveHookCallback(LocalHookCallback callback, out int token)
+  private static bool TryRemoveCallback<TCallback>(TCallback callback,
+    ConcurrentDictionary<int, CallbackRegistration<TCallback>> registrations,
+    ConcurrentDictionary<TCallback, int> tokens, out int token,
+    out IReadOnlyList<RemoteObject>? inputs) where TCallback : Delegate
   {
-    if (_hookCallbacksToTokens.TryRemove(callback, out token))
+    inputs = null;
+    if (tokens.TryRemove(callback, out token))
     {
-      // Only while the token is still this callback's: a later hook of the same
-      // method (by this client again) shares the Diver's token.
-      ((ICollection<KeyValuePair<int, LocalHookCallback>>)_tokensToHookCallbacks).Remove(new(token, callback));
+      // Remove only this callback's entry: a later subscription can reuse the token.
+      if (registrations.TryGetValue(token, out var registration) &&
+          registration.Callback.Equals(callback))
+      {
+        inputs = registration.RetainedInputs;
+        ((ICollection<KeyValuePair<int, CallbackRegistration<TCallback>>>)registrations)
+          .Remove(new(token, registration));
+      }
       return true;
     }
 
-    foreach (var entry in _tokensToHookCallbacks)
+    foreach (var entry in registrations)
     {
-      if (entry.Value != callback)
+      if (!entry.Value.Callback.Equals(callback))
         continue;
-
-      // Only that entry: the token may have been given to a later callback meanwhile.
-      if (((ICollection<KeyValuePair<int, LocalHookCallback>>)_tokensToHookCallbacks).Remove(entry))
+      if (((ICollection<KeyValuePair<int, CallbackRegistration<TCallback>>>)registrations)
+          .Remove(entry))
       {
         token = entry.Key;
-        _hookCallbacksToTokens.TryRemove(callback, out _);
+        inputs = entry.Value.RetainedInputs;
+        tokens.TryRemove(callback, out _);
         return true;
       }
     }

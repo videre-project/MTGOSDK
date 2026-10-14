@@ -7,6 +7,7 @@
 using MessagePack;
 
 using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Types;
 
 
 namespace MTGOSDK.Core.Remoting.Interop;
@@ -18,6 +19,12 @@ namespace MTGOSDK.Core.Remoting.Interop;
 [MessagePackObject(AllowPrivate = true)]
 public class ObjectOrRemoteAddress : IPinResponse
 {
+  /// <summary>
+  /// Owns the local reference acquired when an object is encoded as a parameter.
+  /// </summary>
+  [IgnoreMember]
+  internal RemoteObject? RetainedObject { get; set; }
+
   [IgnoreMember]
   internal string? PinOwner { get; set; }
 
@@ -65,6 +72,14 @@ public class ObjectOrRemoteAddress : IPinResponse
       Type = type,
       HashCode = hashCode
     };
+
+  internal static ObjectOrRemoteAddress FromRemoteObject(RemoteObject remote, string typeName)
+  {
+    var retained = remote.Retain();
+    var value = FromToken(retained.RemoteToken, typeName);
+    value.RetainedObject = retained;
+    return value;
+  }
 
   private static readonly ObjectOrRemoteAddress s_null = new()
   {

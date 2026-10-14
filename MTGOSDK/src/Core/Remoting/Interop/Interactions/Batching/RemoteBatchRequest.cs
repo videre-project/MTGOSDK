@@ -30,4 +30,16 @@ public sealed class RemoteBatchRequest
 
   [Key(4)]
   public bool ForceUIThread { get; set; }
+
+  /// <summary>
+  /// Copies the wire description and preserves ownership of local input handles.
+  /// </summary>
+  internal RemoteBatchRequest Copy()
+  {
+    var copy = MessagePackSerializer.Deserialize<RemoteBatchRequest>(
+      MessagePackSerializer.Serialize(this));
+    for (int i = 0; i < Inputs.Count; i++)
+      copy.Inputs[i].RetainedObject = Inputs[i].RetainedObject;
+    return copy;
+  }
 }

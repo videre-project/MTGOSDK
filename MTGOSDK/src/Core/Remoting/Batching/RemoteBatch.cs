@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MessagePack;
-
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
@@ -25,7 +23,6 @@ public sealed class RemoteBatch : RemoteBatchScope
 {
   internal int NextId;
   private readonly List<ObjectOrRemoteAddress> _inputs = [];
-  private List<RemoteObject>? _retainedInputs;
   private readonly Dictionary<string, RemoteBatchProjection> _projections = new();
 
   /// <summary>
@@ -75,9 +72,14 @@ public sealed class RemoteBatch : RemoteBatchScope
     };
     if (remote is not null)
     {
-      var retained = remote.Retain();
-      (_retainedInputs ??= []).Add(retained);
-      return Input(ObjectOrRemoteAddress.FromToken(retained.RemoteToken, typeof(object).FullName!));
+      try
+      {
+        return Input(ObjectOrRemoteAddress.FromRemoteObject(remote, typeof(object).FullName!));
+      }
+      finally
+      {
+        GC.KeepAlive(value);
+      }
     }
     if (value != null && TypeProxy<dynamic>.IsProxy(value))
       throw new ArgumentException("Pass an existing raw remote handle instead of a proxy.", nameof(value));
@@ -91,12 +93,10 @@ public sealed class RemoteBatch : RemoteBatchScope
     _projections.Add(name, projection);
 
   /// <summary>
-  /// Copies the recorded batch into an independent wire request. The copy does
-  /// not retain object inputs, so the caller must keep this batch alive until
-  /// the request finishes.
+  /// Copies the recorded description while preserving local ownership of its
+  /// object inputs. Ownership is not included in the serialized request.
   /// </summary>
-  public RemoteBatchRequest ToRequest() => MessagePackSerializer.Deserialize<RemoteBatchRequest>(
-    MessagePackSerializer.Serialize(CreateRequest()));
+  public RemoteBatchRequest ToRequest() => CreateRequest().Copy();
 
   private RemoteBatchRequest CreateRequest() => new()
   {
@@ -130,17 +130,8 @@ public sealed class RemoteBatch : RemoteBatchScope
   public RemoteBatchResult Execute(DiverCommunicator connection) =>
     ExecuteAsync(connection).GetAwaiter().GetResult();
 
-  public async Task<RemoteBatchResult> ExecuteAsync(DiverCommunicator connection)
-  {
-    try
-    {
-      return await connection.ExecuteDetachedBatchAsync(ToRequest()).ConfigureAwait(false);
-    }
-    finally
-    {
-      GC.KeepAlive(this);
-    }
-  }
+  public async Task<RemoteBatchResult> ExecuteAsync(DiverCommunicator connection) =>
+    await connection.ExecuteDetachedBatchAsync(ToRequest()).ConfigureAwait(false);
 
   public RemoteBatchResult Execute(RemoteHandle connection) => Execute(connection.Communicator);
   public Task<RemoteBatchResult> ExecuteAsync(RemoteHandle connection) => ExecuteAsync(connection.Communicator);

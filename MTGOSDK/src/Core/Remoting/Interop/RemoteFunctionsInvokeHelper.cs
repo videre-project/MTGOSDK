@@ -20,50 +20,55 @@ public static class RemoteFunctionsInvokeHelper
 {
   public static ObjectOrRemoteAddress CreateRemoteParameter(object parameter)
   {
-    if (parameter == null)
+    try
     {
-      return ObjectOrRemoteAddress.Null;
+      if (parameter == null)
+      {
+        return ObjectOrRemoteAddress.Null;
+      }
+      else if (parameter.GetType().IsPrimitiveEtc()
+            || parameter.GetType().IsPrimitiveEtcArray()
+            || parameter.GetType().IsStringCoercible()
+            || parameter.GetType().IsEnum)
+      {
+        return ObjectOrRemoteAddress.FromObj(parameter);
+      }
+      else if (parameter is RemoteObject remoteArg)
+      {
+        return ObjectOrRemoteAddress
+          .FromRemoteObject(remoteArg, remoteArg.GetType().FullName);
+      }
+      else if (parameter is DynamicRemoteObject dro)
+      {
+        RemoteObject originRemoteObject = dro.__ro;
+        return ObjectOrRemoteAddress
+          .FromRemoteObject(originRemoteObject, originRemoteObject.GetType().FullName);
+      }
+      else if (parameter is DLRWrapper wrapper)
+      {
+        RemoteObject originRemoteObject = wrapper.@ro;
+        return ObjectOrRemoteAddress
+          .FromRemoteObject(originRemoteObject, originRemoteObject.GetType().FullName);
+      }
+      else if (TypeProxy<dynamic>.IsProxy(parameter))
+      {
+        return CreateRemoteParameter(DLRWrapper.Unbind((dynamic)parameter));
+      }
+      else if (parameter is Type t)
+      {
+        return ObjectOrRemoteAddress.FromType(t);
+      }
+      else
+      {
+        throw new Exception(
+          $"{nameof(RemoteMethodInfo)}.{nameof(Invoke)} only works with primitive (int, " +
+          $"double, string,...) or remote (in {nameof(RemoteObject)}) parameters. " +
+          $"One of the parameter was of unsupported type {parameter.GetType()}");
+      }
     }
-    else if (parameter.GetType().IsPrimitiveEtc()
-          || parameter.GetType().IsPrimitiveEtcArray()
-          || parameter.GetType().IsStringCoercible()
-          || parameter.GetType().IsEnum)
+    finally
     {
-      return ObjectOrRemoteAddress.FromObj(parameter);
-    }
-    else if (parameter is RemoteObject remoteArg)
-    {
-      return ObjectOrRemoteAddress
-        .FromToken(remoteArg.RemoteToken, remoteArg.GetType().FullName);
-    }
-    else if (parameter is DynamicRemoteObject dro)
-    {
-      RemoteObject originRemoteObject = dro.__ro;
-      return ObjectOrRemoteAddress
-        .FromToken(originRemoteObject.RemoteToken,
-                  originRemoteObject.GetType().FullName);
-    }
-    else if (parameter is DLRWrapper wrapper)
-    {
-      RemoteObject originRemoteObject = wrapper.@ro;
-      return ObjectOrRemoteAddress
-        .FromToken(originRemoteObject.RemoteToken,
-                  originRemoteObject.GetType().FullName);
-    }
-    else if (TypeProxy<dynamic>.IsProxy(parameter))
-    {
-      return CreateRemoteParameter(DLRWrapper.Unbind((dynamic)parameter));
-    }
-    else if (parameter is Type t)
-    {
-      return ObjectOrRemoteAddress.FromType(t);
-    }
-    else
-    {
-      throw new Exception(
-        $"{nameof(RemoteMethodInfo)}.{nameof(Invoke)} only works with primitive (int, " +
-        $"double, string,...) or remote (in {nameof(RemoteObject)}) parameters. " +
-        $"One of the parameter was of unsupported type {parameter.GetType()}");
+      GC.KeepAlive(parameter);
     }
   }
 
@@ -91,108 +96,115 @@ public static class RemoteFunctionsInvokeHelper
     string[] genericArgsFullNames,
     object[] parameters)
   {
-    // invokeAttr, binder and culture currently ignored
-    // TODO: Actually validate parameters and expected parameters.
-
-    int paramCount = parameters.Length;
-    object[] paramsNoEnums = new object[paramCount];
-    Array.Copy(parameters, paramsNoEnums, paramCount);
-
-    for (int i = 0; i < paramCount; i++)
+    try
     {
-      var val = paramsNoEnums[i];
-      if (val != null && val.GetType().IsEnum)
-      {
-        var enumClass = app.GetRemoteEnum(val.GetType().FullName);
-        object enumVal = enumClass.GetValue(val.ToString());
-        paramsNoEnums[i] = enumVal;
-      }
-    }
+      // invokeAttr, binder and culture currently ignored
+      // TODO: Actually validate parameters and expected parameters.
 
-    ObjectOrRemoteAddress[] remoteParams = new ObjectOrRemoteAddress[paramCount];
-    for (int i = 0; i < paramCount; i++)
-    {
-      remoteParams[i] = CreateRemoteParameter(paramsNoEnums[i]);
-    }
+      int paramCount = parameters.Length;
+      object[] paramsNoEnums = new object[paramCount];
+      Array.Copy(parameters, paramsNoEnums, paramCount);
 
-    bool hasResults;
-    ObjectOrRemoteAddress oora;
-    // Invoke static method (where the first parameter of Invoke() is null).
-    if (obj == null)
-    {
-      if (app == null)
+      for (int i = 0; i < paramCount; i++)
       {
-        throw new InvalidOperationException(
-          $"Trying to invoke a static call (null target object) " +
-          $"on a {nameof(RemoteMethodInfo)} but it's associated " +
-          $"Declaring Type ({declaringType}) does not have a RemoteHandle associated. " +
-          $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
+        var val = paramsNoEnums[i];
+        if (val != null && val.GetType().IsEnum)
+        {
+          var enumClass = app.GetRemoteEnum(val.GetType().FullName);
+          object enumVal = enumClass.GetValue(val.ToString());
+          paramsNoEnums[i] = enumVal;
+        }
       }
 
-      InvocationResults invokeRes = app.Communicator.InvokeStaticMethod(
-        declaringType.FullName,
-        funcName,
-        genericArgsFullNames,
-        remoteParams
-      );
-
-      if (invokeRes is null)
+      ObjectOrRemoteAddress[] remoteParams = new ObjectOrRemoteAddress[paramCount];
+      for (int i = 0; i < paramCount; i++)
       {
-        throw new InvalidOperationException(
-          $"Static remote invocation '{declaringType.FullName}.{funcName}' returned no result (null). " +
-          "This usually indicates a diver/transport failure or an unexpected response format.");
+        remoteParams[i] = CreateRemoteParameter(paramsNoEnums[i]);
       }
 
-      if (invokeRes.VoidReturnType)
+      bool hasResults;
+      ObjectOrRemoteAddress oora;
+      // Invoke static method (where the first parameter of Invoke() is null).
+      if (obj == null)
       {
-        hasResults = false;
-        oora = null;
-      }
-      // Invoke non-static method.
-      else
-      {
-        hasResults = true;
-        oora = invokeRes.ReturnedObjectOrAddress;
-      }
-    }
-    else
-    {
-      // obj is NOT null. Make sure it's a RemoteObject.
-      RemoteObject ro;
-      if (obj is RemoteObject remoteObj)
-      {
-        ro = remoteObj;
-      }
-      else if (obj is DynamicRemoteObject dro)
-      {
-        ro = dro.__ro;
+        if (app == null)
+        {
+          throw new InvalidOperationException(
+            $"Trying to invoke a static call (null target object) " +
+            $"on a {nameof(RemoteMethodInfo)} but it's associated " +
+            $"Declaring Type ({declaringType}) does not have a RemoteHandle associated. " +
+            $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
+        }
+
+        InvocationResults invokeRes = app.Communicator.InvokeStaticMethod(
+          declaringType.FullName,
+          funcName,
+          genericArgsFullNames,
+          remoteParams
+        );
+
+        if (invokeRes is null)
+        {
+          throw new InvalidOperationException(
+            $"Static remote invocation '{declaringType.FullName}.{funcName}' returned no result (null). " +
+            "This usually indicates a diver/transport failure or an unexpected response format.");
+        }
+
+        if (invokeRes.VoidReturnType)
+        {
+          hasResults = false;
+          oora = null;
+        }
+        // Invoke non-static method.
+        else
+        {
+          hasResults = true;
+          oora = invokeRes.ReturnedObjectOrAddress;
+        }
       }
       else
       {
-        throw new NotImplementedException(
-          $"Provided type was {obj.GetType().FullName}. " +
-          $"{nameof(RemoteMethodInfo)}.{nameof(Invoke)} only supports {nameof(RemoteObject)} targets at the moment.");
+        // obj is NOT null. Make sure it's a RemoteObject.
+        RemoteObject ro;
+        if (obj is RemoteObject remoteObj)
+        {
+          ro = remoteObj;
+        }
+        else if (obj is DynamicRemoteObject dro)
+        {
+          ro = dro.__ro;
+        }
+        else
+        {
+          throw new NotImplementedException(
+            $"Provided type was {obj.GetType().FullName}. " +
+            $"{nameof(RemoteMethodInfo)}.{nameof(Invoke)} only supports {nameof(RemoteObject)} targets at the moment.");
+        }
+        (hasResults, oora) = ro.InvokeMethod(funcName, genericArgsFullNames, remoteParams);
       }
-      (hasResults, oora) = ro.InvokeMethod(funcName, genericArgsFullNames, remoteParams);
+
+      if (!hasResults)
+        return null;
+
+      // Non-void function.
+      if (oora.IsNull)
+        return null;
+      if (!oora.IsRemoteAddress)
+      {
+        return PrimitivesEncoder.Decode(oora);
+      }
+      else
+      {
+        RemoteObject ro = app.GetRemoteObjectFromField(oora);
+        dynamic dro = ro.Dynamify();
+        dro.__timestamp = oora.Timestamp;
+
+        return dro;
+      }
     }
-
-    if (!hasResults)
-      return null;
-
-    // Non-void function.
-    if (oora.IsNull)
-      return null;
-    if (!oora.IsRemoteAddress)
+    finally
     {
-      return PrimitivesEncoder.Decode(oora);
-    }
-    else
-    {
-      RemoteObject ro = app.GetRemoteObjectFromField(oora);
-      dynamic dro = ro.Dynamify();
-      dro.__timestamp = oora.Timestamp;
-
-      return dro;
+      GC.KeepAlive(obj);
     }
   }
 }

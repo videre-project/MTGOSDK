@@ -6,6 +6,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -21,6 +22,7 @@ using MTGOSDK.Core.Memory;
 using MTGOSDK.Core.Memory.Snapshot;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
@@ -28,6 +30,7 @@ using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
+using MTGOSDK.Core.Remoting.Reflection;
 using MTGOSDK.Core.Remoting.Types;
 
 namespace MTGOSDK.UnitTests;
@@ -39,9 +42,23 @@ namespace MTGOSDK.UnitTests;
 [NonParallelizable]
 public class RemoteLifetimes
 {
-  public sealed class Item
+  public sealed class Item : INotifyPropertyChanged
   {
-    public string Name { get; set; } = "retained";
+    private string _name = "retained";
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public string Name
+    {
+      get => _name;
+      set
+      {
+        _name = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+      }
+    }
+    public string Label = "retained";
+    public Item() { }
+    public Item(Item other) => Name = other.Name;
+    public string Echo(Item other) => other.Name;
   }
 
   public sealed class RetryItem { }
@@ -62,9 +79,11 @@ public class RemoteLifetimes
     private readonly object _lock = new();
     private int _nextClient;
     public RemoteHandle Handle { get; }
+    public PropertyChangeRouter Router { get; } = new();
     public DiverCommunicator Client => Handle.Communicator;
     public int Pins { get { lock (_lock) return _clients.Values.Sum(_runtime.GetClientReferenceCount); } }
     public int ObjectReads { get; private set; }
+    public string? LastMemberValue { get; private set; }
     public int TypeFailures { get; set; }
     public bool TakeObjectReference { get; set; } = true;
     public bool RejectRepeatedObjectReads { get; set; }
@@ -80,6 +99,12 @@ public class RemoteLifetimes
     public TaskCompletionSource<bool>? DelayedUnregisterCompleted { get; set; }
     public TaskCompletionSource<bool>? ObjectEntered { get; set; }
     public TaskCompletionSource<bool>? ContinueObject { get; set; }
+
+    public TaskCompletionSource<bool>? InvocationEntered { get; set; }
+    public TaskCompletionSource<bool>? ContinueInvocation { get; set; }
+    public TaskCompletionSource<bool>? UnsubscribeEntered { get; set; }
+    public TaskCompletionSource<bool>? ContinueUnsubscribe { get; set; }
+    private RemoteBatchRequest? _capture;
 
     public PinPeer()
     {
@@ -122,6 +147,17 @@ public class RemoteLifetimes
       // The owner is captured at request entry, before any controlled wait.
       string owner;
       lock (_lock) owner = _connections.GetValueOrDefault(connection, "");
+      if ((endpoint is "/invoke" or "/create_object" or "/get_field" or "/set_field") &&
+          ContinueInvocation is not null)
+      {
+        InvocationEntered!.TrySetResult(true);
+        await ContinueInvocation.Task;
+      }
+      if (endpoint == "/event_unsubscribe" && ContinueUnsubscribe is not null)
+      {
+        UnsubscribeEntered!.TrySetResult(true);
+        await ContinueUnsubscribe.Task;
+      }
       bool delayedUnregister = false;
       if (endpoint == "/unregister_client")
       {
@@ -182,7 +218,8 @@ public class RemoteLifetimes
               _peer.Close(connection);
               return null;
             }
-            return Success(new UnregisterClientResponse { WasRemoved = removed }, owner);
+            return Success(new UnregisterClientResponse
+            { WasRemoved = removed, OtherClientsAmount = _clients.Count }, owner);
           case "/domains": return Success(new DomainDump("pins", []), owner);
           case "/type":
             if (TypeFailures > 0)
@@ -191,14 +228,59 @@ public class RemoteLifetimes
               return MessagePackSerializer.Serialize(DiverResponse<object>.FromError("metadata unavailable"));
             }
             var type = MessagePackSerializer.Deserialize<TypeDumpRequest>(body);
-            var actual = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(type.TypeFullName))
-              .First(t => t is not null)!;
+            var actual = _runtime.ResolveType(type.TypeFullName, type.Assembly);
             return Success(TypeDump.ParseType(actual), owner);
           case "/object": return DumpObject(body, owner);
+          case "/invoke":
+            var invoke = MessagePackSerializer.Deserialize<InvocationRequest>(body);
+            var target = (Item)Resolve(invoke.ObjAddress);
+            var method = target.GetType().GetMethod(invoke.MethodName)!;
+            var result = method.Invoke(target, invoke.Parameters.Select(_runtime.ParseParameterObject).ToArray());
+            LastMemberValue = target.Name;
+            return Success(new InvocationResults
+            {
+              VoidReturnType = method.ReturnType == typeof(void),
+              ReturnedObjectOrAddress = result is null ? ObjectOrRemoteAddress.Null
+                : ObjectOrRemoteAddress.FromObj(result)
+            }, owner);
+          case "/get_field":
+            var read = MessagePackSerializer.Deserialize<FieldGetRequest>(body);
+            var readTarget = Resolve(read.ObjAddress);
+            var readValue = readTarget.GetType().GetField(read.FieldName)!.GetValue(readTarget)!;
+            LastMemberValue = (string)readValue;
+            return Success(new InvocationResults
+            { ReturnedObjectOrAddress = ObjectOrRemoteAddress.FromObj(readValue) }, owner);
+          case "/set_field":
+            var write = MessagePackSerializer.Deserialize<FieldSetRequest>(body);
+            var writeTarget = Resolve(write.ObjAddress);
+            var field = writeTarget.GetType().GetField(write.FieldName)!;
+            field.SetValue(writeTarget, _runtime.ParseParameterObject(write.Value));
+            var written = field.GetValue(writeTarget)!;
+            LastMemberValue = (string)written;
+            return Success(new InvocationResults
+            { ReturnedObjectOrAddress = ObjectOrRemoteAddress.FromObj(written) }, owner);
+          case "/create_object":
+            var create = MessagePackSerializer.Deserialize<CtorInvocationRequest>(body);
+            var created = Activator.CreateInstance(_runtime.ResolveType(create.TypeFullName),
+              create.Parameters.Select(_runtime.ParseParameterObject).ToArray())!;
+            ulong createdToken = _runtime.PinObject(created, _clients[owner]);
+            return Success(new InvocationResults
+            {
+              ReturnedObjectOrAddress = ObjectOrRemoteAddress.FromToken(createdToken, created.GetType().FullName!)
+            }, owner);
           case "/event_subscribe":
+            var subscription = MessagePackSerializer.Deserialize<EventSubscriptionRequest>(body);
+            if (Resolve(subscription.Address).GetType().GetEvent(subscription.EventName) is null)
+              throw new InvalidOperationException("The requested event does not exist.");
+            _capture = subscription.Capture?.Batch;
             return FailSubscribe ? MessagePackSerializer.Serialize(DiverResponse<object>.FromError("subscribe failed"))
               : Success(new EventRegistrationResults { Token = 1 }, owner);
-          case "/event_unsubscribe": return Success<object?>(null, owner);
+          case "/hook_method":
+            _capture = MessagePackSerializer.Deserialize<HookSubscriptionRequest>(body).Capture?.Batch;
+            return Success(new EventRegistrationResults { Token = 1 }, owner);
+          case "/event_property_filter":
+          case "/event_unsubscribe":
+          case "/unhook_method": return Success<object?>(null, owner);
           case "/unpin":
             var pin = MessagePackSerializer.Deserialize<ExpectedUnpin>(body);
             if (_clients.TryGetValue(owner, out int client))
@@ -230,11 +312,33 @@ public class RemoteLifetimes
       }, owner);
     }
 
+    private object Resolve(ulong token) =>
+      _runtime.TryGetPinnedObject(token, out var value) ? value
+        : throw new InvalidOperationException("the invocation input was unpinned");
+
+    public string ItemName(ulong token)
+    {
+      lock (_lock) return ((Item)Resolve(token)).Name;
+    }
+
+    public string CaptureInputName()
+    {
+      lock (_lock)
+      {
+        var executor = new BatchExecutor(_ => typeof(Item), input => input.IsNull
+          ? new PropertyChangedEventArgs("Name") : Resolve(input.RemoteAddress));
+        return executor.Execute(_capture!).Values["name"].GetScalar<string>();
+      }
+    }
+
     public void Dispose()
     {
+      ContinueInvocation?.TrySetResult(true);
+      ContinueUnsubscribe?.TrySetResult(true);
       ContinueBatch?.TrySetResult(true);
       ContinueObject?.TrySetResult(true);
       ContinueUnregister?.TrySetResult(true);
+      Router.Dispose();
       var client = Client;
       Handle.Dispose();
       client.Dispose();
@@ -259,10 +363,12 @@ public class RemoteLifetimes
     GC.Collect();
   }
 
-  private static IDisposable Subscribe(RemoteObject remote) =>
-    (IDisposable)typeof(RemoteObject).Assembly.GetType(
-      "MTGOSDK.Core.Remoting.Interop.RemotePropertyChangeProxy")!
-      .GetConstructors().Single().Invoke([remote, null, null]);
+  private static IPropertyChangeSubscription Subscribe(PinPeer peer, RemoteObject remote,
+    RemoteBatch? capture = null)
+  {
+    remote.AddReference();
+    return peer.Router.Subscribe((DynamicRemoteObject)remote.Dynamify(), capture, nameof(Item.Name));
+  }
 
   private static RemoteObject Retain(RemoteObject remote) =>
     (RemoteObject)typeof(RemoteObject).GetMethod("Retain",
@@ -302,7 +408,8 @@ public class RemoteLifetimes
     using var peer = new PinPeer();
     var remote = peer.Add(new Item());
     ulong token = remote.RemoteToken;
-    var subscription = Subscribe(remote);
+    var subscription = Subscribe(peer, remote);
+    Collect();
     remote.ReleaseReference();
     Assert.That(peer.IsPinned(token), Is.True, "the subscription keeps the object after the caller releases it");
     subscription.Dispose();
@@ -317,7 +424,8 @@ public class RemoteLifetimes
     using var peer = new PinPeer { FailSubscribe = true };
     var remote = peer.Add(new Item());
     ulong token = remote.RemoteToken;
-    Assert.That(() => Subscribe(remote), Throws.InstanceOf<TargetInvocationException>());
+    Assert.That(() => Subscribe(peer, remote), Throws.InstanceOf<MTGOSDK.Core.Exceptions.ExternalErrorException>());
+    Collect();
     remote.ReleaseReference();
     await Until(() => !peer.IsPinned(token));
   }
@@ -539,6 +647,197 @@ public class RemoteLifetimes
     Assert.That(peer.IsPinned(token), Is.True, "no failed attempt owns the caller's original pin");
     peer.Client.UnpinObject(token);
     Assert.That(peer.IsPinned(token), Is.False);
+  }
+
+  private static async Task DrainPinReturns(PinPeer peer)
+  {
+    var scheduler = (ChannelScheduler)typeof(DiverCommunicator)
+      .GetField("_releaseScheduler", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(peer.Client)!;
+    var drained = Signal();
+    scheduler.Enqueue(() => drained.SetResult(true));
+    await drained.Task.WaitAsync(TimeSpan.FromSeconds(5));
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static IDisposable SubscribeWithTemporaryCapture(PinPeer peer, RemoteObject target)
+  {
+    var input = (DynamicRemoteObject)peer.Add(new Item()).Dynamify();
+    var batch = new RemoteBatch();
+    batch.Output("name", batch.Read(batch.Input((object)input), "Name"));
+    return Subscribe(peer, target, batch);
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static object InvokeWithTemporaryInputs(PinPeer peer, string path)
+  {
+    var argument = (DynamicRemoteObject)peer.Add(new Item { Name = "argument" }).Dynamify();
+    if (path == "constructor") return peer.Handle.Activator.CreateInstance(typeof(Item), argument);
+    if (path == "raw")
+    {
+      var raw = peer.Add(new Item());
+      var (_, value) = raw.InvokeMethod(nameof(Item.Echo),
+        RemoteFunctionsInvokeHelper.CreateRemoteParameter(argument));
+      return PrimitivesEncoder.Decode(value);
+    }
+    var target = (DynamicRemoteObject)peer.Add(new Item { Name = "receiver" }).Dynamify();
+    if (path == "typed") return target.InvokeMethod<string>(nameof(Item.Echo), argument);
+    if (path == "dynamic-dispatch") return ((dynamic)target).Echo(argument);
+    if (path == "dynamic")
+    {
+      var method = new DynamicRemoteObject.DynamicRemoteMethod(nameof(Item.Echo),
+        target.__type.Methods.Where(m => m.Name == nameof(Item.Echo)).ToList());
+      method.TryInvoke(target, [argument], out object result);
+      return result;
+    }
+    return RemoteFunctionsInvokeHelper.Invoke(peer.Handle, typeof(Item), nameof(Item.Echo),
+      target, Array.Empty<string>(), [argument]);
+  }
+
+  [TestCase("helper")]
+  [TestCase("typed")]
+  [TestCase("dynamic-dispatch")]
+  [TestCase("dynamic")]
+  [TestCase("constructor")]
+  [TestCase("raw")]
+  public async Task Test_Invocation_KeepsTemporaryInputsUntilResponse(string path)
+  {
+    using var peer = new PinPeer { InvocationEntered = Signal(), ContinueInvocation = Signal() };
+    var invoking = Task.Run(() => InvokeWithTemporaryInputs(peer, path));
+    await peer.InvocationEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    try
+    {
+      Collect();
+      await DrainPinReturns(peer);
+      peer.ContinueInvocation.SetResult(true);
+      var result = await invoking.WaitAsync(TimeSpan.FromSeconds(5));
+      if (result is RemoteObject created)
+      {
+        Assert.That(created.IsValid, Is.True);
+        Assert.That(peer.ItemName(created.RemoteToken), Is.EqualTo("argument"));
+        created.ReleaseReference();
+      }
+      else Assert.That(result, Is.EqualTo("argument"));
+    }
+    finally
+    {
+      peer.ContinueInvocation.TrySetResult(true);
+    }
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static Task<RemoteBatchResult> ExecuteTemporaryRequest(PinPeer peer)
+  {
+    var input = (DynamicRemoteObject)peer.Add(new Item()).Dynamify();
+    var batch = new RemoteBatch();
+    batch.Output("name", batch.Read(batch.Input((object)input), "Name"));
+    return peer.Client.ExecuteBatchAsync(batch.ToRequest());
+  }
+
+  [Test]
+  public async Task Test_DetachedBatchRequest_OwnsInputsThroughAsyncExecution()
+  {
+    using var peer = new PinPeer { BatchEntered = Signal(), ContinueBatch = Signal() };
+    var executing = ExecuteTemporaryRequest(peer);
+    await peer.BatchEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    try
+    {
+      Collect();
+      await DrainPinReturns(peer);
+      peer.ContinueBatch.SetResult(true);
+      var result = await executing.WaitAsync(TimeSpan.FromSeconds(5));
+      Assert.That(result.Values["name"].GetScalar<string>(), Is.EqualTo("retained"));
+    }
+    finally
+    {
+      peer.ContinueBatch.TrySetResult(true);
+    }
+  }
+
+  [Test]
+  public async Task Test_CaptureInputs_AreOwnedUntilUnsubscribeCompletes()
+  {
+    using var peer = new PinPeer { UnsubscribeEntered = Signal(), ContinueUnsubscribe = Signal() };
+    var target = peer.Add(new Item());
+    var subscription = SubscribeWithTemporaryCapture(peer, target);
+    Collect();
+    await DrainPinReturns(peer);
+    Assert.That(peer.CaptureInputName(), Is.EqualTo("retained"),
+      "the active capture can still read its input after the original batch is collected");
+    var disposing = Task.Run(subscription.Dispose);
+    await peer.UnsubscribeEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    try
+    {
+      Collect();
+      await DrainPinReturns(peer);
+      Assert.That(peer.CaptureInputName(), Is.EqualTo("retained"));
+    }
+    finally
+    {
+      peer.ContinueUnsubscribe.TrySetResult(true);
+      await disposing.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    Collect();
+    await DrainPinReturns(peer);
+    Assert.That(() => peer.CaptureInputName(), Throws.TypeOf<InvalidOperationException>());
+    target.ReleaseReference();
+    GC.KeepAlive(subscription);
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static object? AccessTemporaryTarget(PinPeer peer, string path)
+  {
+    var remote = peer.Add(new Item());
+    if (path == "raw-read") return PrimitivesEncoder.Decode(remote.GetField(nameof(Item.Label)));
+    if (path == "raw-write") return PrimitivesEncoder.Decode(remote.SetField(nameof(Item.Label),
+      ObjectOrRemoteAddress.FromObj("changed")));
+    var target = (DynamicRemoteObject)remote.Dynamify();
+    if (path == "property-write")
+    {
+      ((dynamic)target).Name = "changed";
+      return "changed";
+    }
+    var field = target.__type.GetField(nameof(Item.Label))!;
+    if (path == "field-read") return field.GetValue(target);
+    field.SetValue(target, "changed");
+    return "changed";
+  }
+
+  [TestCase("raw-read", "retained")]
+  [TestCase("raw-write", "changed")]
+  [TestCase("field-read", "retained")]
+  [TestCase("field-write", "changed")]
+  [TestCase("property-write", "changed")]
+  public async Task Test_MemberAccess_KeepsTemporaryTargetUntilResponse(string path, string expected)
+  {
+    using var peer = new PinPeer { InvocationEntered = Signal(), ContinueInvocation = Signal() };
+    var accessing = Task.Run(() => AccessTemporaryTarget(peer, path));
+    await peer.InvocationEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    try
+    {
+      Collect();
+      await DrainPinReturns(peer);
+      peer.ContinueInvocation.SetResult(true);
+      Assert.That(await accessing.WaitAsync(TimeSpan.FromSeconds(5)), Is.EqualTo(expected));
+      Assert.That(peer.LastMemberValue, Is.EqualTo(expected), "the request observes the expected remote state");
+    }
+    finally
+    {
+      peer.ContinueInvocation.TrySetResult(true);
+    }
+  }
+
+  [Test]
+  public async Task Test_FailedCaptureSubscription_ReturnsInputOwnership()
+  {
+    using var peer = new PinPeer { FailSubscribe = true };
+    var target = peer.Add(new Item());
+    Assert.That(() => SubscribeWithTemporaryCapture(peer, target),
+      Throws.InstanceOf<MTGOSDK.Core.Exceptions.ExternalErrorException>());
+    Collect();
+    await DrainPinReturns(peer);
+    Assert.That(() => peer.CaptureInputName(), Throws.TypeOf<InvalidOperationException>());
+    Assert.That(target.IsValid, Is.True, "failure does not release the caller's target");
+    target.ReleaseReference();
   }
 
 }

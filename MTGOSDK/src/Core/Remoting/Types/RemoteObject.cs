@@ -150,9 +150,15 @@ public class RemoteObject : IObjectReference
 
   public ObjectOrRemoteAddress SetField(string fieldName, ObjectOrRemoteAddress newValue)
   {
-    InvocationResults invokeRes = _ref.SetField(fieldName, newValue);
-    return invokeRes.ReturnedObjectOrAddress;
-
+    try
+    {
+      InvocationResults invokeRes = _ref.SetField(fieldName, newValue);
+      return invokeRes.ReturnedObjectOrAddress;
+    }
+    finally
+    {
+      GC.KeepAlive(this);
+    }
   }
 
   public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(
@@ -165,22 +171,29 @@ public class RemoteObject : IObjectReference
     string[] genericArgsFullTypeNames,
     params ObjectOrRemoteAddress[] args)
   {
-    using var activity = s_activitySource.StartActivity("RO.InvokeMethod");
-    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
-    activity?.SetTag("method", methodName);
+    try
+    {
+      using var activity = s_activitySource.StartActivity("RO.InvokeMethod");
+      activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+      activity?.SetTag("method", methodName);
 
-    InvocationResults? invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
-    if (invokeRes is null)
-    {
-      throw new InvalidOperationException(
-        $"Remote invocation '{GetType().FullName}.{methodName}' returned no result (null). " +
-        "This usually indicates a diver/transport failure or an unexpected response format.");
+      InvocationResults? invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
+      if (invokeRes is null)
+      {
+        throw new InvalidOperationException(
+          $"Remote invocation '{GetType().FullName}.{methodName}' returned no result (null). " +
+          "This usually indicates a diver/transport failure or an unexpected response format.");
+      }
+      if (invokeRes.VoidReturnType)
+      {
+        return (false, null);
+      }
+      return (true, invokeRes.ReturnedObjectOrAddress);
     }
-    if (invokeRes.VoidReturnType)
+    finally
     {
-      return (false, null);
+      GC.KeepAlive(this);
     }
-    return (true, invokeRes.ReturnedObjectOrAddress);
   }
 
   public dynamic Dynamify() => new DynamicRemoteObject(_app, this);
@@ -192,8 +205,15 @@ public class RemoteObject : IObjectReference
 
   public ObjectOrRemoteAddress GetField(string name)
   {
-    var res = _ref.GetField(name);
-    return res.ReturnedObjectOrAddress;
+    try
+    {
+      var res = _ref.GetField(name);
+      return res.ReturnedObjectOrAddress;
+    }
+    finally
+    {
+      GC.KeepAlive(this);
+    }
   }
 
   public void EventSubscribe(string eventName, Delegate callback)

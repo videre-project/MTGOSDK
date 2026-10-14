@@ -35,60 +35,67 @@ public class RemoteFieldInfo(
 
   public override object GetValue(object obj)
   {
-    ObjectOrRemoteAddress oora = null;
-    if (obj == null)
+    try
     {
-      // No 'this' object --> Static field
-
-      if (App == null)
+      ObjectOrRemoteAddress oora = null;
+      if (obj == null)
       {
-        throw new InvalidOperationException(
-            $"Trying to get a static field (null target object) " +
-            $"on a {nameof(RemoteFieldInfo)} but it's associated " +
-            $"Declaring Type ({DeclaringType}) does not have a RemoteHandle associated. " +
-            $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
-      }
+        // No 'this' object --> Static field
 
-      oora = App.Communicator.GetField(0, DeclaringType.FullName, Name).ReturnedObjectOrAddress;
-    }
-    else
-    {
-      // obj is NOT null. Make sure it's a RemoteObject or DynamicRemoteObject.
-      RemoteObject ro = obj as RemoteObject;
-      ro ??= (obj as DynamicRemoteObject)?.__ro;
-      if (ro != null)
-      {
-        oora = ro.GetField(Name);
+        if (App == null)
+        {
+          throw new InvalidOperationException(
+              $"Trying to get a static field (null target object) " +
+              $"on a {nameof(RemoteFieldInfo)} but it's associated " +
+              $"Declaring Type ({DeclaringType}) does not have a RemoteHandle associated. " +
+              $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
+        }
+
+        oora = App.Communicator.GetField(0, DeclaringType.FullName, Name).ReturnedObjectOrAddress;
       }
       else
       {
-        throw new NotImplementedException(
-          $"{nameof(RemoteFieldInfo)}.{nameof(GetValue)} only supports {nameof(RemoteObject)} or {nameof(DynamicRemoteObject)} targets.");
+        // obj is NOT null. Make sure it's a RemoteObject or DynamicRemoteObject.
+        RemoteObject ro = obj as RemoteObject;
+        ro ??= (obj as DynamicRemoteObject)?.__ro;
+        if (ro != null)
+        {
+          oora = ro.GetField(Name);
+        }
+        else
+        {
+          throw new NotImplementedException(
+            $"{nameof(RemoteFieldInfo)}.{nameof(GetValue)} only supports {nameof(RemoteObject)} or {nameof(DynamicRemoteObject)} targets.");
+        }
+      }
+
+      if (oora == null)
+      {
+        string offendingFunc = obj == null ? $"{nameof(DiverCommunicator)}.{nameof(DiverCommunicator.GetField)}" : $"{nameof(RemoteObject)}.{nameof(RemoteObject.GetField)}";
+        throw new Exception($"Could not get {nameof(ObjectOrRemoteAddress)} object. Seems like invoking {offendingFunc} returned null.");
+      }
+      else
+      {
+        // The null sentinel is a remote address of 0, so it is checked first.
+        if (oora.IsNull)
+        {
+          return null;
+        }
+        else if (oora.IsRemoteAddress)
+        {
+          var remoteObject = App.GetRemoteObjectFromField(oora);
+          dynamic dro = remoteObject.Dynamify();
+          dro.__timestamp = oora.Timestamp;
+
+          return dro;
+        }
+        // Primitive
+        return PrimitivesEncoder.Decode(oora.EncodedObject, oora.Type);
       }
     }
-
-    if (oora == null)
+    finally
     {
-      string offendingFunc = obj == null ? $"{nameof(DiverCommunicator)}.{nameof(DiverCommunicator.GetField)}" : $"{nameof(RemoteObject)}.{nameof(RemoteObject.GetField)}";
-      throw new Exception($"Could not get {nameof(ObjectOrRemoteAddress)} object. Seems like invoking {offendingFunc} returned null.");
-    }
-    else
-    {
-      // The null sentinel is a remote address of 0, so it is checked first.
-      if (oora.IsNull)
-      {
-        return null;
-      }
-      else if (oora.IsRemoteAddress)
-      {
-        var remoteObject = App.GetRemoteObjectFromField(oora);
-        dynamic dro = remoteObject.Dynamify();
-        dro.__timestamp = oora.Timestamp;
-
-        return dro;
-      }
-      // Primitive
-      return PrimitivesEncoder.Decode(oora.EncodedObject, oora.Type);
+      GC.KeepAlive(obj);
     }
   }
 
@@ -99,51 +106,58 @@ public class RemoteFieldInfo(
     Binder binder,
     CultureInfo culture)
   {
-    if (value != null && value.GetType().IsEnum)
+    try
     {
-      var enumClass = App.GetRemoteEnum(value.GetType().FullName);
-      // TODO: This will break on the first enum value which represents 2 or more flags
-      object enumVal = enumClass.GetValue(value.ToString());
-      // NOTE: Object stays in place in the remote app as long as we have it's reference
-      // in the the value variable(so untill end of this method)
-      value = enumVal;
-    }
-
-    // Might throw if the parameter is a local object (not RemoteObject or DynamicRemoteObject).
-    ObjectOrRemoteAddress remoteNewValue = RemoteFunctionsInvokeHelper.CreateRemoteParameter(value);
-
-    if (obj == null)
-    {
-      // No 'this' object --> Static field
-
-      if (App == null)
+      if (value != null && value.GetType().IsEnum)
       {
-        throw new InvalidOperationException(
-            $"Trying to get a static field (null target object) " +
-            $"on a {nameof(RemoteFieldInfo)} but it's associated " +
-            $"Declaring Type ({DeclaringType}) does not have a RemoteHandle associated. " +
-            $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
+        var enumClass = App.GetRemoteEnum(value.GetType().FullName);
+        // TODO: This will break on the first enum value which represents 2 or more flags
+        object enumVal = enumClass.GetValue(value.ToString());
+        // NOTE: Object stays in place in the remote app as long as we have it's reference
+        // in the the value variable(so untill end of this method)
+        value = enumVal;
       }
 
-      App.Communicator.SetField(0, DeclaringType.FullName, Name, remoteNewValue);
-      return;
-    }
+      // Might throw if the parameter is a local object (not RemoteObject or DynamicRemoteObject).
+      ObjectOrRemoteAddress remoteNewValue = RemoteFunctionsInvokeHelper.CreateRemoteParameter(value);
 
-    // obj is NOT null. Make sure it's a RemoteObject or DynamicRemoteObject.
-    RemoteObject ro = obj as RemoteObject;
-    ro ??= (obj as DynamicRemoteObject)?.__ro;
-    if (ro != null)
+      if (obj == null)
+      {
+        // No 'this' object --> Static field
+
+        if (App == null)
+        {
+          throw new InvalidOperationException(
+              $"Trying to get a static field (null target object) " +
+              $"on a {nameof(RemoteFieldInfo)} but it's associated " +
+              $"Declaring Type ({DeclaringType}) does not have a RemoteHandle associated. " +
+              $"The type was either mis-constructed or it's not a {nameof(RemoteType)} object");
+        }
+
+        App.Communicator.SetField(0, DeclaringType.FullName, Name, remoteNewValue);
+        return;
+      }
+
+      // obj is NOT null. Make sure it's a RemoteObject or DynamicRemoteObject.
+      RemoteObject ro = obj as RemoteObject;
+      ro ??= (obj as DynamicRemoteObject)?.__ro;
+      if (ro != null)
+      {
+        // The Diver returns the field's new value and pins it for this client;
+        // nothing here wraps it, so that reference is returned.
+        ObjectOrRemoteAddress result = ro.SetField(Name, remoteNewValue);
+        if (result is { IsRemoteAddress: true, IsNull: false, IsType: false })
+          (App ?? RemoteClient.@client)?.Communicator?.ReleaseLater(result.RemoteAddress, result.PinOwner);
+        return;
+      }
+
+      throw new NotImplementedException(
+        $"{nameof(RemoteFieldInfo)}.{nameof(SetValue)} only supports {nameof(RemoteObject)} or {nameof(DynamicRemoteObject)} targets.");
+    }
+    finally
     {
-      // The Diver returns the field's new value and pins it for this client;
-      // nothing here wraps it, so that reference is returned.
-      ObjectOrRemoteAddress result = ro.SetField(Name, remoteNewValue);
-      if (result is { IsRemoteAddress: true, IsNull: false, IsType: false })
-        (App ?? RemoteClient.@client)?.Communicator?.ReleaseLater(result.RemoteAddress, result.PinOwner);
-      return;
+      GC.KeepAlive(obj);
     }
-
-    throw new NotImplementedException(
-      $"{nameof(RemoteFieldInfo)}.{nameof(SetValue)} only supports {nameof(RemoteObject)} or {nameof(DynamicRemoteObject)} targets.");
   }
 
   public override string ToString() => $"{FieldType.FullName} {Name}";

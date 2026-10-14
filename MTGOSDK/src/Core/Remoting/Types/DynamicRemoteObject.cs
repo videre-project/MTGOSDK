@@ -129,7 +129,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           // OK, invoking with generic arguments
           result = overload
             .MakeGenericMethod(_genericArguments)
-            .Invoke(parent.__ro, args);
+            .Invoke(parent, args);
         }
         else
         {
@@ -139,7 +139,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           }
           // OK, invoking without generic arguments
           result = overloads.Single()
-            .Invoke(parent.__ro, args);
+            .Invoke(parent, args);
         }
       }
       else if (overloads.Count > 1)
@@ -198,7 +198,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         if (matchingOverloads.Count == 1)
         {
           // We found a single matching overload, so we can invoke it.
-          result = matchingOverloads.Single().Invoke(parent.__ro, args);
+          result = matchingOverloads.Single().Invoke(parent, args);
         }
         else
         {
@@ -546,7 +546,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
                           where member.Name == name
                           where ((MethodInfo) member).GetParameters().Length == args.Length
                           select member;
-    return (T) (matchingMethods.Single() as MethodInfo).Invoke(__ro, args);
+    return (T) (matchingMethods.Single() as MethodInfo).Invoke(this, args);
   }
 
   /// <summary>
@@ -933,7 +933,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         // }
         try
         {
-          ((FieldInfo) firstMember).SetValue(__ro, value);
+          ((FieldInfo) firstMember).SetValue(this, value);
         }
         catch (Exception ex)
         {
@@ -947,7 +947,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         // }
         try
         {
-          ((PropertyInfo) firstMember).SetValue(__ro, value);
+          ((PropertyInfo) firstMember).SetValue(this, value);
         }
         catch (Exception ex)
         {
