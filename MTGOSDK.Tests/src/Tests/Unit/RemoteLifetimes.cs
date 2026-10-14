@@ -18,7 +18,6 @@ using MessagePack;
 using ScubaDiver;
 
 using MTGOSDK.Core;
-using MTGOSDK.Core.Memory;
 using MTGOSDK.Core.Memory.Snapshot;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Batching;
@@ -100,14 +99,23 @@ public class RemoteLifetimes
     public TaskCompletionSource<bool>? ObjectEntered { get; set; }
     public TaskCompletionSource<bool>? ContinueObject { get; set; }
 
+    public bool Legacy { get; }
     public TaskCompletionSource<bool>? InvocationEntered { get; set; }
     public TaskCompletionSource<bool>? ContinueInvocation { get; set; }
+    public TaskCompletionSource<bool>? UnpinEntered { get; set; }
+    public TaskCompletionSource<bool>? ContinueUnpin { get; set; }
     public TaskCompletionSource<bool>? UnsubscribeEntered { get; set; }
     public TaskCompletionSource<bool>? ContinueUnsubscribe { get; set; }
     private RemoteBatchRequest? _capture;
 
-    public PinPeer()
+    public PinPeer(bool legacy = false)
     {
+      Legacy = legacy;
+      if (legacy)
+      {
+        _clients.Add("other-client", ++_nextClient);
+        _runtime.AddClient(_nextClient);
+      }
       _peer.Answer = (_, _) => Task.FromResult(true);
       _peer.Respond = Respond;
       Handle = RemoteHandle.Connect(Process.GetCurrentProcess(), (ushort)_peer.Port);
@@ -119,7 +127,7 @@ public class RemoteLifetimes
 
     public ulong Pin(object value)
     {
-      lock (_lock) return _runtime.PinObject(value, _clients[LastRegistration!]);
+      lock (_lock) return _runtime.PinObject(value, Legacy ? null : _clients[LastRegistration!]);
     }
 
     public RemoteObject Add(Item item) =>
@@ -132,12 +140,12 @@ public class RemoteLifetimes
     {
       var buffer = new ArrayBufferWriter<byte>();
       var writer = new MessagePackWriter(buffer);
-      writer.WriteArrayHeader(5);
+      writer.WriteArrayHeader(Legacy ? 4 : 5);
       writer.Write(false);
       writer.WriteNil();
       writer.WriteNil();
       MessagePackSerializer.Serialize(ref writer, data);
-      writer.Write(owner);
+      if (!Legacy) writer.Write(owner);
       writer.Flush();
       return buffer.WrittenSpan.ToArray();
     }
@@ -152,6 +160,11 @@ public class RemoteLifetimes
       {
         InvocationEntered!.TrySetResult(true);
         await ContinueInvocation.Task;
+      }
+      if (endpoint == "/unpin" && ContinueUnpin is not null)
+      {
+        UnpinEntered!.TrySetResult(true);
+        await ContinueUnpin.Task;
       }
       if (endpoint == "/event_unsubscribe" && ContinueUnsubscribe is not null)
       {
@@ -263,7 +276,7 @@ public class RemoteLifetimes
             var create = MessagePackSerializer.Deserialize<CtorInvocationRequest>(body);
             var created = Activator.CreateInstance(_runtime.ResolveType(create.TypeFullName),
               create.Parameters.Select(_runtime.ParseParameterObject).ToArray())!;
-            ulong createdToken = _runtime.PinObject(created, _clients[owner]);
+            ulong createdToken = _runtime.PinObject(created, Legacy ? null : _clients[owner]);
             return Success(new InvocationResults
             {
               ReturnedObjectOrAddress = ObjectOrRemoteAddress.FromToken(createdToken, created.GetType().FullName!)
@@ -283,7 +296,8 @@ public class RemoteLifetimes
           case "/unhook_method": return Success<object?>(null, owner);
           case "/unpin":
             var pin = MessagePackSerializer.Deserialize<ExpectedUnpin>(body);
-            if (_clients.TryGetValue(owner, out int client))
+            if (Legacy) _runtime.UnpinObject(pin.Address);
+            else if (_clients.TryGetValue(owner, out int client))
               RequestOwner.Of(client).Unpin(_runtime, pin.Address, pin.PinOwner, owner);
             return Success<object?>(null, owner);
           case "/batch_execute":
@@ -304,7 +318,7 @@ public class RemoteLifetimes
         return MessagePackSerializer.Serialize(DiverResponse<object>.FromError("object lookup failed"));
       var request = MessagePackSerializer.Deserialize<ObjectDumpRequest>(body);
       _runtime.TryGetPinnedObject(request.Address, out var value);
-      if (request.PinRequest && TakeObjectReference) _runtime.PinObject(value, _clients[owner]);
+      if (request.PinRequest && TakeObjectReference) _runtime.PinObject(value, Legacy ? null : _clients[owner]);
       return Success(new ObjectDump
       {
         Type = request.TypeName, PinnedAddress = request.Address,
@@ -334,6 +348,7 @@ public class RemoteLifetimes
     public void Dispose()
     {
       ContinueInvocation?.TrySetResult(true);
+      ContinueUnpin?.TrySetResult(true);
       ContinueUnsubscribe?.TrySetResult(true);
       ContinueBatch?.TrySetResult(true);
       ContinueObject?.TrySetResult(true);
@@ -476,7 +491,6 @@ public class RemoteLifetimes
     var batch = RecordRawInput(peer, out ulong token);
     Collect();
     Assert.That(batch.IsAlive, Is.False);
-    GCTimer.Start();
     await Until(() => !peer.IsPinned(token));
   }
 
@@ -725,6 +739,73 @@ public class RemoteLifetimes
   }
 
   [MethodImpl(MethodImplOptions.NoInlining)]
+  private static WeakReference CreateTemporaryWrapper(RemoteObject remote, bool dynamic)
+  {
+    if (!dynamic) return new WeakReference(Retain(remote));
+    remote.AddReference();
+    return new WeakReference((DynamicRemoteObject)remote.Dynamify());
+  }
+
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task Test_WrapperCollectedDuringDisconnect_ReturnsItsHolderAfterReconnect(bool dynamic)
+  {
+    using var peer = new PinPeer();
+    var remote = peer.Add(new Item());
+    ulong token = remote.RemoteToken;
+    var proxy = CreateTemporaryWrapper(remote, dynamic);
+    peer.DropConnection();
+    await Until(() => !peer.Client.IsConnected);
+    Collect();
+    Assert.That(proxy.IsAlive, Is.False);
+    await peer.Client.ConnectAsync();
+    remote.ReleaseReference();
+    await Until(() => !peer.IsPinned(token));
+  }
+
+  [Test]
+  public async Task Test_UnansweredUnpin_DoesNotBlockReleaseOrUnregister()
+  {
+    using var peer = new PinPeer { UnpinEntered = Signal(), ContinueUnpin = Signal() };
+    var remote = peer.Add(new Item());
+    var releasing = Task.Run(() => remote.ReleaseReference());
+    await peer.UnpinEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    try
+    {
+      bool released = await Task.WhenAny(releasing, Task.Delay(500)) == releasing;
+      bool unregistered = peer.Client.TryUnregisterClient(TimeSpan.FromSeconds(2));
+      Assert.Multiple(() =>
+      {
+        Assert.That(released, Is.True, "release does not wait for the peer's answer");
+        Assert.That(unregistered, Is.True, "the pending unpin does not prevent unregistering");
+      });
+    }
+    finally
+    {
+      peer.ContinueUnpin.TrySetResult(true);
+      await releasing.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+  }
+
+  [Test]
+  public async Task Test_OlderDiver_UnregisterStillAllowsExplicitCleanup()
+  {
+    using var peer = new PinPeer(legacy: true);
+    var standalone = peer.Add(new Item());
+    var target = peer.Add(new Item());
+    ulong standaloneToken = standalone.RemoteToken;
+    ulong targetToken = target.RemoteToken;
+    var subscription = Subscribe(peer, target);
+    Collect();
+    Assert.That(peer.Client.UnregisterClient(), Is.True);
+    standalone.ReleaseReference();
+    subscription.Dispose();
+    target.ReleaseReference();
+    Assert.That(peer.Requests, Does.Contain("/event_unsubscribe"));
+    await Until(() => !peer.IsPinned(standaloneToken) && !peer.IsPinned(targetToken));
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
   private static Task<RemoteBatchResult> ExecuteTemporaryRequest(PinPeer peer)
   {
     var input = (DynamicRemoteObject)peer.Add(new Item()).Dynamify();
@@ -781,6 +862,89 @@ public class RemoteLifetimes
     Assert.That(() => peer.CaptureInputName(), Throws.TypeOf<InvalidOperationException>());
     target.ReleaseReference();
     GC.KeepAlive(subscription);
+  }
+
+  [Test]
+  public async Task Test_UnansweredUnpin_TimesOutWithoutReplayingTheRelease()
+  {
+    using var peer = new PinPeer { UnpinEntered = Signal(), ContinueUnpin = Signal() };
+    var remote = peer.Add(new Item());
+    ulong token = remote.RemoteToken;
+    remote.ReleaseReference();
+    await peer.UnpinEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    try
+    {
+      await Until(() => peer.Client.PendingRequestCount == 0);
+      Assert.That(peer.Requests.Count(p => p == "/unpin"), Is.EqualTo(1));
+      Assert.That(peer.IsPinned(token), Is.True, "a timeout does not confirm that the peer released the pin");
+      Assert.That(peer.Client.TryUnregisterClient(TimeSpan.FromSeconds(2)), Is.True);
+      Assert.That(peer.IsPinned(token), Is.False, "unregistering reclaims the remaining reference");
+    }
+    finally
+    {
+      peer.ContinueUnpin.TrySetResult(true);
+    }
+  }
+
+  [TestCase(false)]
+  [TestCase(true)]
+  public async Task Test_OlderDiver_KeepsSharedOwnershipAcrossReregister(bool reconnect)
+  {
+    using var peer = new PinPeer(legacy: true);
+    var item = new Item();
+    var remote = peer.Add(item);
+    ulong token = remote.RemoteToken;
+    Assert.That(peer.Client.UnregisterClient(), Is.True);
+    if (reconnect)
+    {
+      peer.DropConnection();
+      await Until(() => !peer.Client.IsConnected);
+    }
+    Assert.That(peer.Client.RegisterClient(), Is.True);
+    Assert.That(remote.IsValid, Is.True);
+    remote.ReleaseReference();
+    await Until(() => !peer.IsPinned(token));
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static WeakReference CreateLazyWrapper(Action initialize)
+  {
+    var lazy = new LazyRemoteObject();
+    lazy.Set(() => { initialize(); return null!; });
+    return new WeakReference(lazy);
+  }
+
+  [Test]
+  public void Test_CollectingLazyWrapper_DoesNotInitializeIt()
+  {
+    int initialized = 0;
+    var lazy = CreateLazyWrapper(() => initialized++);
+    Collect();
+    Assert.That(lazy.IsAlive, Is.False);
+    Assert.That(initialized, Is.Zero);
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static WeakReference CreateResolvedLazyWrapper(DynamicRemoteObject proxy)
+  {
+    var lazy = new LazyRemoteObject();
+    lazy.Set(() => proxy);
+    lazy.GetResolvedInstance();
+    return new WeakReference(lazy);
+  }
+
+  [Test]
+  public async Task Test_CollectingResolvedLazyWrapper_DoesNotReleaseAnotherWrappersOwnership()
+  {
+    using var peer = new PinPeer();
+    var proxy = (DynamicRemoteObject)peer.Add(new Item()).Dynamify();
+    var lazy = CreateResolvedLazyWrapper(proxy);
+    Collect();
+    await DrainPinReturns(peer);
+    Assert.That(lazy.IsAlive, Is.False);
+    Assert.That(proxy.__ro.IsValid, Is.True);
+    Assert.That(peer.IsPinned(proxy.__ro.RemoteToken), Is.True);
+    GC.KeepAlive(proxy);
   }
 
   [MethodImpl(MethodImplOptions.NoInlining)]

@@ -40,6 +40,9 @@ public class TcpCommunicator : TcpPipelineBase
 
   // Request ids stay unique across connections.
   private int _nextRequestId = 0;
+  private volatile bool _supportsPinOwnership;
+
+  internal bool SupportsPinOwnership => _supportsPinOwnership;
 
   // Callback handling, in wire order across reconnects.
   private readonly ChannelScheduler _callbackScheduler;
@@ -195,6 +198,7 @@ public class TcpCommunicator : TcpPipelineBase
         throw new Core.Exceptions.ExternalErrorException(errorMsg);
       }
 
+      if (wrapper.PinOwner is not null) _supportsPinOwnership = true;
       if (wrapper.Data is IPinResponse pins)
         pins.PinOwner = wrapper.PinOwner;
       return wrapper.Data;

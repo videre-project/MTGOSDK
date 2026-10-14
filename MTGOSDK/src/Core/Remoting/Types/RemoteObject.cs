@@ -108,21 +108,7 @@ public class RemoteObject : IObjectReference
       if (_released) return;
       _released = true;
     }
-    if (_ref != null && _ref.IsValid)
-    {
-      GCTimer.Enqueue(new QueuedRemoteObjectReference(_ref));
-    }
-  }
-
-  private sealed class QueuedRemoteObjectReference(RemoteObjectRef reference) : IObjectReference
-  {
-    public bool IsValid => reference.IsValid;
-
-    public void AddReference()
-    { }
-
-    public void ReleaseReference(bool useJitter) =>
-      reference.ReleaseReference(useJitter);
+    _ref?.ReleaseReference();
   }
 
   private readonly RemoteHandle _app;

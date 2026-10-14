@@ -202,8 +202,7 @@ internal class RemoteObjectRef
       }
       else
       {
-        // No delay, unpin immediately
-        _communicator.UnpinObject(_pinnedAddress, _registrationEpoch);
+        _communicator.ReleaseLater(_pinnedAddress, _registrationEpoch);
       }
     }
     catch (NullReferenceException)

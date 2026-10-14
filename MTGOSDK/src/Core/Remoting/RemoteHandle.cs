@@ -281,7 +281,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
         try
         {
           od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
-          epoch = _app.Communicator.GetReceiptEpoch(od.PinOwner);
+          epoch = _app.Communicator.GetResponseRegistrationEpoch(od.PinOwner);
 
           // Check if we have a cached RemoteType with its SourceTypeDump.
           RemoteType rt = TypeResolver.Instance.ResolveRemoteType(_app, od.Type);
@@ -415,7 +415,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
       bool ownsReference,
       string? pinOwner = null)
     {
-      long epoch = _app.Communicator.GetReceiptEpoch(pinOwner);
+      long epoch = _app.Communicator.GetResponseRegistrationEpoch(pinOwner);
       var receipt = ownsReference ? PinReceipt.Surplus : PinReceipt.None;
       try
       {

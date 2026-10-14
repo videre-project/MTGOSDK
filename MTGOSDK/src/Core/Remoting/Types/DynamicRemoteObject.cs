@@ -342,18 +342,12 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   ~DynamicRemoteObject()
   {
-    // Destructor - we need to make sure we don't leave dangling references to
-    // remote objects. This is important because the remote object might be
-    // disposed of and we don't want to keep a reference to it.
-
-    if (__ro != null && __ro.IsValid)
-    {
-      __ro.ReleaseReference();
-    }
-
-    __ro = null;
-    __ra = null;
-    __type = null;
+    // Only the fields initialized by this wrapper own a reference. Accessing
+    // virtual properties here could initialize a lazy wrapper during collection.
+    m_ro?.ReleaseReference();
+    m_ro = null;
+    m_ra = null;
+    m_type = null;
   }
 
   /// <summary>

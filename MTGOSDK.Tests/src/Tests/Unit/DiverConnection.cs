@@ -327,6 +327,8 @@ public class DiverConnection
       Answer = (_, _) => Task.FromResult(true),
       Body = endpoint => endpoint switch
       {
+        "/register_client" => MessagePackSerializer.Serialize(new DiverResponse<object>
+          { PinOwner = "" }),
         "/event_subscribe" or "/hook_method" => MessagePackSerializer.Serialize(
           DiverResponse<EventRegistrationResults>.Success(
             new EventRegistrationResults { Token = Interlocked.Increment(ref tokens) })),
@@ -385,6 +387,7 @@ public class DiverConnection
     // One native hook: the Diver gives every share of it the same token.
     peer.Body = endpoint => endpoint switch
     {
+      "/register_client" => MessagePackSerializer.Serialize(new DiverResponse<object> { PinOwner = "" }),
       "/hook_method" => MessagePackSerializer.Serialize(
         DiverResponse<EventRegistrationResults>.Success(new EventRegistrationResults { Token = 7 })),
       "/unregister_client" => MessagePackSerializer.Serialize(
@@ -730,6 +733,45 @@ public class DiverConnection
     }
     finally
     {
+      client.Cancel();
+    }
+  }
+
+
+  [Test]
+  public async Task Test_ActiveCleanup_WaitsForASlowSubscription()
+  {
+    using var peer = SubscriptionPeer(() => true);
+    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    Task? subscribing = null;
+    Task? cleanup = null;
+    try
+    {
+      Assert.That(client.RegisterClient(), Is.True);
+      client.EventSubscribe(1, "Changed", s_noEvent);
+      peer.Answer = (_, endpoint) => endpoint == "/event_subscribe" ? answer.Task : Task.FromResult(true);
+      subscribing = Task.Run(() => client.EventSubscribe(1, "OtherChanged", (_, _) => { }));
+      await Until(() => peer.Requests(0).Count(endpoint => endpoint == "/event_subscribe") == 2,
+        "the second subscription is waiting for its response");
+      cleanup = Task.Run(() => client.EventUnsubscribe(s_noEvent));
+      await Task.Delay(1200);
+      Assert.That(cleanup.IsCompleted, Is.False,
+        "an active cleanup still waits for the registration lock after one second");
+      answer.SetResult(true);
+      await subscribing.WaitAsync(TimeSpan.FromSeconds(5));
+      await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
+      Assert.That(peer.Requests(0).Count(endpoint => endpoint == "/event_unsubscribe"), Is.EqualTo(1));
+    }
+    finally
+    {
+      answer.TrySetResult(true);
+      if (subscribing is not null) await subscribing.WaitAsync(TimeSpan.FromSeconds(5));
+      if (cleanup is not null)
+      {
+        try { await cleanup.WaitAsync(TimeSpan.FromSeconds(5)); }
+        catch (OperationCanceledException) { }
+      }
       client.Cancel();
     }
   }

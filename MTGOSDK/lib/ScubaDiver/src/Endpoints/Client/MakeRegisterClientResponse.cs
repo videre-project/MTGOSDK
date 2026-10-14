@@ -174,7 +174,7 @@ public partial class Diver : IDisposable
     {
       lock (_registeredPidsLock) _legacyClients.Add((pid, startTimeUtc));
       Log.Debug("[Diver] New client registered (without a client id). ID = " + pid);
-      return s_okResponse;
+      return WrapSuccess<object>(null);
     }
 
     string key = ClientKey(pid, request.ClientId);
@@ -210,7 +210,7 @@ public partial class Diver : IDisposable
     }
     if (replaced != null) RemoveClientSubscriptions(replaced);
     Log.Debug("[Diver] New client registered. ID = " + pid);
-    return s_okResponse;
+    return WrapSuccess<object>(null);
   }
 
   private byte[] MakeUnregisterClientResponse()
