@@ -277,6 +277,7 @@ public class RemoteHandle : DLRWrapper, IDisposable
       TypeDump td = null!;
       Retry(() =>
       {
+        od = null!;
         try
         {
           od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
@@ -295,6 +296,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
         }
         catch (Exception e)
         {
+          if (od?.ReferenceTaken == true)
+            _app.Communicator.ReleaseLater(od.PinnedAddress, epoch);
           throw new InvalidOperationException(
             $"Could not dump remote object {typeName} at address {remoteAddress:X}.\n" +
             $"This is likely due to the object being invalid or not being a managed object.",
@@ -307,10 +310,17 @@ public class RemoteHandle : DLRWrapper, IDisposable
       // A current Diver took one reference (the new ref's, or a surplus to
       // return); an older one may not have, and then nothing is returned.
       var receipt = od.ReferenceTaken ? PinReceipt.Surplus : PinReceipt.None;
-      return PublishRemoteObjectRef(
-        od.PinnedAddress,
-        () => new RemoteObjectRef(od, td, _app.Communicator, epoch),
-        epoch, ref receipt);
+      try
+      {
+        return PublishRemoteObjectRef(
+          od.PinnedAddress,
+          () => new RemoteObjectRef(od, td, _app.Communicator, epoch),
+          epoch, ref receipt);
+      }
+      finally
+      {
+        SettleReceipt(od.PinnedAddress, epoch, ref receipt);
+      }
     }
 
 
