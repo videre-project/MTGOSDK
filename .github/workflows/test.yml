@@ -73,7 +73,7 @@ jobs:
           @"
           <RunSettings>
             <NUnit>
-              <TestOutputXml>$env:RUNNER_TEMP/test-results</TestOutputXml>
+              <TestOutputXml>$env:WORKSPACE_PATH/test-results</TestOutputXml>
             </NUnit>
           </RunSettings>
           "@ | Set-Content -Path $settingsPath
@@ -87,7 +87,7 @@ jobs:
         with:
           name: test-results
           path: |
-            ${{ runner.temp }}/test-results/*.xml
+            ${{ env.WORKSPACE_PATH }}/test-results/*.xml
             ${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/bin/**/.testresults-*.log
             ${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/bin/**/MTGOSDK.Tests*.log
           include-hidden-files: true
@@ -119,9 +119,10 @@ jobs:
             ForEach-Object { Get-Content -LiteralPath $_.FullName }
         shell: powershell
 
-      - if: always()
+      - name: Summarize test results
+        if: always()
         run: |
-          $testResultsPath = Join-Path $env:RUNNER_TEMP 'test-results/MTGOSDK.Tests.xml'
+          $testResultsPath = Join-Path $env:WORKSPACE_PATH 'test-results/MTGOSDK.Tests.xml'
           if (-not (Test-Path $testResultsPath)) {
             @(
               "TEST_RESULTS_LABEL=Critical error"
@@ -134,29 +135,38 @@ jobs:
           $testRun = $results.'test-run'
           $testCount = [int]$testRun.total
           $successCount = [int]$testRun.passed
-          $duration = [double]::Parse($testRun.duration, [cultureinfo]::InvariantCulture)
+          $duration = [math]::Round(
+            [double]::Parse($testRun.duration, [cultureinfo]::InvariantCulture), 2)
           $formattedDuration = if ($duration -ge 60) {
-            "{0}m {1}s" -f [math]::Floor($duration / 60), ($duration % 60)
+            "{0}m {1:F2}s" -f [math]::Floor($duration / 60), ($duration % 60)
           } else {
-            "{0}s" -f $duration
+            "{0:F2}s" -f $duration
           }
-          $label = if ($env:TEST_RESULT -eq 'success') {
+          $runPassed = $testRun.result -eq 'Passed'
+          $label = if (-not $runPassed) {
+            "Failing after $formattedDuration"
+          } elseif ($env:TEST_RESULT -eq 'success') {
             "Successful in $formattedDuration"
           } else {
-            "Failing after $formattedDuration"
+            "Workflow failed after $formattedDuration"
           }
 
           $description = "$successCount/$testCount tests passed"
-          $setupFailure = $results.SelectSingleNode("//test-suite[@result='Failed' and @site='SetUp']")
-          if ($setupFailure) {
-            Write-Output "::error title=Test setup failed::See the NUnit setup exception in the test output and test-results artifact."
-            $description = "Test setup failed; $description"
+          $fixtureFailure = $results.SelectSingleNode("//test-suite[@result='Failed' and (@site='SetUp' or @site='TearDown')]")
+          if ($fixtureFailure) {
+            $phase = if ($fixtureFailure.site -eq 'SetUp') { 'setup' } else { 'teardown' }
+            Write-Output "::error title=Test $phase failed::See the NUnit $phase exception in the test output and test-results artifact."
+            $description = "Test $phase failed; $description"
           }
 
           @(
             "TEST_RESULTS_LABEL=$label"
             "TEST_RESULTS_DESCRIPTION=$description"
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          if (-not $runPassed) {
+            throw "NUnit reported $($testRun.result); see the test output and test-results artifact."
+          }
         shell: powershell
         env:
           # Report success or failure based on the workflow run status
