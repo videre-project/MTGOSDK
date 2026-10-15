@@ -97,6 +97,9 @@ public class SetupFixture : Shared
 
       client = new Client(options, loggerProvider: s_loggerProvider);
 
+      Assert.That(Client.Version, Is.EqualTo(Client.CompatibleVersion),
+        "MTGO must match the SDK reference version before integration tests run.");
+
       // Ensure the MTGO client is not interactive (with an existing user session).
       Assert.That(client.IsInteractive, Is.False);
 
@@ -120,34 +123,11 @@ public class SetupFixture : Shared
       GC.Collect();
       GC.WaitForPendingFinalizers();
     }
-    // If an exception occurs, log the error and immediately exit the runner.
+    // Let NUnit report setup failures and finish writing the test results.
     catch (Exception ex)
     {
-      // If the exception is an aggregate exception, get the inner exception
-      // and unroll the full stack trace.
-      string error;
-      if (ex is AggregateException ae)
-      {
-        error = ae.Flatten().ToString();
-      }
-      else
-      {
-        error = ex.ToString();
-      }
-
-      // Check if inside a GitHub Actions CI environment.
-      if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
-      {
-        TestContext.Error.WriteLine($"::error title=Encountered an error during setup::{error}");
-      }
-      else
-      {
-        TestContext.Error.WriteLine(error);
-      }
-
-      TestContext.Error.Flush();
-      await Task.Delay(1000);
-      Environment.Exit(-100);
+      s_logger.LogError(ex, "MTGO test setup failed.");
+      throw;
     }
     finally
     {
@@ -176,31 +156,31 @@ public class SetupFixture : Shared
       // Skip if the client has already been disposed.
       if (!RemoteClient.IsInitialized && client == null) return;
 
-      // Log off the client to ensure that the user session terminates.
-      bool isLoggedIn = true;
-      if (!client.IsInteractive)
+      bool isInteractive = false;
+      try
       {
-        await client.LogOff();
-        Assert.That(client.IsLoggedIn, Is.False);
-        isLoggedIn = false;
+        isInteractive = client?.IsInteractive ?? false;
+        if (client != null && !isInteractive && (client.IsLoggedIn || client.IsConnected))
+        {
+          await client.LogOff();
+          Assert.That(client.IsLoggedIn, Is.False);
+        }
+      }
+      finally
+      {
+        // Setup may fail before assigning a client or logging in.
+        RemoteClient.Dispose();
+        client = null!;
+        await RemoteClient.WaitForDisposeAsync();
+        if (!isInteractive)
+          RemoteClient.KillProcess();
       }
 
-      // Safely teardown the client instance and wait for disposal.
-      client.Dispose();
-      client = null!;
-      await RemoteClient.WaitForDisposeAsync();
       Assert.That(RemoteClient.IsDisposed, Is.True);
-
-      // Verify that all remote handles have been reset.
       Assert.That(RemoteClient.IsInitialized, Is.False);
       Assert.That(RemoteClient.Port, Is.Null);
-
-      // Finally, kill the process to ensure that all resources are released.
-      if (!isLoggedIn)
-      {
-        RemoteClient.KillProcess();
+      if (!isInteractive)
         Assert.That(RemoteClient.HasStarted, Is.False);
-      }
     }
     finally
     {

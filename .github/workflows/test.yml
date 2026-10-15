@@ -66,9 +66,32 @@ jobs:
       # leaking in from the main solution restore.
       #
       - name: Run tests
-        run: dotnet test --project MTGOSDK.Tests -p:UseLocalFeed=True
+        run: |
+          "DIVER_LOG_PATH=$env:LOCALAPPDATA/MTGOSDK/Logs" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $settingsPath = Join-Path $env:RUNNER_TEMP 'nunit.runsettings'
+          @"
+          <RunSettings>
+            <NUnit>
+              <TestOutputXml>$env:RUNNER_TEMP/test-results</TestOutputXml>
+            </NUnit>
+          </RunSettings>
+          "@ | Set-Content -Path $settingsPath
+          dotnet test --project MTGOSDK.Tests -p:UseLocalFeed=True --settings $settingsPath
         shell: powershell
         working-directory: ${{ env.WORKSPACE_PATH }}
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            ${{ runner.temp }}/test-results/*.xml
+            ${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/bin/**/.testresults-*.log
+            ${{ env.WORKSPACE_PATH }}/MTGOSDK.Tests/bin/**/MTGOSDK.Tests*.log
+          include-hidden-files: true
+          retention-days: 7
 
       # Upload the Diver logs for debugging test failures or crashes
       - if: ${{ failure() }}
@@ -76,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: diver-logs
-          path: ${{ env.LOCALAPPDATA }}/MTGOSDK/Logs/*
+          path: ${{ env.DIVER_LOG_PATH }}/*
           retention-days: 7
 
       # Upload the MSBuild binary log
@@ -88,56 +111,52 @@ jobs:
           path: ${{ env.WORKSPACE_PATH }}/logs/msbuild.binlog
           retention-days: 7
 
-      # Show the test log
-      - if: ${{ always() }}
+      - name: Show test logs
+        if: always()
         run: |
-          $TEST_LOG_PATH = Get-ChildItem -Path $env:WORKSPACE_PATH\MTGOSDK.Tests\bin\* -Recurse -Include *.testresults-*.log | Select-Object -First 1 -ExpandProperty FullName
-          foreach ($line in Get-Content -Path $TEST_LOG_PATH) {
-            Write-Host $line
-          }
+          Get-ChildItem -Path "$env:WORKSPACE_PATH/MTGOSDK.Tests/bin" -Recurse -File -Force `
+            -Include '.testresults-*.log', 'MTGOSDK.Tests*.log' -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-Content -LiteralPath $_.FullName }
         shell: powershell
-      - if: ${{ always() }}
-        run: |
-          $TEST_LOG_PATH = Get-ChildItem -Path $env:WORKSPACE_PATH\MTGOSDK.Tests\bin\* -Recurse -Include MTGOSDK.Tests*.log | Select-Object -First 1 -ExpandProperty FullName
-          foreach ($line in Get-Content -Path $TEST_LOG_PATH) {
-            Write-Host $line
-          }
-        shell: powershell
-        continue-on-error: true
 
       - if: always()
         run: |
-          $TEST_RESULTS_PATH = Get-ChildItem -Path $env:WORKSPACE_PATH\MTGOSDK.Tests\bin\* -Recurse -Include *.testresults | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $TEST_RESULTS_PATH) {
-            Write-Output "TEST_RESULTS_LABEL=Critical error" |
-              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            Write-Output "TEST_RESULTS_DESCRIPTION=Test workflow failed" |
-              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          } else {
-            $testCount = (Get-Content $TEST_RESULTS_PATH | Where-Object {$_.Trim() -ne ""} | Measure-Object -Line).Lines
-            $successCount = (Select-String -Path $TEST_RESULTS_PATH -Pattern 'Success' | Measure-Object).Count
-
-            # Calculate the total duration of all tests in the test results file
-            $duration = (Select-String -Path $TEST_RESULTS_PATH -Pattern 'Took' | ForEach-Object {
-              $_.ToString().Split(' ')[-2].TrimEnd('s')
-            } | Measure-Object -Sum).Sum
-            $formattedDuration = if ($duration -ge 60) {
-              "{0}m {1}s" -f [math]::Floor($duration / 60), ($duration % 60)
-            } else {
-              "{0}s" -f $duration
-            }
-
-            if ($env:TEST_RESULT -eq 'success') {
-              Write-Output "TEST_RESULTS_LABEL=Successful in $formattedDuration" |
-                Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            } else {
-              Write-Output "TEST_RESULTS_LABEL=Failing after $formattedDuration" |
-                Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            }
-
-            Write-Output "TEST_RESULTS_DESCRIPTION=$successCount/$testCount tests passed" |
-              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $testResultsPath = Join-Path $env:RUNNER_TEMP 'test-results/MTGOSDK.Tests.xml'
+          if (-not (Test-Path $testResultsPath)) {
+            @(
+              "TEST_RESULTS_LABEL=Critical error"
+              "TEST_RESULTS_DESCRIPTION=Test workflow failed"
+            ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            throw "NUnit result file was not produced: $testResultsPath"
           }
+
+          [xml]$results = Get-Content -Raw -Path $testResultsPath
+          $testRun = $results.'test-run'
+          $testCount = [int]$testRun.total
+          $successCount = [int]$testRun.passed
+          $duration = [double]::Parse($testRun.duration, [cultureinfo]::InvariantCulture)
+          $formattedDuration = if ($duration -ge 60) {
+            "{0}m {1}s" -f [math]::Floor($duration / 60), ($duration % 60)
+          } else {
+            "{0}s" -f $duration
+          }
+          $label = if ($env:TEST_RESULT -eq 'success') {
+            "Successful in $formattedDuration"
+          } else {
+            "Failing after $formattedDuration"
+          }
+
+          $description = "$successCount/$testCount tests passed"
+          $setupFailure = $results.SelectSingleNode("//test-suite[@result='Failed' and @site='SetUp']")
+          if ($setupFailure) {
+            Write-Output "::error title=Test setup failed::See the NUnit setup exception in the test output and test-results artifact."
+            $description = "Test setup failed; $description"
+          }
+
+          @(
+            "TEST_RESULTS_LABEL=$label"
+            "TEST_RESULTS_DESCRIPTION=$description"
+          ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         shell: powershell
         env:
           # Report success or failure based on the workflow run status
