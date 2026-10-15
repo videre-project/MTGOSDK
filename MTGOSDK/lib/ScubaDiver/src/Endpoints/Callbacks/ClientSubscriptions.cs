@@ -43,15 +43,18 @@ public partial class Diver : IDisposable
   private void AddClientSubscription(int token, bool hook)
   {
     if (s_requestConnection.Value is not Guid connection) return;
+    var owner = CurrentRequestOwner;
     lock (_registeredPidsLock)
     {
-      if (!_connectionClients.TryGetValue(connection, out var client))
+      if (!owner.IsGone && owner.Registration is null)
       {
         _unregisteredSubscriptions.TryGetValue(token, out int shares);
         _unregisteredSubscriptions[token] = shares + 1;
         return;
       }
-      if (!client.Removed && client.Id == CurrentRequestOwner.Registration)
+      if (!owner.IsGone &&
+          _connectionClients.TryGetValue(connection, out var client) &&
+          !client.Removed && client.Id == owner.Registration)
       {
         client.Subscriptions.Add((token, hook));
         return;
@@ -74,9 +77,11 @@ public partial class Diver : IDisposable
   private SubscriptionOwner TakeClientSubscription(int token, bool hook)
   {
     if (s_requestConnection.Value is not Guid connection) return SubscriptionOwner.Unregistered;
+    var owner = CurrentRequestOwner;
+    if (owner.IsGone) return SubscriptionOwner.NotOwned;
     lock (_registeredPidsLock)
     {
-      if (!_connectionClients.TryGetValue(connection, out var client))
+      if (owner.Registration is null)
       {
         if (_unregisteredSubscriptions.TryGetValue(token, out int shares))
         {
@@ -85,7 +90,8 @@ public partial class Diver : IDisposable
         }
         return SubscriptionOwner.Unregistered;
       }
-      if (client.Id != CurrentRequestOwner.Registration) return SubscriptionOwner.NotOwned;
+      if (!_connectionClients.TryGetValue(connection, out var client) ||
+          client.Id != owner.Registration) return SubscriptionOwner.NotOwned;
       return client.Subscriptions.Remove((token, hook)) ? SubscriptionOwner.Owned : SubscriptionOwner.NotOwned;
     }
   }
