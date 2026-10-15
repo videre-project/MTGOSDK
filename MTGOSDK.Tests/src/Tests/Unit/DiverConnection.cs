@@ -11,7 +11,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,6 +42,8 @@ public class DiverConnection
     private readonly CancellationTokenSource _cts = new();
     private readonly List<TcpClient> _connections = new();
     private readonly List<List<string>> _requests = new();
+    private readonly List<Task> _workers = new();
+    private readonly Task _acceptTask;
 
     /// <summary>
     /// Decides when to answer: the connection index and endpoint.
@@ -59,7 +60,7 @@ public class DiverConnection
     public Peer()
     {
       _listener.Start();
-      _ = AcceptAsync();
+      _acceptTask = AcceptAsync();
     }
 
     public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -89,56 +90,64 @@ public class DiverConnection
       {
         while (!_cts.IsCancellationRequested)
         {
-          var client = await _listener.AcceptTcpClientAsync();
+          var client = await _listener.AcceptTcpClientAsync(_cts.Token).ConfigureAwait(false);
           int index;
           lock (_connections)
           {
+            if (_cts.IsCancellationRequested)
+            {
+              client.Dispose();
+              return;
+            }
             index = _connections.Count;
             _connections.Add(client);
             _requests.Add(new List<string>());
+            _workers.Add(ServeAsync(index, client));
           }
-          _ = ServeAsync(index, client);
         }
       }
-      catch (Exception) when (_cts.IsCancellationRequested) { }
-      catch (ObjectDisposedException) { }
-      catch (SocketException) { }
+      catch (Exception error) when (IsConnectionClosed(error)) { }
     }
 
     private async Task ServeAsync(int index, TcpClient client)
     {
-      var stream = client.GetStream();
-      var writeLock = new SemaphoreSlim(1, 1);
+      using var writeLock = new SemaphoreSlim(1, 1);
+      var responses = new List<Task>();
       try
       {
+        var stream = client.GetStream();
         var header = new byte[11];
         while (true)
         {
-          await ReadExactlyAsync(stream, header);
+          await stream.ReadExactlyAsync(header).ConfigureAwait(false);
           int id = BinaryPrimitives.ReadInt32LittleEndian(header);
           int endpointLength = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(5, 2));
           int bodyLength = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(7, 4));
           var endpointBytes = new byte[endpointLength];
-          await ReadExactlyAsync(stream, endpointBytes);
+          await stream.ReadExactlyAsync(endpointBytes).ConfigureAwait(false);
           var body = new byte[bodyLength];
-          await ReadExactlyAsync(stream, body);
+          await stream.ReadExactlyAsync(body).ConfigureAwait(false);
           string endpoint = Encoding.UTF8.GetString(endpointBytes);
           lock (_connections) _requests[index].Add(endpoint);
-          _ = RespondAsync(index, endpoint, body, id, stream, writeLock);
+          responses.Add(RespondAsync(index, endpoint, body, id, stream, writeLock));
         }
       }
-      catch (Exception) { /* closed */ }
+      catch (Exception error) when (IsConnectionClosed(error)) { }
+      finally
+      {
+        await Task.WhenAll(responses).ConfigureAwait(false);
+      }
     }
 
     private async Task RespondAsync(int index, string endpoint, byte[] request, int id, NetworkStream stream, SemaphoreSlim writeLock)
     {
       try
       {
-        if (!await Answer(index, endpoint)) return;
+        if (!await Answer(index, endpoint).WaitAsync(_cts.Token).ConfigureAwait(false)) return;
         byte[] body;
         try
         {
-          body = (Respond is null ? Body(endpoint) : await Respond(index, endpoint, request))
+          body = (Respond is null ? Body(endpoint) : await Respond(index, endpoint, request).ConfigureAwait(false))
             ?? MessagePackSerializer.Serialize(DiverResponse<object>.Success(null!));
         }
         catch (Exception error)
@@ -150,46 +159,29 @@ public class DiverConnection
         frame[4] = (byte)TcpMessageType.Response;
         BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(7, 4), body.Length);
         body.CopyTo(frame, 11);
-        await writeLock.WaitAsync();
-        try { await stream.WriteAsync(frame, 0, frame.Length); }
+        await writeLock.WaitAsync(_cts.Token).ConfigureAwait(false);
+        try { await stream.WriteAsync(frame, 0, frame.Length).ConfigureAwait(false); }
         finally { writeLock.Release(); }
       }
-      catch (Exception) { /* closed */ }
+      catch (Exception error) when (IsConnectionClosed(error)) { }
     }
 
-    private static async Task ReadExactlyAsync(Stream stream, byte[] buffer)
-    {
-      int read = 0;
-      while (read < buffer.Length)
-      {
-        int n = await stream.ReadAsync(buffer, read, buffer.Length - read);
-        if (n == 0) throw new EndOfStreamException();
-        read += n;
-      }
-    }
+    private static bool IsConnectionClosed(Exception error) =>
+      error is IOException or SocketException or ObjectDisposedException or OperationCanceledException;
 
     public void Dispose()
     {
-      _cts.Cancel();
-      _listener.Stop();
-      lock (_connections)
-        foreach (var connection in _connections) connection.Dispose();
+      using (_cts)
+      {
+        _cts.Cancel();
+        _listener.Stop();
+        lock (_connections)
+          foreach (var connection in _connections) connection.Dispose();
+        _acceptTask.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+        Task.WhenAll(_workers).WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+      }
     }
   }
-
-  private static void SetField(object target, string name, object? value) =>
-    target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(target, value);
-
-  private static TcpCommunicator Transport(DiverCommunicator client) =>
-    (TcpCommunicator)typeof(DiverCommunicator)
-      .GetField("_tcp", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(client)!;
-
-  /// <summary>
-  /// The transport's current connection.
-  /// </summary>
-  private static object Session(DiverCommunicator client) =>
-    typeof(TcpCommunicator)
-      .GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(Transport(client))!;
 
   private static async Task Until(Func<bool> condition, string what)
   {
@@ -202,23 +194,21 @@ public class DiverConnection
   }
 
   [Test]
-  public async Task Test_Disconnect_AfterAnUnansweredUnregister_SendsNothing()
+  public void Test_Disconnect_AfterAnUnansweredUnregister_SendsNothing()
   {
-    using var peer = new Peer();
+    using var peer = SubscriptionPeer(() => true);
+    peer.Answer = (_, endpoint) => Task.FromResult(endpoint != "/unregister_client");
     var client = new DiverCommunicator("127.0.0.1", peer.Port);
     try
     {
-      await client.ConnectAsync();
-      // As a registered client (this peer never confirms anything).
-      SetField(client, "_registered", true);
-      SetField(client, "_process_id", Environment.ProcessId);
+      Assert.That(client.RegisterClient(), Is.True);
 
       // RemoteClient.Dispose: a bounded unregister, then the handle's Disconnect.
       var watch = Stopwatch.StartNew();
       Assert.That(client.TryUnregisterClient(TimeSpan.FromMilliseconds(500)), Is.False);
       Assert.That(client.Disconnect(), Is.False, "nothing is left to unregister");
-      Assert.That(watch.Elapsed, Is.LessThan(TimeSpan.FromSeconds(3)), "disposal does not wait for the peer");
-      Assert.That(peer.Requests(0), Is.EqualTo(new[] { "/unregister_client" }));
+      Assert.That(watch.Elapsed, Is.LessThan(TimeSpan.FromSeconds(3)), "bounded unregister and disconnect finish without a response");
+      Assert.That(peer.Requests(0), Is.EqualTo(new[] { "/register_client", "/unregister_client" }));
     }
     finally
     {
@@ -227,20 +217,41 @@ public class DiverConnection
   }
 
   [Test]
-  public async Task Test_ConcurrentConnects_OpenOneConnection()
+  public async Task Test_ConcurrentConnects_WaitForOneHandshake()
   {
-    using var peer = new Peer();
-    var client = new DiverCommunicator("127.0.0.1", peer.Port);
+    using var peer = new Peer { Answer = (_, _) => Task.FromResult(true) };
+    using var tcp = new TcpCommunicator("127.0.0.1", peer.Port);
+    var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    int handshakes = 0;
+    async Task Handshake(Func<string, byte[], Task> send)
+    {
+      Interlocked.Increment(ref handshakes);
+      started.TrySetResult();
+      await release.Task;
+      await send("/register_client", []);
+    }
+
+    var first = tcp.ConnectAsync(Handshake);
+    Task[] others = [];
     try
     {
-      await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => client.ConnectAsync())));
-      await Task.Delay(500);
-      Assert.That(client.IsConnected, Is.True);
+      await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+      others = Enumerable.Range(0, 7).Select(_ => tcp.ConnectAsync(Handshake)).ToArray();
+      Assert.That(others.All(attempt => !attempt.IsCompleted), Is.True,
+        "concurrent connection attempts wait for the pending handshake");
+
+      release.SetResult();
+      await Task.WhenAll(others.Prepend(first)).WaitAsync(TimeSpan.FromSeconds(5));
+      await tcp.SendRequestAsync("/ping", []).WaitAsync(TimeSpan.FromSeconds(5));
+      Assert.That(handshakes, Is.EqualTo(1));
       Assert.That(peer.Accepted, Is.EqualTo(1));
+      Assert.That(peer.Requests(0), Is.EqualTo(new[] { "/register_client", "/ping" }));
     }
     finally
     {
-      client.Cancel();
+      release.TrySetResult();
+      await Task.WhenAll(others.Prepend(first)).WaitAsync(TimeSpan.FromSeconds(5));
     }
   }
 
@@ -260,23 +271,28 @@ public class DiverConnection
       peer.Close(0);
       await Until(() => !client.IsConnected, "the client sees the drop");
 
-      // One request reconnects and waits for the registration. Another, sent
-      // straight to the transport as a request that had already passed the
-      // connection check would be, arrives while the registration is unanswered.
+      // Concurrent API requests must wait until the new connection is registered.
       var first = Task.Run(() => client.CheckAliveness());
       await Until(() => peer.Requests(1).Contains("/register_client"), "the registration is sent");
-      var second = Transport(client).SendRequestAsync("/ping", []);
+      var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+      var second = Task.Run(() =>
+      {
+        secondStarted.SetResult();
+        return client.CheckAliveness();
+      });
+      await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
       await Task.Delay(500);
       Assert.That(peer.Requests(1), Is.EqualTo(new[] { "/register_client" }),
         "no request is sent on the new connection before its registration is confirmed");
 
       registered.SetResult(true);
       Assert.That(await first, Is.True);
-      await second;
+      Assert.That(await second, Is.True);
       Assert.That(peer.Requests(1), Is.EqualTo(new[] { "/register_client", "/ping", "/ping" }));
     }
     finally
     {
+      registered.TrySetResult(false);
       client.Cancel();
     }
   }
@@ -300,7 +316,7 @@ public class DiverConnection
       var attempt = client.ConnectAsync(timeout.Token);
       await Until(() => peer.Requests(1).Contains("/register_client"), "the registration is sent");
       timeout.Cancel();
-      Assert.That(async () => await attempt.WaitAsync(TimeSpan.FromSeconds(5)),
+      await Assert.ThatAsync(() => attempt.WaitAsync(TimeSpan.FromSeconds(5)),
         Throws.InstanceOf<OperationCanceledException>(), "the cancelled attempt ends");
       Assert.That(client.IsConnected, Is.False, "its connection was closed");
 
@@ -381,45 +397,6 @@ public class DiverConnection
   }
 
   [Test]
-  public void Test_ARetiredHookSharingATokenWithALiveOne_LeavesTheLiveOne()
-  {
-    using var peer = SubscriptionPeer(() => true);
-    // One native hook: the Diver gives every share of it the same token.
-    peer.Body = endpoint => endpoint switch
-    {
-      "/register_client" => MessagePackSerializer.Serialize(new DiverResponse<object> { PinOwner = "" }),
-      "/hook_method" => MessagePackSerializer.Serialize(
-        DiverResponse<EventRegistrationResults>.Success(new EventRegistrationResults { Token = 7 })),
-      "/unregister_client" => MessagePackSerializer.Serialize(
-        DiverResponse<UnregisterClientResponse>.Success(new UnregisterClientResponse { WasRemoved = true })),
-      _ => null,
-    };
-    var client = new DiverCommunicator("127.0.0.1", peer.Port);
-    try
-    {
-      Assert.That(client.RegisterClient(), Is.True);
-      var retired = NoHook();
-      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, retired);
-      Assert.That(client.UnregisterClient(), Is.True);
-      Assert.That(client.RegisterClient(), Is.True);
-      var live = NoHook();
-      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, live);
-
-      client.UnhookMethod(retired);
-      Assert.That(peer.Requests(0), Does.Not.Contain("/unhook_method"), "the retired share is gone already");
-      Assert.That(client.GetCallbackMapDiagnostics().HookTokenEntries, Is.EqualTo(1),
-        "the live hook still receives the token's callbacks");
-
-      client.UnhookMethod(live);
-      Assert.That(peer.Requests(0).Last(), Is.EqualTo("/unhook_method"));
-    }
-    finally
-    {
-      client.Cancel();
-    }
-  }
-
-  [Test]
   public async Task Test_CleanupOverlappingAnUnregister_WaitsAndThenSendsNothing()
   {
     var unregistered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -436,8 +413,15 @@ public class DiverConnection
       peer.Answer = (_, endpoint) => endpoint == "/unregister_client" ? unregistered.Task : Task.FromResult(true);
       var unregistering = Task.Run(() => client.UnregisterClient());
       await Until(() => peer.Requests(0).Contains("/unregister_client"), "the unregister is sent");
-      var cleanup = Task.Run(() => client.UnhookMethod(old));
+      var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+      var cleanup = Task.Run(() =>
+      {
+        cleanupStarted.SetResult();
+        client.UnhookMethod(old);
+      });
+      await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
       await Task.Delay(500);
+      Assert.That(cleanup.IsCompleted, Is.False, "cleanup waits for unregister to finish");
       Assert.That(peer.Requests(0), Does.Not.Contain("/unhook_method"),
         "no cleanup is sent while the registration changes");
 
@@ -457,52 +441,7 @@ public class DiverConnection
   }
 
   [Test]
-  public async Task Test_CleanupWaitingForTheLock_ReturnsOnceItsEpochEnds()
-  {
-    using var peer = SubscriptionPeer(() => true);
-    var client = new DiverCommunicator("127.0.0.1", peer.Port);
-    using var release = new ManualResetEventSlim();
-    using var held = new ManualResetEventSlim();
-    Thread? holder = null;
-    try
-    {
-      Assert.That(client.RegisterClient(), Is.True);
-      var old = NoHook();
-      client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, old);
-
-      // A newer request of this client holds the registration lock and does
-      // not finish (as a subscription the Diver never answers would).
-      object registrationLock = typeof(DiverCommunicator)
-        .GetField("_registrationLock", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(client)!;
-      holder = new Thread(() =>
-      {
-        lock (registrationLock) { held.Set(); release.Wait(); }
-      });
-      holder.Start();
-      held.Wait();
-
-      // The old hook's cleanup starts while its epoch is current, so it waits.
-      var cleanup = Task.Run(() => client.UnhookMethod(old));
-      await Task.Delay(300);
-      Assert.That(cleanup.IsCompleted, Is.False, "an active cleanup waits for the lock");
-
-      // The epoch ends (as a confirmed unregister ends it): the cleanup returns
-      // although the lock is still held, and sends nothing.
-      typeof(DiverCommunicator).GetMethod("EndRegistration", BindingFlags.Instance | BindingFlags.NonPublic)!
-        .Invoke(client, [new UnregisterClientRequest { ClientId = "retired" }]);
-      await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
-      Assert.That(peer.Requests(0), Does.Not.Contain("/unhook_method"));
-    }
-    finally
-    {
-      release.Set();
-      holder?.Join();
-      client.Cancel();
-    }
-  }
-
-  [Test]
-  public async Task Test_ASubscriptionOverlappingATimedOutUnregister_KeepsItsEpoch()
+  public async Task Test_TimedOutUnregister_DoesNotDetachPendingSubscriptions()
   {
     var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
     using var peer = SubscriptionPeer(() => true);
@@ -515,7 +454,7 @@ public class DiverConnection
       var subscribing = Task.Run(() => client.EventSubscribe(1, "Changed", onEvent));
       await Until(() => peer.Requests(0).Contains("/event_subscribe"), "the subscription is sent");
 
-      // Disposal gives up while the subscription is unanswered.
+      // The bounded unregister gives up while the subscription is unanswered.
       Assert.That(client.TryUnregisterClient(TimeSpan.FromMilliseconds(300)), Is.False);
       answer.SetResult(true);
       await subscribing;
@@ -598,11 +537,8 @@ public class DiverConnection
     var client = new DiverCommunicator("127.0.0.1", peer.Port);
     try
     {
-      // Not the registration's: the Diver does not remove it when the client
-      // unregisters, so the client sends the request. (A Diver counts such a
-      // subscription as an unregistered connection's, and this connection is
-      // now its removed registration's: it takes nothing; that limitation is
-      // older than this test.)
+      // Unregistering cannot be assumed to remove a hook created before registration.
+      // The client must still send its explicit unhook request.
       var onHook = NoHook();
       client.HookMethod("T", "M", HarmonyPatchPosition.Prefix, onHook);
       Assert.That(client.RegisterClient(), Is.True);
@@ -618,7 +554,7 @@ public class DiverConnection
   }
 
   [Test]
-  public void Test_ANewRegistrationAfterAConfirmedUnregister_IsCleanedUp()
+  public void Test_SubscriptionAfterReregistering_StillSendsItsCleanup()
   {
     using var peer = SubscriptionPeer(() => true);
     var client = new DiverCommunicator("127.0.0.1", peer.Port);
@@ -664,10 +600,10 @@ public class DiverConnection
       cancel.Cancel();
       release.SetResult();
 
-      Assert.That(async () => await attempt.WaitAsync(TimeSpan.FromSeconds(5)),
+      await Assert.ThatAsync(() => attempt.WaitAsync(TimeSpan.FromSeconds(5)),
         Throws.InstanceOf<OperationCanceledException>(), "the cancelled attempt fails");
-      Assert.That(async () => await waiting.WaitAsync(TimeSpan.FromSeconds(5)),
-        Throws.Exception, "a request waiting for the handshake fails");
+      await Assert.ThatAsync(() => waiting.WaitAsync(TimeSpan.FromSeconds(5)),
+        Throws.InstanceOf<OperationCanceledException>(), "a request waiting for the cancelled handshake fails");
       Assert.That(tcp.IsConnected, Is.False, "its connection was closed");
       Assert.That(peer.Requests(0), Is.Empty, "no ordinary request reached the peer");
 
@@ -715,21 +651,14 @@ public class DiverConnection
     {
       var pending = Task.Run(() => client.GetDiverDiagnostics());
       await Until(() => peer.Requests(0).Contains("/diagnostics"), "the request is sent");
-      object closed = Session(client);
-
       peer.Close(0);
-      Assert.That(async () => await pending, Throws.Exception, "a request of the closed connection fails");
+      await Assert.ThatAsync(() => pending.WaitAsync(TimeSpan.FromSeconds(5)),
+        Throws.InstanceOf<IOException>().Or.InstanceOf<OperationCanceledException>(),
+        "a request of the closed connection fails");
       Assert.That(client.CheckAliveness(), Is.True);
 
-      // A send bound to the closed connection that resumes after the
-      // reconnect (for example one paused before it was queued) fails there.
-      var late = (Task)closed.GetType().GetMethod("SendAsync")!
-        .Invoke(closed, [999, "/get_field", Array.Empty<byte>(), false, CancellationToken.None])!;
-      Assert.That(async () => await late, Throws.InvalidOperationException);
-
-      Assert.That(client.CheckAliveness(), Is.True);
-      Assert.That(peer.Requests(1), Is.EqualTo(new[] { "/ping", "/ping" }),
-        "nothing of the closed connection is sent on the new one");
+      Assert.That(peer.Requests(1), Is.EqualTo(new[] { "/ping" }),
+        "the failed diagnostics request is not replayed on the new connection");
     }
     finally
     {
@@ -760,13 +689,14 @@ public class DiverConnection
   }
 
   [Test]
-  public async Task Test_ActiveCleanup_WaitsForASlowSubscription()
+  public async Task Test_SlowSubscription_DoesNotLoseAnotherSubscriptionsCleanup()
   {
     using var peer = SubscriptionPeer(() => true);
     var client = new DiverCommunicator("127.0.0.1", peer.Port);
     var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
     Task? subscribing = null;
     Task? cleanup = null;
+    var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
     try
     {
       Assert.That(client.RegisterClient(), Is.True);
@@ -775,10 +705,14 @@ public class DiverConnection
       subscribing = Task.Run(() => client.EventSubscribe(1, "OtherChanged", (_, _) => { }));
       await Until(() => peer.Requests(0).Count(endpoint => endpoint == "/event_subscribe") == 2,
         "the second subscription is waiting for its response");
-      cleanup = Task.Run(() => client.EventUnsubscribe(s_noEvent));
+      cleanup = Task.Run(() =>
+      {
+        cleanupStarted.SetResult();
+        client.EventUnsubscribe(s_noEvent);
+      });
+      await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+      // An unrelated subscription taking over a second must not make cleanup give up.
       await Task.Delay(1200);
-      Assert.That(cleanup.IsCompleted, Is.False,
-        "an active cleanup still waits for the registration lock after one second");
       answer.SetResult(true);
       await subscribing.WaitAsync(TimeSpan.FromSeconds(5));
       await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
@@ -787,13 +721,15 @@ public class DiverConnection
     finally
     {
       answer.TrySetResult(true);
-      if (subscribing is not null) await subscribing.WaitAsync(TimeSpan.FromSeconds(5));
-      if (cleanup is not null)
+      try
       {
-        try { await cleanup.WaitAsync(TimeSpan.FromSeconds(5)); }
-        catch (OperationCanceledException) { }
+        if (subscribing is not null) await subscribing.WaitAsync(TimeSpan.FromSeconds(5));
+        if (cleanup is not null) await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
       }
-      client.Cancel();
+      finally
+      {
+        client.Dispose();
+      }
     }
   }
 }

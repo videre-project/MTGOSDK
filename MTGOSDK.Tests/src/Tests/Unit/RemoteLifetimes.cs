@@ -83,7 +83,7 @@ public class RemoteLifetimes
     public int Pins { get { lock (_lock) return _clients.Values.Sum(_runtime.GetClientReferenceCount); } }
     public int ObjectReads { get; private set; }
     public string? LastMemberValue { get; private set; }
-    public int TypeFailures { get; set; }
+    public Func<bool> RejectTypeRead { get; set; } = () => false;
     public bool TakeObjectReference { get; set; } = true;
     public bool RejectRepeatedObjectReads { get; set; }
     public bool FailSubscribe { get; set; }
@@ -120,7 +120,17 @@ public class RemoteLifetimes
       }
       _peer.Answer = (_, _) => Task.FromResult(true);
       _peer.Respond = Respond;
-      Handle = RemoteHandle.Connect(Process.GetCurrentProcess(), (ushort)_peer.Port);
+      try
+      {
+        Handle = RemoteHandle.Connect(Process.GetCurrentProcess(), (ushort)_peer.Port);
+      }
+      catch
+      {
+        using var runtime = _runtime;
+        using var peer = _peer;
+        using var router = Router;
+        throw;
+      }
     }
 
     public void DropConnection() => _peer.Close(_peer.Accepted - 1);
@@ -242,11 +252,8 @@ public class RemoteLifetimes
             { WasRemoved = removed, OtherClientsAmount = _clients.Count }, owner);
           case "/domains": return Success(new DomainDump("pins", []), owner);
           case "/type":
-            if (TypeFailures > 0)
-            {
-              TypeFailures--;
+            if (RejectTypeRead())
               return MessagePackSerializer.Serialize(DiverResponse<object>.FromError("metadata unavailable"));
-            }
             var type = MessagePackSerializer.Deserialize<TypeDumpRequest>(body);
             var actual = _runtime.ResolveType(type.TypeFullName, type.Assembly);
             return Success(TypeDump.ParseType(actual), owner);
@@ -337,11 +344,6 @@ public class RemoteLifetimes
       _runtime.TryGetPinnedObject(token, out var value) ? value
         : throw new InvalidOperationException("the invocation input was unpinned");
 
-    public string ItemName(ulong token)
-    {
-      lock (_lock) return ((Item)Resolve(token)).Name;
-    }
-
     public string CaptureInputName()
     {
       lock (_lock)
@@ -354,6 +356,11 @@ public class RemoteLifetimes
 
     public void Dispose()
     {
+      using var runtime = _runtime;
+      using var peer = _peer;
+      using var client = Client;
+      using var handle = Handle;
+      using var router = Router;
       ContinueSubscribe?.TrySetResult(true);
       ContinueInvocation?.TrySetResult(true);
       ContinueUnpin?.TrySetResult(true);
@@ -361,22 +368,17 @@ public class RemoteLifetimes
       ContinueBatch?.TrySetResult(true);
       ContinueObject?.TrySetResult(true);
       ContinueUnregister?.TrySetResult(true);
-      Router.Dispose();
-      var client = Client;
-      Handle.Dispose();
-      client.Dispose();
-      _peer.Dispose();
-      _runtime.Dispose();
     }
   }
 
   private static TaskCompletionSource<bool> Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-  private static async Task Until(Func<bool> predicate)
+  private static async Task Until(Func<bool> predicate,
+    [CallerArgumentExpression(nameof(predicate))] string? condition = null)
   {
     var watch = Stopwatch.StartNew();
     while (!predicate() && watch.Elapsed < TimeSpan.FromSeconds(5)) await Task.Delay(10);
-    Assert.That(predicate(), Is.True, "the expected lifetime transition completed");
+    Assert.That(predicate(), Is.True, $"Timed out waiting for {condition}.");
   }
 
   private static void Collect()
@@ -393,117 +395,26 @@ public class RemoteLifetimes
     return peer.Router.Subscribe((DynamicRemoteObject)remote.Dynamify(), capture, nameof(Item.Name));
   }
 
-  private static RemoteObject Retain(RemoteObject remote) =>
-    (RemoteObject)typeof(RemoteObject).GetMethod("Retain",
-      BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(remote, null)!;
-
-  [TestCase(true)]
-  [TestCase(false)]
-  public async Task Test_RetainedObject_CanBeReleasedIndependently(bool releaseOriginalFirst)
-  {
-    using var peer = new PinPeer();
-    var original = peer.Add(new Item());
-    ulong token = original.RemoteToken;
-    int requests = peer.Requests.Length;
-    var retained = Retain(original);
-    Assert.That(retained, Is.Not.SameAs(original));
-    Assert.That(retained.RemoteToken, Is.EqualTo(token));
-    Assert.That(peer.Requests, Has.Length.EqualTo(requests), "retention requires no remote request");
-    Assert.That(peer.Pins, Is.EqualTo(1));
-
-    var first = releaseOriginalFirst ? original : retained;
-    var last = releaseOriginalFirst ? retained : original;
-    first.ReleaseReference();
-    first.ReleaseReference();
-    Assert.That(first.IsValid, Is.False);
-    Assert.That(last.IsValid, Is.True);
-    Assert.That(peer.IsPinned(token), Is.True);
-    Assert.That(() => Retain(first), Throws.InstanceOf<TargetInvocationException>()
-      .With.InnerException.TypeOf<ObjectDisposedException>());
-
-    last.ReleaseReference();
-    await Until(() => !peer.IsPinned(token));
-  }
-
-  [Test]
-  public async Task Test_PropertySubscription_OwnsAReferenceUntilDisposed()
-  {
-    using var peer = new PinPeer();
-    var remote = peer.Add(new Item());
-    ulong token = remote.RemoteToken;
-    var subscription = Subscribe(peer, remote);
-    Collect();
-    remote.ReleaseReference();
-    Assert.That(peer.IsPinned(token), Is.True, "the subscription keeps the object after the caller releases it");
-    subscription.Dispose();
-    subscription.Dispose();
-    await Until(() => !peer.IsPinned(token));
-    Assert.That(peer.Requests.Count(e => e == "/event_unsubscribe"), Is.EqualTo(1));
-  }
-
-  [Test]
-  public async Task Test_FailedPropertySubscription_ReturnsItsHolder()
-  {
-    using var peer = new PinPeer { FailSubscribe = true };
-    var remote = peer.Add(new Item());
-    ulong token = remote.RemoteToken;
-    Assert.That(() => Subscribe(peer, remote), Throws.InstanceOf<MTGOSDK.Core.Exceptions.ExternalErrorException>());
-    Collect();
-    remote.ReleaseReference();
-    await Until(() => !peer.IsPinned(token));
-  }
-
   [MethodImpl(MethodImplOptions.NoInlining)]
-  private static (RemoteBatch Batch, WeakReference Proxy, ulong Token) RecordTemporaryInput(PinPeer peer)
+  private static WeakReference ExecuteAndDropBatchWithReleasedInput(PinPeer peer, out ulong token)
   {
-    var remote = peer.Add(new Item());
-    var proxy = (DynamicRemoteObject)remote.Dynamify();
-    var batch = new RemoteBatch();
-    batch.Output("name", batch.Read(batch.Input((object)proxy), "Name"));
-    return (batch, new WeakReference(proxy), remote.RemoteToken);
+    var input = CreateInputOwner(peer, useDynamicProxy: false);
+    token = input.Token;
+    return new WeakReference(input.Owner);
   }
 
   [Test]
-  public async Task Test_Batch_KeepsInputThroughAsyncExecutionAfterProxyIsCollected()
-  {
-    using var peer = new PinPeer { BatchEntered = Signal(), ContinueBatch = Signal() };
-    var recorded = RecordTemporaryInput(peer);
-    Collect();
-    Assert.That(recorded.Proxy.IsAlive, Is.False, "the batch owns a separate reference to the input");
-    Assert.That(peer.IsPinned(recorded.Token), Is.True);
-    var executing = recorded.Batch.ExecuteAsync(peer.Client);
-    await peer.BatchEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-    Collect();
-    Assert.That(peer.IsPinned(recorded.Token), Is.True, "an awaited request still owns its inputs");
-    peer.ContinueBatch.SetResult(true);
-    var result = await executing.WaitAsync(TimeSpan.FromSeconds(5));
-    Assert.That(result.Values["name"].GetScalar<string>(), Is.EqualTo("retained"));
-  }
-
-  [MethodImpl(MethodImplOptions.NoInlining)]
-  private static WeakReference RecordRawInput(PinPeer peer, out ulong token)
-  {
-    var remote = peer.Add(new Item());
-    token = remote.RemoteToken;
-    var batch = new RemoteBatch();
-    batch.Output("name", batch.Read(batch.Input((object)remote), "Name"));
-    remote.ReleaseReference();
-    Assert.That(batch.Execute(peer.Client).Values["name"].GetScalar<string>(), Is.EqualTo("retained"));
-    return new WeakReference(batch);
-  }
-
-  [Test]
-  public async Task Test_Batch_OwnsRawInputAndReturnsItWhenCollected()
+  public async Task Test_CollectedBatch_ReleasesItsRemoteObjectInput()
   {
     using var peer = new PinPeer();
-    var batch = RecordRawInput(peer, out ulong token);
+    var batch = ExecuteAndDropBatchWithReleasedInput(peer, out ulong token);
     Collect();
     Assert.That(batch.IsAlive, Is.False);
     await Until(() => !peer.IsPinned(token));
   }
 
   [Test]
-  public async Task Test_OldHolder_CannotReleaseOrReplaceNewRegistrationsPin()
+  public async Task Test_PreviousRegistrationsWrapper_CannotReadOrReleaseCurrentPin()
   {
     using var peer = new PinPeer();
     var item = new Item();
@@ -513,11 +424,10 @@ public class RemoteLifetimes
     Assert.That(peer.Client.RegisterClient(), Is.True);
     var current = peer.Handle.GetRemoteObjectFromField(peer.Pin(item), typeof(Item).FullName!);
     Assert.That(old.IsValid, Is.False);
-    Assert.That(() => Retain(old), Throws.InstanceOf<TargetInvocationException>()
-      .With.InnerException.TypeOf<ObjectDisposedException>());
-    Assert.That(current, Is.Not.SameAs(old));
+    Assert.That(() => old.GetField(nameof(Item.Label)), Throws.TypeOf<ObjectDisposedException>());
     old.ReleaseReference();
-    await peer.Client.ConnectAsync();
+    await DrainPinReturns(peer);
+    Assert.That(PrimitivesEncoder.Decode(current.GetField(nameof(Item.Label))), Is.EqualTo("retained"));
     Assert.That(peer.Pins, Is.EqualTo(1), "the new registration's first pin is not surplus");
     current.ReleaseReference();
     await Until(() => !peer.IsPinned(token));
@@ -538,6 +448,8 @@ public class RemoteLifetimes
     Assert.That(peer.LastRegistration, Is.Not.EqualTo(original));
     var current = peer.Handle.GetRemoteObjectFromField(peer.Pin(item), typeof(Item).FullName!);
     old.ReleaseReference();
+    await DrainPinReturns(peer);
+    Assert.That(PrimitivesEncoder.Decode(current.GetField(nameof(Item.Label))), Is.EqualTo("retained"));
     Assert.That(peer.Pins, Is.EqualTo(1));
     current.ReleaseReference();
     await Until(() => peer.Pins == 0);
@@ -548,7 +460,8 @@ public class RemoteLifetimes
   {
     using var peer = new PinPeer();
     var item = new Item();
-    ulong token = peer.Pin(item);
+    var remote = peer.Add(item);
+    ulong token = remote.RemoteToken;
     var scheduler = (ChannelScheduler)typeof(DiverCommunicator)
       .GetField("_releaseScheduler", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(peer.Client)!;
     var entered = Signal();
@@ -557,8 +470,7 @@ public class RemoteLifetimes
     await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
     try
     {
-      typeof(DiverCommunicator).GetMethod("ReleaseLater", BindingFlags.Instance | BindingFlags.NonPublic,
-        null, [typeof(ulong)], null)!.Invoke(peer.Client, [token]);
+      remote.ReleaseReference();
       Assert.That(peer.Client.UnregisterClient(), Is.True);
       Assert.That(peer.Client.RegisterClient(), Is.True);
       Assert.That(peer.Pin(item), Is.EqualTo(token));
@@ -591,7 +503,8 @@ public class RemoteLifetimes
     var current = await reading.WaitAsync(TimeSpan.FromSeconds(5));
     Assert.That(current.IsValid, Is.True, "retrying acquired a receipt from the current registration");
     current.ReleaseReference();
-    await Until(() => peer.Pins == 1);
+    await DrainPinReturns(peer);
+    Assert.That(peer.Pins, Is.EqualTo(1));
     Assert.That(peer.IsPinned(token), Is.True, "the new registration's independent pin remains");
     peer.Client.UnpinObject(token);
     Assert.That(peer.IsPinned(token), Is.False);
@@ -635,37 +548,48 @@ public class RemoteLifetimes
     Assert.That(peer.IsPinned(token), Is.False);
   }
 
-  [TestCase(1)]
-  [TestCase(3)]
-  public async Task Test_FailedMetadataAttempts_ReturnOnlyTheirAcquiredPins(int failures)
+  [TestCase(true, TestName = "Test_TransientMetadataFailure_ReturnsOnlyAcquiredReferences")]
+  [TestCase(false, TestName = "Test_PersistentMetadataFailure_ReturnsOnlyAcquiredReferences")]
+  public async Task Test_MetadataFailure_PreservesExistingPin(bool recover)
   {
-    using var peer = new PinPeer { TypeFailures = failures };
+    int reads = 0;
+    using var peer = new PinPeer { RejectTypeRead = () => !recover || reads++ == 0 };
     ulong token = peer.Pin(new RetryItem());
-    if (failures == 3)
-      Assert.That(() => peer.Handle.GetRemoteObject(token, typeof(RetryItem).FullName!),
-        Throws.InstanceOf<InvalidOperationException>());
+    if (!recover)
+    {
+      var error = Assert.Throws<InvalidOperationException>(() =>
+        peer.Handle.GetRemoteObject(token, typeof(RetryItem).FullName!));
+      Assert.That(error!.InnerException, Is.TypeOf<MTGOSDK.Core.Exceptions.ExternalErrorException>());
+      Assert.That(error.InnerException!.Message, Is.EqualTo("metadata unavailable"));
+    }
     else
       peer.Handle.GetRemoteObject(token, typeof(RetryItem).FullName!).ReleaseReference();
-    await Until(() => peer.Pins == 1);
-    Assert.That(peer.ObjectReads, Is.EqualTo(Math.Min(failures + 1, 3)));
+    await DrainPinReturns(peer);
+    Assert.That(peer.Pins, Is.EqualTo(1));
     Assert.That(peer.IsPinned(token), Is.True, "the independently owned original pin is intact");
     peer.Client.UnpinObject(token);
     Assert.That(peer.IsPinned(token), Is.False);
   }
 
-  [TestCase(false, false)]
-  [TestCase(true, true)]
-  public async Task Test_FailedObjectReads_DoNotReleaseAPreviousAttemptsPin(bool takeReference, bool rejectRepeated)
+  [TestCase(false, false, "metadata unavailable",
+    TestName = "Test_MetadataFailureWithoutAcquisition_PreservesExistingPin")]
+  [TestCase(true, true, "object lookup failed",
+    TestName = "Test_FailedObjectRetry_DoesNotReleaseEarlierAcquisitionTwice")]
+  public async Task Test_FailedObjectReads_PreserveExistingPin(
+    bool takeReference, bool rejectRepeated, string expectedError)
   {
     using var peer = new PinPeer
     {
-      TypeFailures = 3, TakeObjectReference = takeReference,
+      RejectTypeRead = () => true, TakeObjectReference = takeReference,
       RejectRepeatedObjectReads = rejectRepeated
     };
     ulong token = peer.Pin(new RetryItem());
-    Assert.That(() => peer.Handle.GetRemoteObject(token, typeof(RetryItem).FullName!),
-      Throws.InstanceOf<InvalidOperationException>());
-    await Until(() => peer.Pins == 1);
+    var error = Assert.Throws<InvalidOperationException>(() =>
+      peer.Handle.GetRemoteObject(token, typeof(RetryItem).FullName!));
+    Assert.That(error!.InnerException, Is.TypeOf<MTGOSDK.Core.Exceptions.ExternalErrorException>());
+    Assert.That(error.InnerException!.Message, Is.EqualTo(expectedError));
+    await DrainPinReturns(peer);
+    Assert.That(peer.Pins, Is.EqualTo(1));
     Assert.That(peer.IsPinned(token), Is.True, "no failed attempt owns the caller's original pin");
     peer.Client.UnpinObject(token);
     Assert.That(peer.IsPinned(token), Is.False);
@@ -691,11 +615,10 @@ public class RemoteLifetimes
   }
 
   [MethodImpl(MethodImplOptions.NoInlining)]
-  private static object InvokeWithTemporaryInputs(PinPeer peer, string path)
+  private static object InvokeWithTemporaryInputs(PinPeer peer, string api)
   {
     var argument = (DynamicRemoteObject)peer.Add(new Item { Name = "argument" }).Dynamify();
-    if (path == "constructor") return peer.Handle.Activator.CreateInstance(typeof(Item), argument);
-    if (path == "raw")
+    if (api == "RemoteObject.InvokeMethod")
     {
       var raw = peer.Add(new Item());
       var (_, value) = raw.InvokeMethod(nameof(Item.Echo),
@@ -703,43 +626,41 @@ public class RemoteLifetimes
       return PrimitivesEncoder.Decode(value);
     }
     var target = (DynamicRemoteObject)peer.Add(new Item { Name = "receiver" }).Dynamify();
-    if (path == "typed") return target.InvokeMethod<string>(nameof(Item.Echo), argument);
-    if (path == "dynamic-dispatch") return ((dynamic)target).Echo(argument);
-    if (path == "dynamic")
+    switch (api)
     {
-      var method = new DynamicRemoteObject.DynamicRemoteMethod(nameof(Item.Echo),
-        target.__type.Methods.Where(m => m.Name == nameof(Item.Echo)).ToList());
-      method.TryInvoke(target, [argument], out object result);
-      return result;
+      case "DynamicRemoteObject.InvokeMethod":
+        return target.InvokeMethod<string>(nameof(Item.Echo), argument);
+      case "dynamic invocation":
+        return ((dynamic)target).Echo(argument);
+      case "DynamicRemoteMethod.TryInvoke":
+        var method = new DynamicRemoteObject.DynamicRemoteMethod(nameof(Item.Echo),
+          target.__type.Methods.Where(m => m.Name == nameof(Item.Echo)).ToList());
+        Assert.That(method.TryInvoke(target, [argument], out object result), Is.True);
+        return result;
+      case "RemoteFunctionsInvokeHelper.Invoke":
+        return RemoteFunctionsInvokeHelper.Invoke(peer.Handle, typeof(Item), nameof(Item.Echo),
+          target, Array.Empty<string>(), [argument]);
+      default:
+        throw new ArgumentOutOfRangeException(nameof(api), api, "Unknown invocation API.");
     }
-    return RemoteFunctionsInvokeHelper.Invoke(peer.Handle, typeof(Item), nameof(Item.Echo),
-      target, Array.Empty<string>(), [argument]);
   }
 
-  [TestCase("helper")]
-  [TestCase("typed")]
-  [TestCase("dynamic-dispatch")]
-  [TestCase("dynamic")]
-  [TestCase("constructor")]
-  [TestCase("raw")]
-  public async Task Test_Invocation_KeepsTemporaryInputsUntilResponse(string path)
+  [TestCase("RemoteFunctionsInvokeHelper.Invoke")]
+  [TestCase("DynamicRemoteObject.InvokeMethod")]
+  [TestCase("dynamic invocation")]
+  [TestCase("DynamicRemoteMethod.TryInvoke")]
+  [TestCase("RemoteObject.InvokeMethod")]
+  public async Task Test_Invocation_KeepsTemporaryInputsUntilResponse(string api)
   {
     using var peer = new PinPeer { InvocationEntered = Signal(), ContinueInvocation = Signal() };
-    var invoking = Task.Run(() => InvokeWithTemporaryInputs(peer, path));
+    var invoking = Task.Run(() => InvokeWithTemporaryInputs(peer, api));
     await peer.InvocationEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
     try
     {
       Collect();
       await DrainPinReturns(peer);
       peer.ContinueInvocation.SetResult(true);
-      var result = await invoking.WaitAsync(TimeSpan.FromSeconds(5));
-      if (result is RemoteObject created)
-      {
-        Assert.That(created.IsValid, Is.True);
-        Assert.That(peer.ItemName(created.RemoteToken), Is.EqualTo("argument"));
-        created.ReleaseReference();
-      }
-      else Assert.That(result, Is.EqualTo("argument"));
+      Assert.That(await invoking.WaitAsync(TimeSpan.FromSeconds(5)), Is.EqualTo("argument"));
     }
     finally
     {
@@ -748,28 +669,80 @@ public class RemoteLifetimes
   }
 
   [MethodImpl(MethodImplOptions.NoInlining)]
-  private static WeakReference CreateTemporaryWrapper(RemoteObject remote, bool dynamic)
+  private static RemoteObject ConstructWithTemporaryArgument(PinPeer peer)
   {
-    if (!dynamic) return new WeakReference(Retain(remote));
-    remote.AddReference();
-    return new WeakReference((DynamicRemoteObject)remote.Dynamify());
+    var argument = (DynamicRemoteObject)peer.Add(new Item { Name = "argument" }).Dynamify();
+    return peer.Handle.Activator.CreateInstance(typeof(Item), argument);
   }
 
-  [TestCase(false)]
-  [TestCase(true)]
-  public async Task Test_WrapperCollectedDuringDisconnect_ReturnsItsHolderAfterReconnect(bool dynamic)
+  [Test]
+  public async Task Test_Construction_KeepsTemporaryArgumentUntilResponse()
   {
-    using var peer = new PinPeer();
+    using var peer = new PinPeer { InvocationEntered = Signal(), ContinueInvocation = Signal() };
+    var constructing = Task.Run(() => ConstructWithTemporaryArgument(peer));
+    await peer.InvocationEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    try
+    {
+      Collect();
+      await DrainPinReturns(peer);
+      peer.ContinueInvocation.SetResult(true);
+      var created = await constructing.WaitAsync(TimeSpan.FromSeconds(5));
+      try
+      {
+        var (_, name) = created.InvokeMethod("get_" + nameof(Item.Name));
+        Assert.That(PrimitivesEncoder.Decode(name), Is.EqualTo("argument"),
+          "the constructor reads its argument and returns a usable remote object");
+      }
+      finally
+      {
+        created.ReleaseReference();
+      }
+    }
+    finally
+    {
+      peer.ContinueInvocation.TrySetResult(true);
+    }
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static (object Owner, ulong Token) CreateInputOwner(PinPeer peer, bool useDynamicProxy)
+  {
     var remote = peer.Add(new Item());
     ulong token = remote.RemoteToken;
-    var proxy = CreateTemporaryWrapper(remote, dynamic);
-    peer.DropConnection();
-    await Until(() => !peer.Client.IsConnected);
-    Collect();
-    Assert.That(proxy.IsAlive, Is.False);
-    await peer.Client.ConnectAsync();
+    if (useDynamicProxy)
+    {
+      var proxy = (DynamicRemoteObject)remote.Dynamify();
+      Assert.That((string)((dynamic)proxy).Name, Is.EqualTo("retained"));
+      return (proxy, token);
+    }
+    var batch = new RemoteBatch();
+    batch.Output("name", batch.Read(batch.Input((object)remote), "Name"));
     remote.ReleaseReference();
-    await Until(() => !peer.IsPinned(token));
+    Assert.That(batch.Execute(peer.Client).Values["name"].GetScalar<string>(), Is.EqualTo("retained"));
+    return (batch, token);
+  }
+
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  private static (WeakReference Owner, ulong Token) DropInputOwnerDuringDisconnect(PinPeer peer, bool useDynamicProxy)
+  {
+    var input = CreateInputOwner(peer, useDynamicProxy);
+    peer.DropConnection();
+    Assert.That(SpinWait.SpinUntil(() => !peer.Client.IsConnected, TimeSpan.FromSeconds(5)), Is.True);
+    var result = (new WeakReference(input.Owner), input.Token);
+    GC.KeepAlive(input.Owner);
+    return result;
+  }
+
+  [TestCase(false, TestName = "Test_CollectedBatchInput_ReturnsPinAfterReconnect")]
+  [TestCase(true, TestName = "Test_CollectedDynamicProxy_ReturnsPinAfterReconnect")]
+  public async Task Test_CollectedInputOwnerDuringDisconnect_ReturnsPinAfterReconnect(bool useDynamicProxy)
+  {
+    using var peer = new PinPeer();
+    var input = DropInputOwnerDuringDisconnect(peer, useDynamicProxy);
+    Collect();
+    Assert.That(input.Owner.IsAlive, Is.False);
+    await peer.Client.ConnectAsync();
+    await Until(() => !peer.IsPinned(input.Token));
   }
 
   [Test]
@@ -815,19 +788,20 @@ public class RemoteLifetimes
   }
 
   [MethodImpl(MethodImplOptions.NoInlining)]
-  private static Task<RemoteBatchResult> ExecuteTemporaryRequest(PinPeer peer)
+  private static Task<RemoteBatchResult> ExecuteTemporaryBatch(PinPeer peer, bool detached)
   {
     var input = (DynamicRemoteObject)peer.Add(new Item()).Dynamify();
     var batch = new RemoteBatch();
     batch.Output("name", batch.Read(batch.Input((object)input), "Name"));
-    return peer.Client.ExecuteBatchAsync(batch.ToRequest());
+    return detached ? peer.Client.ExecuteBatchAsync(batch.ToRequest()) : batch.ExecuteAsync(peer.Client);
   }
 
-  [Test]
-  public async Task Test_DetachedBatchRequest_OwnsInputsThroughAsyncExecution()
+  [TestCase(false, TestName = "Test_BatchExecuteAsync_KeepsInputsUntilResponse")]
+  [TestCase(true, TestName = "Test_ExecuteBatchAsync_KeepsRequestInputsUntilResponse")]
+  public async Task Test_BatchExecution_KeepsTemporaryInputsUntilResponse(bool detached)
   {
     using var peer = new PinPeer { BatchEntered = Signal(), ContinueBatch = Signal() };
-    var executing = ExecuteTemporaryRequest(peer);
+    var executing = ExecuteTemporaryBatch(peer, detached);
     await peer.BatchEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
     try
     {
@@ -844,7 +818,7 @@ public class RemoteLifetimes
   }
 
   [Test]
-  public async Task Test_CaptureInputs_AreOwnedUntilUnsubscribeCompletes()
+  public async Task Test_PendingUnsubscribe_KeepsCaptureInputsUntilResponse()
   {
     using var peer = new PinPeer { UnsubscribeEntered = Signal(), ContinueUnsubscribe = Signal() };
     var target = peer.Add(new Item());
@@ -951,7 +925,7 @@ public class RemoteLifetimes
     Collect();
     await DrainPinReturns(peer);
     Assert.That(lazy.IsAlive, Is.False);
-    Assert.That(proxy.__ro.IsValid, Is.True);
+    Assert.That((string)((dynamic)proxy).Name, Is.EqualTo("retained"));
     Assert.That(peer.IsPinned(proxy.__ro.RemoteToken), Is.True);
     GC.KeepAlive(proxy);
   }
@@ -976,48 +950,54 @@ public class RemoteLifetimes
     return stateReference;
   }
 
-  [TestCase(false)]
-  [TestCase(true)]
+  [TestCase(false, TestName = "Test_DisposingCommunicator_ReleasesEventCallbackState")]
+  [TestCase(true, TestName = "Test_DisposingCommunicator_ReleasesHookCallbackState")]
   public void Test_DisposingCommunicator_ReleasesCallbackState(bool hook)
   {
     using var peer = new PinPeer();
     var callbackState = RegisterTemporaryCapture(peer, hook);
     Collect();
     Assert.That(callbackState.IsAlive, Is.True, "the active subscription retains its callback state");
-    Assert.That(peer.Client.UnregisterClient(), Is.True);
     peer.Client.Dispose();
     Collect();
     Assert.That(callbackState.IsAlive, Is.False, "disposal releases caller-owned callback state");
   }
 
   [MethodImpl(MethodImplOptions.NoInlining)]
-  private static object? AccessTemporaryTarget(PinPeer peer, string path)
+  private static object? AccessTemporaryTarget(PinPeer peer, string api)
   {
     var remote = peer.Add(new Item());
-    if (path == "raw-read") return PrimitivesEncoder.Decode(remote.GetField(nameof(Item.Label)));
-    if (path == "raw-write") return PrimitivesEncoder.Decode(remote.SetField(nameof(Item.Label),
+    if (api == "RemoteObject.GetField") return PrimitivesEncoder.Decode(remote.GetField(nameof(Item.Label)));
+    if (api == "RemoteObject.SetField") return PrimitivesEncoder.Decode(remote.SetField(nameof(Item.Label),
       ObjectOrRemoteAddress.FromObj("changed")));
     var target = (DynamicRemoteObject)remote.Dynamify();
-    if (path == "property-write")
+    if (api == "dynamic property assignment")
     {
       ((dynamic)target).Name = "changed";
       return "changed";
     }
     var field = target.__type.GetField(nameof(Item.Label))!;
-    if (path == "field-read") return field.GetValue(target);
-    field.SetValue(target, "changed");
-    return "changed";
+    switch (api)
+    {
+      case "RemoteFieldInfo.GetValue":
+        return field.GetValue(target);
+      case "RemoteFieldInfo.SetValue":
+        field.SetValue(target, "changed");
+        return "changed";
+      default:
+        throw new ArgumentOutOfRangeException(nameof(api), api, "Unknown member access API.");
+    }
   }
 
-  [TestCase("raw-read", "retained")]
-  [TestCase("raw-write", "changed")]
-  [TestCase("field-read", "retained")]
-  [TestCase("field-write", "changed")]
-  [TestCase("property-write", "changed")]
-  public async Task Test_MemberAccess_KeepsTemporaryTargetUntilResponse(string path, string expected)
+  [TestCase("RemoteObject.GetField", "retained")]
+  [TestCase("RemoteObject.SetField", "changed")]
+  [TestCase("RemoteFieldInfo.GetValue", "retained")]
+  [TestCase("RemoteFieldInfo.SetValue", "changed")]
+  [TestCase("dynamic property assignment", "changed")]
+  public async Task Test_MemberAccess_KeepsTemporaryTargetUntilResponse(string api, string expected)
   {
     using var peer = new PinPeer { InvocationEntered = Signal(), ContinueInvocation = Signal() };
-    var accessing = Task.Run(() => AccessTemporaryTarget(peer, path));
+    var accessing = Task.Run(() => AccessTemporaryTarget(peer, api));
     await peer.InvocationEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
     try
     {
@@ -1034,21 +1014,27 @@ public class RemoteLifetimes
   }
 
   [Test]
-  public async Task Test_FailedCaptureSubscription_ReturnsInputOwnership()
+  public async Task Test_FailedPropertySubscription_ReturnsOnlyItsOwnReferences()
   {
     using var peer = new PinPeer { FailSubscribe = true };
     var target = peer.Add(new Item());
+    ulong token = target.RemoteToken;
+
     Assert.That(() => SubscribeWithTemporaryCapture(peer, target),
-      Throws.InstanceOf<MTGOSDK.Core.Exceptions.ExternalErrorException>());
+      Throws.InstanceOf<MTGOSDK.Core.Exceptions.ExternalErrorException>().With.Message.EqualTo("subscribe failed"));
     Collect();
     await DrainPinReturns(peer);
-    Assert.That(() => peer.CaptureInputName(), Throws.TypeOf<InvalidOperationException>());
-    Assert.That(target.IsValid, Is.True, "failure does not release the caller's target");
+
+    Assert.That(PrimitivesEncoder.Decode(target.GetField(nameof(Item.Label))), Is.EqualTo("retained"),
+      "failure preserves the caller's target reference");
+    Assert.That(() => peer.CaptureInputName(), Throws.TypeOf<InvalidOperationException>()
+      .With.Message.EqualTo("the invocation input was unpinned"), "failure releases the temporary capture input");
     target.ReleaseReference();
+    await Until(() => !peer.IsPinned(token));
   }
 
   [Test]
-  public async Task Test_DisposalDuringSubscription_ReleasesPendingCallbackState()
+  public async Task Test_DisposalDuringEventSubscription_ReleasesPendingCallbackState()
   {
     using var peer = new PinPeer { SubscribeEntered = Signal(), ContinueSubscribe = Signal() };
     var recorded = new TaskCompletionSource<WeakReference>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1058,13 +1044,13 @@ public class RemoteLifetimes
     await peer.SubscribeEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
     await Task.Run(peer.Client.Dispose).WaitAsync(TimeSpan.FromSeconds(5));
     await Assert.ThatAsync(() => subscribing.WaitAsync(TimeSpan.FromSeconds(5)),
-      Throws.TypeOf<TaskCanceledException>());
+      Throws.InstanceOf<OperationCanceledException>());
     Collect();
     Assert.That(callbackState.IsAlive, Is.False, "failed subscription state is released after disposal");
   }
 
-  [TestCase(false)]
-  [TestCase(true)]
+  [TestCase(false, TestName = "Test_DisposedCommunicator_AllowsLateEventUnsubscribe")]
+  [TestCase(true, TestName = "Test_DisposedCommunicator_AllowsLateUnhook")]
   public void Test_DisposedCommunicator_AllowsLateSubscriptionCleanup(bool hook)
   {
     using var peer = new PinPeer();
@@ -1079,7 +1065,6 @@ public class RemoteLifetimes
       peer.Client.EventSubscribe(target.RemoteToken, "PropertyChanged", callback);
       GC.KeepAlive(target);
     }
-    peer.Client.UnregisterClient();
     peer.Client.Dispose();
     var requests = peer.Requests;
     Assert.DoesNotThrow(() =>

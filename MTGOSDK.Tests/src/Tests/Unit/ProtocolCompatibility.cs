@@ -4,10 +4,13 @@
 **/
 
 using System;
+using System.Collections.Generic;
 
 using MessagePack;
 
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Client;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
@@ -41,6 +44,10 @@ public class ProtocolCompatibility
   {
     [Key(0)] public DateTime Timestamp { get; set; }
     [Key(1)] public int Token { get; set; }
+    [Key(2)] public List<ObjectOrRemoteAddress> Parameters { get; set; } = new();
+    [Key(3)] public RemoteBatchResult? Capture { get; set; }
+    [Key(4)] public RemoteBatchError? CaptureError { get; set; }
+    [Key(5)] public RemoteCaptureSequence? CaptureSequence { get; set; }
   }
 
   [MessagePackObject]
@@ -62,7 +69,7 @@ public class ProtocolCompatibility
     MessagePackSerializer.Deserialize<T>(MessagePackSerializer.Serialize(old.GetType(), old));
 
   [Test]
-  public void Test_OlderBatchRequest_StillPinsItems()
+  public void Test_OlderBatchRequest_DefaultsToPinningItems()
   {
     var request = Read<BatchCollectionRequest>(new OldBatchCollectionRequest
     {
@@ -81,13 +88,26 @@ public class ProtocolCompatibility
   }
 
   [Test]
-  public void Test_OlderCallback_DoesNotOwnItsParameters()
+  public void Test_OlderCallback_DoesNotGrantPerRecipientReferences()
   {
-    var request = Read<CallbackInvocationRequest>(new OldCallbackInvocationRequest { Token = 5 });
-    Assert.That(request.Token, Is.EqualTo(5));
-    Assert.That(request.PinOwner, Is.Null);
-    Assert.That(request.ParametersPinnedPerRecipient, Is.False,
-      "an argument that is not wrapped returns no reference to a Diver that pinned once for all recipients");
+    var original = new OldCallbackInvocationRequest
+    {
+      Token = 5,
+      Timestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+      Parameters = [ObjectOrRemoteAddress.FromObj("legacy"), ObjectOrRemoteAddress.FromToken(7, "System.Object")]
+    };
+    var request = Read<CallbackInvocationRequest>(original);
+    Assert.Multiple(() =>
+    {
+      Assert.That(request.Token, Is.EqualTo(original.Token));
+      Assert.That(request.Timestamp, Is.EqualTo(original.Timestamp));
+      Assert.That(request.Parameters, Has.Count.EqualTo(2));
+      Assert.That(PrimitivesEncoder.Decode(request.Parameters[0]), Is.EqualTo("legacy"));
+      Assert.That(request.Parameters[1].RemoteAddress, Is.EqualTo(7));
+      Assert.That(request.PinOwner, Is.Null);
+      Assert.That(request.ParametersPinnedPerRecipient, Is.False,
+        "an older callback does not grant a separate reference to each recipient");
+    });
   }
 
   [Test]
@@ -107,7 +127,7 @@ public class ProtocolCompatibility
   }
 
   [Test]
-  public void Test_OlderRelease_UsesItsConnectionsOwner()
+  public void Test_OlderRelease_HasNoExplicitPinOwner()
   {
     var request = Read<UnpinRequest>(new OldUnpinRequest { Address = 7 });
     Assert.That(request.Address, Is.EqualTo(7));

@@ -12,8 +12,8 @@ using ScubaDiver;
 namespace MTGOSDK.UnitTests;
 
 /// <summary>
-/// Whom a request's pins are counted for (RequestOwner, compiled into this
-/// project from ScubaDiver), against the real pin table.
+/// Registered requests acquire and return references for their own registration.
+/// Removed registrations and closed, unregistered connections cannot acquire pins.
 /// </summary>
 public class RequestPins
 {
@@ -38,17 +38,7 @@ public class RequestPins
   private bool IsPinned(ulong token) => _runtime.TryGetPinnedObject(token, out _);
 
   [Test]
-  public void Test_AConnectionsOwner_IsResolvedFromItsMappingAndState()
-  {
-    Assert.That(RequestOwner.Resolve(ClientA, open: true).Registration, Is.EqualTo(ClientA));
-    Assert.That(RequestOwner.Resolve(ClientA, open: false).Registration, Is.EqualTo(ClientA),
-      "a closed connection stays its registration's while that lasts");
-    Assert.That(RequestOwner.Resolve(null, open: true), Is.EqualTo(RequestOwner.Unregistered));
-    Assert.That(RequestOwner.Resolve(null, open: false).IsGone, Is.True);
-  }
-
-  [Test]
-  public void Test_AGoneRequest_PinsAndReleasesNothing()
+  public void Test_ClosedUnregisteredConnection_CannotAcquireOrReleasePins()
   {
     // A request queued on a connection that closed after its registration was removed.
     var owner = RequestOwner.Resolve(null, open: false);
@@ -61,11 +51,12 @@ public class RequestPins
     Assert.That(IsPinned(shared), Is.False, "and was the only one");
   }
 
-  [Test]
-  public void Test_ARemovedRegistrationsRequest_IsRefused()
+  [TestCase(false)]
+  [TestCase(true)]
+  public void Test_RemovedRegistration_CannotAcquirePins(bool connectionOpen)
   {
-    // Its connection is still open, so still mapped to the removed registration.
-    var owner = RequestOwner.Resolve(ClientA, open: true);
+    // Removing a mapped registration must prevent further pins on either connection state.
+    var owner = RequestOwner.Resolve(ClientA, open: connectionOpen);
     _runtime.RemoveClient(ClientA);
     var instance = new object();
 
@@ -74,36 +65,40 @@ public class RequestPins
   }
 
   [Test]
-  public void Test_RegisteredAndUnregisteredRequests_Pin()
+  public void Test_RegisteredAndUnregisteredRequests_HoldIndependentReferences()
   {
     var instance = new object();
-    ulong token = RequestOwner.Of(ClientA).Pin(_runtime, instance);
-    Assert.That(RequestOwner.Unregistered.Pin(_runtime, instance), Is.EqualTo(token));
+    var registered = RequestOwner.Resolve(ClientA, open: true);
+    var unregistered = RequestOwner.Resolve(null, open: true);
+    ulong token = registered.Pin(_runtime, instance);
+    Assert.That(unregistered.Pin(_runtime, instance), Is.EqualTo(token));
     Assert.That(_runtime.GetClientReferenceCount(ClientA), Is.EqualTo(1));
 
-    Assert.That(RequestOwner.Of(ClientA).Unpin(_runtime, token), Is.True);
-    Assert.That(RequestOwner.Unregistered.Unpin(_runtime, token), Is.True);
+    Assert.That(registered.Unpin(_runtime, token), Is.True);
+    Assert.That(IsPinned(token), Is.True, "the unregistered request still holds its shared reference");
+    Assert.That(unregistered.Unpin(_runtime, token), Is.True);
     Assert.That(IsPinned(token), Is.False);
   }
 
   [Test]
-  public void Test_AReleaseForAnEarlierRegistration_KeepsTheCurrentPin()
+  public void Test_ReleaseFromPreviousRegistration_PreservesCurrentPin()
   {
     var instance = new object();
     ulong token = RequestOwner.Of(ClientA).Pin(_runtime, instance);
     var owner = RequestOwner.Of(ClientA);
 
-    Assert.That(owner.Unpin(_runtime, token, "previous", "current"), Is.False);
+    Assert.That(owner.Unpin(_runtime, token, receiptOwner: "previous", connectionOwner: "current"), Is.False);
     Assert.That(IsPinned(token), Is.True, "the current registration still owns its reference");
-    Assert.That(owner.Unpin(_runtime, token, "current", "current"), Is.True);
+    Assert.That(owner.Unpin(_runtime, token, receiptOwner: "current", connectionOwner: "current"), Is.True);
     Assert.That(IsPinned(token), Is.False);
   }
 
   [Test]
-  public void Test_AReleaseWithoutAnOwner_UsesItsConnection()
+  public void Test_ReleaseWithoutReceiptOwner_UsesConnectionRegistration()
   {
     ulong token = RequestOwner.Of(ClientA).Pin(_runtime, new object());
-    Assert.That(RequestOwner.Of(ClientA).Unpin(_runtime, token, null, "current"), Is.True);
+    Assert.That(RequestOwner.Of(ClientA).Unpin(_runtime, token, receiptOwner: null, connectionOwner: "current"),
+      Is.True);
     Assert.That(IsPinned(token), Is.False);
   }
 

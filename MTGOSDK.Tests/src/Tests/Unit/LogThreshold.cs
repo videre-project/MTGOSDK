@@ -132,7 +132,7 @@ public class LogThreshold
     });
 
     Assert.That(provider.Entries, Is.Empty);
-    Assert.That(provider.LoggersCreated, Is.EqualTo(0), "the caller is never resolved");
+    Assert.That(provider.LoggersCreated, Is.EqualTo(0), "disabled logging does not request a logger from the provider");
   }
 
   [Test]

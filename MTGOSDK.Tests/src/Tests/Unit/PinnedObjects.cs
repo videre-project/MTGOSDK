@@ -89,7 +89,7 @@ public class PinnedObjects
   }
 
   [Test]
-  public void Test_UnattributedReferences_BehaveAsBefore()
+  public void Test_UnattributedPins_ReleaseOneReferenceAtATime()
   {
     var instance = new object();
     ulong token = s_runtime.PinObject(instance);

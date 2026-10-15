@@ -15,20 +15,19 @@ using ScubaDiver;
 namespace MTGOSDK.UnitTests;
 
 /// <summary>
-/// The Diver takes a callback's argument references for each recipient
-/// (CallbackArguments, compiled into this project from ScubaDiver) against
-/// the real pin table, including a recipient whose registration is removed
-/// while its references are being taken.
+/// Registered recipients own one reference per occurrence of an object argument.
+/// Legacy subscribers use shared references; removed recipients are excluded.
+/// Failed encoding returns the references acquired for that callback.
 /// </summary>
 public class CallbackPins
 {
   private const int ClientA = 2001;
   private const int ClientB = 2002;
 
-  private static readonly Guid s_a = Guid.NewGuid();
-  private static readonly Guid s_b = Guid.NewGuid();
-  private static readonly Guid s_older = Guid.NewGuid();
-  private static readonly Guid s_removed = Guid.NewGuid();
+  private static readonly Guid s_recipientA = Guid.NewGuid();
+  private static readonly Guid s_recipientB = Guid.NewGuid();
+  private static readonly Guid s_unregisteredRecipient = Guid.NewGuid();
+  private static readonly Guid s_inactiveRecipient = Guid.NewGuid();
 
   private SnapshotRuntime _runtime = null!;
 
@@ -51,9 +50,9 @@ public class CallbackPins
   private bool IsPinned(ulong token) => _runtime.TryGetPinnedObject(token, out _);
 
   private static (bool, int?) RecipientOf(Guid recipient) =>
-    recipient == s_a ? (true, ClientA) :
-    recipient == s_b ? (true, ClientB) :
-    recipient == s_older ? (true, null) :
+    recipient == s_recipientA ? (true, ClientA) :
+    recipient == s_recipientB ? (true, ClientB) :
+    recipient == s_unregisteredRecipient ? (true, null) :
     (false, null);
 
   [Test]
@@ -64,11 +63,11 @@ public class CallbackPins
     // An object twice: one reference per occurrence.
     object?[] parameters = [first, 7, second, first];
     int pinsForA = 0;
-    var unattributed = new List<ulong>();
+    var sharedPins = new List<ulong>();
 
     var prepared = CallbackArguments.Prepare(
       parameters,
-      [s_a, s_b, s_older],
+      [s_recipientA, s_recipientB, s_unregisteredRecipient],
       RecipientOf,
       () => true,
       (object instance, int? client, out ulong token) =>
@@ -77,20 +76,22 @@ public class CallbackPins
         if (client == ClientA && ++pinsForA == 2)
           _runtime.RemoveClient(ClientA);
         bool taken = _runtime.TryPinObject(instance, client, out token);
-        if (taken && client == null) unattributed.Add(token);
+        if (taken && client == null) sharedPins.Add(token);
         return taken;
       },
       _runtime.UnpinObject,
       _runtime.GetObjectToken);
 
-    Assert.That(prepared.Owners.Keys, Is.EquivalentTo(new[] { s_b }), "A is not sent the callback");
-    Assert.That(prepared.SharedRecipients, Is.EquivalentTo(new[] { s_older }), "A never falls back to it");
+    Assert.That(prepared.Owners.Keys, Is.EquivalentTo(new[] { s_recipientB }), "A is not sent the callback");
+    Assert.That(prepared.SharedRecipients, Is.EquivalentTo(new[] { s_unregisteredRecipient }),
+      "the removed recipient is excluded from shared delivery too");
     Assert.That(prepared.Shared, Is.True);
-    Assert.That(unattributed, Has.Count.EqualTo(3), "one shared reference per object argument");
+    Assert.That(sharedPins, Has.Count.EqualTo(3), "one shared reference per object argument");
     Assert.That(prepared.Tokens, Has.Count.EqualTo(3));
     Assert.That(prepared.Parameters[1].IsRemoteAddress, Is.False, "a primitive is sent by value");
 
-    Assert.That(_runtime.GetClientReferenceCount(ClientA), Is.EqualTo(0), "A holds nothing");
+    Assert.That(_runtime.GetClientReferenceCount(ClientA), Is.EqualTo(0),
+      "removing the registration returns all of its references");
     Assert.That(_runtime.GetClientReferenceCount(ClientB), Is.EqualTo(3));
 
     // B and the older recipient return theirs: nothing is left pinned.
@@ -105,9 +106,9 @@ public class CallbackPins
   /// <summary>
   /// An argument whose hash code cannot be read.
   /// </summary>
-  private sealed class Unreadable
+  private sealed class ThrowingHashCode
   {
-    public override int GetHashCode() => throw new InvalidOperationException("unreadable");
+    public override int GetHashCode() => throw new InvalidOperationException("hash code unavailable");
     public override bool Equals(object? obj) => ReferenceEquals(this, obj);
   }
 
@@ -115,16 +116,16 @@ public class CallbackPins
   public void Test_AFailingArgument_ReturnsTheReferencesAlreadyTaken()
   {
     var first = new object();
-    object?[] parameters = [first, first, new Unreadable()];
+    object?[] parameters = [first, first, new ThrowingHashCode()];
 
     Assert.That(() => CallbackArguments.Prepare(
       parameters,
-      [s_a, s_b, s_older],
+      [s_recipientA, s_recipientB, s_unregisteredRecipient],
       RecipientOf,
       () => true,
       _runtime.TryPinObject,
       _runtime.UnpinObject,
-      _runtime.GetObjectToken), Throws.InvalidOperationException);
+      _runtime.GetObjectToken), Throws.InvalidOperationException.With.Message.EqualTo("hash code unavailable"));
 
     Assert.That(_runtime.GetClientReferenceCount(ClientA), Is.EqualTo(0));
     Assert.That(_runtime.GetClientReferenceCount(ClientB), Is.EqualTo(0));
@@ -138,13 +139,13 @@ public class CallbackPins
     ulong held = _runtime.PinObject(first, ClientB);
 
     Assert.That(() => CallbackArguments.Prepare(
-      [first, new Unreadable()],
-      [s_b],
+      [first, new ThrowingHashCode()],
+      [s_recipientB],
       RecipientOf,
       () => false,
       _runtime.TryPinObject,
       _runtime.UnpinObject,
-      _runtime.GetObjectToken), Throws.InvalidOperationException);
+      _runtime.GetObjectToken), Throws.InvalidOperationException.With.Message.EqualTo("hash code unavailable"));
 
     Assert.That(_runtime.GetClientReferenceCount(ClientB), Is.EqualTo(1), "only the callback's reference is returned");
     Assert.That(IsPinned(held), Is.True);
@@ -156,14 +157,14 @@ public class CallbackPins
     var argument = new object();
     var prepared = CallbackArguments.Prepare(
       [argument],
-      [s_removed, s_b],
+      [s_inactiveRecipient, s_recipientB],
       RecipientOf,
       () => true,
       _runtime.TryPinObject,
       _runtime.UnpinObject,
       _runtime.GetObjectToken);
 
-    Assert.That(prepared.Owners.Keys, Is.EquivalentTo(new[] { s_b }));
+    Assert.That(prepared.Owners.Keys, Is.EquivalentTo(new[] { s_recipientB }));
     Assert.That(prepared.SharedRecipients, Is.Empty);
     Assert.That(prepared.Shared, Is.False, "no recipient without a registration");
     Assert.That(_runtime.GetClientReferenceCount(ClientB), Is.EqualTo(1));
@@ -177,14 +178,15 @@ public class CallbackPins
     var argument = new object();
     var prepared = CallbackArguments.Prepare(
       [argument],
-      [s_older],
+      [s_unregisteredRecipient],
       RecipientOf,
       () => false,
       _runtime.TryPinObject,
       _runtime.UnpinObject,
       _runtime.GetObjectToken);
 
-    Assert.That(prepared.SharedRecipients, Is.EquivalentTo(new[] { s_older }), "still sent, owning nothing");
+    Assert.That(prepared.SharedRecipients, Is.EquivalentTo(new[] { s_unregisteredRecipient }),
+      "still sent, owning nothing");
     Assert.That(prepared.Shared, Is.False);
     Assert.That(IsPinned(prepared.Tokens[0]), Is.False);
   }
