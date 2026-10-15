@@ -110,12 +110,12 @@ public class TcpCommunicator : TcpPipelineBase
       if (previous != null) await previous.CloseAsync().ConfigureAwait(false);
 
       var session = new Session(this);
-      await session.OpenAsync(_hostname, _port, cancellationToken).ConfigureAwait(false);
-      // Published now; other requests wait until the handshake is done.
-      _session = session;
-
       try
       {
+        await session.OpenAsync(_hostname, _port, cancellationToken).ConfigureAwait(false);
+        // Published now; other requests wait until the handshake is done.
+        _session = session;
+
         if (handshake != null)
         {
           await handshake((endpoint, body) =>
