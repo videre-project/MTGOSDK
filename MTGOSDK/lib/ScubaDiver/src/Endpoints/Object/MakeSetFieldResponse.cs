@@ -60,7 +60,6 @@ public partial class Diver : IDisposable
     var fieldInfo = dumpedObjType.GetFieldRecursive(request.FieldName);
     if (fieldInfo == null)
     {
-      Debugger.Launch();
       Log.Debug("[Diver] Failed to Resolved field :/");
       return QuickError("Couldn't find field in type.");
     }
@@ -81,13 +80,17 @@ public partial class Diver : IDisposable
     }
 
     ObjectOrRemoteAddress returnValue;
-    if (results.GetType().IsPrimitiveEtc())
+    if (results is null)
+    {
+      returnValue = ObjectOrRemoteAddress.Null; // a null field value (for example an event without subscribers)
+    }
+    else if (results.GetType().IsPrimitiveEtc())
     {
       returnValue = ObjectOrRemoteAddress.FromObj(results);
     }
     else
     {
-      ulong resultsAddress = _runtime.PinObject(results);
+      ulong resultsAddress = PinForRequest(results);
       Type resultsType = results.GetType();
       int hashCode = results.GetHashCode();
       returnValue = ObjectOrRemoteAddress.FromToken(resultsAddress, resultsType.Name, hashCode);

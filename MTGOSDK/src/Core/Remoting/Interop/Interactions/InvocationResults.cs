@@ -9,9 +9,19 @@ using MessagePack;
 
 namespace MTGOSDK.Core.Remoting.Interop.Interactions;
 
-[MessagePackObject]
-public class InvocationResults
+[MessagePackObject(AllowPrivate = true)]
+public class InvocationResults : IPinResponse
 {
+  [IgnoreMember]
+  string? IPinResponse.PinOwner
+  {
+    set
+    {
+      if (ReturnedObjectOrAddress is not null)
+        ReturnedObjectOrAddress.PinOwner = value;
+    }
+  }
+
   [Key(0)]
   public bool VoidReturnType { get; set; }
   [Key(1)]

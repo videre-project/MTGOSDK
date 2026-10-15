@@ -152,40 +152,70 @@ public partial class Diver : IDisposable
     if (!IsCallbackActive(token))
       return false;
 
-    var remoteParams = new ObjectOrRemoteAddress[parameters.Length];
-    for (int i = 0; i < parameters.Length; i++)
-    {
-      object parameter = parameters[i];
-      if (parameter == null)
+    // Every registered recipient owns one pin reference to each object
+    // argument, counted for its registration, and returns it with /unpin (a
+    // client without a handler for the token returns it at once), so a client
+    // that exits before returning it is reclaimed. The references are taken
+    // before the callback is sent, so no recipient can release an argument
+    // another one is still reading. A recipient removed meanwhile is refused
+    // its references and is not sent the callback (see CallbackArguments).
+    // Connections without a registration (see CallbackRecipient) are told they
+    // do not own a reference; when one of them subscribed to this token, they
+    // share one unattributed reference, as every recipient did before.
+    CallbackArguments.Prepared prepared = null;
+    SendTcpCallback(
+      recipients =>
       {
-        remoteParams[i] = ObjectOrRemoteAddress.Null;
-      }
-      else if (parameter.GetType().IsPrimitiveEtc())
-      {
-        remoteParams[i] = ObjectOrRemoteAddress.FromObj(parameter);
-      }
-      else
-      {
-        ulong addr = _runtime.PinObject(parameter);
-        int hashCode = parameter.GetHashCode();
-        remoteParams[i] = ObjectOrRemoteAddress.FromToken(
-          addr,
-          parameter.GetType().FullName,
-          hashCode);
-      }
-    }
+        prepared = CallbackArguments.Prepare(
+          parameters,
+          recipients,
+          CallbackRecipient,
+          () => HasUnregisteredSubscriber(token),
+          _runtime.TryPinObject,
+          _runtime.UnpinObject,
+          _runtime.GetObjectToken);
 
-    // Send callback over TCP
-    var callbackRequest = new CallbackInvocationRequest
-    {
-      Token = token,
-      Timestamp = timestamp,
-      Parameters = [.. remoteParams],
-      Capture = capture,
-      CaptureError = captureError,
-      CaptureSequence = sequence
-    };
-    SendTcpCallback(callbackRequest);
+        CallbackInvocationRequest Callback(bool owned, string owner) => new()
+        {
+          Token = token,
+          Timestamp = timestamp,
+          Parameters = [.. prepared.Parameters],
+          Capture = capture,
+          CaptureError = captureError,
+          CaptureSequence = sequence,
+          ParametersPinnedPerRecipient = owned,
+          PinOwner = owner
+        };
+        var sharedCallback = Callback(owned: false, "");
+        return recipient =>
+        {
+          if (prepared.Owners.TryGetValue(recipient, out int owner))
+          {
+            lock (_registeredPidsLock)
+            {
+              if (_connectionClients.TryGetValue(recipient, out var client) &&
+                  client.Id == owner && !client.Removed)
+                return Callback(owned: true, client.Key);
+            }
+            return null;
+          }
+          return prepared.SharedRecipients.Contains(recipient) ? sharedCallback : null;
+        };
+      },
+      unsent =>
+      {
+        if (prepared == null) return;
+        foreach (ulong addr in prepared.Tokens)
+          foreach (Guid recipient in unsent)
+            if (prepared.Owners.TryGetValue(recipient, out int client))
+              _runtime.UnpinObject(addr, client);
+        // The shared reference goes when no connection without a registration got it.
+        bool sharedSent = prepared.SharedRecipients.Any(recipient => !unsent.Contains(recipient));
+        if (prepared.Shared && !sharedSent)
+          foreach (ulong addr in prepared.Tokens)
+            _runtime.UnpinObject(addr, null);
+      },
+      IsCallbackRecipient);
     Interlocked.Increment(ref s_callbacksSent);
     return true;
   }
@@ -390,6 +420,8 @@ public partial class Diver : IDisposable
       _activeCallbacks.TryRemove(token, out _);
       return QuickError($"Failed insert the event handler: {ex}");
     }
+    // Outside the try: undoing it for a client removed meanwhile is not a failed insert.
+    AddClientSubscription(token, hook: false);
 
     var erResults = new EventRegistrationResults { Token = token, CaptureSequence = baseline };
     return WrapSuccess(erResults);

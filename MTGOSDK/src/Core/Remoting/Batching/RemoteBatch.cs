@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using MessagePack;
-
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
@@ -56,6 +54,7 @@ public sealed class RemoteBatch : RemoteBatchScope
 
   /// <summary>
   /// Records a supported literal or raw remote handle without remote discovery.
+  /// Object inputs remain retained for the lifetime of the batch.
   /// </summary>
   public RemoteBatchSlot Input(object? value)
   {
@@ -65,10 +64,23 @@ public sealed class RemoteBatch : RemoteBatchScope
       throw new ArgumentException("Pass an existing raw remote handle instead of a wrapper.", nameof(value));
     // Use the existing handle token so recording an input does not fetch
     // remote type metadata.
-    if (value is RemoteObject remote)
-      return Input(ObjectOrRemoteAddress.FromToken(remote.RemoteToken, typeof(object).FullName!));
-    if (value is DynamicRemoteObject dynamicRemote)
-      return Input(ObjectOrRemoteAddress.FromToken(dynamicRemote.__ro.RemoteToken, typeof(object).FullName!));
+    var remote = value switch
+    {
+      RemoteObject instance => instance,
+      DynamicRemoteObject instance => instance.__ro,
+      _ => null
+    };
+    if (remote is not null)
+    {
+      try
+      {
+        return Input(ObjectOrRemoteAddress.FromRemoteObject(remote, typeof(object).FullName!));
+      }
+      finally
+      {
+        GC.KeepAlive(value);
+      }
+    }
     if (value != null && TypeProxy<dynamic>.IsProxy(value))
       throw new ArgumentException("Pass an existing raw remote handle instead of a proxy.", nameof(value));
     return Input(RemoteFunctionsInvokeHelper.CreateRemoteParameter(value!));
@@ -81,10 +93,10 @@ public sealed class RemoteBatch : RemoteBatchScope
     _projections.Add(name, projection);
 
   /// <summary>
-  /// Copies the recorded batch into an independent wire request.
+  /// Copies the recorded description while preserving local ownership of its
+  /// object inputs. Ownership is not included in the serialized request.
   /// </summary>
-  public RemoteBatchRequest ToRequest() => MessagePackSerializer.Deserialize<RemoteBatchRequest>(
-    MessagePackSerializer.Serialize(CreateRequest()));
+  public RemoteBatchRequest ToRequest() => CreateRequest().Copy();
 
   private RemoteBatchRequest CreateRequest() => new()
   {
@@ -118,8 +130,9 @@ public sealed class RemoteBatch : RemoteBatchScope
   public RemoteBatchResult Execute(DiverCommunicator connection) =>
     ExecuteAsync(connection).GetAwaiter().GetResult();
 
-  public Task<RemoteBatchResult> ExecuteAsync(DiverCommunicator connection) =>
-    connection.ExecuteDetachedBatchAsync(ToRequest());
+  public async Task<RemoteBatchResult> ExecuteAsync(DiverCommunicator connection) =>
+    await connection.ExecuteDetachedBatchAsync(ToRequest()).ConfigureAwait(false);
+
   public RemoteBatchResult Execute(RemoteHandle connection) => Execute(connection.Communicator);
   public Task<RemoteBatchResult> ExecuteAsync(RemoteHandle connection) => ExecuteAsync(connection.Communicator);
 }

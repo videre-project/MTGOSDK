@@ -54,90 +54,103 @@ public partial class Diver : IDisposable
     for (int c = 0; c < schema.Length; c++)
       columnLists[c] = new List<string>();
 
-    int count = 0;
-    foreach (var item in enumerable)
+    // A failed read returns no tokens, so the references it took are released,
+    // by the owner they were taken for.
+    RequestOwner owner = CurrentRequestOwner;
+    try
     {
-      if (count >= maxItems) break;
-
-      ulong itemToken = _runtime.PinObject(item);
-      itemTokens.Add(itemToken);
-
-      if (itemTypeName == null && item != null)
-        itemTypeName = item.GetType().FullName;
-
-      for (int c = 0; c < schema.Length; c++)
+      int count = 0;
+      foreach (var item in enumerable)
       {
-        try
+        if (count >= maxItems) break;
+
+        // Pin only when the client will wrap the token (and so release it).
+        if (!request.SkipItemPins)
+          itemTokens.Add(owner.Pin(_runtime, item));
+
+        if (itemTypeName == null && item != null)
+          itemTypeName = item.GetType().FullName;
+
+        for (int c = 0; c < schema.Length; c++)
         {
-          if (TryResolveNestedCollectionPath(
-            item,
-            schema[c],
-            out string nestedJson,
-            out string nestedTypeName))
+          try
           {
-            columnLists[c].Add(nestedJson);
-            schemaTypes[c] ??= nestedTypeName;
-            continue;
-          }
+            if (TryResolveNestedCollectionPath(
+              item,
+              schema[c],
+              out string nestedJson,
+              out string nestedTypeName))
+            {
+              columnLists[c].Add(nestedJson);
+              schemaTypes[c] ??= nestedTypeName;
+              continue;
+            }
 
-          var (value, type) = ResolveMemberPath(item, schema[c]);
+            var (value, type) = ResolveMemberPath(item, schema[c]);
 
-          if (value == null)
-          {
-            columnLists[c].Add(null);
+            if (value == null)
+            {
+              columnLists[c].Add(null);
+            }
+            else if (value.GetType().IsEnum)
+            {
+              columnLists[c].Add(PrimitivesEncoder.Encode(value.ToString()));
+              if (schemaTypes[c] == null) schemaTypes[c] = "System.String";
+            }
+            else if (value.GetType().IsPrimitiveEtc())
+            {
+              columnLists[c].Add(PrimitivesEncoder.Encode(value));
+              if (schemaTypes[c] == null) schemaTypes[c] = value.GetType().FullName;
+            }
+            else if (IsSimpleCollection(value))
+            {
+              columnLists[c].Add(System.Text.Json.JsonSerializer.Serialize(value));
+              if (schemaTypes[c] == null) schemaTypes[c] = value.GetType().FullName;
+            }
+            else
+            {
+              columnLists[c].Add(null);
+            }
           }
-          else if (value.GetType().IsEnum)
+          catch (Exception ex)
           {
-            columnLists[c].Add(PrimitivesEncoder.Encode(value.ToString()));
-            if (schemaTypes[c] == null) schemaTypes[c] = "System.String";
-          }
-          else if (value.GetType().IsPrimitiveEtc())
-          {
-            columnLists[c].Add(PrimitivesEncoder.Encode(value));
-            if (schemaTypes[c] == null) schemaTypes[c] = value.GetType().FullName;
-          }
-          else if (IsSimpleCollection(value))
-          {
-            columnLists[c].Add(System.Text.Json.JsonSerializer.Serialize(value));
-            if (schemaTypes[c] == null) schemaTypes[c] = value.GetType().FullName;
-          }
-          else
-          {
+            Log.Debug($"[Diver] Error resolving path '{schema[c]}' on item {count}: {ex.Message}");
             columnLists[c].Add(null);
           }
         }
-        catch (Exception ex)
-        {
-          Log.Debug($"[Diver] Error resolving path '{schema[c]}' on item {count}: {ex.Message}");
-          columnLists[c].Add(null);
-        }
+
+        count++;
       }
 
-      count++;
+      // Convert column lists to arrays
+      var columns = new string[schema.Length][];
+      for (int c = 0; c < schema.Length; c++)
+        columns[c] = columnLists[c].ToArray();
+
+      // Fill in any null schema types with "null"
+      for (int c = 0; c < schemaTypes.Length; c++)
+        schemaTypes[c] ??= "null";
+
+      Log.Debug($"[Diver] Processed {count} items from collection, pinned {itemTokens.Count} items");
+
+      var response = new BatchCollectionResponse
+      {
+        Schema = schema,
+        SchemaTypes = schemaTypes,
+        Columns = columns,
+        Count = count,
+        ItemTokens = itemTokens,
+        ItemTypeName = itemTypeName
+      };
+
+      return WrapSuccess(response);
     }
-
-    // Convert column lists to arrays
-    var columns = new string[schema.Length][];
-    for (int c = 0; c < schema.Length; c++)
-      columns[c] = columnLists[c].ToArray();
-
-    // Fill in any null schema types with "null"
-    for (int c = 0; c < schemaTypes.Length; c++)
-      schemaTypes[c] ??= "null";
-
-    Log.Debug($"[Diver] Processed {count} items from collection, pinned {itemTokens.Count} items");
-
-    var response = new BatchCollectionResponse
+    catch
     {
-      Schema = schema,
-      SchemaTypes = schemaTypes,
-      Columns = columns,
-      Count = count,
-      ItemTokens = itemTokens,
-      ItemTypeName = itemTypeName
-    };
-
-    return WrapSuccess(response);
+      foreach (ulong token in itemTokens)
+        owner.Unpin(_runtime, token);
+      throw;
+    }
   }
 
   /// <summary>

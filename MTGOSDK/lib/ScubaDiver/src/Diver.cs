@@ -40,6 +40,9 @@ public partial class Diver : IDisposable
   private readonly CaptureScopeManager _captureScopes = new();
 
   private static readonly AsyncLocal<byte[]> s_requestBody = new();
+  private static readonly AsyncLocal<Guid?> s_requestConnection = new();
+  private static readonly AsyncLocal<RequestOwner?> s_requestOwner = new();
+  private static readonly AsyncLocal<string> s_requestPinOwner = new();
 
   private readonly Dictionary<string, Func<byte[], byte[]>> _tcpHandlers;
   private readonly ConcurrentDictionary<int, RegisteredEventHandlerInfo> _remoteEventHandler;
@@ -125,7 +128,8 @@ public partial class Diver : IDisposable
         "ScubaDiver");
 #endif
       _runtime = new SnapshotRuntime();
-      _tcpServer = new TcpServer(listenPort, HandleTcpRequest);
+      _tcpServer = new TcpServer(listenPort, HandleTcpRequest, OnConnectionClosed);
+      StartClientMonitor();
       Log.Debug($"[Diver] Listening on TCP port {listenPort}...");
       _tcpServer.StartAsync(_cts.Token).GetAwaiter().GetResult();
     }
@@ -141,7 +145,7 @@ public partial class Diver : IDisposable
   /// <summary>
   /// Routes TCP requests to the appropriate handler.
   /// </summary>
-  private byte[] HandleTcpRequest(string endpoint, byte[] body)
+  private byte[] HandleTcpRequest(Guid connection, string endpoint, byte[] body)
   {
 #if MTGOSDK_TRACING
     using var activity = s_activitySource.StartActivity(endpoint, ActivityKind.Server);
@@ -155,7 +159,18 @@ public partial class Diver : IDisposable
       return QuickError($"Unknown endpoint: {endpoint}");
 
     var previousBody = s_requestBody.Value;
+    var previousConnection = s_requestConnection.Value;
     s_requestBody.Value = body;
+    s_requestConnection.Value = connection;
+    NoteRequest(connection, endpoint);
+    var previousOwner = s_requestOwner.Value;
+    var previousPinOwner = s_requestPinOwner.Value;
+    lock (_registeredPidsLock)
+    {
+      s_requestOwner.Value = ResolveRequestOwner();
+      s_requestPinOwner.Value = _connectionClients.TryGetValue(connection, out var client)
+        ? client.Key : "";
+    }
     long started = Stopwatch.GetTimestamp();
     try
     {
@@ -170,6 +185,9 @@ public partial class Diver : IDisposable
     {
       // Restore the enclosing request if a handler invoked another request locally.
       s_requestBody.Value = previousBody;
+      s_requestConnection.Value = previousConnection;
+      s_requestOwner.Value = previousOwner;
+      s_requestPinOwner.Value = previousPinOwner;
       long elapsed = Stopwatch.GetTimestamp() - started;
       var metrics = s_endpointMetrics.GetOrAdd(endpoint, _ => new EndpointMetrics());
       Interlocked.Increment(ref metrics.Count);
@@ -179,11 +197,15 @@ public partial class Diver : IDisposable
   }
 
   /// <summary>
-  /// Sends a callback to the connected SDK client over TCP.
+  /// Sends a callback over TCP to the connected SDK clients that
+  /// <paramref name="isRecipient"/> selects (see <see cref="TcpServer.SendCallback"/>).
   /// </summary>
-  public void SendTcpCallback(CallbackInvocationRequest callback)
+  public int SendTcpCallback(
+    Func<IReadOnlyList<Guid>, Func<Guid, CallbackInvocationRequest>> prepare,
+    Action<IReadOnlyList<Guid>> releaseUnsent,
+    Func<Guid, bool> isRecipient)
   {
-    _tcpServer?.SendCallback(callback);
+    return _tcpServer?.SendCallback(prepare, releaseUnsent, isRecipient) ?? 0;
   }
 
   public byte[] QuickError(string error, string stackTrace = null)
@@ -198,8 +220,12 @@ public partial class Diver : IDisposable
     return MessagePackSerializer.Serialize(errResponse);
   }
 
-  public static byte[] WrapSuccess<T>(T data) =>
-    MessagePackSerializer.Serialize(DiverResponse<T>.Success(data));
+  public static byte[] WrapSuccess<T>(T data)
+  {
+    var response = DiverResponse<T>.Success(data);
+    response.PinOwner = s_requestPinOwner.Value;
+    return MessagePackSerializer.Serialize(response);
+  }
 
   /// <summary>
   /// Get the cached request body for the current request.
@@ -235,6 +261,7 @@ public partial class Diver : IDisposable
     }
 
     // Detach native callbacks before releasing the runtime they use for capture.
+    Release("client monitor", () => _clientMonitor?.Dispose());
     Release("transport cancellation", _cts.Cancel);
     Release("TCP server", () => _tcpServer?.Dispose());
     _activeCallbacks.Clear();
@@ -256,7 +283,14 @@ public partial class Diver : IDisposable
     Release("capture scopes", _captureScopes.Dispose);
     Release("snapshot runtime", () => _runtime?.Dispose());
     Release("STA thread", STAThread.Stop);
-    lock (_registeredPidsLock) _registeredPids.Clear();
+    lock (_registeredPidsLock)
+    {
+      _registeredClients.Clear();
+      _legacyClients.Clear();
+      _requestingConnections.Clear();
+      _unregisteredSubscriptions.Clear();
+      _connectionClients.Clear();
+    }
 #if MTGOSDK_TRACING
     Release("trace exporter", () => _traceExporter?.Dispose());
 #endif

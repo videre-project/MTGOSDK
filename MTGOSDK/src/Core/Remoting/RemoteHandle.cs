@@ -8,6 +8,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
@@ -155,22 +156,102 @@ public class RemoteHandle : DLRWrapper, IDisposable
       return false;
     }
 
+    // Pin accounting. The Diver adds one reference to an object's pin each time
+    // it returns the object, and one /unpin removes one. The client keeps one
+    // RemoteObjectRef per token holding one of those references, unpinned when
+    // its last RemoteObject is released. Every other reference a receipt brings
+    // (PinReceipt) is settled once the receipt has a holder on a live object:
+    //  - Surplus: a response (or a callback argument, pinned once for every
+    //    client it was sent to) pinned the object for this client again; the
+    //    extra reference is returned at once (otherwise the object stays pinned
+    //    for as long as the client is attached);
+    //  - None: no reference was taken (heap lookups), or a new ref adopted it.
+    internal enum PinReceipt { None, Surplus }
+
+    private void SettleReceipt(ulong pinnedAddress, long epoch, ref PinReceipt receipt)
+    {
+      var pending = receipt;
+      receipt = PinReceipt.None;
+      if (pending == PinReceipt.None) return;
+      // Returned in the background: the caller's ref still holds its own
+      // reference, so the object stays pinned for as long as it is held.
+      _app.Communicator.ReleaseLater(pinnedAddress, epoch);
+    }
+
     private RemoteObject PublishRemoteObjectRef(
       ulong pinnedAddress,
-      Func<RemoteObjectRef> createRef)
+      Func<RemoteObjectRef> createRef,
+      long epoch,
+      ref PinReceipt receipt)
     {
       lock (GetRemoteObjectRefLock(pinnedAddress))
       {
+        if (!_app.Communicator.IsRegistrationCurrent(epoch))
+          throw new ObjectDisposedException(nameof(RemoteObject));
         if (TryGetLiveRemoteObjectRef(pinnedAddress, out var existingRef))
         {
-          return new RemoteObject(existingRef, _app);
+          try
+          {
+            var shared = new RemoteObject(existingRef, _app);
+            SettleReceipt(pinnedAddress, epoch, ref receipt);
+            return shared;
+          }
+          catch (ObjectDisposedException)
+          {
+            // Released meanwhile: a new ref adopts this receipt's reference.
+          }
         }
 
         RemoteObjectRef objRef = createRef();
         _pinnedAddressesToRefs[pinnedAddress] = new WeakReference<RemoteObjectRef>(objRef);
         SweepStaleCacheEntries();
 
+        receipt = PinReceipt.None; // the new ref holds this receipt's reference
         return new RemoteObject(objRef, _app);
+      }
+    }
+
+    /// <summary>
+    /// Takes a holder on the cached, live RemoteObject for an address.
+    /// </summary>
+    private bool TryAcquireCached(ulong address, out RemoteObject remoteObject)
+    {
+      remoteObject = null!;
+      if (!_pinnedAddressesToRemoteObjects.TryGetValue(address, out var weakRef))
+        return false;
+      if (weakRef.TryGetTarget(out var ro) && ro.TryAddReference())
+      {
+        if (ro.IsValid)
+        {
+          remoteObject = ro;
+          return true;
+        }
+        ro.ReleaseReference();
+      }
+      // Stale entry (only removed if it is still this one).
+      ((ICollection<KeyValuePair<ulong, WeakReference<RemoteObject>>>) _pinnedAddressesToRemoteObjects)
+        .Remove(new KeyValuePair<ulong, WeakReference<RemoteObject>>(address, weakRef));
+      return false;
+    }
+
+    /// <summary>
+    /// Caches a newly built RemoteObject, or hands out the one cached meanwhile.
+    /// The new object keeps its holder (and so its pin) until another live
+    /// holder has been acquired, so the receipt is never left without a pin.
+    /// </summary>
+    private RemoteObject PublishToCache(ulong address, RemoteObject newRo)
+    {
+      while (true)
+      {
+        if (TryAcquireCached(address, out var cached))
+        {
+          newRo.ReleaseReference();
+          return cached;
+        }
+        if (_pinnedAddressesToRemoteObjects.TryAdd(address, new WeakReference<RemoteObject>(newRo)))
+        {
+          return newRo;
+        }
       }
     }
 
@@ -181,16 +262,26 @@ public class RemoteHandle : DLRWrapper, IDisposable
     {
       if (TryGetLiveRemoteObjectRef(remoteAddress, out var existingRef))
       {
-        return new RemoteObject(existingRef, _app);
+        try
+        {
+          return new RemoteObject(existingRef, _app); // no reference taken
+        }
+        catch (ObjectDisposedException)
+        {
+          // Released meanwhile: dump and pin below.
+        }
       }
 
+      long epoch = _app.Communicator.RegistrationEpoch;
       ObjectDump od = null!;
       TypeDump td = null!;
       Retry(() =>
       {
+        od = null!;
         try
         {
           od = _app.Communicator.DumpObject(remoteAddress, typeName, true, hashCode);
+          epoch = _app.Communicator.GetResponseRegistrationEpoch(od.PinOwner);
 
           // Check if we have a cached RemoteType with its SourceTypeDump.
           RemoteType rt = TypeResolver.Instance.ResolveRemoteType(_app, od.Type);
@@ -205,6 +296,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
         }
         catch (Exception e)
         {
+          if (od?.ReferenceTaken == true)
+            _app.Communicator.ReleaseLater(od.PinnedAddress, epoch);
           throw new InvalidOperationException(
             $"Could not dump remote object {typeName} at address {remoteAddress:X}.\n" +
             $"This is likely due to the object being invalid or not being a managed object.",
@@ -214,9 +307,20 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
       // The requested heap address may differ from Diver's stable pin token.
       // Publish by the returned token so every local wrapper shares one ref.
-      return PublishRemoteObjectRef(
-        od.PinnedAddress,
-        () => new RemoteObjectRef(od, td, _app.Communicator));
+      // A current Diver took one reference (the new ref's, or a surplus to
+      // return); an older one may not have, and then nothing is returned.
+      var receipt = od.ReferenceTaken ? PinReceipt.Surplus : PinReceipt.None;
+      try
+      {
+        return PublishRemoteObjectRef(
+          od.PinnedAddress,
+          () => new RemoteObjectRef(od, td, _app.Communicator, epoch),
+          epoch, ref receipt);
+      }
+      finally
+      {
+        SettleReceipt(od.PinnedAddress, epoch, ref receipt);
+      }
     }
 
 
@@ -227,11 +331,22 @@ public class RemoteHandle : DLRWrapper, IDisposable
     /// </summary>
     private RemoteObject GetRemoteObjectFromFieldUncached(
       ulong pinnedAddress,
-      string typeName)
+      string typeName,
+      long epoch,
+      ref PinReceipt receipt)
     {
       if (TryGetLiveRemoteObjectRef(pinnedAddress, out var existingRef))
       {
-        return new RemoteObject(existingRef, _app);
+        try
+        {
+          var shared = new RemoteObject(existingRef, _app);
+          SettleReceipt(pinnedAddress, epoch, ref receipt);
+          return shared;
+        }
+        catch (ObjectDisposedException)
+        {
+          // Released meanwhile: publish below, adopting this receipt's reference.
+        }
       }
 
       TypeDump td = null!;
@@ -260,7 +375,8 @@ public class RemoteHandle : DLRWrapper, IDisposable
 
       return PublishRemoteObjectRef(
         pinnedAddress,
-        () => new RemoteObjectRef(pinnedAddress, typeName, td, _app.Communicator));
+        () => new RemoteObjectRef(pinnedAddress, typeName, td, _app.Communicator, epoch),
+        epoch, ref receipt);
     }
 
 
@@ -269,89 +385,52 @@ public class RemoteHandle : DLRWrapper, IDisposable
       string typeName,
       int? hashcode = null)
     {
-      const int maxRetries = 5;
-
-      for (int attempt = 0; attempt < maxRetries; attempt++)
-      {
-        // Fast path: try to get existing valid reference
-        if (_pinnedAddressesToRemoteObjects.TryGetValue(address, out var weakRef))
-        {
-          if (weakRef.TryGetTarget(out var ro) && ro.IsValid)
-          {
-            ro.AddReference();
-            if (ro.IsValid) return ro;
-            ro.ReleaseReference();
-          }
-          // Stale entry - remove it and retry
-          _pinnedAddressesToRemoteObjects.TryRemove(address, out _);
-          continue;
-        }
-
-        // Slow path: create new object and try to add it
-        var newRo = GetRemoteObjectUncached(address, typeName, hashcode);
-        var newWeakRef = new WeakReference<RemoteObject>(newRo);
-
-        // Try to add our new object
-        if (_pinnedAddressesToRemoteObjects.TryAdd(address, newWeakRef))
-        {
-          // We won - return our object
-          return newRo;
-        }
-
-        // Lost the cache race. Release this wrapper's reference; if it owns a
-        // duplicate pin, it will be unpinned, and if it shares a ref, the winner
-        // remains valid through the ref count.
-        newRo.ReleaseReference();
-      }
-
-      // Exhausted retries - create object directly without caching
-      return GetRemoteObjectUncached(address, typeName, hashcode);
+      // A cached holder takes no new Diver reference; a dump settles its own.
+      if (TryAcquireCached(address, out var cached))
+        return cached;
+      return PublishToCache(address, GetRemoteObjectUncached(address, typeName, hashcode));
     }
 
     /// <summary>
-    /// Gets a RemoteObject using the lightweight path (no /object call).
-    /// Uses same caching as GetRemoteObject.
+    /// Gets a RemoteObject using the lightweight path (no /object call), for a
+    /// token the Diver has just returned and so pinned once more for this
+    /// client (invoke, field and item reads, object creation, batch items and
+    /// callback arguments). The reference is taken over, or returned if this
+    /// fails first.
     /// </summary>
     public RemoteObject GetRemoteObjectFromField(
       ulong pinnedAddress,
-      string typeName)
+      string typeName) =>
+      GetRemoteObjectFromField(pinnedAddress, typeName, ownsReference: true);
+
+    /// <summary>
+    /// As <see cref="GetRemoteObjectFromField(ulong, string)"/>; without
+    /// <paramref name="ownsReference"/> (a callback argument a Diver pinned once
+    /// for all recipients) nothing is returned: a new ref adopts that reference
+    /// and an existing one leaves it.
+    /// </summary>
+    public RemoteObject GetRemoteObjectFromField(
+      ulong pinnedAddress,
+      string typeName,
+      bool ownsReference,
+      string? pinOwner = null)
     {
-      const int maxRetries = 5;
-
-      for (int attempt = 0; attempt < maxRetries; attempt++)
+      long epoch = _app.Communicator.GetResponseRegistrationEpoch(pinOwner);
+      var receipt = ownsReference ? PinReceipt.Surplus : PinReceipt.None;
+      try
       {
-        // Fast path: try to get existing valid reference
-        if (_pinnedAddressesToRemoteObjects.TryGetValue(pinnedAddress, out var weakRef))
+        if (TryAcquireCached(pinnedAddress, out var cached))
         {
-          if (weakRef.TryGetTarget(out var ro) && ro.IsValid)
-          {
-            ro.AddReference();
-            if (ro.IsValid) return ro;
-            ro.ReleaseReference();
-          }
-          // Stale entry - remove it and retry
-          _pinnedAddressesToRemoteObjects.TryRemove(pinnedAddress, out _);
-          continue;
+          SettleReceipt(pinnedAddress, epoch, ref receipt);
+          return cached;
         }
-
-        // Slow path: create new object using lightweight constructor
-        var newRo = GetRemoteObjectFromFieldUncached(pinnedAddress, typeName);
-        var newWeakRef = new WeakReference<RemoteObject>(newRo);
-
-        // Try to add our new object
-        if (_pinnedAddressesToRemoteObjects.TryAdd(pinnedAddress, newWeakRef))
-        {
-          return newRo;
-        }
-
-        // Lost the cache race. Release this wrapper's reference; if it owns a
-        // duplicate pin, it will be unpinned, and if it shares a ref, the winner
-        // remains valid through the ref count.
-        newRo.ReleaseReference();
+        return PublishToCache(pinnedAddress,
+          GetRemoteObjectFromFieldUncached(pinnedAddress, typeName, epoch, ref receipt));
       }
-
-      // Exhausted retries - create object directly without caching
-      return GetRemoteObjectFromFieldUncached(pinnedAddress, typeName);
+      finally
+      {
+        SettleReceipt(pinnedAddress, epoch, ref receipt); // only after a failure
+      }
     }
   }
 
@@ -578,6 +657,24 @@ public class RemoteHandle : DLRWrapper, IDisposable
   {
     return _remoteObjects.GetRemoteObjectFromField(pinnedAddress, typeName);
   }
+
+  /// <summary>
+  /// Gets a RemoteObject for a callback argument; <paramref name="ownsReference"/>
+  /// is whether the Diver pinned it for this client (see
+  /// <see cref="Hooking.HookContext.OwnsParameters"/>).
+  /// </summary>
+  internal RemoteObject GetRemoteObjectFromField(
+    ulong pinnedAddress,
+    string typeName,
+    bool ownsReference)
+  {
+    return _remoteObjects.GetRemoteObjectFromField(pinnedAddress, typeName, ownsReference);
+  }
+
+  internal RemoteObject GetRemoteObjectFromField(ObjectOrRemoteAddress value,
+    bool ownsReference = true) =>
+    _remoteObjects.GetRemoteObjectFromField(value.RemoteAddress, value.Type,
+      ownsReference, value.PinOwner);
 
   public RemoteObjectCacheDiagnostics GetRemoteObjectCacheDiagnostics() =>
     _remoteObjects.GetDiagnostics();

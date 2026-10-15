@@ -26,7 +26,8 @@ public partial class Diver : IDisposable
     ulong objAddr = request.Address;
 
     Log.Debug($"[Diver][Debug](Unpin) objAddrStr={objAddr:X16}");
-    _runtime.QueueUnpinObject(objAddr);
+    // A client returns only references it holds (or unattributed ones).
+    CurrentRequestOwner.Unpin(_runtime, objAddr, request.PinOwner, s_requestPinOwner.Value);
 
     return s_okResponse;
   }

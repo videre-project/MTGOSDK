@@ -18,6 +18,7 @@ internal class RemoteObjectRef
   private readonly ulong _pinnedAddress;
   private readonly string _typeName;
   private readonly DiverCommunicator _communicator;
+  private readonly long _registrationEpoch;
   private readonly TypeDump _typeInfo;
   
   // Optional - only populated when ObjectDump is available (lazy loaded if needed)
@@ -29,13 +30,15 @@ internal class RemoteObjectRef
   internal RemoteObjectRef(
     ObjectDump remoteObjectInfo,
     TypeDump typeInfo,
-    DiverCommunicator creatingCommunicator)
+    DiverCommunicator creatingCommunicator,
+    long registrationEpoch)
   {
     _objectDump = remoteObjectInfo;
     _pinnedAddress = remoteObjectInfo.PinnedAddress;
     _typeName = remoteObjectInfo.Type;
     _typeInfo = typeInfo;
     _communicator = creatingCommunicator;
+    _registrationEpoch = registrationEpoch;
   }
 
   /// <summary>
@@ -45,12 +48,14 @@ internal class RemoteObjectRef
     ulong pinnedAddress,
     string typeName,
     TypeDump typeInfo,
-    DiverCommunicator creatingCommunicator)
+    DiverCommunicator creatingCommunicator,
+    long registrationEpoch)
   {
     _pinnedAddress = pinnedAddress;
     _typeName = typeName;
     _typeInfo = typeInfo;
     _communicator = creatingCommunicator;
+    _registrationEpoch = registrationEpoch;
     _objectDump = null; // Lazy load if needed
   }
 
@@ -63,10 +68,11 @@ internal class RemoteObjectRef
 
   private void ThrowIfReleased()
   {
-    if (Volatile.Read(ref _state) != 0)
+    if (Volatile.Read(ref _state) != 0 ||
+        !_communicator.IsRegistrationCurrent(_registrationEpoch))
     {
-      throw new ObjectDisposedException(
-          "Cannot use RemoteObjectRef object after `Release` have been called");
+      throw new ObjectDisposedException(nameof(RemoteObjectRef),
+        "The reference was released or its client registration ended.");
     }
   }
 
@@ -74,9 +80,7 @@ internal class RemoteObjectRef
   {
     lock (_lifetimeLock)
     {
-      if (Volatile.Read(ref _state) != 0)
-        throw new ObjectDisposedException(
-            "Cannot use RemoteObjectRef object after `Release` have been called");
+      ThrowIfReleased();
       _refCount++;
     }
   }
@@ -145,7 +149,8 @@ internal class RemoteObjectRef
   private static readonly TimeSpan _minDelay = TimeSpan.FromSeconds(1);
   private static readonly TimeSpan _maxDelay = TimeSpan.FromSeconds(5);
 
-  public bool IsValid => Volatile.Read(ref _state) == 0 && _communicator.IsConnected;
+  public bool IsValid => Volatile.Read(ref _state) == 0 && _communicator.IsConnected &&
+    _communicator.IsRegistrationCurrent(_registrationEpoch);
 
   /// <summary>
   /// Releases hold of the remote object in the remote process and the local proxy.
@@ -170,8 +175,7 @@ internal class RemoteObjectRef
 
   private void RemoteReleaseCore(bool useJitter)
   {
-    // Guard against disconnected communicator
-    if (_communicator is null || !_communicator.IsConnected)
+    if (_communicator is null)
     {
       return;
     }
@@ -193,13 +197,12 @@ internal class RemoteObjectRef
         Task.Delay(jitteredDelay).ContinueWith(_ =>
         {
           // Unpin the object after the delay
-          _communicator.UnpinObject(_pinnedAddress);
+          _communicator.ReleaseLater(_pinnedAddress, _registrationEpoch);
         });
       }
       else
       {
-        // No delay, unpin immediately
-        _communicator.UnpinObject(_pinnedAddress);
+        _communicator.ReleaseLater(_pinnedAddress, _registrationEpoch);
       }
     }
     catch (NullReferenceException)

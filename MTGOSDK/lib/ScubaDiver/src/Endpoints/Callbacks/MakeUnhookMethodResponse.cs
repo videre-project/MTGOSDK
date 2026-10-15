@@ -9,8 +9,6 @@ using System;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
-using ScubaDiver.Hooking;
-
 
 namespace ScubaDiver;
 
@@ -26,19 +24,12 @@ public partial class Diver : IDisposable
 
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Called! Token: {token}");
 
-    lock (_methodHookGate)
-    {
-      if (_remoteHooks.TryGetValue(token, out RegisteredMethodHookInfo rmhi))
-      {
-        // Another SDK connection may still be using this shared native hook.
-        if (--rmhi.SubscriptionCount > 0) return s_okResponse;
-
-        _remoteHooks.TryRemove(token, out _);
-        _activeCallbacks.TryRemove(token, out _);
-        HarmonyWrapper.Instance.RemoveHook(rmhi.OriginalHookedMethod);
-        return s_okResponse;
-      }
-    }
+    // A share this client no longer holds was released with its registration
+    // (or is another client's): nothing is left to do.
+    if (TakeClientSubscription(token, hook: true) == SubscriptionOwner.NotOwned)
+      return s_okResponse;
+    if (RemoveHookShare(token))
+      return s_okResponse;
 
     Log.Debug($"[Diver][MakeUnhookMethodResponse] Unknown token for event callback subscription. Token: {token}");
     return QuickError("Unknown token for event callback subscription");

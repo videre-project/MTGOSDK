@@ -898,6 +898,11 @@ public sealed class RemoteClient : DLRWrapper
 
     Log.Debug("Disposing RemoteClient.");
 
+    // Unregister before the connection is cancelled (bounded, best effort), so
+    // the Diver releases this client's pins and subscriptions now, even if
+    // this process lives on; otherwise they wait until it exits.
+    Try(() => @client?.Communicator?.TryUnregisterClient(TimeSpan.FromSeconds(2)));
+
     //
     // Replace the current CancellationTokenSource with a fresh one so any late
     // callbacks that still hold a reference to the old CTS can safely cancel

@@ -41,9 +41,4 @@ public class DynamicRemoteEnumerator(dynamic remoteEnumerator)
       remoteEnumerator.MoveNext();
     }
   }
-
-  ~DynamicRemoteEnumerator()
-  {
-    Dispose();
-  }
 }

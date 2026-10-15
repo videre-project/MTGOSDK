@@ -100,6 +100,8 @@ public partial class Diver : IDisposable
       ActiveHooks = _remoteHooks.Count,
       ActiveEventSubscriptions = _remoteEventHandler.Count,
       ConnectedClients = _tcpServer?.ClientCount ?? 0,
+      ClientPinReferences = ClientPinReferences(),
+      ClientsRemoved = Volatile.Read(ref _clientsRemoved),
       Endpoints = endpoints,
       CallbacksSent = Interlocked.Read(ref s_callbacksSent),
       LastCallbackQueueDelayMs =

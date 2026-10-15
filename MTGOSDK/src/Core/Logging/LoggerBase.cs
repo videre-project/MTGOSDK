@@ -25,6 +25,22 @@ public class LoggerBase : DLRWrapper<ILoggerFactory>, ILogger
   private static ILoggerProvider s_provider = NullLoggerProvider.Instance;
 
   /// <summary>
+  /// The lowest level the static <see cref="Log"/> methods emit, at every
+  /// level. A message below it goes to the null logger before the caller type
+  /// is resolved (a stack walk) or a logger is created, so disabled logging
+  /// stays cheap on hot paths (its arguments are still evaluated).
+  /// </summary>
+  public static LogLevel MinimumLevel { get; set; } = LogLevel.Trace;
+
+  /// <summary>
+  /// The logger for a message at <paramref name="level"/>: the caller's
+  /// logger at or above <see cref="MinimumLevel"/>, otherwise the null logger
+  /// (without resolving the caller).
+  /// </summary>
+  internal static ILogger GetLogger(LogLevel level) =>
+    level >= MinimumLevel ? s_logger : s_nulllogger;
+
+  /// <summary>
   /// Represents a type used to configure the logging system and create
   /// instances of <see cref="ILogger"/>.
   /// </summary>

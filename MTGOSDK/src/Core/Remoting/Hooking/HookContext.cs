@@ -29,4 +29,13 @@ public class HookContext(DateTime timestamp)
   /// standalone notifications outside a native invocation scope.
   /// </summary>
   public RemoteCaptureSequence? CaptureSequence { get; init; }
+
+  /// <summary>
+  /// Whether this client owns a pin reference to each object parameter (the
+  /// Diver pinned them for every recipient) and so must take each over or
+  /// return it. False for a Diver that pins once for all recipients: an
+  /// argument that is not wrapped returns nothing, and a new proxy adopts the
+  /// shared reference, as before.
+  /// </summary>
+  internal bool OwnsParameters { get; init; }
 }

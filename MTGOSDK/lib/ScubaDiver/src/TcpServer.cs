@@ -6,7 +6,9 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO.Pipelines;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -32,7 +34,8 @@ public class TcpServer : IDisposable
   private readonly TcpListener _listener;
   private int _disposed;
   private readonly CancellationTokenSource _cts;
-  private readonly Func<string, byte[], byte[]> _requestHandler;
+  private readonly Func<Guid, string, byte[], byte[]> _requestHandler;
+  private readonly Action<Guid> _connectionClosed;
 
   // Track active client connections
   private readonly ConcurrentDictionary<Guid, TcpClientConnection> _clients = new();
@@ -47,13 +50,43 @@ public class TcpServer : IDisposable
   /// </summary>
   public int ClientCount => _clients.Count;
 
+  /// <summary>
+  /// Whether a connection is still open (it is removed before
+  /// <c>connectionClosed</c> is called for it).
+  /// </summary>
+  public bool IsOpen(Guid connection) => _clients.ContainsKey(connection);
+
   public TcpServer(
     int port,
     Func<string, byte[], byte[]> requestHandler,
     CancellationTokenSource cancellationTokenSource = null)
+    : this(port, ConnectionAgnostic(requestHandler), null, cancellationTokenSource)
+  { }
+
+  private static Func<Guid, string, byte[], byte[]> ConnectionAgnostic(
+    Func<string, byte[], byte[]> requestHandler)
+  {
+    if (requestHandler == null) throw new ArgumentNullException(nameof(requestHandler));
+    return (_, endpoint, body) => requestHandler(endpoint, body);
+  }
+
+  /// <param name="port">The loopback port to listen on.</param>
+  /// <param name="requestHandler">
+  /// Handles one request: the connection it arrived on, the endpoint and the body.
+  /// </param>
+  /// <param name="connectionClosed">
+  /// Called with a connection's id once it has closed and no longer receives callbacks.
+  /// </param>
+  /// <param name="cancellationTokenSource">Stops the server when cancelled.</param>
+  public TcpServer(
+    int port,
+    Func<Guid, string, byte[], byte[]> requestHandler,
+    Action<Guid> connectionClosed = null,
+    CancellationTokenSource cancellationTokenSource = null)
   {
     Port = port;
     _requestHandler = requestHandler ?? throw new ArgumentNullException(nameof(requestHandler));
+    _connectionClosed = connectionClosed;
     _cts = cancellationTokenSource ?? new CancellationTokenSource();
     _listener = new TcpListener(IPAddress.Loopback, port);
     
@@ -105,7 +138,8 @@ public class TcpServer : IDisposable
   private async Task HandleNewClientAsync(TcpClient client, CancellationToken token)
   {
     var connectionId = Guid.NewGuid();
-    var connection = new TcpClientConnection(client, _requestHandler);
+    var connection = new TcpClientConnection(client,
+      (endpoint, body) => _requestHandler(connectionId, endpoint, body));
 
     try
     {
@@ -126,29 +160,79 @@ public class TcpServer : IDisposable
       _clients.TryRemove(connectionId, out _);
       connection.Dispose();
       Log.Debug($"[TcpServer] Client {connectionId} disconnected. Active clients: {_clients.Count}");
+      try
+      {
+        _connectionClosed?.Invoke(connectionId);
+      }
+      catch (Exception ex)
+      {
+        Log.Error($"[TcpServer] Connection close handler failed for {connectionId}: {ex.Message}");
+      }
     }
   }
 
   /// <summary>
-  /// Sends a callback to all connected clients (broadcast).
+  /// Sends a callback to the connected clients <paramref name="isRecipient"/>
+  /// selects (all when null).
   /// </summary>
-  public void SendCallback(CallbackInvocationRequest callback)
+  /// <param name="prepare">
+  /// Takes the references for the given recipient connections before anything
+  /// is sent, so they exist before any recipient can release its own, and
+  /// returns the callback each recipient gets (recipients given the same
+  /// instance share one serialized body), or null for a recipient that is
+  /// not to be sent it (and is not reported unsent).
+  /// </param>
+  /// <param name="releaseUnsent">
+  /// Called with the recipient connections the callback could not be queued for.
+  /// </param>
+  /// <param name="isRecipient">Selects the connections to send to.</param>
+  /// <returns>The number of recipients the callback was queued for.</returns>
+  public int SendCallback(
+    Func<IReadOnlyList<Guid>, Func<Guid, CallbackInvocationRequest>> prepare,
+    Action<IReadOnlyList<Guid>> releaseUnsent,
+    Func<Guid, bool> isRecipient = null)
   {
-    if (_clients.IsEmpty) return;
+    var recipients = _clients
+      .Where(client => isRecipient == null || isRecipient(client.Key))
+      .ToArray();
+    if (recipients.Length == 0) return 0;
 
+    var sent = new HashSet<Guid>();
+    var skipped = new HashSet<Guid>();
     try
     {
-      var body = MessagePackSerializer.Serialize(callback);
-      
-      foreach (var client in _clients.Values)
+      var callbackFor = prepare(recipients.Select(recipient => recipient.Key).ToArray());
+      var bodies = new List<(CallbackInvocationRequest Callback, byte[] Body)>();
+
+      foreach (var recipient in recipients)
       {
-        client.SendCallback(body);
+        var callback = callbackFor(recipient.Key);
+        if (callback == null)
+        {
+          skipped.Add(recipient.Key);
+          continue;
+        }
+        byte[] body = bodies.FirstOrDefault(entry => ReferenceEquals(entry.Callback, callback)).Body;
+        if (body == null)
+        {
+          body = MessagePackSerializer.Serialize(callback);
+          bodies.Add((callback, body));
+        }
+        if (recipient.Value.SendCallback(body)) sent.Add(recipient.Key);
       }
     }
     catch (Exception ex)
     {
       Log.Error($"[TcpServer] Failed to broadcast callback: {ex.Message}");
     }
+
+    var unsent = recipients
+      .Where(recipient => !sent.Contains(recipient.Key) && !skipped.Contains(recipient.Key))
+      .Select(recipient => recipient.Key)
+      .ToArray();
+    if (unsent.Length > 0)
+      releaseUnsent(unsent);
+    return sent.Count;
   }
 
   /// <summary>
@@ -224,13 +308,15 @@ public class TcpServer : IDisposable
       }
     }
 
-    public void SendCallback(byte[] serializedCallback)
+    public bool SendCallback(byte[] serializedCallback)
     {
-      if (!_isConnected) return;
-      
+      if (!_isConnected) return false;
+
       // Enqueue to write channel (fire-and-forget)
-      if (!TryEnqueueWrite(0, TcpMessageType.Callback, "/invoke_callback", serializedCallback))
-        Log.Warning("[TcpClientConnection] Callback could not be queued because the write channel is full or closed.");
+      if (TryEnqueueWrite(0, TcpMessageType.Callback, "/invoke_callback", serializedCallback))
+        return true;
+      Log.Warning("[TcpClientConnection] Callback could not be queued because the write channel is full or closed.");
+      return false;
     }
 
     /// <summary>

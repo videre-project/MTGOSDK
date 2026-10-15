@@ -129,7 +129,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           // OK, invoking with generic arguments
           result = overload
             .MakeGenericMethod(_genericArguments)
-            .Invoke(parent.__ro, args);
+            .Invoke(parent, args);
         }
         else
         {
@@ -139,7 +139,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
           }
           // OK, invoking without generic arguments
           result = overloads.Single()
-            .Invoke(parent.__ro, args);
+            .Invoke(parent, args);
         }
       }
       else if (overloads.Count > 1)
@@ -198,7 +198,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         if (matchingOverloads.Count == 1)
         {
           // We found a single matching overload, so we can invoke it.
-          result = matchingOverloads.Single().Invoke(parent.__ro, args);
+          result = matchingOverloads.Single().Invoke(parent, args);
         }
         else
         {
@@ -323,14 +323,6 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
   public virtual DateTime __timestamp { get => m_timestamp; set => m_timestamp = value; }
   private DateTime m_timestamp = DateTime.Now;
 
-  /// <summary>
-  /// Holds strong references to child DROs returned from property/method access.
-  /// This prevents children from being GC'd (and unpinned) while the parent is alive.
-  /// </summary>
-  // Property serialization can fetch multiple remote children concurrently.
-  // Keep this cache concurrent so parallel SerializeAs calls cannot corrupt it.
-  private readonly ConcurrentDictionary<ulong, DynamicRemoteObject> __childRefs = new();
-
   private IEnumerable<MemberInfo> __ongoingMembersDumper = null;
   private IEnumerator<MemberInfo> __ongoingMembersDumperEnumerator = null;
   private List<MemberInfo> __membersInner = null;
@@ -350,21 +342,12 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
   ~DynamicRemoteObject()
   {
-    // Destructor - we need to make sure we don't leave dangling references to
-    // remote objects. This is important because the remote object might be
-    // disposed of and we don't want to keep a reference to it.
-
-    // Clear child references first - they'll be GC'd and released separately
-    __childRefs.Clear();
-
-    if (__ro != null && __ro.IsValid)
-    {
-      __ro.ReleaseReference();
-    }
-
-    __ro = null;
-    __ra = null;
-    __type = null;
+    // Only the fields initialized by this wrapper own a reference. Accessing
+    // virtual properties here could initialize a lazy wrapper during collection.
+    m_ro?.ReleaseReference();
+    m_ro = null;
+    m_ra = null;
+    m_type = null;
   }
 
   /// <summary>
@@ -390,18 +373,11 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
 
     // Remote object - wrap in DynamicRemoteObject using lightweight path
     // /get_field already pinned the object, so we skip /object call
-    RemoteObject ro = __ra.GetRemoteObjectFromField(oora.RemoteAddress, oora.Type);
+    RemoteObject ro = __ra.GetRemoteObjectFromField(oora);
     var dro = ro.Dynamify() as DynamicRemoteObject;
     dro.__timestamp = oora.Timestamp;
 
-    TrackChildReference(oora.RemoteAddress, dro);
-
     return dro;
-  }
-
-  private void TrackChildReference(ulong remoteAddress, DynamicRemoteObject dro)
-  {
-    __childRefs[remoteAddress] = dro;
   }
 
   /// <summary>
@@ -564,7 +540,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
                           where member.Name == name
                           where ((MethodInfo) member).GetParameters().Length == args.Length
                           select member;
-    return (T) (matchingMethods.Single() as MethodInfo).Invoke(__ro, args);
+    return (T) (matchingMethods.Single() as MethodInfo).Invoke(this, args);
   }
 
   /// <summary>
@@ -951,7 +927,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         // }
         try
         {
-          ((FieldInfo) firstMember).SetValue(__ro, value);
+          ((FieldInfo) firstMember).SetValue(this, value);
         }
         catch (Exception ex)
         {
@@ -965,7 +941,7 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
         // }
         try
         {
-          ((PropertyInfo) firstMember).SetValue(__ro, value);
+          ((PropertyInfo) firstMember).SetValue(this, value);
         }
         catch (Exception ex)
         {
@@ -1050,11 +1026,9 @@ public class DynamicRemoteObject : DynamicObject, IEnumerable
       }
       else if (item.IsRemoteAddress)
       {
-        var remoteObject = __ra.GetRemoteObjectFromField(item.RemoteAddress, item.Type);
+        var remoteObject = __ra.GetRemoteObjectFromField(item);
         var dro = remoteObject.Dynamify() as DynamicRemoteObject;
         dro.__timestamp = item.Timestamp;
-
-        TrackChildReference(item.RemoteAddress, dro);
 
         return dro;
       }

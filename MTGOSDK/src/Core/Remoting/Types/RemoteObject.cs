@@ -20,12 +20,57 @@ public class RemoteObject : IObjectReference
 {
   private static readonly ActivitySource s_activitySource = new("MTGOSDK.Core");
 
-  public void AddReference() => _ref?.AddReference();
+  // A RemoteObject is shared by every wrapper of its token that the cache hands
+  // out: each holder takes one reference (the constructor counts the first)
+  // and releases it once. The object releases its single share of the
+  // RemoteObjectRef exactly once, when the last holder releases it or when it
+  // is finalized, whichever comes first. (Releasing on the first holder's
+  // release left the other holders' shares counted, so the ref was never
+  // unpinned; releasing from both the finalizer and a holder would release
+  // another live object's share.)
+  // Holder acquisition and the final release are one transition under
+  // _lifetimeLock, so a holder can never be added once the release is decided.
+  private readonly object _lifetimeLock = new();
+  private int _holders = 1;
+  private bool _released;
+
+  /// <summary>
+  /// Takes one more holder; false once the object has been released (the
+  /// caller must then obtain another object).
+  /// </summary>
+  internal bool TryAddReference()
+  {
+    lock (_lifetimeLock)
+    {
+      if (_released) return false;
+      _holders++;
+      return true;
+    }
+  }
+
+  /// <summary>
+  /// Creates a separate local owner of the same remote reference.
+  /// The returned object can be released independently of this one.
+  /// </summary>
+  internal RemoteObject Retain()
+  {
+    lock (_lifetimeLock)
+    {
+      if (_released)
+        throw new ObjectDisposedException(nameof(RemoteObject));
+      return new RemoteObject(_ref, _app);
+    }
+  }
+
+  public void AddReference() => TryAddReference();
 
   public void ReleaseReference(bool useJitter = false)
   {
-    if (_isDisposed) return;
-    _isDisposed = true;
+    lock (_lifetimeLock)
+    {
+      if (_released || --_holders > 0) return;
+      _released = true;
+    }
 
     _ref?.ReleaseReference(useJitter);
   }
@@ -35,32 +80,35 @@ public class RemoteObject : IObjectReference
   /// </summary>
   internal void SuppressUnpin()
   {
-    if (_isDisposed) return;
-    _isDisposed = true;
+    lock (_lifetimeLock)
+    {
+      if (_released) return;
+      _released = true;
+    }
     _ref?.SuppressUnpin();
   }
 
-  public bool IsValid => _ref != null && _ref.IsValid && !_isDisposed;
-
-  private bool _isDisposed = false;
-
-  ~RemoteObject()
+  public bool IsValid
   {
-    if (IsValid)
+    get
     {
-      GCTimer.Enqueue(new QueuedRemoteObjectReference(_ref));
+      lock (_lifetimeLock)
+      {
+        return !_released && _ref != null && _ref.IsValid;
+      }
     }
   }
 
-  private sealed class QueuedRemoteObjectReference(RemoteObjectRef reference) : IObjectReference
+  ~RemoteObject()
   {
-    public bool IsValid => reference.IsValid;
-
-    public void AddReference()
-    { }
-
-    public void ReleaseReference(bool useJitter) =>
-      reference.ReleaseReference(useJitter);
+    // Unreachable, so no holder can release it any more: release the share
+    // unless a holder already did.
+    lock (_lifetimeLock)
+    {
+      if (_released) return;
+      _released = true;
+    }
+    _ref?.ReleaseReference();
   }
 
   private readonly RemoteHandle _app;
@@ -88,9 +136,15 @@ public class RemoteObject : IObjectReference
 
   public ObjectOrRemoteAddress SetField(string fieldName, ObjectOrRemoteAddress newValue)
   {
-    InvocationResults invokeRes = _ref.SetField(fieldName, newValue);
-    return invokeRes.ReturnedObjectOrAddress;
-
+    try
+    {
+      InvocationResults invokeRes = _ref.SetField(fieldName, newValue);
+      return invokeRes.ReturnedObjectOrAddress;
+    }
+    finally
+    {
+      GC.KeepAlive(this);
+    }
   }
 
   public (bool hasResults, ObjectOrRemoteAddress returnedValue) InvokeMethod(
@@ -103,22 +157,29 @@ public class RemoteObject : IObjectReference
     string[] genericArgsFullTypeNames,
     params ObjectOrRemoteAddress[] args)
   {
-    using var activity = s_activitySource.StartActivity("RO.InvokeMethod");
-    activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
-    activity?.SetTag("method", methodName);
+    try
+    {
+      using var activity = s_activitySource.StartActivity("RO.InvokeMethod");
+      activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
+      activity?.SetTag("method", methodName);
 
-    InvocationResults? invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
-    if (invokeRes is null)
-    {
-      throw new InvalidOperationException(
-        $"Remote invocation '{GetType().FullName}.{methodName}' returned no result (null). " +
-        "This usually indicates a diver/transport failure or an unexpected response format.");
+      InvocationResults? invokeRes = _ref.InvokeMethod(methodName, genericArgsFullTypeNames, args);
+      if (invokeRes is null)
+      {
+        throw new InvalidOperationException(
+          $"Remote invocation '{GetType().FullName}.{methodName}' returned no result (null). " +
+          "This usually indicates a diver/transport failure or an unexpected response format.");
+      }
+      if (invokeRes.VoidReturnType)
+      {
+        return (false, null);
+      }
+      return (true, invokeRes.ReturnedObjectOrAddress);
     }
-    if (invokeRes.VoidReturnType)
+    finally
     {
-      return (false, null);
+      GC.KeepAlive(this);
     }
-    return (true, invokeRes.ReturnedObjectOrAddress);
   }
 
   public dynamic Dynamify() => new DynamicRemoteObject(_app, this);
@@ -130,8 +191,15 @@ public class RemoteObject : IObjectReference
 
   public ObjectOrRemoteAddress GetField(string name)
   {
-    var res = _ref.GetField(name);
-    return res.ReturnedObjectOrAddress;
+    try
+    {
+      var res = _ref.GetField(name);
+      return res.ReturnedObjectOrAddress;
+    }
+    finally
+    {
+      GC.KeepAlive(this);
+    }
   }
 
   public void EventSubscribe(string eventName, Delegate callback)
@@ -142,13 +210,24 @@ public class RemoteObject : IObjectReference
     void callbackProxy(HookContext context, ObjectOrRemoteAddress[] args)
     {
       DynamicRemoteObject[] droParameters = new DynamicRemoteObject[args.Length];
-      for (int i = 0; i < args.Length; i++)
+      int resolved = 0;
+      try
       {
-        RemoteObject ro = _app.GetRemoteObjectFromField(args[i].RemoteAddress, args[i].Type);
-        DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
-        dro.__timestamp = args[i].Timestamp;
+        for (; resolved < args.Length; resolved++)
+        {
+          // Takes over this client's pin reference to the argument.
+          RemoteObject ro = _app.GetRemoteObjectFromField(args[resolved], context.OwnsParameters);
+          DynamicRemoteObject dro = ro.Dynamify() as DynamicRemoteObject;
+          dro.__timestamp = args[resolved].Timestamp;
 
-        droParameters[i] = dro;
+          droParameters[resolved] = dro;
+        }
+      }
+      finally
+      {
+        // An argument left unresolved (after a failure) still holds a reference.
+        if (resolved < args.Length)
+          _app.Communicator.ReleaseCallbackArguments(context, args.Skip(resolved + 1));
       }
 
       // Call the callback with the proxied parameters (using DynamicRemoteObjects)

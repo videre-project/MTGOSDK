@@ -37,6 +37,16 @@ public class BatchCollectionRequest
   /// </summary>
   [Key(3)]
   public int MaxItems { get; set; }
+
+  /// <summary>
+  /// Whether to skip pinning each item and returning its token in
+  /// <see cref="BatchCollectionResponse.ItemTokens"/>. Callers that do not wrap
+  /// the tokens in remote objects (which unpin them when collected) set this:
+  /// an unwrapped pin is never released. False when absent, so an older
+  /// client still receives its item tokens.
+  /// </summary>
+  [Key(4)]
+  public bool SkipItemPins { get; set; }
 }
 
 /// <summary>
@@ -44,9 +54,18 @@ public class BatchCollectionRequest
 /// in a columnar layout. Property names and types appear once in the schema;
 /// values are stored as <c>Columns[propertyIndex][itemIndex]</c>.
 /// </summary>
-[MessagePackObject]
-public class BatchCollectionResponse
+[MessagePackObject(AllowPrivate = true)]
+public class BatchCollectionResponse : IPinResponse
 {
+  [IgnoreMember]
+  internal string? PinOwner { get; set; }
+
+  [IgnoreMember]
+  string? IPinResponse.PinOwner
+  {
+    set => PinOwner = value;
+  }
+
   /// <summary>
   /// Property path names (e.g., "Name", "Id"). Defines column order.
   /// </summary>
@@ -74,7 +93,9 @@ public class BatchCollectionResponse
   public int Count { get; set; }
 
   /// <summary>
-  /// Remote tokens (addresses) for each pinned item, in item order.
+  /// Remote tokens (addresses) for each pinned item, in item order, when the
+  /// request did not set <see cref="BatchCollectionRequest.SkipItemPins"/>;
+  /// otherwise empty.
   /// Used to create DRO references for DLRWrapper fallback access.
   /// </summary>
   [Key(4)]

@@ -103,6 +103,7 @@ public partial class Diver : IDisposable
           // and retain the native patch for each subscription.
           Log.Debug("[Diver] Hook Method - Returning existing token");
           rmhi.SubscriptionCount++;
+          AddClientSubscription(existingHook.Key, hook: true);
           var result = new EventRegistrationResults { Token = existingHook.Key };
           return WrapSuccess(result);
         }
@@ -150,6 +151,7 @@ public partial class Diver : IDisposable
 
       Log.Debug($"[Diver] Hooked func {methodName}! token={token}, position={hookPosition}, capture={request.Capture != null}");
       _remoteHooks[token] = registration;
+      AddClientSubscription(token, hook: true);
 
       var erResults = new EventRegistrationResults { Token = token };
       return WrapSuccess(erResults);
