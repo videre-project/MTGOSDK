@@ -12,6 +12,7 @@ using System.Reflection;
 using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Reflection.Serialization;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 using MTGOSDK.Core.Remoting.Reflection;
 using MTGOSDK.Core.Remoting.Types;
 
@@ -644,14 +645,22 @@ public abstract class DLRWrapper : SerializableBase
     // Items are pinned only when they are wrapped below (the wrappers release
     // the pins); otherwise the tokens would be dropped and never unpinned.
     bool wrapsItems = typeof(DLRWrapper).IsAssignableFrom(typeof(TPathSource));
-    var response = RemoteClient.@client.Communicator
-      .GetBatchCollectionMembers(
-        dro.__ro.RemoteToken,
-        dro.__type?.FullName ?? "Unknown",
-        string.Join("|", allPaths),
-        maxItems,
-        pinItems: wrapsItems
-      );
+    BatchCollectionResponse response;
+    try
+    {
+      response = RemoteClient.@client.Communicator
+        .GetBatchCollectionMembers(
+          dro.__ro.RemoteToken,
+          dro.__type?.FullName ?? "Unknown",
+          string.Join("|", allPaths),
+          maxItems,
+          pinItems: wrapsItems
+        );
+    }
+    finally
+    {
+      GC.KeepAlive(dro);
+    }
 
     // Item pins not handed to a RemoteObject (enumeration stopped early, an
     // exception, or no wrapper built) are returned when the iterator ends.
@@ -787,14 +796,22 @@ public abstract class DLRWrapper : SerializableBase
       : pathList.Select(p => $"{pathPrefix}.{p}").ToList();
 
     // Single IPC call to fetch all items' primitive properties
-    var response = RemoteClient.@client.Communicator
-      .GetBatchCollectionMembers(
-        collection.__ro.RemoteToken,
-        collection.__type?.FullName ?? "Unknown",
-        string.Join("|", prefixedPaths),
-        maxItems,
-        pinItems: false
-      );
+    BatchCollectionResponse response;
+    try
+    {
+      response = RemoteClient.@client.Communicator
+        .GetBatchCollectionMembers(
+          collection.__ro.RemoteToken,
+          collection.__type?.FullName ?? "Unknown",
+          string.Join("|", prefixedPaths),
+          maxItems,
+          pinItems: false
+        );
+    }
+    finally
+    {
+      GC.KeepAlive(collection);
+    }
 
     if (response?.Schema == null || response.Columns == null)
     {
@@ -1331,14 +1348,22 @@ public abstract class DLRWrapper : SerializableBase
     }
 
     // Single IPC call to fetch all items
-    var response = Remoting.RemoteClient.@client.Communicator
-      .GetBatchCollectionMembers(
-        dro.__ro.RemoteToken,
-        dro.__type?.FullName ?? "Unknown",
-        string.Join("|", paths),
-        maxItems,
-        pinItems: false
-      );
+    BatchCollectionResponse response;
+    try
+    {
+      response = Remoting.RemoteClient.@client.Communicator
+        .GetBatchCollectionMembers(
+          dro.__ro.RemoteToken,
+          dro.__type?.FullName ?? "Unknown",
+          string.Join("|", paths),
+          maxItems,
+          pinItems: false
+        );
+    }
+    finally
+    {
+      GC.KeepAlive(dro);
+    }
 
     if (response?.Schema == null || response.Columns == null)
     {
@@ -1432,14 +1457,22 @@ public abstract class DLRWrapper : SerializableBase
       return Array.Empty<TInterface>();
 
     // Await the expensive batch IPC call — does NOT block a thread pool thread
-    var response = await Remoting.RemoteClient.@client.Communicator
-      .GetBatchCollectionMembersAsync(
-        dro.__ro.RemoteToken,
-        dro.__type?.FullName ?? "Unknown",
-        string.Join("|", paths),
-        maxItems,
-        pinItems: false
-      ).ConfigureAwait(false);
+    BatchCollectionResponse response;
+    try
+    {
+      response = await Remoting.RemoteClient.@client.Communicator
+        .GetBatchCollectionMembersAsync(
+          dro.__ro.RemoteToken,
+          dro.__type?.FullName ?? "Unknown",
+          string.Join("|", paths),
+          maxItems,
+          pinItems: false
+        ).ConfigureAwait(false);
+    }
+    finally
+    {
+      GC.KeepAlive(dro);
+    }
 
     if (response?.Schema == null || response.Columns == null)
       return Array.Empty<TInterface>();

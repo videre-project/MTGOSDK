@@ -50,6 +50,10 @@ internal static class RemoteBatchCollection
     {
       return false;
     }
+    finally
+    {
+      GC.KeepAlive(dro);
+    }
 
     if (response?.Schema == null ||
         response.Columns == null ||
