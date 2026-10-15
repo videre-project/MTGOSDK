@@ -21,7 +21,6 @@ using MTGOSDK.Resources;
 using MTGOSDK.Win32.API;
 using MTGOSDK.Win32.Deployment;
 using MTGOSDK.Win32.Extensions;
-using MTGOSDK.Win32.Utilities;
 
 namespace MTGOSDK.Core.Remoting;
 
@@ -425,9 +424,9 @@ public sealed class RemoteClient : DLRWrapper
   /// Note: This method will close any existing MTGO processes when called.
   /// <para/>
   /// If no MTGO installation exists or is out of date, this method will
-  /// attempt to install or update the client before starting it. If the
-  /// normal provider activation fails after a deployment is present, the
-  /// installed ClickOnce bind is used as a fallback without another fetch.
+  /// attempt to install or update the client before activating its installed
+  /// ClickOnce deployment. If the update fails, an existing deployment can
+  /// still be activated without another provider request.
   /// </remarks>
   /// <returns>True if the MTGO client process was started.</returns>
   /// <exception cref="SetupFailureException">
@@ -451,7 +450,7 @@ public sealed class RemoteClient : DLRWrapper
   {
     if (!File.Exists(AppRefPath))
       throw new SetupFailureException(
-        "Cannot restart MTGO without an existing ClickOnce deployment.");
+        "Cannot activate MTGO without an existing ClickOnce deployment.");
 
     string launcherPath = GetLauncherPath();
     string launcherArguments = $"--activate-cached \"{AppRefPath}\"";
@@ -464,43 +463,12 @@ public sealed class RemoteClient : DLRWrapper
       timeout: TimeSpan.FromSeconds(30),
       captureOutput: true);
 
+    if (!await WaitUntil(() => HasStarted, delay: 500, retries: 20)) // 10s
+      throw new ExternalErrorException(
+        "The MTGO process failed to start after cached activation.");
+
     Log.Debug("Installed MTGO deployment activated.");
   }
-
-  private static async Task StartAppRefProcess()
-  {
-    // Start MTGO as the current desktop user.
-    Log.Debug("Starting MTGO process as the current desktop user.");
-    try
-    {
-      //
-      // This makes a call to CreateProcessAsUser from the Win32 API to start the
-      // process as the current user. This requires the SeIncreaseQuotaPrivilege
-      // (and potentially SE_ASSIGNPRIMARYTOKEN_NAME if not assignable).
-      //
-      // This requires enabling 'Replace a process level token' for the user
-      // account running this process. Refer to the below resource for more info:
-      // https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/replace-a-process-level-token
-      //
-      using var process = ProcessUtilities.RunAsDesktopUser(AppRefPath, "");
-      if (process is null)
-        throw new ExternalErrorException(
-          $"The process '{AppRefPath}' could not be started as the desktop user.");
-
-      await process.WaitForExitAsync();
-    }
-    catch
-    {
-      //
-      // Fall back to starting the process assuming the process has proper
-      // permissions set to start as the current user (or is now set).
-      //
-      await StartShellProcess(AppRefPath, timeout: TimeSpan.FromSeconds(10));
-    }
-  }
-
-  private static Task<bool> WaitForProcessStart() =>
-    WaitUntil(() => HasStarted, delay: 500, retries: 20); // 10s
 
   private static async Task StartProcess(bool checkForUpdates)
   {
@@ -511,23 +479,13 @@ public sealed class RemoteClient : DLRWrapper
     {
       try
       {
-        // Always perform the normal update check first. This creates or updates
-        // the ClickOnce deployment before any cached activation fallback.
+        // Update the ClickOnce deployment before activating its installed bind.
         await InstallOrUpdate();
-        await StartAppRefProcess();
-        if (!await WaitForProcessStart())
-        {
-          throw new ExternalErrorException(
-            "The MTGO process failed to start after appref activation.");
-        }
+        await ActivateCachedDeployment();
       }
       //
-      // A failed provider check can occur either while installing the deployment
-      // or during the appref shortcut's second provider check.
-      //
-      // If a deployment is already present, we instead retry its current bind
-      // without making another provider request. Otherwise, if no cached bind
-      // exists, we simply fail with the original installation failure.
+      // If an update or activation fails after a deployment is present, retry
+      // its installed bind without making another provider request.
       //
       catch (ExternalErrorException exception)
       {
@@ -540,11 +498,6 @@ public sealed class RemoteClient : DLRWrapper
         try
         {
           await ActivateCachedDeployment();
-          if (!await WaitForProcessStart())
-          {
-            throw new ExternalErrorException(
-              "The MTGO process failed to start after cached activation.");
-          }
         }
         catch (Exception fallbackException)
         {
@@ -560,11 +513,6 @@ public sealed class RemoteClient : DLRWrapper
       // Use the ClickOnce store's current bind to preserve the activation
       // context without asking the deployment provider for an update.
       await ActivateCachedDeployment();
-      if (!await WaitForProcessStart())
-      {
-        throw new ExternalErrorException(
-          "The MTGO process failed to start after cached activation.");
-      }
     }
 
     // Wait for the MTGO process UI to start and open kicker window.
@@ -846,7 +794,25 @@ public sealed class RemoteClient : DLRWrapper
       delay: 750, retries: 6, raise: true);
     }
 
-    // When the MTGO process exists, trigger the ProcessExited event
+    try
+    {
+      // Verify that the injected assembly is loaded and responding.
+      if (!handle.Communicator.CheckAliveness())
+        throw new TimeoutException("Diver is not responding to requests.");
+
+      // MTGO also checks its deployment manifest during login.
+      handle.Communicator.InvokeStaticMethod(
+        "MTGOSDK.Win32.Deployment.ManifestRequestBuilder",
+        "Register",
+        ObjectOrRemoteAddress.FromObj(ApplicationUri));
+    }
+    catch
+    {
+      handle.Dispose();
+      throw;
+    }
+
+    // When the MTGO process exists, trigger the ProcessExited event.
     ClientProcess.EnableRaisingEvents = true;
     ClientProcess.Exited += (s, e) =>
     {
@@ -855,11 +821,7 @@ public sealed class RemoteClient : DLRWrapper
       ProcessExited?.Invoke(null, EventArgs.Empty);
     };
 
-    // Verify that the injected assembly is loaded and reponding
-    if (!handle.Communicator.CheckAliveness())
-      throw new TimeoutException("Diver is not responding to requests.");
-    else
-      Log.Debug("Established a connection to the MTGO process.");
+    Log.Debug("Established a connection to the MTGO process.");
 
     return handle;
   }

@@ -40,6 +40,8 @@ public static class Program
       var manifestUri = new Uri(args[0], UriKind.Absolute);
       WriteMessage($"Starting MTGO update check for {manifestUri.AbsoluteUri}.");
 
+      ManifestRequestBuilder.Register(manifestUri.AbsoluteUri);
+
       using var hostingManager =
         new InPlaceHostingManager(
           manifestUri,

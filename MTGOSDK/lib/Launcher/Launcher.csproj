@@ -21,6 +21,8 @@
   <ItemGroup>
     <Compile Include="$(SolutionDir)MTGOSDK.Win32\src\Deployment\CachedDeploymentActivator.cs"
              Link="Deployment\CachedDeploymentActivator.cs" />
+    <Compile Include="$(SolutionDir)MTGOSDK.Win32\src\Deployment\ManifestRequestBuilder.cs"
+             Link="Deployment\ManifestRequestBuilder.cs" />
     <EmbeddedResource Include="$(SystemDeploymentAssembly)"
                       LogicalName="System.Deployment.dll" />
     <PackageReference Include="FrameworkExtract.System.Deployment"
