@@ -23,7 +23,7 @@ public sealed class Distribution(dynamic distribution)
   // IDistribution wrapper properties
   //
 
-  public Targetable Target => new(@base.Target);
+  public Targetable Target => new(Unbind(this).Target);
 
   public int Value => @base.Value;
 

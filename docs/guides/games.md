@@ -167,6 +167,15 @@ game.OnGameAction += (GameAction action) =>
 
 The `GameAction` base class has several subtypes: `CardAction` for spells and abilities, `PrimitiveAction` for OK/Cancel/Pass, `NumericAction` for choosing numbers, and so on. You can use pattern matching to handle specific action types.
 
+`ManaPoolAction` exposes the available mana or color choices in `ManaPoolColors`,
+with the current selection in `SelectedItem` and `SelectedID`. `ManaPoolColors`
+is a flags value; each individual color set in it is an available choice.
+
+`TargetSet` exposes whether amounts are distributed, the total to assign,
+and each selected target's current amount and limits through `Distributions`.
+These values are included in captured actions, with each distribution target
+preserving its card or player identity.
+
 ### Game Completion
 
 ```csharp

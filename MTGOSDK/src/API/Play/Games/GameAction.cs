@@ -135,15 +135,21 @@ public abstract class GameAction : DLRWrapper<IGameAction>, IPromptOption
     var distribution = CreateScalarProjection(("Target", "Target", card));
     var targetSet = CreateScalarProjection(
       ("LegalTargets",   "LegalTargets",   RemoteBatchProjection.Sequence(card)),
-      ("CurrentTargets", "CurrentTargets", RemoteBatchProjection.Sequence(card)));
+      ("CurrentTargets", "CurrentTargets", RemoteBatchProjection.Sequence(card)),
+      ("Distributions", "Distributions", RemoteBatchProjection.Object(
+        ("Values", "Values", RemoteBatchProjection.Sequence(distribution)))));
+
+    var cardAction = CreateActionProjection(
+      ("Card",    "Card",    card),
+      ("Targets", "Targets", RemoteBatchProjection.Sequence(targetSet)));
 
     const string actionNamespace = "WotC.MtGO.Client.Model.Play.Actions.";
     var action = CreateActionProjection();
     action.RuntimeTypes = new()
     {
       [actionNamespace + nameof(CardSelectorAction)] = CreateActionProjection(
-        ("Choices", "Choices",
-          RemoteBatchProjection.Sequence(RemoteBatchProjection.ObjectScalars()))),
+        ("Choices", "Choices", RemoteBatchProjection.Sequence(RemoteBatchProjection.Object(
+          ("CTN", "CTN", scalar), ("CanChoose", "CanChoose", scalar))))),
 
       [actionNamespace + nameof(SelectFromListAction)] = CreateActionProjection(
         ("AvailableItems", "AvailableItems",
@@ -161,9 +167,8 @@ public abstract class GameAction : DLRWrapper<IGameAction>, IPromptOption
         ("Source",        "Source",        card),
         ("Distributions", "Distributions", RemoteBatchProjection.Sequence(distribution))),
 
-      [actionNamespace + nameof(CardAction)] = CreateActionProjection(
-        ("Card",    "Card",    card),
-        ("Targets", "Targets", RemoteBatchProjection.Sequence(targetSet))),
+      [actionNamespace + nameof(CardAction)] = cardAction,
+      [actionNamespace + nameof(DistributingCardAction)] = cardAction,
 
       [actionNamespace + nameof(OrderingAction)] = CreateActionProjection(
         ("Source",         "Source",         card),
@@ -255,7 +260,7 @@ public abstract class GameAction : DLRWrapper<IGameAction>, IPromptOption
         nameof(OrderingAction)               => new OrderingAction(gameAction),
         nameof(PrimitiveAction)              => new PrimitiveAction(gameAction),
         "PrimitiveWithAlternatesAction"       => new PrimitiveAction(gameAction),
-        "ManaPoolAction"                      => new PrimitiveAction(gameAction),
+        nameof(ManaPoolAction)               => new ManaPoolAction(gameAction),
         nameof(SelectFromListAction)         => new SelectFromListAction(gameAction),
         nameof(SelectPlayerAction)           => new SelectPlayerAction(gameAction),
         nameof(ToggleMessageAction)          => new ToggleMessageAction(gameAction),

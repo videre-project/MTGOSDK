@@ -11,7 +11,7 @@ namespace MTGOSDK.API.Play.Games;
 public sealed class CardSelectorAction(dynamic cardSelectorAction) : GameAction
 {
   /// <summary>
-  /// Stores an internal reference to the IGameCard object.
+  /// Stores an internal reference to the ICardSelectorAction object.
   /// </summary>
   internal override dynamic obj => Bind<ICardSelectorAction>(cardSelectorAction);
 
