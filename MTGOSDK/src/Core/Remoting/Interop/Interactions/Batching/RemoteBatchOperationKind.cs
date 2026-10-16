@@ -13,4 +13,8 @@ public enum RemoteBatchOperationKind
   CallStatic,
   ForEach,
   Output,
+  Where,
+  OrderBy,
+  Count,
+  Take,
 }

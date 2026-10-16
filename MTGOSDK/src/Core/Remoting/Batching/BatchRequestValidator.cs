@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 
 
@@ -27,7 +28,10 @@ internal static class BatchRequestValidator
       ValidateProjection(projection.Value, request.Projections, new());
     }
 
-    ValidateSequence(request, request.Operations, new(), new(), new());
+    var results = new HashSet<int>();
+    ValidateSequence(request, request.Operations, results, new(), new());
+    if (request.ReferenceOutput != null)
+      CheckReference(request, request.ReferenceOutput, results, new());
   }
 
   private static void ValidateSequence(RemoteBatchRequest request,
@@ -44,25 +48,15 @@ internal static class BatchRequestValidator
           (operation.Body.Count != 0 || operation.Indices != null))
         throw new ArgumentException("Only ForEach accepts a body or selected indices.");
       if ((operation.Kind == RemoteBatchOperationKind.Read || operation.Kind == RemoteBatchOperationKind.Output ||
-          operation.Kind == RemoteBatchOperationKind.ForEach) && operation.Arguments.Length != 0)
+          operation.Kind == RemoteBatchOperationKind.ForEach || operation.Kind == RemoteBatchOperationKind.Where ||
+          operation.Kind == RemoteBatchOperationKind.OrderBy || operation.Kind == RemoteBatchOperationKind.Count) &&
+          operation.Arguments.Length != 0)
         throw new ArgumentException("This operation does not accept arguments.");
 
       // Nested bodies inherit the results available at their entry point.
       // Sharing allIds across bodies keeps operation IDs unique throughout the batch.
-      void CheckReference(RemoteBatchReference? reference)
-      {
-        if (reference == null)
-          throw new ArgumentException("Missing operation reference.");
-        bool valid = reference.Kind switch
-        {
-          RemoteBatchReferenceKind.Input => reference.Id >= 0 && reference.Id < request.Inputs.Count,
-          RemoteBatchReferenceKind.Result => results.Contains(reference.Id),
-          RemoteBatchReferenceKind.Item => items.Contains(reference.Id),
-          _ => false
-        };
-        if (!valid)
-          throw new ArgumentException($"Invalid, forward, or inaccessible reference {reference.Id}.");
-      }
+      void CheckReference(RemoteBatchReference? reference) =>
+        BatchRequestValidator.CheckReference(request, reference, results, items);
 
       foreach (var argument in operation.Arguments)
         CheckReference(argument);
@@ -72,6 +66,26 @@ internal static class BatchRequestValidator
         case RemoteBatchOperationKind.Read:
           CheckReference(operation.Target);
           RequirePath(operation.Path);
+          break;
+
+        case RemoteBatchOperationKind.Where:
+          CheckReference(operation.Target);
+          ValidatePredicate(operation.Predicate, CheckReference);
+          break;
+
+        case RemoteBatchOperationKind.OrderBy:
+          CheckReference(operation.Target);
+          RequirePath(operation.Path);
+          break;
+
+        case RemoteBatchOperationKind.Count:
+          CheckReference(operation.Target);
+          break;
+
+        case RemoteBatchOperationKind.Take:
+          CheckReference(operation.Target);
+          if (operation.Arguments.Length != 1)
+            throw new ArgumentException("Take requires one count argument.");
           break;
 
         case RemoteBatchOperationKind.Create:
@@ -116,6 +130,55 @@ internal static class BatchRequestValidator
       }
       results.Add(operation.Id);
     }
+  }
+
+  private static void ValidatePredicate(RemoteBatchPredicate? predicate,
+    Action<RemoteBatchReference?> checkReference)
+  {
+    if (predicate == null)
+      throw new ArgumentException("Missing collection predicate.");
+
+    switch (predicate.Kind)
+    {
+      case RemoteBatchPredicateKind.AssignableTo:
+        RequireType(predicate.Type!);
+        break;
+
+      case RemoteBatchPredicateKind.Comparison:
+        RequirePath(predicate.Path);
+        if (!Enum.IsDefined(typeof(ComparisonOperator), predicate.Operator))
+          throw new ArgumentException("Unknown comparison operator.");
+        if (predicate.OtherPath != null)
+          RequirePath(predicate.OtherPath);
+        else
+          checkReference(predicate.Value);
+        break;
+
+      case RemoteBatchPredicateKind.EnumName:
+      case RemoteBatchPredicateKind.StringContains:
+        RequirePath(predicate.Path);
+        checkReference(predicate.Value);
+        break;
+
+      default:
+        throw new ArgumentException("Unknown collection predicate.");
+    }
+  }
+
+  private static void CheckReference(RemoteBatchRequest request, RemoteBatchReference? reference,
+    HashSet<int> results, HashSet<int> items)
+  {
+    if (reference == null)
+      throw new ArgumentException("Missing operation reference.");
+    bool valid = reference.Kind switch
+    {
+      RemoteBatchReferenceKind.Input => reference.Id >= 0 && reference.Id < request.Inputs.Count,
+      RemoteBatchReferenceKind.Result => results.Contains(reference.Id),
+      RemoteBatchReferenceKind.Item => items.Contains(reference.Id),
+      _ => false
+    };
+    if (!valid)
+      throw new ArgumentException($"Invalid, forward, or inaccessible reference {reference.Id}.");
   }
 
   private static void ValidateProjection(RemoteBatchProjection projection,

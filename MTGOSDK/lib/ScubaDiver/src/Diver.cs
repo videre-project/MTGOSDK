@@ -36,6 +36,7 @@ public partial class Diver : IDisposable
   private SnapshotRuntime _runtime;
   private TcpServer _tcpServer;
   private readonly BatchExecutionEndpoint _batchExecutionEndpoint;
+  private readonly EventCaptureEndpoint _eventCaptureEndpoint;
   private readonly BatchExecutor _batchExecutor;
   private readonly CaptureScopeManager _captureScopes = new();
 
@@ -58,9 +59,19 @@ public partial class Diver : IDisposable
   {
     _batchExecutor = new BatchExecutor(
       type => BatchExecutionEndpoint.ResolveLoadedType(type, name => _runtime.ResolveType(name)),
-      input => _runtime.ParseParameterObject(input), instance => _runtime.GetObjectToken(instance));
+      input => _runtime.ParseParameterObject(input),
+      instance => _runtime.GetObjectToken(instance),
+      instance => ObjectOrRemoteAddress.FromToken(
+        PinForRequest(instance), instance.GetType().FullName));
     _batchExecutionEndpoint = new BatchExecutionEndpoint(_batchExecutor,
       action => STAThread.IsDispatcherThread ? action() : STAThread.Execute(action));
+    _eventCaptureEndpoint = new EventCaptureEndpoint(token =>
+      _remoteEventHandler.TryGetValue(token, out var subscription)
+        ? subscription.CaptureCurrent ?? throw new InvalidOperationException(
+            "Event subscription has no ordered capture.")
+        : throw new InvalidOperationException("Event subscription is no longer registered."),
+      action => STAThread.IsDispatcherThread ? action()
+        : STAThread.Execute(action, Timeout.InfiniteTimeSpan));
 
     // TCP handlers for request dispatch
     _tcpHandlers = new Dictionary<string, Func<byte[], byte[]>>()
@@ -85,6 +96,7 @@ public partial class Diver : IDisposable
       {"/batch_execute", body => _batchExecutionEndpoint.Handle(body)},
       {"/event_subscribe", _ => MakeEventSubscribeResponse()},
       {"/event_property_filter", _ => MakeEventPropertyFilterResponse()},
+      {"/event_capture", body => _eventCaptureEndpoint.Handle(body)},
       {"/event_unsubscribe", _ => MakeEventUnsubscribeResponse()},
       {"/hook_method", _ => MakeHookMethodResponse()},
       {"/unhook_method", _ => MakeUnhookMethodResponse()},

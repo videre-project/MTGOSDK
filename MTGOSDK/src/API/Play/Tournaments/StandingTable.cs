@@ -8,6 +8,10 @@ using System.Globalization;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
+using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
+using MTGOSDK.Core.Remoting.Types;
 
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
@@ -112,9 +116,7 @@ internal sealed class StandingTable
     bool hasPlayoffs,
     int totalRounds)
   {
-    var wrappersById = standings.ToDictionary(
-      standing => (int)Unbind(standing).User.Id,
-      standing => standing);
+    var wrappersById = ReadStandingWrappers(standings);
 
     var roundResults = ReadRoundResults(rounds);
 
@@ -127,6 +129,24 @@ internal sealed class StandingTable
     var matches = ReadRoundMatches(rounds, previousMatchCutoff);
 
     return new(wrappersById, roundResults, matches, previousMatchCutoff == 0);
+  }
+
+  private static Dictionary<int, StandingRecord> ReadStandingWrappers(IList<StandingRecord> standings)
+  {
+    if (standings.Count == 0) return new();
+    var sources = standings.Select(standing => (object)Unbind(standing)).ToArray();
+    if (sources.Any(source => source is not DynamicRemoteObject))
+      return standings.ToDictionary(standing => (int)Unbind(standing).User.Id);
+
+    var batch = new RemoteBatch();
+    for (int i = 0; i < sources.Length; i++)
+      batch.Output(i.ToString(CultureInfo.InvariantCulture),
+        batch.Read(batch.Input(sources[i]), "User.Id"));
+    var captured = batch.Execute(RemoteClient.@client);
+    GC.KeepAlive(sources);
+    return Enumerable.Range(0, standings.Count).ToDictionary(
+      i => captured.Values[i.ToString(CultureInfo.InvariantCulture)].GetScalar<int>(),
+      i => standings[i]);
   }
 
   private static int GetLatestResultRound(IEnumerable<RoundResultInfo> roundResults)
@@ -150,10 +170,9 @@ internal sealed class StandingTable
   {
     var matches = new Dictionary<int, MatchInfo>();
 
-    foreach (var round in rounds.OrderBy(round => round.Number))
+    foreach (var round in CaptureRoundMatches(rounds, minRoundExclusive))
     {
       int roundNumber = round.Number;
-      if (roundNumber <= minRoundExclusive) continue;
 
       foreach (var user in round.UsersWithByes)
       {
@@ -256,6 +275,52 @@ internal sealed class StandingTable
       .OrderBy(match => match.Round)
       .ThenBy(match => match.Id)
       .ToList();
+  }
+
+  private static IEnumerable<TournamentRound> CaptureRoundMatches(
+    IEnumerable<TournamentRound> rounds,
+    int minRoundExclusive)
+  {
+    var selectedRounds = rounds
+      .Where(round => round.Number > minRoundExclusive)
+      .OrderBy(round => round.Number)
+      .ToArray();
+    if (selectedRounds.Length == 0) return [];
+    var sources = selectedRounds.Select(round => (object)Unbind(round)).ToArray();
+    if (sources.Any(source => source is not DynamicRemoteObject))
+      return selectedRounds;
+
+    var value = RemoteBatchProjection.Value();
+    var user = RemoteBatchProjection.Object(("Id", "Id", value));
+    var player = RemoteBatchProjection.Object(("User", "User", user));
+    var game = RemoteBatchProjection.Object(
+      ("Id", "Id", value),
+      ("GameState", "GameState", value),
+      ("Players", "Players", RemoteBatchProjection.Sequence(player)),
+      ("WinningPlayers", "WinningPlayers", RemoteBatchProjection.Sequence(player)));
+    var match = RemoteBatchProjection.Object(
+      ("MatchId", "MatchId", value),
+      ("Status", "Status", value),
+      ("IsCompleted", "IsCompleted", value),
+      ("WinningPlayers", "WinningPlayers", RemoteBatchProjection.Sequence(user)),
+      ("LosingPlayers", "LosingPlayers", RemoteBatchProjection.Sequence(user)),
+      ("Games", "Games", RemoteBatchProjection.Sequence(game)));
+    var projection = RemoteBatchProjection.Object(
+      ("Number", "Number", value),
+      ("UsersWithByes", "UsersWithByes", RemoteBatchProjection.Sequence(user)),
+      ("Matches", "Matches", RemoteBatchProjection.Sequence(match)));
+
+    var batch = new RemoteBatch();
+    for (int i = 0; i < selectedRounds.Length; i++)
+      batch.Output(i.ToString(CultureInfo.InvariantCulture),
+        batch.Input(sources[i]), projection);
+
+    var captured = batch.Execute(RemoteClient.@client);
+    GC.KeepAlive(sources);
+    return Enumerable.Range(0, selectedRounds.Length)
+      .Select(i => new TournamentRound(RemoteBatchObject.FromValue(
+        captured.Values[i.ToString(CultureInfo.InvariantCulture)])!))
+      .ToArray();
   }
 
   private static void NormalizeMatchResult(

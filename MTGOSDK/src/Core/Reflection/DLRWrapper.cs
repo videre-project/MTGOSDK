@@ -12,6 +12,8 @@ using System.Reflection;
 using MTGOSDK.Core.Compiler;
 using MTGOSDK.Core.Reflection.Serialization;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Object;
 using MTGOSDK.Core.Remoting.Reflection;
 using MTGOSDK.Core.Remoting.Types;
@@ -37,56 +39,35 @@ public abstract class DLRWrapper : SerializableBase
   /// </summary>
   internal virtual dynamic @base { get; }
 
-  /// <summary>
-  /// Batch-fetches primitive properties before serialization to minimize IPC calls.
-  /// Called by ToJSON() to convert N individual IPC calls into 1 batch call.
-  /// </summary>
-  internal void HydrateForSerialization(IEnumerable<string> propertyNames)
+  private readonly AsyncLocal<Proxy.CachingRemoteProxy?> _serializationProxy = new();
+
+  internal Proxy.CachingRemoteProxy? SerializationProxy => _serializationProxy.Value;
+
+  private sealed class SerializationScope(
+    DLRWrapper wrapper, Proxy.CachingRemoteProxy? previous) : IDisposable
   {
-    // Use IJsonSerializable as sentinel key for general serialization
-    var sentinelKey = typeof(Serialization.IJsonSerializable);
-    if (_interfaceProxies.ContainsKey(sentinelKey))
-      return;
+    public void Dispose() => wrapper._serializationProxy.Value = previous;
+  }
 
-    var paths = Serialization.AccessPathAnalyzer
-      .GetBatchablePathsForProperties(this.GetType(), propertyNames);
-    if (paths.Length == 0) return;
+  internal IDisposable? UseSerializationProxy(Proxy.CachingRemoteProxy? proxy)
+  {
+    if (proxy is null) return null;
+    var scope = new SerializationScope(this, _serializationProxy.Value);
+    _serializationProxy.Value = proxy;
+    return scope;
+  }
 
-    var pathsDelimited = string.Join("|", paths);
+  /// <summary>
+  /// Captures the native members needed by one JSON serialization operation.
+  /// </summary>
+  internal Proxy.CachingRemoteProxy? CaptureForSerialization(IEnumerable<string> propertyNames)
+  {
+    var paths = AccessPathAnalyzer.GetBatchablePathsForProperties(GetType(), propertyNames);
+    if (paths.Length == 0) return null;
 
-    var remoteObj = Unbind(this);
-    if (remoteObj is not Remoting.Types.DynamicRemoteObject dro)
-      return;
-
-    var response = RemoteClient.@client.Communicator.GetBatchMembers(
-      dro.__ro.RemoteToken,
-      dro.__type?.FullName ?? dro.GetType().Name,
-      pathsDelimited);
-
-    if (response?.Schema == null || response.Values == null) return;
-
-    var values = new Dictionary<string, object?>();
-    for (int i = 0; i < response.Schema.Length; i++)
-    {
-      var path = response.Schema[i];
-      var encodedValue = response.Values[i];
-      var typeName = response.SchemaTypes[i];
-
-      if (encodedValue == null)
-      {
-        values[path] = null;
-      }
-      else if (encodedValue.StartsWith("@"))
-      {
-        continue; // Skip non-primitives; they fall through to the real DRO
-      }
-      else
-      {
-        values[path] = DecodeBatchValue(encodedValue, typeName);
-      }
-    }
-
-    _interfaceProxies[sentinelKey] = new Proxy.CachingRemoteProxy(remoteObj, values);
+    object remote = @base_unbound ?? Unbind(this);
+    if (remote is not DynamicRemoteObject source) return null;
+    return new Proxy.CachingRemoteProxy(source, RemoteBatchSerialization.ReadMembers(source, paths));
   }
 
   protected dynamic @base_unbound { get; set; } = null!;
@@ -163,6 +144,8 @@ public abstract class DLRWrapper : SerializableBase
   /// </remarks>
   public static dynamic Unbind(DLRWrapper dro)
   {
+    if (dro.SerializationProxy is { } captured) return captured;
+
     // Check if we have a cached proxy from batch hydration
     // This allows Unbind(this).Property to use cached values for hydrated properties
     // We need reflection since DLRWrapper<T> is generic and we can't cast to a specific T
@@ -593,11 +576,31 @@ public abstract class DLRWrapper : SerializableBase
     where TInterface : class
     where TPathSource : class
   {
-    var dro = collection as Remoting.Types.DynamicRemoteObject;
-    if (dro == null)
-    {
-      yield break;
-    }
+    if (collection is not DynamicRemoteObject remote) yield break;
+    foreach (var item in CaptureCollectionAsync<TInterface, TPathSource>(
+      remote, pathPrefix, maxItems).GetAwaiter().GetResult())
+      yield return item;
+  }
+
+  /// <summary>
+  /// Captures collection columns asynchronously and uses live wrappers for members
+  /// that require native access or wrapper-specific conversions.
+  /// </summary>
+  public static async Task<IList<TInterface>> SerializeDroAsAsync<TInterface, TPathSource>(
+    DynamicRemoteObject collection,
+    string? pathPrefix = null,
+    int maxItems = 0)
+    where TInterface : class
+    where TPathSource : class =>
+    (await CaptureCollectionAsync<TInterface, TPathSource>(collection, pathPrefix, maxItems)
+      .ConfigureAwait(false)).ToList();
+
+  private static async Task<IEnumerable<TInterface>> CaptureCollectionAsync<TInterface, TPathSource>(
+    DynamicRemoteObject collection, string? pathPrefix, int maxItems)
+    where TInterface : class
+    where TPathSource : class
+  {
+    if (collection is null) return Array.Empty<TInterface>();
 
     var interfaceType = typeof(TInterface);
 
@@ -609,22 +612,6 @@ public abstract class DLRWrapper : SerializableBase
     // Get reverse mapping: remote path -> interface property name
     var reversePathMap = Serialization.AccessPathAnalyzer
       .GetReversePathMap(typeof(TPathSource), interfaceType);
-
-    // Track which interface properties are covered by the source type paths
-    var coveredProperties = new HashSet<string>();
-    foreach (var path in sourcePaths)
-    {
-      // Find which interface property this path maps to
-      if (reversePathMap.TryGetValue(path, out var propName))
-      {
-        coveredProperties.Add(propName);
-      }
-      else
-      {
-        // Path matches property name directly
-        coveredProperties.Add(path.Split('.')[0]);
-      }
-    }
 
     // Build full paths list - apply prefix to source type paths
     var allPaths = new List<string>();
@@ -638,40 +625,56 @@ public abstract class DLRWrapper : SerializableBase
 
     if (allPaths.Count == 0)
     {
-      yield break;
+      return Array.Empty<TInterface>();
     }
 
-    // Single IPC call to fetch all items' primitive properties + item tokens.
-    // Items are pinned only when they are wrapped below (the wrappers release
-    // the pins); otherwise the tokens would be dropped and never unpinned.
+    // Pin items only when materialization creates live wrappers for them.
+    var connection = collection.__ra;
+    var communicator = connection.Communicator;
     bool wrapsItems = typeof(DLRWrapper).IsAssignableFrom(typeof(TPathSource));
     BatchCollectionResponse response;
     try
     {
-      response = RemoteClient.@client.Communicator
-        .GetBatchCollectionMembers(
-          dro.__ro.RemoteToken,
-          dro.__type?.FullName ?? "Unknown",
+      response = await communicator.GetBatchCollectionMembersAsync(
+          collection.__ro.RemoteToken,
+          collection.__type?.FullName ?? "Unknown",
           string.Join("|", allPaths),
           maxItems,
           pinItems: wrapsItems
-        );
+        ).ConfigureAwait(false);
     }
     finally
     {
-      GC.KeepAlive(dro);
+      GC.KeepAlive(collection);
     }
 
-    // Item pins not handed to a RemoteObject (enumeration stopped early, an
-    // exception, or no wrapper built) are returned when the iterator ends.
+    return MaterializeCollection<TInterface, TPathSource>(
+      connection, communicator, response, sourcePaths, reversePathMap, pathPrefix);
+  }
+
+  private static IEnumerable<TInterface> MaterializeCollection<TInterface, TPathSource>(
+    RemoteHandle connection,
+    DiverCommunicator communicator,
+    BatchCollectionResponse response,
+    IList<string> sourcePaths,
+    Dictionary<string, string> reversePathMap,
+    string? pathPrefix)
+    where TInterface : class
+    where TPathSource : class
+  {
     int consumedPins = 0;
     try
     {
       if (response?.Schema == null || response.Columns == null)
-      {
         yield break;
-      }
 
+      var interfaceType = typeof(TInterface);
+      var batchFetchedPaths = sourcePaths.ToHashSet();
+      var interfaceToRemotePath = reversePathMap
+        .Where(kvp => batchFetchedPaths.Contains(kvp.Key))
+        .ToDictionary(kvp => kvp.Value, kvp => kvp.Key);
+      var serializeMethod = typeof(SerializableBase).GetMethod("SerializeAs")
+        ?.MakeGenericMethod(interfaceType);
       // Check if we have item tokens for hybrid mode (create wrappers with DRO fallback)
       bool hasTokens = response.ItemTokens != null && response.ItemTokens.Count == response.Count;
 
@@ -704,14 +707,14 @@ public abstract class DLRWrapper : SerializableBase
           var itemToken = response.ItemTokens[i];
           var itemTypeName = response.ItemTypeName;
 
-          // Create a RemoteObject for this item from its token, then Dynamify to get DRO.
-          // GetRemoteObjectFromField takes the item's pin over (or returns it if
-          // it fails), so it leaves the iterator's ownership first.
+          // RemoteObject acquisition takes ownership even if reading its type fails.
           consumedPins = i + 1;
-          var remoteObject = RemoteClient.@client.GetRemoteObjectFromField(new Remoting.Interop.ObjectOrRemoteAddress
+          var remoteObject = connection.GetRemoteObjectFromField(new ObjectOrRemoteAddress
           {
-            IsRemoteAddress = true, RemoteAddress = itemToken,
-            Type = itemTypeName, PinOwner = response.PinOwner
+            IsRemoteAddress = true,
+            RemoteAddress = itemToken,
+            Type = itemTypeName,
+            PinOwner = response.PinOwner
           });
           var itemDro = remoteObject.Dynamify() as Remoting.Types.DynamicRemoteObject;
 
@@ -725,19 +728,12 @@ public abstract class DLRWrapper : SerializableBase
           // properties such as TradePost.Poster may have dotted remote paths like
           // Poster.Name in the registry, but those are not valid member names for
           // dynamic fallback access to the underlying DRO.
-          var batchFetchedPaths = sourcePaths.ToHashSet();
-          var interfaceToRemotePath = reversePathMap
-            .Where(kvp => batchFetchedPaths.Contains(kvp.Key))
-            .ToDictionary(kvp => kvp.Value, kvp => kvp.Key);
           var cachingProxy = new Proxy.CachingRemoteProxy(
             itemDro, propertyValues, pathPrefix, interfaceToRemotePath);
           wrapper._interfaceProxies[interfaceType] = cachingProxy;
 
           // Serialize via the wrapper - uses cache for batch data, DRO fallback for complex props
           // Use reflection to call SerializeAs<TInterface>() on the wrapper
-          var serializeMethod = typeof(Serialization.SerializableBase)
-            .GetMethod("SerializeAs")
-            ?.MakeGenericMethod(interfaceType);
           if (serializeMethod != null)
           {
             var result = serializeMethod.Invoke(wrapper, new object[] { null, null, false });
@@ -757,14 +753,9 @@ public abstract class DLRWrapper : SerializableBase
     }
     finally
     {
-      if (response?.ItemTokens is { } itemTokens)
-      {
-        for (int k = consumedPins; k < itemTokens.Count; k++)
-        {
-          try { RemoteClient.@client.Communicator.ReleaseLater(itemTokens[k], response.PinOwner); }
-          catch { /* the client may already be disconnected */ }
-        }
-      }
+      if (response?.ItemTokens is not null)
+        for (int i = consumedPins; i < response.ItemTokens.Count; i++)
+          communicator.ReleaseLater(response.ItemTokens[i], response.PinOwner);
     }
   }
 
@@ -778,70 +769,21 @@ public abstract class DLRWrapper : SerializableBase
   /// <param name="maxItems">Maximum number of items to serialize (0 = no limit).</param>
   /// <returns>Enumerable of serialized items implementing TInterface.</returns>
   public static IEnumerable<TInterface> SerializeDroAs<TInterface>(
-    Remoting.Types.DynamicRemoteObject collection,
+    DynamicRemoteObject collection,
     IEnumerable<string> paths,
     string? pathPrefix = null,
     int maxItems = 0)
     where TInterface : class
   {
-    var pathList = paths.ToList();
-    if (pathList.Count == 0)
-    {
-      yield break;
-    }
-
-    // Apply path prefix if provided (e.g., "PlayerEvent.EventId" instead of "EventId")
-    var prefixedPaths = string.IsNullOrEmpty(pathPrefix)
-      ? pathList
-      : pathList.Select(p => $"{pathPrefix}.{p}").ToList();
-
-    // Single IPC call to fetch all items' primitive properties
-    BatchCollectionResponse response;
-    try
-    {
-      response = RemoteClient.@client.Communicator
-        .GetBatchCollectionMembers(
-          collection.__ro.RemoteToken,
-          collection.__type?.FullName ?? "Unknown",
-          string.Join("|", prefixedPaths),
-          maxItems,
-          pinItems: false
-        );
-    }
-    finally
-    {
-      GC.KeepAlive(collection);
-    }
-
-    if (response?.Schema == null || response.Columns == null)
-    {
-      yield break;
-    }
-
-    // Build TInterface objects from columnar response data
-    for (int i = 0; i < response.Count; i++)
-    {
-      var propertyValues = new Dictionary<string, object?>();
-
-      for (int col = 0; col < response.Schema.Length; col++)
-      {
-        var encodedValue = response.Columns[col][i];
-        var typeName = response.SchemaTypes[col];
-
-        object? value = encodedValue != null
-          ? DecodeBatchValue(encodedValue, typeName)
-          : null;
-
-        // Strip prefix from key for property mapping
-        var propName = response.Schema[col];
-        if (!string.IsNullOrEmpty(pathPrefix) && propName.StartsWith(pathPrefix + "."))
-          propName = propName.Substring(pathPrefix.Length + 1);
-
-        propertyValues[propName] = value;
-      }
-
-      yield return InterfaceProxyBuilder.Create<TInterface>(propertyValues);
-    }
+    var members = paths.Select(path => (Name: path,
+      Path: string.IsNullOrEmpty(pathPrefix) ? path : pathPrefix + "." + path)).ToArray();
+    if (members.Length == 0) yield break;
+    var batch = new RemoteBatch();
+    RemoteBatchSerialization.RecordCollection(batch, batch.Input(collection), members, maxItems);
+    var captured = batch.Execute(collection.__ra);
+    GC.KeepAlive(collection);
+    foreach (var item in RemoteBatchSerialization.ReadCollection<TInterface>(captured))
+      yield return item;
   }
 
   /// <summary>
@@ -1185,8 +1127,7 @@ public abstract class DLRWrapper : SerializableBase
   //
 
   /// <summary>
-  /// Cache of hydrated proxies per-interface type.
-  /// Different SerializeAs&lt;T&gt; calls may need different properties.
+  /// Captured collection columns supplied to newly constructed item wrappers.
   /// </summary>
   internal readonly Dictionary<Type, Proxy.CachingRemoteProxy> _interfaceProxies = new();
 
@@ -1195,59 +1136,19 @@ public abstract class DLRWrapper : SerializableBase
   /// </summary>
   public bool IsHydratedFor<TInterface>() => _interfaceProxies.ContainsKey(typeof(TInterface));
 
-  /// <summary>
-  /// Internal: Hydrates only properties needed for the given interface.
-  /// </summary>
-  /// <typeparam name="TInterface">The serialization interface.</typeparam>
-  /// <param name="paths">The remote access paths to fetch.</param>
-  internal void HydrateForInterface<TInterface>(string[] paths)
+  internal Proxy.CachingRemoteProxy? CaptureForInterface<TInterface>(string[] paths) =>
+    CaptureForInterfaceAsync<TInterface>(paths).GetAwaiter().GetResult();
+
+  internal async Task<Proxy.CachingRemoteProxy?> CaptureForInterfaceAsync<TInterface>(string[] paths)
   {
-    var interfaceType = typeof(TInterface);
-    if (_interfaceProxies.ContainsKey(interfaceType))
-      return;
-    if (paths == null || paths.Length == 0) return;
+    if (_interfaceProxies.TryGetValue(typeof(TInterface), out var captured))
+      return captured;
+    if (paths.Length == 0) return null;
 
-    // Join paths with pipe delimiter
-    var pathsDelimited = string.Join("|", paths);
-
-    // Get the remote object's address and type
-    var remoteObj = Unbind(this);
-    if (remoteObj is not Remoting.Types.DynamicRemoteObject dro)
-      return;
-
-    // Single IPC call for batch property fetching
-    var response = RemoteClient.@client.Communicator.GetBatchMembers(
-      dro.__ro.RemoteToken,
-      dro.__type?.FullName ?? dro.GetType().Name,
-      pathsDelimited);
-
-    if (response?.Schema == null || response.Values == null) return;
-
-    // Convert encoded values to dictionary for caching
-    var values = new Dictionary<string, object?>();
-    for (int i = 0; i < response.Schema.Length; i++)
-    {
-      var path = response.Schema[i];
-      var encodedValue = response.Values[i];
-      var typeName = response.SchemaTypes[i];
-
-      if (encodedValue == null)
-      {
-        values[path] = null;
-      }
-      else if (encodedValue.StartsWith("@"))
-      {
-        // A non-primitive's token (no pin was taken for it): skip it; the
-        // member is read through the remote object instead.
-        continue;
-      }
-      else
-      {
-        values[path] = DecodeBatchValue(encodedValue, typeName);
-      }
-    }
-
-    _interfaceProxies[interfaceType] = new Proxy.CachingRemoteProxy(remoteObj, values);
+    object remote = @base_unbound ?? Unbind(this);
+    if (remote is not DynamicRemoteObject source) return null;
+    var values = await RemoteBatchSerialization.ReadMembersAsync(source, paths).ConfigureAwait(false);
+    return new Proxy.CachingRemoteProxy(source, values);
   }
 
   /// <summary>
@@ -1290,109 +1191,9 @@ public abstract class DLRWrapper : SerializableBase
     where TInterface : class
     where TPathSource : class
   {
-    var interfaceType = typeof(TInterface);
-
-    // Get paths for interface properties that exist in the prefixed source type
-    var prefixedPaths = Serialization.AccessPathAnalyzer.GetBatchablePathsForInterface(
-      typeof(TPathSource), interfaceType);
-
-    // Build full paths list - prefixed paths for source type properties
-    var paths = new List<string>();
-    var coveredProperties = new HashSet<string>();
-
-    foreach (var path in prefixedPaths)
-    {
-      paths.Add(string.IsNullOrEmpty(pathPrefix) ? path : $"{pathPrefix}.{path}");
-      // Track which interface properties are covered (first segment of path)
-      coveredProperties.Add(path.Split('.')[0]);
-    }
-
-    // Find interface properties NOT covered by the source type - fallback to parent
-    var interfaceProps = interfaceType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-    foreach (var prop in interfaceProps)
-    {
-      if (!coveredProperties.Contains(prop.Name))
-      {
-        // Property not in TPathSource, request it directly from parent (unprefixed)
-        paths.Add(prop.Name);
-      }
-    }
-
-    if (paths.Count == 0)
-    {
-      yield break;
-    }
-
-    // Get the remote collection using the property name
-    dynamic remoteObj = Unbind(this);
-    dynamic remoteCollection;
-    try
-    {
-      // Dynamically access the collection property
-      remoteCollection = ((IDynamicMetaObjectProvider)remoteObj)
-        .GetMetaObject(System.Linq.Expressions.Expression.Parameter(typeof(object)))
-        .BindGetMember(new DynamicGetMemberBinder(collectionPropertyName)).Value;
-    }
-    catch
-    {
-      // Fallback to simple property access
-      var prop = remoteObj.GetType().GetProperty(collectionPropertyName);
-      if (prop == null) yield break;
-      remoteCollection = prop.GetValue(remoteObj);
-    }
-
-    var dro = remoteCollection as Remoting.Types.DynamicRemoteObject;
-    if (dro == null)
-    {
-      yield break;
-    }
-
-    // Single IPC call to fetch all items
-    BatchCollectionResponse response;
-    try
-    {
-      response = Remoting.RemoteClient.@client.Communicator
-        .GetBatchCollectionMembers(
-          dro.__ro.RemoteToken,
-          dro.__type?.FullName ?? "Unknown",
-          string.Join("|", paths),
-          maxItems,
-          pinItems: false
-        );
-    }
-    finally
-    {
-      GC.KeepAlive(dro);
-    }
-
-    if (response?.Schema == null || response.Columns == null)
-    {
-      yield break;
-    }
-
-    // Build TInterface objects from columnar response data
-    for (int i = 0; i < response.Count; i++)
-    {
-      var propertyValues = new Dictionary<string, object?>();
-
-      for (int col = 0; col < response.Schema.Length; col++)
-      {
-        var encodedValue = response.Columns[col][i];
-        var typeName = response.SchemaTypes[col];
-
-        object? value = encodedValue != null
-          ? DecodeBatchValue(encodedValue, typeName)
-          : null;
-
-        var propPath = response.Schema[col];
-        if (!string.IsNullOrEmpty(pathPrefix) && propPath.StartsWith(pathPrefix + "."))
-          propPath = propPath.Substring(pathPrefix.Length + 1);
-
-        propertyValues[propPath] = value;
-      }
-
-      yield return Serialization.InterfaceProxyBuilder.Create<TInterface>(propertyValues);
-    }
+    foreach (var item in CaptureCollectionAsAsync<TInterface, TPathSource>(
+      collectionPropertyName, pathPrefix, maxItems).GetAwaiter().GetResult())
+      yield return item;
   }
 
   /// <summary>
@@ -1400,120 +1201,32 @@ public abstract class DLRWrapper : SerializableBase
   /// awaits the batch IPC call instead of blocking a thread pool thread.
   /// </summary>
   /// <remarks>
-  /// The DynamicObject API is inherently synchronous, so resolving the remote collection
-  /// reference still requires a single synchronous IPC call. Only the expensive batch
-  /// property fetch is awaited.
+  /// Collection resolution and member capture share the same awaited batch request.
   /// </remarks>
   public async Task<IList<TInterface>> SerializeCollectionAsAsync<TInterface, TPathSource>(
     string collectionPropertyName,
     string pathPrefix,
     int maxItems = 0)
     where TInterface : class
+    where TPathSource : class =>
+    (await CaptureCollectionAsAsync<TInterface, TPathSource>(
+      collectionPropertyName, pathPrefix, maxItems).ConfigureAwait(false)).ToList();
+
+  private async Task<IEnumerable<TInterface>> CaptureCollectionAsAsync<TInterface, TPathSource>(
+    string collectionPropertyName, string pathPrefix, int maxItems)
+    where TInterface : class
     where TPathSource : class
   {
-    var interfaceType = typeof(TInterface);
-
-    // Path analysis is pure CPU work — no IPC
-    var prefixedPaths = Serialization.AccessPathAnalyzer.GetBatchablePathsForInterface(
-      typeof(TPathSource), interfaceType);
-
-    var paths = new List<string>();
-    var coveredProperties = new HashSet<string>();
-
-    foreach (var path in prefixedPaths)
-    {
-      paths.Add(string.IsNullOrEmpty(pathPrefix) ? path : $"{pathPrefix}.{path}");
-      coveredProperties.Add(path.Split('.')[0]);
-    }
-
-    var interfaceProps = interfaceType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-    foreach (var prop in interfaceProps)
-    {
-      if (!coveredProperties.Contains(prop.Name))
-        paths.Add(prop.Name);
-    }
-
-    if (paths.Count == 0)
-      return Array.Empty<TInterface>();
-
-    // Resolve the remote collection reference — one fast synchronous IPC call via DynamicObject
-    dynamic remoteObj = Unbind(this);
-    dynamic remoteCollection;
-    try
-    {
-      remoteCollection = ((IDynamicMetaObjectProvider)remoteObj)
-        .GetMetaObject(System.Linq.Expressions.Expression.Parameter(typeof(object)))
-        .BindGetMember(new DynamicGetMemberBinder(collectionPropertyName)).Value;
-    }
-    catch
-    {
-      var prop = remoteObj.GetType().GetProperty(collectionPropertyName);
-      if (prop == null) return Array.Empty<TInterface>();
-      remoteCollection = prop.GetValue(remoteObj);
-    }
-
-    var dro = remoteCollection as Remoting.Types.DynamicRemoteObject;
-    if (dro == null)
-      return Array.Empty<TInterface>();
-
-    // Await the expensive batch IPC call — does NOT block a thread pool thread
-    BatchCollectionResponse response;
-    try
-    {
-      response = await Remoting.RemoteClient.@client.Communicator
-        .GetBatchCollectionMembersAsync(
-          dro.__ro.RemoteToken,
-          dro.__type?.FullName ?? "Unknown",
-          string.Join("|", paths),
-          maxItems,
-          pinItems: false
-        ).ConfigureAwait(false);
-    }
-    finally
-    {
-      GC.KeepAlive(dro);
-    }
-
-    if (response?.Schema == null || response.Columns == null)
-      return Array.Empty<TInterface>();
-
-    // Build result list from columnar data (pure CPU work)
-    var result = new List<TInterface>(response.Count);
-    for (int i = 0; i < response.Count; i++)
-    {
-      var propertyValues = new Dictionary<string, object?>();
-
-      for (int col = 0; col < response.Schema.Length; col++)
-      {
-        var encodedValue = response.Columns[col][i];
-        var typeName = response.SchemaTypes[col];
-
-        object? value = encodedValue != null
-          ? DecodeBatchValue(encodedValue, typeName)
-          : null;
-
-        var propPath = response.Schema[col];
-        if (!string.IsNullOrEmpty(pathPrefix) && propPath.StartsWith(pathPrefix + "."))
-          propPath = propPath.Substring(pathPrefix.Length + 1);
-
-        propertyValues[propPath] = value;
-      }
-
-      result.Add(Serialization.InterfaceProxyBuilder.Create<TInterface>(propertyValues));
-    }
-
-    return result;
+    DynamicRemoteObject source = @base_unbound ?? Unbind(this);
+    var batch = new RemoteBatch();
+    var collection = batch.Read(batch.Input(source), collectionPropertyName);
+    RemoteBatchSerialization.RecordCollection<TInterface, TPathSource>(
+      batch, collection, pathPrefix, maxItems);
+    var captured = await batch.ExecuteAsync(source.__ra).ConfigureAwait(false);
+    GC.KeepAlive(source);
+    return RemoteBatchSerialization.ReadCollection<TInterface>(captured);
   }
 
-  /// <summary>
-  /// Helper binder for dynamic member access.
-  /// </summary>
-  private class DynamicGetMemberBinder : GetMemberBinder
-  {
-    public DynamicGetMemberBinder(string name) : base(name, false) { }
-    public override DynamicMetaObject FallbackGetMember(DynamicMetaObject target, DynamicMetaObject? errorSuggestion)
-      => throw new NotImplementedException();
-  }
 }
 
 /// <summary>
@@ -1600,8 +1313,9 @@ public class DLRWrapper<I>: DLRWrapper where I : class
   {
     get
     {
-      // If we have a cached proxy from batch hydration, use it
-      // This allows HydrateForInterface to pre-fetch properties
+      if (SerializationProxy is { } captured) return captured;
+
+      // Collection serializers supply captured columns before reading wrapper properties.
       if (_interfaceProxies.Count > 0)
       {
         // Return the first available cached proxy

@@ -6,7 +6,9 @@
 using System.Linq.Expressions;
 
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Batching;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -23,11 +25,13 @@ public static class DLRExtensions
   public static DynamicRemoteObject WhereAssignableTo<T>(
     this DynamicRemoteObject collection)
   {
-    return RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "WhereAssignableTo",
-      args: new object[] { collection, typeof(T).FullName }
-    );
+    var batch = new RemoteBatch();
+    var source = batch.Input(collection);
+
+    // Packaging can merge SDK contract metadata into a different assembly.
+    // Resolve the corresponding native contract by its full name.
+    var result = batch.WhereAssignableTo(source, new RemoteBatchType(typeof(T).FullName!));
+    return batch.ExecuteReference(result, RemoteClient.@client)!.Dynamify();
   }
 
   /// <summary>
@@ -46,32 +50,20 @@ public static class DLRExtensions
     this DynamicRemoteObject collection,
     Expression<Func<T, bool>> predicate)
   {
-    if (ExpressionParser.TryParsePropertyComparison(
-          predicate,
-          out string leftPropertyName,
-          out ComparisonOperator propertyOp,
-          out string rightPropertyName))
+    var batch = new RemoteBatch();
+    var source = batch.Input(collection);
+    RemoteBatchSlot result;
+    if (ExpressionParser.TryParsePropertyComparison(predicate,
+      out string leftPropertyName, out ComparisonOperator comparison, out string rightPropertyName))
     {
-      return RemoteClient.InvokeMethod(
-        "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-        "WherePropertyCompareProperty",
-        args: new object[]
-        {
-          collection,
-          leftPropertyName,
-          (int)propertyOp,
-          rightPropertyName
-        }
-      );
+      result = batch.WhereProperty(source, leftPropertyName, comparison, rightPropertyName);
     }
-
-    var (propertyName, op, value) = ExpressionParser.ParsePredicate(predicate);
-    
-    return RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "WherePropertyCompare",
-      args: new object[] { collection, propertyName, (int)op, value }
-    );
+    else
+    {
+      var (propertyName, op, value) = ExpressionParser.ParsePredicate(predicate);
+      result = batch.Where(source, propertyName, op, batch.Input(value));
+    }
+    return batch.ExecuteReference(result, RemoteClient.@client)!.Dynamify();
   }
 
   /// <summary>
@@ -92,12 +84,9 @@ public static class DLRExtensions
     Expression<Func<T, TKey>> keySelector,
     bool descending = false)
   {
-    var propertyName = ExpressionParser.ParseKeySelector(keySelector);
-    
-    return RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "OrderByProperty",
-      args: new object[] { collection, propertyName, descending }
-    );
+    var batch = new RemoteBatch();
+    var source = batch.Input(collection);
+    var result = batch.OrderBy(source, ExpressionParser.ParseKeySelector(keySelector), descending);
+    return batch.ExecuteReference(result, RemoteClient.@client)!.Dynamify();
   }
 }

@@ -27,6 +27,7 @@ internal sealed class BatchValueSerializer(
   Func<RemoteBatchType, Type> resolveType, Func<object, ulong>? getObjectToken)
 {
   private static readonly ConcurrentDictionary<Type, PropertyInfo[]> s_scalarMembers = new();
+  private readonly Dictionary<Type, RemoteBatchType> _types = new();
 
   private sealed class IdentityComparer : IEqualityComparer<object>
   {
@@ -57,8 +58,8 @@ internal sealed class BatchValueSerializer(
         return new()
         {
           Kind = RemoteBatchValueKind.Enum,
-          Type = RemoteBatchType.Native(type),
-          UnderlyingType = RemoteBatchType.Native(underlying),
+          Type = DescribeType(type),
+          UnderlyingType = DescribeType(underlying),
           EnumName = type.IsDefined(typeof(FlagsAttribute), false) ? value.ToString() : Enum.GetName(type, value),
           ScalarData = MessagePackSerializer.Serialize(underlying, Convert.ChangeType(value, underlying))
         };
@@ -67,7 +68,7 @@ internal sealed class BatchValueSerializer(
         return new()
         {
           Kind = RemoteBatchValueKind.Scalar,
-          Type = RemoteBatchType.Native(type),
+          Type = DescribeType(type),
           ScalarData = MessagePackSerializer.Serialize(type, value)
         };
 
@@ -75,7 +76,7 @@ internal sealed class BatchValueSerializer(
         throw new InvalidOperationException("Object cycle in projection.");
       try
       {
-        var result = new RemoteBatchValue { Type = RemoteBatchType.Native(type) };
+        var result = new RemoteBatchValue { Type = DescribeType(type) };
         switch (projection.Kind)
         {
           case RemoteBatchProjectionKind.Value:
@@ -83,6 +84,7 @@ internal sealed class BatchValueSerializer(
             if (value is not IEnumerable sequence || value is string || IsDictionary(type))
               throw new InvalidOperationException("Value requires an explicit object or dictionary projection.");
             result.Kind = RemoteBatchValueKind.Sequence;
+            result.Items = [];
             int index = 0;
             foreach (var item in sequence)
               result.Items.Add(Serialize(item, projection.Element ?? RemoteBatchProjection.Value(),
@@ -91,6 +93,7 @@ internal sealed class BatchValueSerializer(
 
           case RemoteBatchProjectionKind.Object:
             result.Kind = RemoteBatchValueKind.Object;
+            result.Members = new();
             if (projection.IncludeLogicalAddress)
             {
               if (type.IsValueType)
@@ -125,17 +128,24 @@ internal sealed class BatchValueSerializer(
             foreach (var member in projection.Members)
             {
               var memberPath = path + "." + member.Key;
-              object? memberValue;
               try
               {
-                memberValue = read(value, member.Value.Path);
+                var memberValue = read(value, member.Value.Path);
+                result.Members.Add(member.Key, Serialize(memberValue, member.Value.Projection,
+                  memberPath, depth + 1, ancestors));
+              }
+              catch (Exception) when (member.Value.IgnoreErrors)
+              {
+                continue;
+              }
+              catch (BatchProjectionException)
+              {
+                throw;
               }
               catch (Exception error)
               {
                 throw new BatchProjectionException(memberPath, error);
               }
-              result.Members.Add(member.Key, Serialize(memberValue, member.Value.Projection,
-                memberPath, depth + 1, ancestors));
             }
             return result;
 
@@ -143,6 +153,7 @@ internal sealed class BatchValueSerializer(
             if (!IsDictionary(type) || value is not IEnumerable entries)
               throw new InvalidOperationException("Dictionary projection requires a dictionary.");
             result.Kind = RemoteBatchValueKind.Dictionary;
+            result.Entries = [];
             int entryIndex = 0;
             foreach (var entry in entries)
             {
@@ -183,6 +194,13 @@ internal sealed class BatchValueSerializer(
     {
       throw new BatchProjectionException(path, error);
     }
+  }
+
+  private RemoteBatchType DescribeType(Type type)
+  {
+    if (!_types.TryGetValue(type, out var identity))
+      _types.Add(type, identity = RemoteBatchType.Native(type));
+    return identity;
   }
 
   private RemoteBatchProjection ResolveProjection(RemoteBatchProjection projection, Type type)

@@ -44,4 +44,10 @@ public sealed class RemoteBatchOperation
 
   [Key(9)]
   public RemoteBatchProjection Projection { get; set; } = new();
+
+  [Key(10)]
+  public RemoteBatchPredicate? Predicate { get; set; }
+
+  [Key(11)]
+  public bool Descending { get; set; }
 }

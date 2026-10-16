@@ -168,6 +168,8 @@ public partial class Diver : IDisposable
     if (capture.Scope?.IsStateBoundary == true && !capture.CaptureOnExit)
       throw new ArgumentException("State boundaries must capture on completion.");
     BatchExecutor.Validate(capture.Batch);
+    if (capture.Batch.ReferenceOutput != null)
+      throw new ArgumentException("Callback captures require detached outputs.");
     CaptureScopeManager.Validate(capture.Scope, capture.Batch);
     if (capture.Scope != null &&
         capture.Scope.OwnerInput >= capture.Inputs.Count)

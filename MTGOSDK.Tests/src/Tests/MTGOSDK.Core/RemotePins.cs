@@ -18,6 +18,7 @@ using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Batching;
 using MTGOSDK.Core.Remoting.Hooking;
 using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 using MTGOSDK.Core.Remoting.Types;
 
 
@@ -195,6 +196,27 @@ public class RemotePins : BaseFixture
   }
 
   [Test]
+  public async Task Test_RetainedBatchResult_ReturnsItsPinOnRelease()
+  {
+    var batch = new RemoteBatch();
+    var created = batch.Create(new RemoteBatchMethod(new RemoteBatchType(ListType), ".ctor"));
+    var result = await batch.ExecuteReferenceAsync(created, RemoteClient.@client!);
+    Assert.That(result, Is.Not.Null);
+    ulong token = result!.RemoteToken;
+    try
+    {
+      Assert.That(IsPinned(token), Is.True);
+    }
+    finally
+    {
+      result.ReleaseReference();
+    }
+    Assert.That(await Eventually(() => !IsPinned(token), TimeSpan.FromSeconds(10)), Is.True,
+      "releasing the returned RemoteObject returns the retained batch result's pin");
+    GC.KeepAlive(result);
+  }
+
+  [Test]
   public async Task Test_ChildProxy_IsNotRetainedByItsParent()
   {
     dynamic parent = RemoteClient.CreateInstance(ListType);
@@ -273,24 +295,29 @@ public class RemotePins : BaseFixture
       // The second client subscribes; both registered clients receive the
       // callback, each with its own reference to the sender and the arguments.
       dynamic component = RemoteClient.CreateInstance("System.ComponentModel.Component");
-      var delivered = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+      var delivered = new TaskCompletionSource<(int Pins, ObjectOrRemoteAddress Argument)>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
       DiverCommunicator.LocalEventCallback handler = (context, args) =>
       {
         int held = ClientPins(standIn.Id);
         foreach (var argument in args)
           if (argument.IsRemoteAddress && !argument.IsNull)
             other.UnpinObject(argument.RemoteAddress);
-        delivered.TrySetResult(held);
+        delivered.TrySetResult((held, args[1]));
       };
       other.EventSubscribe(Token(component), "Disposed", handler);
       try
       {
         component.Dispose();
 
-        Assert.That(await delivered.Task.WaitAsync(TimeSpan.FromSeconds(10)), Is.EqualTo(2),
+        var received = await delivered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.That(received.Pins, Is.EqualTo(2),
           "the second client holds one reference to the sender and one to the event arguments");
         Assert.That(await Eventually(() => ClientPins(standIn.Id) == 0, TimeSpan.FromSeconds(10)), Is.True,
           "its releases return exactly its own references");
+        Assert.That(await Eventually(() => !IsPinned(received.Argument.RemoteAddress, received.Argument.Type),
+          TimeSpan.FromSeconds(10)), Is.True,
+          "registered clients without a handler also return their callback argument references");
       }
       finally
       {

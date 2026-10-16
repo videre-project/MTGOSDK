@@ -63,7 +63,9 @@ public sealed class GamePlayer(dynamic gamePlayer) : DLRWrapper<IGamePlayer>
   /// <summary>
   /// The user's Login ID, captured from the game's IGamePlayer.User.
   /// </summary>
-  public int UserId => User.Id;
+  public int UserId => _isPartial
+    ? ((GamePlayerPartial)gamePlayer).User.Id
+    : (int)Unbind(this).User.Id;
 
   /// <summary>
   /// The catalog ID of the player's avatar card definition.

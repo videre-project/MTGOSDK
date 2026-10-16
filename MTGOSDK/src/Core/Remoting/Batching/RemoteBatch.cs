@@ -46,9 +46,14 @@ public sealed class RemoteBatch : RemoteBatchScope
   /// </summary>
   public RemoteBatchSlot Input(ObjectOrRemoteAddress value)
   {
+    if (value is null) throw new ArgumentNullException(nameof(value));
+
     var slot = new RemoteBatchSlot(this, this,
       new() { Kind = RemoteBatchReferenceKind.Input, Id = _inputs.Count });
-    _inputs.Add(value ?? throw new ArgumentNullException(nameof(value)));
+
+    // Ignore transport timestamps when comparing capture descriptions so clients
+    // can share a hook when they recorded the same inputs at different times.
+    _inputs.Add(value.WithTimestamp(default));
     return slot;
   }
 
@@ -125,6 +130,28 @@ public sealed class RemoteBatch : RemoteBatchScope
       copy._projections.Add(projection.Key, projection.Value);
     configure(copy);
     return copy.CreateRequest();
+  }
+
+  /// <summary>
+  /// Retains one root result in the target process and returns a live remote object.
+  /// Use ordinary Execute for detached values that do not require native access.
+  /// </summary>
+  public RemoteObject? ExecuteReference(RemoteBatchSlot value, RemoteHandle connection) =>
+    ExecuteReferenceAsync(value, connection).GetAwaiter().GetResult();
+
+  /// <summary>
+  /// Retains one root result using the same ownership rules as a remote invocation.
+  /// </summary>
+  public async Task<RemoteObject?> ExecuteReferenceAsync(RemoteBatchSlot value, RemoteHandle connection)
+  {
+    var reference = Reference(value);
+    var request = ToRequest();
+    request.ReferenceOutput = reference;
+    var result = await connection.Communicator.ExecuteDetachedBatchAsync(request).ConfigureAwait(false);
+    var retained = result.Reference
+      ?? throw new InvalidOperationException("Batch did not return the requested remote reference.");
+    return retained.IsNull ? null
+      : connection.GetRemoteObjectFromField(retained);
   }
 
   public RemoteBatchResult Execute(DiverCommunicator connection) =>
