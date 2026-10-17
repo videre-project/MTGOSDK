@@ -1460,6 +1460,15 @@ public sealed class RemoteClient : DLRWrapper
   }
 
   /// <summary>
+  /// Hooks an exact method overload with synchronous native value capture.
+  /// </summary>
+  public static void HookMethod(MethodBase method, HookAction callback,
+    HarmonyPatchPosition position, RemoteHookCapture capture)
+  {
+    @client.Harmony.HookMethod(method, position, callback, capture);
+  }
+
+  /// <summary>
   /// Unhooks a remote object's method using a Harmony callback.
   /// </summary>
   /// <param name="queryPath">The query path to the remote object.</param>

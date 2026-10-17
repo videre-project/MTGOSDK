@@ -136,7 +136,7 @@ public sealed class LogMessageProcessor : IGameStateProcessor, IDisposable
       return;
 
     // History and native notifications can deliver the same message.
-    var key = (message.User?.Name, message.Timestamp, message.Text);
+    var key = (message.User?.Name, message.Timestamp.ToUniversalTime(), message.Text);
     lock (_messageLock)
     {
       if (_disposed || !_seenMessages.Add(key))

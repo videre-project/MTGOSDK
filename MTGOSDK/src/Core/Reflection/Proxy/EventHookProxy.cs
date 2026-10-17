@@ -141,6 +141,16 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
     _hookAction = new((ctx, instance, args) => Dispatch(ctx, (object?)instance, args));
   }
 
+  /// <summary>
+  /// Captures native values at an exact method overload before callback delivery.
+  /// </summary>
+  public EventHookProxy(string typeName, MethodBase method, CapturedEventHook hook,
+    RemoteHookCapture capture, HarmonyPatchPosition position = HarmonyPatchPosition.Postfix)
+    : this(typeName, method.Name, hook, capture, position)
+  {
+    _method = method;
+  }
+
   private void Dispatch(HookContext context, object? instance, dynamic[] args)
   {
     if (context.CaptureError is { } captureError)
@@ -233,7 +243,7 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
           RemoteClient.HookMethod(
             _typeName, _methodName, _hookAction, _position, _capture);
         else
-          RemoteClient.HookMethod(_method, _hookAction, _position);
+          RemoteClient.HookMethod(_method, _hookAction, _position, _capture);
       }
     }
   }
@@ -304,8 +314,11 @@ public class EventHookProxy<I, T> : EventProxyBase<I, T>
   public static implicit operator EventHookProxy<dynamic, T>(
     EventHookProxy<I, T> e) =>
       e._capture != null
-        ? new EventHookProxy<dynamic, T>(e._typeName, e._methodName,
-            e._capturedHook!, e._capture, e._position)
+        ? e._method == null
+          ? new EventHookProxy<dynamic, T>(e._typeName, e._methodName,
+              e._capturedHook!, e._capture, e._position)
+          : new EventHookProxy<dynamic, T>(e._typeName, e._method,
+              e._capturedHook!, e._capture, e._position)
         : e._method == null
         ? new EventHookProxy<dynamic, T>(
             e._typeName, e._methodName, e._hook, e._position)

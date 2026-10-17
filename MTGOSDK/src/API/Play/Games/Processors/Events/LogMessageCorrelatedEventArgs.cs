@@ -7,7 +7,6 @@ using System;
 
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
-using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Events;
@@ -37,14 +36,14 @@ public sealed class LogMessageCorrelatedEventArgs(
   public double TimeDeltaSeconds { get; } = timeDeltaSeconds;
 
   /// <summary>
-  /// The message's server timestamp.
+  /// The timestamp retained by the native chat channel.
   /// </summary>
   public DateTime MessageServerTimestamp => Message.Timestamp;
 
   /// <summary>
-  /// The message's client receive timestamp (from <c>Unbind(message).__timestamp</c>).
+  /// The original client receive time, including for historical messages.
   /// </summary>
-  public DateTime MessageClientTimestamp => Unbind(Message).__timestamp;
+  public DateTime MessageClientTimestamp => Message.Timestamp.ToUniversalTime();
 
   /// <summary>
   /// The snapshot's ActionTimestamp from gameplay-hook capture.
