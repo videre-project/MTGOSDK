@@ -138,6 +138,13 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public DateTime StartTime => @base.StartTime;
 
   /// <summary>
+  /// The game outcomes retained by the match server.
+  /// </summary>
+  [NonSerializable]
+  public IList<GamePlayerResult> Results =>
+    ResultProcessor.ReadGameResults(this);
+
+  /// <summary>
   /// The end time of the game.
   /// </summary>
   [Default(null)]
@@ -373,50 +380,25 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public EventHookWrapper<IList<GamePlayerResult>> OnGameResultsChanged =
     new(GameResultsChanged, new Filter<IList<GamePlayerResult>>((s,_) => s.Id == game.Id));
 
+  /// <summary>
+  /// Event triggered when match-server rankings for this game change.
+  /// </summary>
+  public EventHookWrapper<IList<GamePlayerResult>> OnPlayerRankingsChanged =
+    new(PlayerRankingsChanged, new((sender, _) => sender.Id == game.Id));
+
   //
   // IGame static events
   //
 
   /// <summary>
-  /// Event triggered when the game results for the current game update.
+  /// Reports game-server results, including play/draw information.
   /// </summary>
   public static EventHookProxy<Game, IList<GamePlayerResult>> GameResultsChanged =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game>(),
-      "CompileWinningPlayers",
-      new((instance, args) =>
-      {
-        Game game = new(instance);
-        if (game == null) return null; // Ignore invalid game objects.
-        if (game.IsReplay) return null; // Ignore replay games.
+    ResultProcessor.GameResultsChanged;
 
-        dynamic message = args[1];
-        if (message == null) return null; // Ignore invalid messages.
-
-        // Always compute elapsed game time for the clock field.
-        // GameResultsInfo_t.PlayingTime is unreliable -- it reports
-        // sentinel values or garbage for untimed matches, and for
-        // timed matches it represents time remaining and not elapsed.
-        TimeSpan elapsed = game.CompletedDuration
-          ?? (game.EndTime is DateTime endTime && endTime > game.StartTime
-              ? endTime - game.StartTime
-              : DateTime.Now - game.StartTime);
-
-        List<GamePlayerResult> results = new();
-        foreach(var entry in message.GameResults)
-        {
-          int i = results.Count;
-          GamePlayer player = new(instance.GetPlayerByServerIndex(i));
-          PlayDrawResult playDrawResult = i == message.MovedFirst
-            ? PlayDrawResult.Play
-            : PlayDrawResult.Draw;
-
-          GameResult result = Cast<GameResult>(entry.Results);
-
-          results.Add(new(player, playDrawResult, result, elapsed));
-        }
-
-        return (game, results); // Return a tuple of (Game, IList<GamePlayerResult>)
-      })
-    );
+  /// <summary>
+  /// Reports match-server game outcomes, without play/draw information.
+  /// </summary>
+  public static EventHookProxy<Game, IList<GamePlayerResult>> PlayerRankingsChanged =
+    ResultProcessor.PlayerRankingsChanged;
 }

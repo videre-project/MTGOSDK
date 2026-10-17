@@ -7,6 +7,7 @@ using System.Collections;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Reflection;
 
@@ -139,6 +140,12 @@ public sealed class Match(dynamic match) : Event
   public IList<User> LosingPlayers =>
     Map<IList, User>(Unbind(@base.LosingPlayers));
 
+  /// <summary>
+  /// The final match outcomes and game scores. Empty until MTGO supplies results.
+  /// </summary>
+  [NonSerializable]
+  public IList<PlayerResult> Results => ResultProcessor.ReadMatchResults(this);
+
   //
   // IMatch wrapper events
   //
@@ -158,6 +165,22 @@ public sealed class Match(dynamic match) : Event
   //
   // IMatch static events
   //
+
+  /// <summary>
+  /// Reports captured final outcomes and scores, identified by match ID so they
+  /// remain usable after the native match is removed.
+  /// </summary>
+  public static event Action<int, IList<PlayerResult>> MatchResultsChanged
+  {
+    add => ResultProcessor.MatchResultsChanged += value;
+    remove => ResultProcessor.MatchResultsChanged -= value;
+  }
+
+  /// <summary>
+  /// Installs result captures for challenge, league, and tournament matches.
+  /// </summary>
+  public static void EnsureResultHooksInitialized() =>
+    ResultProcessor.EnsureMatchHooksInitialized();
 
   public static EventHookProxy<Match, MatchState> MatchStateChanged =
     new(
