@@ -21,6 +21,7 @@ using MTGOSDK.Core.Reflection.Proxy;
 using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Remoting.Batching;
 using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
@@ -52,6 +53,16 @@ public sealed class GameProcessor : IDisposable
       return s_scopes.GetValue(game, static owner => new GameProcessor(owner));
     }
   }
+
+  // Opening timestamps are shared by wrappers of the same native game and
+  // retained across scope disposal so a reconnect does not reset the boundary.
+  private static readonly ConcurrentDictionary<int, DateTime> s_startTimes = new();
+
+  internal static bool TryGetStartTime(int gameId, out DateTime timestamp) =>
+    s_startTimes.TryGetValue(gameId, out timestamp);
+
+  internal static void RememberStartTime(int gameId, DateTime timestamp) =>
+    s_startTimes.TryAdd(gameId, timestamp);
 
   internal static void ClearEvents(Game game)
   {
@@ -127,6 +138,7 @@ public sealed class GameProcessor : IDisposable
   private CardActionRegistry? _cardActions;
   private InteractionModeTracker? _interactionState;
   private int? _activeGameId;
+  private bool _startTimeInitialized;
   private volatile bool _disposed;
   private bool _resourcesReleased;
 
@@ -262,6 +274,30 @@ public sealed class GameProcessor : IDisposable
     ArgumentNullException.ThrowIfNull(game);
     Game = game;
     _processors = new List<IGameStateProcessor>();
+  }
+
+  /// <summary>
+  /// Establishes the game's start from an observed opening, a restored value,
+  /// or existing channel history before the host first persists the game.
+  /// Leaves the native fallback in place when no opening can be established.
+  /// </summary>
+  public void Initialize()
+  {
+    lock (_lock)
+    {
+      ObjectDisposedException.ThrowIf(_disposed, this);
+      if (_startTimeInitialized) return;
+      EnsureHookInitialized();
+      if (!Game.IsReplay)
+      {
+        var start = Game.StartTime.ToUniversalTime();
+        var nativeStart = ((DateTime)Unbind(Game).StartTime).ToUniversalTime();
+        if (start != nativeStart)
+          s_startTimes[Game.Id] = start;
+        LogMessageProcessor.InitializeStartTime(Game);
+      }
+      _startTimeInitialized = true;
+    }
   }
 
   private void EnsureActive()
@@ -1016,7 +1052,7 @@ public sealed class GameProcessor : IDisposable
   /// </summary>
   internal static void Activate(int gameId, GameProcessor processor)
   {
-    EnsureHookInitialized();
+    processor.Initialize();
     s_activeProcessors[gameId] = processor;
 
     // Replay any hooks that arrived before the processor was activated.
@@ -1106,12 +1142,49 @@ public sealed class GameProcessor : IDisposable
   public static event Action<Game>? OnNewGame;
 
   /// <summary>
-  /// Ensures the static <c>HandleGamePlayStatus</c> hook is installed
-  /// so that game detection and routing are active.
+  /// Installs game-opening and gameplay hooks for detection and state routing.
   /// </summary>
   public static void EnsureHookInitialized()
   {
+    foreach (var hook in s_gameOpeningHooks) hook.EnsureInitialize();
     s_handleGamePlayStatus.EnsureInitialize();
+  }
+
+  // Capture the existing IDs before native creation. Reading Games later in
+  // the callback would see the newly inserted game and miss its opening.
+  private static readonly EventHookProxy<int, DateTime>[] s_gameOpeningHooks =
+  [
+    CreateOpeningHook("MatchEvent.Match+MatchBaseState"),
+    CreateOpeningHook("LeagueMatchEvent.LeagueMatch+LeagueMatchBaseState"),
+    CreateOpeningHook("TournamentMatchEvent.TournamentMatch+TournamentMatchBaseState")
+  ];
+
+  private static EventHookProxy<int, DateTime> CreateOpeningHook(string stateType) =>
+    new("WotC.MtGO.Client.Model.Play." + stateType,
+      "CreateGameFromFlsMatchGameStartedMessage",
+      new CapturedEventHook((context, _, _) =>
+      {
+        var values = (context.Capture
+          ?? throw new InvalidOperationException("Game opening capture is missing.")).Values;
+        int id = values["gameId"].GetScalar<int>();
+        if (!values["games"].Items.Any(game => game.Members["id"].GetScalar<int>() == id))
+        {
+          s_startTimes.AddOrUpdate(id, context.Timestamp,
+            (_, existing) => existing < context.Timestamp ? existing : context.Timestamp);
+        }
+        return (id, context.Timestamp);
+      }), CreateOpeningCapture(), HarmonyPatchPosition.Prefix);
+
+  private static RemoteHookCapture CreateOpeningCapture()
+  {
+    var batch = new RemoteBatch();
+    var message = batch.Input(ObjectOrRemoteAddress.Null);
+    var match = batch.Input(ObjectOrRemoteAddress.Null);
+    batch.Output("gameId", batch.Read(message, "GameID"));
+    batch.Output("games", batch.Read(match, "Games"),
+      RemoteBatchProjection.Sequence(RemoteBatchProjection.Object(
+        ("id", "Id", RemoteBatchProjection.Value()))));
+    return new RemoteHookCapture { Batch = batch.ToRequest(), Inputs = [0, 1] };
   }
 
   /// <summary>

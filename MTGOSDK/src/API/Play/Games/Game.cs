@@ -135,7 +135,18 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The start time of the game.
   /// </summary>
-  public DateTime StartTime => @base.StartTime;
+  /// <remarks>
+  /// Note that this is set to the match start time by MTGO, which will not
+  /// reflect the true start time for later games in a match. Call
+  /// GameProcessor.Initialize() or subscribe to processor events to establish
+  /// the individual game's opening from observed events or channel history.
+  /// </remarks>
+  public DateTime StartTime
+  {
+    get => _startTime ?? @base.StartTime;
+    set => _startTime = value;
+  }
+  private DateTime? _startTime;
 
   /// <summary>
   /// The game outcomes retained by the match server.
