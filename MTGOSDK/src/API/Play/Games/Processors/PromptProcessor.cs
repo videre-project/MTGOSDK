@@ -310,8 +310,17 @@ public sealed class PromptProcessor : IGameStateProcessor, IDisposable
       && previous.Interaction.Mode == interaction.Mode
       && previous.Interaction.PromptBoxText == interaction.PromptBoxText
       && previous.Interaction.Buttons.SequenceEqual(interaction.Buttons)
-      && previous.Interaction.Players.SequenceEqual(interaction.Players)
-      && previous.Interaction.Cards.SequenceEqual(interaction.Cards))
+      // Brightness and cast markers can change before the prompt or choices do.
+      // Capture them with decision changes instead of publishing display-only states.
+      && previous.Interaction.Players.Count == interaction.Players.Count
+      && previous.Interaction.Players.Zip(interaction.Players).All(pair =>
+        pair.First.PlayerIndex == pair.Second.PlayerIndex
+        && pair.First.IsTargetable == pair.Second.IsTargetable
+        && pair.First.IsTargeted == pair.Second.IsTargeted)
+      && previous.Interaction.Cards.Count == interaction.Cards.Count
+      && previous.Interaction.Cards.All(pair =>
+        interaction.Cards.TryGetValue(pair.Key, out var card)
+        && pair.Value.HasSameInteraction(card)))
       return;
 
     // Server timestamps can repeat across messages. Include the emitted revision.

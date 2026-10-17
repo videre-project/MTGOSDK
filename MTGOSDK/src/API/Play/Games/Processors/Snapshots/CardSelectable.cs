@@ -15,4 +15,15 @@ public sealed record CardSelectable(
   bool IsSelectable,
   bool IsTargetable,
   bool IsTargeted
-);
+)
+{
+  /// <summary>
+  /// Whether MTGO displays the card at normal brightness.
+  /// </summary>
+  public bool IsActive { get; init; } = true;
+
+  /// <summary>
+  /// Whether MTGO marks this card as being cast.
+  /// </summary>
+  public bool IsBeingCast { get; init; }
+}

@@ -80,7 +80,7 @@ public sealed class InteractionModeTracker : IDisposable
           {
             TypeFullName = "Shiny.Play.Duel.ViewModel.DuelSceneCardViewModel",
             InstancePath = "MainViewModel",
-            ArgumentValues = ["IsSelectable", "IsTargetable", "IsTargeted", "HasActions", "", null]
+            ArgumentValues = ["IsSelectable", "IsTargetable", "IsTargeted", "HasActions", "IsActive", "IsBeingCast", "", null]
           },
           new()
           {
@@ -122,7 +122,12 @@ public sealed class InteractionModeTracker : IDisposable
     CreateSceneHook(PromptBoxType, "AdvanceToNextTargetListIfAppropriate", "DuelSceneViewModel"),
     CreateSceneHook(PromptBoxType, "ProcessUpdate", "DuelSceneViewModel"),
     CreateSceneHook(SceneType, "UpdateViews"),
-    CreateSceneHook(SceneType, "UpdateZoneViews")
+    CreateSceneHook(SceneType, "UpdateZoneViews"),
+    // Hovering an ability clears and reapplies activity across the scene.
+    // Keep those notifications within the completed association update.
+    CreateSceneHook(SceneType, "UpdateMouseOverCardStatus"),
+    CreateSceneHook(SceneType, "ShowAssociations"),
+    CreateSceneHook(SceneType, "ClearAssociations")
   ];
 
   private static RemoteCaptureScope CaptureScope(string? ownerPath = null) => new()
@@ -646,6 +651,9 @@ public sealed class InteractionModeTracker : IDisposable
     var card = RemoteBatchProjection.Object(
       ("id",       "GameCard.Id",       scalar),
       ("sourceId", "GameCard.SourceId", scalar),
+      ("zone",     "CardZone",          scalar),
+      ("catalogId", "GameCard.Definition.Id", scalar),
+      ("rulesText", "GameCard.RulesText", scalar),
       ("card",     "GameCard", RemoteBatchProjection.Object(
         ("Id",            "Id",       scalar),
         ("SourceId",      "SourceId", scalar),
@@ -656,6 +664,8 @@ public sealed class InteractionModeTracker : IDisposable
       ("selectable", "IsSelectable", scalar),
       ("targetable", "IsTargetable", scalar),
       ("targeted",   "IsTargeted",   scalar),
+      ("active",     "IsActive",     scalar),
+      ("beingCast",  "IsBeingCast",  scalar),
       ("actions",    "Actions",
         RemoteBatchProjection.Sequence(GameAction.CreateCaptureProjection())));
 

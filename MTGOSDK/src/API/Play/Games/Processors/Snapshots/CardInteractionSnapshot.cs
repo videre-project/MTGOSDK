@@ -43,6 +43,21 @@ public sealed class CardInteractionSnapshot : IEquatable<CardInteractionSnapshot
   public string Name => _captured.Get<RemoteBatchObject>("card").Get<string>("Name");
 
   /// <summary>
+  /// The scene zone containing this card, including pending trigger zones.
+  /// </summary>
+  public CardZone Zone => _captured.Get<CardZone>("zone");
+
+  /// <summary>
+  /// The catalog ID of the card definition, when one is available.
+  /// </summary>
+  public int? CatalogId => _captured.Get<int?>("catalogId");
+
+  /// <summary>
+  /// The displayed rules text for the card or ability at capture time.
+  /// </summary>
+  public string RulesText => MtgoTextNormalizer.NormalizeText(_captured.Get<string>("rulesText"));
+
+  /// <summary>
   /// The card's action and selection eligibility at capture time.
   /// </summary>
   public CardSelectable Selection { get; }
@@ -69,7 +84,11 @@ public sealed class CardInteractionSnapshot : IEquatable<CardInteractionSnapshot
       captured.Get<bool>("hasActions"),
       captured.Get<bool>("selectable"),
       captured.Get<bool>("targetable"),
-      captured.Get<bool>("targeted"));
+      captured.Get<bool>("targeted"))
+    {
+      IsActive = captured.Get<bool>("active"),
+      IsBeingCast = captured.Get<bool>("beingCast")
+    };
     Actions = Array.AsReadOnly(captured.GetSequence<RemoteBatchObject>("actions")
       .Select(action => (CardAction)GameAction.MaterializeCaptured(
         resolve is null ? action : (RemoteBatchObject)resolve(action)!)).ToArray());
@@ -80,6 +99,14 @@ public sealed class CardInteractionSnapshot : IEquatable<CardInteractionSnapshot
 
   internal bool HasSameActions(CardInteractionSnapshot other) =>
     CapturedValueComparer.Instance.Equals(_captured.Members["actions"], other._captured.Members["actions"]);
+
+  // Display flags can change before the prompt or available interaction changes.
+  internal bool HasSameInteraction(CardInteractionSnapshot other) =>
+    LogicalAddress == other.LogicalAddress
+    && _captured.Members.Count == other._captured.Members.Count
+    && _captured.Members.All(pair => pair.Key is "active" or "beingCast"
+      || other._captured.Members.TryGetValue(pair.Key, out var value)
+        && CapturedValueComparer.Instance.Equals(pair.Value, value));
 
   public bool Equals(CardInteractionSnapshot? other) =>
     other is not null && _captured.Equals(other._captured);
