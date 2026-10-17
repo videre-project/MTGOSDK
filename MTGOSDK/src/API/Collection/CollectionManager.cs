@@ -23,7 +23,9 @@ namespace MTGOSDK.API.Collection;
 
 public static class CollectionManager
 {
-  /// <summary>The play formats available in the connected MTGO client.</summary>
+  /// <summary>
+  /// The play formats available in the connected MTGO client.
+  /// </summary>
   public static IEnumerable<PlayFormat> PlayFormats =>
     Map<PlayFormat>(Unbind(s_cardDataManager).PlayFormats);
 
