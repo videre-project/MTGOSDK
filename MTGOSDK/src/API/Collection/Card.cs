@@ -80,7 +80,8 @@ public sealed class Card(dynamic card)
   /// <summary>
   /// The card's printed set.
   /// </summary>
-  public Set Set => field ??= new(Unbind(@base.CardSet));
+  public Set? Set =>
+    field ??= @base.CardSet is object set ? new Set(Unbind(set)) : null;
 
   /// <summary>
   /// A string representing the card's collector info (e.g. "1/254").

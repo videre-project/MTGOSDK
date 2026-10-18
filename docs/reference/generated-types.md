@@ -12,16 +12,19 @@ Keep the enum declaration and SDK additions outside the region:
 ```csharp
 namespace MTGOSDK.API.Play.Games;
 
-public enum GamePhase
+public enum ActionType
 {
-  //#pragma import enum WotC.MtGO.Client.Model.Play.GamePhase begin
+  //#pragma import enum WotC.MtGO.Client.Model.Play.ActionType begin
   Invalid = 0,
-  Untap = 1,
+  ChooseOption = 1,
+  CardAction = 2,
   // Remaining native members appear here in the actual file.
-  //#pragma import enum WotC.MtGO.Client.Model.Play.GamePhase end
+  //#pragma import enum WotC.MtGO.Client.Model.Play.ActionType end
 
-  PreGame1 = 13,
-  PreGame2 = 14
+  /// <summary>
+  /// SDK-only client prompt button without a native game action.
+  /// </summary>
+  PromptControl = int.MaxValue
 }
 ```
 
@@ -65,6 +68,8 @@ parse or alter enum declarations; the C# compiler validates the resulting enum.
 | `FunctionKey` | `WotC.MtGO.Client.Model.Play.Actions.FunctionKeyMessageAction+FunctionKey` | `WotC.MtGO.Client.Model.Play` |
 | `GamePhase` | `WotC.MtGO.Client.Model.Play.GamePhase` | `WotC.MtGO.Client.Model.Reference` |
 | `GameStatus` | `WotC.MtGO.Client.Model.Play.GameState` | `WotC.MtGO.Client.Model.Reference` |
+| `InteractionMode` | `Shiny.Play.Duel.Utility.InteractMode` | `DuelScene` |
+| `MagicProperty` | `WotC.MtGO.Client.Model.MagicProperty` | `Mtgo.Shared.Parser.Attributes` |
 | `MagicColors` | `WotC.MtGO.Client.Model.MagicColors` | `Mtgo.Shared.Parser.Attributes` |
 | `StateElementType` | `WotC.MtGO.Client.Model.Play.StateElementType` | `WotC.MtGO.Client.Model.Play` |
 | `MatchState` | `WotC.MtGO.Client.Model.Play.Enums.MatchStatuses` | `WotC.MtGO.Client.Model.Reference` |
@@ -78,8 +83,20 @@ parse or alter enum declarations; the C# compiler validates the resulting enum.
 | `TradePostFormat` | `WotC.MtGO.Client.Model.Trade.TradePostFormat` | `WotC.MtGO.Client.Model.Data` |
 | `TradeState` | `WotC.MtGO.Client.Model.Trade.Enums.TradeState` | `WotC.MtGO.Client.Model.Reference` |
 
+`ActionType.PromptControl` is an SDK addition outside its import region.
 `GamePhase.PreGame1 = 13` and `PreGame2 = 14` likewise remain explicit SDK
 additions outside the imported native members.
+`MagicProperty.GS_SPLITCARD_ID1` is an SDK alias for the unnamed second
+split-card slot accessed by MTGO, defined as `GS_SPLITCARD_ID0 + 1` outside the
+import region. Spell and planeswalker subtypes use the current native
+`SPELL_TYPEID0` and `PLANESWALKER_TYPEID0` ranges. Legacy spell subtype flags and
+`SUBTYPEID0` are not vendored into the enum.
+Artifact subtypes are read from the native `ARTIFACT_TYPEID0` range and interpreted
+using `MagicArtifactType`; unverified artifact boolean flags are not retained.
+Snapshot parsing retains each native numeric property ID and its native name,
+including properties absent from the SDK enum. It does not remap IDs by name,
+so capture tolerates an incomplete enum. A difference between native and SDK
+declarations alone does not establish that snapshot processing is broken.
 
 The imports also replace previously stale copies: `ActionModifiers`,
 `ActionTargetRequirements`, and `FunctionKey` gain current native members;

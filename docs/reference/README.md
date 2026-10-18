@@ -12,6 +12,7 @@ Per-namespace API documentation for MTGOSDK.
 | [ClickOnce](./clickonce.md) | MTGO deployment, installation, and CI/CD |
 | [Debugging](./debugging.md) | Log files, traces, and troubleshooting |
 | [Generated Types](./generated-types.md) | Import enums from MTGO at build time |
+| [Game State Capture](./game-state-capture.md) | Capture resolved card state and correlated interactions |
 
 ## MTGOSDK.Core
 

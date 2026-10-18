@@ -3,8 +3,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
-namespace MTGOSDK.API.Play.Games.Processors.EventArgs;
+
+namespace MTGOSDK.API.Play.Games.Processors.Events;
 
 /// <summary>
 /// Base class for all game processor event arguments. Carries the game state
@@ -14,9 +16,10 @@ namespace MTGOSDK.API.Play.Games.Processors.EventArgs;
 public abstract class GameEventArgs
 {
   /// <summary>
-  /// The game state update nonce for this event, derived from the snapshot's
-  /// interaction timestamp, prompted player, and prompt text.
-  /// Set automatically when the event is dispatched through the centralized bus.
+  /// The identity of this update, assigned by the centralized event bus.
+  /// Correlation events use the snapshot's prompt nonce. Combined state updates
+  /// also include captured local interaction values; their originating server
+  /// nonce remains available through <see cref="Snapshot"/>.
   /// </summary>
   public int Nonce { get; internal set; }
 

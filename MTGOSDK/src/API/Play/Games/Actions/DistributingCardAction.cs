@@ -3,14 +3,15 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Reflection;
+
 using WotC.MtGO.Client.Model.Play;
 
 
 namespace MTGOSDK.API.Play.Games;
 
 public class DistributingCardAction(dynamic cardAction)
-    // We override the base instance with the IDistributingCardAction interface.
-    : CardAction(null)
+    : CardAction(new DLRWrapper<IDistributingCardAction>(cardAction))
 {
   /// <summary>
   /// Stores an internal reference to the IDistributingCardAction object.

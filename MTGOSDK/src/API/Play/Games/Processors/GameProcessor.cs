@@ -6,17 +6,24 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-using MTGOSDK.API.Collection;
-using MTGOSDK.API.Play.Games;
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Intermediate;
 using MTGOSDK.API.Play.Games.Processors.Partials;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Proxy;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
@@ -26,30 +33,91 @@ namespace MTGOSDK.API.Play.Games.Processors;
 /// Manages per-game state: hook queuing/draining, snapshot construction,
 /// and dispatching to registered <see cref="IGameStateProcessor"/> components.
 /// </summary>
-public sealed class GameProcessor
-{  
+public sealed class GameProcessor : IDisposable
+{
+  private static readonly object s_scopeLock = new();
+  private static readonly ConditionalWeakTable<Game, GameProcessor> s_scopes = new();
+
+  /// <summary>
+  /// Gets the processing scope for this Game wrapper. Creating a scope does
+  /// not activate snapshot hooks; registration activates them when needed.
+  /// </summary>
+  public static GameProcessor ForGame(Game game)
+  {
+    ArgumentNullException.ThrowIfNull(game);
+    lock (s_scopeLock)
+    {
+      if (s_scopes.TryGetValue(game, out var scope) && !scope._disposed)
+        return scope;
+      s_scopes.Remove(game);
+      return s_scopes.GetValue(game, static owner => new GameProcessor(owner));
+    }
+  }
+
+  // Opening timestamps are shared by wrappers of the same native game and
+  // retained across scope disposal so a reconnect does not reset the boundary.
+  private static readonly ConcurrentDictionary<int, DateTime> s_startTimes = new();
+
+  internal static bool TryGetStartTime(int gameId, out DateTime timestamp) =>
+    s_startTimes.TryGetValue(gameId, out timestamp);
+
+  internal static void RememberStartTime(int gameId, DateTime timestamp) =>
+    s_startTimes.TryAdd(gameId, timestamp);
+
+  internal static void ClearEvents(Game game)
+  {
+    GameProcessor? processor;
+    lock (s_scopeLock)
+      s_scopes.TryGetValue(game, out processor);
+    processor?.Dispose();
+
+    if (s_activeProcessors.IsEmpty) return;
+    int gameId = processor?._activeGameId ?? game.Id;
+    if (s_activeProcessors.TryGetValue(gameId, out var active))
+      active.Dispose();
+  }
+
+  internal static ProcessorEvent<ZoneChangeEventArgs> ZoneChanged(Game game) =>
+    new(game, typeof(ZoneChangeProcessor), () => new ZoneChangeProcessor());
+
+  internal static ProcessorEvent<CardChangedEventArgs> CardChanged(Game game) =>
+    new(game, typeof(PropertyChangeProcessor), () => new PropertyChangeProcessor());
+
+  internal static ProcessorEvent<PlayerChangedEventArgs> PlayerChanged(Game game) =>
+    new(game, typeof(PropertyChangeProcessor), () => new PropertyChangeProcessor());
+
+  internal static ProcessorEvent<ActionFinalizedEventArgs> ActionFinalized(Game game) =>
+    new(game, typeof(ActionProcessor), () => new ActionProcessor());
+
+  internal static ProcessorEvent<PromptChangedEventArgs> PromptChanged(Game game) =>
+    new(game, typeof(PromptProcessor), () => new PromptProcessor());
+
+  internal static ProcessorEvent<GameStateChangedEventArgs> StateChanged(Game game) =>
+    new(game, typeof(PromptProcessor), () => new PromptProcessor());
+
+  internal static ProcessorEvent<LogMessageCorrelatedEventArgs> LogMessage(Game game) =>
+    new(game, typeof(LogMessageProcessor), () => new LogMessageProcessor());
+
+  internal static ProcessorEvent<DamageAssignmentEventArgs> DamageAssignment(Game game) =>
+    new(game, typeof(DamageAssignmentProcessor), () => new DamageAssignmentProcessor());
+
+  internal static ProcessorEvent<RevealedCardsEventArgs> RevealedCards(Game game) =>
+    new(game, typeof(RevealedZoneProcessor), () => new RevealedZoneProcessor());
+
   private sealed class PendingHook(
     dynamic instance,
-    dynamic message,
     uint timestamp,
-    DateTime actionTimestamp)
+    DateTime actionTimestamp,
+    RemoteBatchResult capture,
+    RemoteCaptureSequence? sequence)
   {
+    public RemoteCaptureSequence? Sequence { get; } = sequence;
     public dynamic Instance { get; } = instance;
-    public dynamic Message { get; } = message;
+    public RemoteBatchResult Capture { get; } = capture;
     public uint Timestamp { get; } = timestamp;
     public DateTime ActionTimestamp { get; } = actionTimestamp;
     public DateTime EnqueuedAtUtc { get; } = DateTime.UtcNow;
   }
-
-  /// <summary>
-  /// Names of MagicProperty values to EXCLUDE from the snapshot hash.
-  /// Passed to the remote helper so it can skip noisy UI/engine properties
-  /// while hashing all other properties automatically.
-  /// </summary>
-  private static readonly string s_hashExcludedPropertyNames =
-    PropertyContainer.HashExcludedProperties
-      .Select(p => p.ToString())
-      .Aggregate((a, b) => a + "|" + b);
 
   /// <summary>
   /// Small holdback window that allows near-simultaneous out-of-order hooks
@@ -65,38 +133,14 @@ public sealed class GameProcessor
   private readonly List<IGameStateProcessor> _processors;
 
   private readonly object _lock = new();
-
-  //
-  // Revealed-zone tracking
-  //
-  // MTGO sends revealed cards via a separate HandleRevealedCard message that
-  // bypasses the ThingElements snapshot pipeline. We hook it and buffer the
-  // (playerNum, CTN) pairs, then merge them into _activeReveals on each
-  // ProcessGameplayStatus tick. Departure is detected by checking whether
-  // any active card's CTN is still present in the Revealed zone via
-  // ThingElements (same-ThingId zone changes appear in context.Current.Cards).
-  //
-
-  internal sealed record RevealedCardItem(int PlayerNum, int CTN, string Name);
-
-  private readonly ConcurrentQueue<RevealedCardItem> _pendingReveals = new();
-  private List<RevealedCardItem> _activeReveals = new();
-
-  /// <summary>
-  /// Consecutive ticks with no new reveals since the last populated batch.
-  /// When this reaches <see cref="RevealDepartureThreshold"/> the active
-  /// reveal list is considered stale and is cleared.
-  /// </summary>
-  private int _noRevealTicks = 0;
-
-  /// <summary>
-  /// Number of consecutive ticks with no new <c>HandleRevealedCard</c>
-  /// callbacks before <see cref="_activeReveals"/> is evicted.
-  /// MTGO typically sends zero or one intermediate <c>HandleGamePlayStatus</c>
-  /// during an active reveal, so a threshold of 3 provides enough slack for
-  /// the asynchronous callback ordering without causing noticeable display lag.
-  /// </summary>
-  private const int RevealDepartureThreshold = 3;
+  private readonly List<Action> _eventCleanup = new();
+  private GameReferenceResolver? _references;
+  private CardActionRegistry? _cardActions;
+  private InteractionModeTracker? _interactionState;
+  private int? _activeGameId;
+  private bool _startTimeInitialized;
+  private volatile bool _disposed;
+  private bool _resourcesReleased;
 
   //
   // Centralized event bus
@@ -109,12 +153,11 @@ public sealed class GameProcessor
   //
 
   private Dictionary<int, GameCard> _previous = new();
-  private Dictionary<int, GameCard> _previousHiddenCards = new();
+  private GameStateSnapshot? _lastSnapshot;
   private readonly Dictionary<int, int> _previousHashes = new();
   private Dictionary<int, int> _previousIneligibleHashes = new();
-  private readonly Dictionary<int, GameCard> _HiddenCards = new();
+  private readonly Dictionary<int, GameCard> _hiddenCards = new();
   private readonly HashSet<int> _subCardIds = new();
-  private readonly Dictionary<int, dynamic?> _definitionCache = new();
   private Dictionary<int, GamePlayer> _previousPlayers = new();
 
   //
@@ -135,38 +178,172 @@ public sealed class GameProcessor
   private bool _forceImmediateDrain;
 
   /// <summary>
-  /// Barriers inserted by <see cref="WaitForPendingDrain"/>. Signaled after
-  /// the drain loop finishes processing all currently-pending hooks.
+  /// Waiters completed when the queue empties, processing fails, or the scope ends.
   /// </summary>
-  private readonly List<ManualResetEventSlim> _drainBarriers = new();
+  private readonly List<TaskCompletionSource<bool>> _drainWaiters = new();
 
   /// <summary>
-  /// Wakes the drain loop from its holdback sleep so it processes barriers
-  /// without waiting the full reorder window.
+  /// Wakes the drain loop when a caller waits for pending processing.
   /// </summary>
   private readonly SemaphoreSlim _drainWakeup = new(0, 1);
 
   private uint _lastProcessedTimestamp;
   private int _lastProcessedNonce;
 
-  public bool IsInitialized { get; set; } = false;
+  /// <summary>
+  /// Whether subscriptions are ready for snapshot delivery.
+  /// </summary>
+  public bool IsInitialized { get; private set; }
 
   /// <summary>
   /// The game instance being processed.
   /// </summary>
   public Game Game { get; }
 
-  public GameProcessor(Game game)
+  /// <summary>
+  /// Live reference scope shared by this game's snapshots and processors.
+  /// </summary>
+  public GameReferenceResolver References
   {
+    get
+    {
+      lock (_lock)
+      {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _references ??= GameReferenceResolver.ForGame((object)Unbind(Unbind(Game)));
+      }
+    }
+  }
+
+  /// <summary>
+  /// Lazily starts correlated state observation for captured card actions.
+  /// </summary>
+  public CardActionRegistry CardActions
+  {
+    get
+    {
+      lock (_lock)
+      {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_cardActions is null)
+        {
+          bool activate = _activeGameId is null;
+          var registry = new CardActionRegistry();
+          registry.Initialize(Game);
+          registry.Changed += NotifyCardActionsChanged;
+          _cardActions = registry;
+          if (activate) Ready();
+        }
+        return _cardActions;
+      }
+    }
+  }
+
+  /// <summary>
+  /// Lazily attaches the duel scene's interaction tracker without starting snapshots.
+  /// </summary>
+  public InteractionModeTracker InteractionState
+  {
+    get
+    {
+      lock (_lock)
+      {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_interactionState is null)
+        {
+          var tracker = new InteractionModeTracker();
+          tracker.Initialize(Game);
+          _interactionState = tracker;
+        }
+        else
+        {
+          _interactionState.Initialize(Game);
+        }
+        return _interactionState;
+      }
+    }
+  }
+
+  static GameProcessor()
+  {
+    RemoteClient.Disposed += ClearScopes;
+  }
+
+  private GameProcessor(Game game)
+  {
+    ArgumentNullException.ThrowIfNull(game);
     Game = game;
     _processors = new List<IGameStateProcessor>();
   }
 
-  public GameProcessor(Game game, params IGameStateProcessor[] processors)
+  /// <summary>
+  /// Establishes the game's start from an observed opening, a restored value,
+  /// or existing channel history before the host first persists the game.
+  /// Leaves the native fallback in place when no opening can be established.
+  /// </summary>
+  public void Initialize()
   {
-    Game = game;
-    _processors = new List<IGameStateProcessor>(processors);
-    foreach (var p in _processors) p.Initialize(Game);
+    lock (_lock)
+    {
+      ObjectDisposedException.ThrowIf(_disposed, this);
+      if (_startTimeInitialized) return;
+      EnsureHookInitialized();
+      if (!Game.IsReplay)
+      {
+        var start = Game.StartTime.ToUniversalTime();
+        var nativeStart = ((DateTime)Unbind(Game).StartTime).ToUniversalTime();
+        if (start != nativeStart)
+          s_startTimes[Game.Id] = start;
+        LogMessageProcessor.InitializeStartTime(Game);
+      }
+      _startTimeInitialized = true;
+    }
+  }
+
+  private void EnsureActive()
+  {
+    ObjectDisposedException.ThrowIf(_disposed, this);
+    if (_activeGameId is not null) return;
+    int gameId = Game.Id;
+    Activate(gameId, this);
+    _activeGameId = gameId;
+  }
+
+  /// <summary>
+  /// Allows queued snapshots to drain after event subscriptions are complete.
+  /// </summary>
+  public void Ready()
+  {
+    lock (_lock)
+    {
+      ObjectDisposedException.ThrowIf(_disposed, this);
+      IsInitialized = true;
+    }
+  }
+
+  /// <summary>
+  /// Waits for queued snapshots and their prompt correlations within one timeout.
+  /// </summary>
+  public bool WaitForPendingProcessing(TimeSpan timeout)
+  {
+    var elapsed = Stopwatch.StartNew();
+    bool drainCompleted = WaitForPendingDrain(timeout);
+    if (!drainCompleted) return false;
+    var prompt = GetProcessor<PromptProcessor>();
+    TimeSpan remaining = timeout == Timeout.InfiniteTimeSpan
+      ? timeout : timeout - elapsed.Elapsed;
+    bool correlated = prompt?.PromptCorrelated.Wait(remaining < TimeSpan.Zero
+      && timeout != Timeout.InfiniteTimeSpan ? TimeSpan.Zero : remaining) ?? true;
+    return correlated;
+  }
+
+  internal void RegisterEventCleanup(Action cleanup)
+  {
+    lock (_lock)
+    {
+      ObjectDisposedException.ThrowIf(_disposed, this);
+      _eventCleanup.Add(cleanup);
+    }
   }
 
   /// <summary>
@@ -174,11 +351,40 @@ public sealed class GameProcessor
   /// </summary>
   public void Register(IGameStateProcessor processor)
   {
+    ArgumentNullException.ThrowIfNull(processor);
     lock (_lock)
     {
+      EnsureActive();
+
+      EnsureDependencies(processor.GetType());
+
+      try
+      {
+        processor.Initialize(Game);
+      }
+      catch
+      {
+        try
+        {
+          (processor as IDisposable)?.Dispose();
+        }
+        catch (Exception disposeError)
+        {
+          Log.Error(disposeError, "Failed to dispose an uninitialized processor.");
+        }
+        throw;
+      }
+
       _processors.Add(processor);
-      processor.Initialize(Game);
     }
+  }
+
+  private void EnsureDependencies(Type processorType)
+  {
+    // Combat state must be populated before property comparisons, regardless
+    // of whether the card or player event registers the processor first.
+    if (processorType == typeof(PropertyChangeProcessor))
+      EnsureRegistered(typeof(CombatProcessor), () => new CombatProcessor());
   }
 
   /// <summary>
@@ -189,42 +395,47 @@ public sealed class GameProcessor
   {
     lock (_lock)
     {
-      if (_registeredProcessorTypes.Contains(processorType)) return;
-      _registeredProcessorTypes.Add(processorType);
-      var processor = factory();
-      _processors.Add(processor);
-      processor.Initialize(Game);
+      EnsureActive();
+      if (_processors.Any(processor => processor.GetType() == processorType)) return;
+      Register(factory());
     }
   }
 
-  private readonly HashSet<Type> _registeredProcessorTypes = new();
-
   /// <summary>
-  /// Whether any pending hooks remain in the queue.
-  /// </summary>
-  private bool HasPendingHooks => _pendingHooks.Count > 0;
-
-  /// <summary>
-  /// Blocks the calling thread until all currently-pending hooks have been
-  /// processed by the drain loop. If no drain loop is active (no pending
-  /// hooks), returns immediately.
+  /// Waits until queued snapshots have been processed and the drain becomes idle.
   /// </summary>
   /// <param name="timeout">Maximum time to wait.</param>
-  /// <returns><c>true</c> if the drain completed within the timeout.</returns>
+  /// <returns>True on completion; false on timeout, processing failure, or disposal.</returns>
   public bool WaitForPendingDrain(TimeSpan timeout)
   {
-    using var barrier = new ManualResetEventSlim(false);
+    var waiter = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
     lock (_lock)
     {
-      if (!_pendingDrainScheduled)
-        return true; // Nothing pending — drain loop is idle
-
-      _drainBarriers.Add(barrier);
+      if (_disposed) return false;
+      if (!_pendingDrainScheduled) return true;
+      _drainWaiters.Add(waiter);
       _forceImmediateDrain = true;
     }
-    // Wake the drain loop if it's sleeping in the holdback delay
-    try { _drainWakeup.Release(); } catch (SemaphoreFullException) { }
-    return barrier.Wait(timeout);
+
+    try
+    {
+      try
+      {
+        _drainWakeup.Release();
+      }
+      catch (SemaphoreFullException)
+      {
+      }
+      return waiter.Task.Wait(timeout) && waiter.Task.Result;
+    }
+    finally
+    {
+      lock (_lock)
+      {
+        _drainWaiters.Remove(waiter);
+        _forceImmediateDrain = _drainWaiters.Count > 0;
+      }
+    }
   }
 
   //
@@ -234,8 +445,11 @@ public sealed class GameProcessor
   /// <summary>
   /// Retrieves a registered processor of a specific type.
   /// </summary>
-  public T? GetProcessor<T>() where T : class, IGameStateProcessor =>
-    _processors.OfType<T>().FirstOrDefault();
+  public T? GetProcessor<T>() where T : class, IGameStateProcessor
+  {
+    lock (_lock)
+      return _processors.OfType<T>().FirstOrDefault();
+  }
 
   /// <summary>
   /// Subscribes to events of type <typeparamref name="T"/> emitted by any
@@ -245,8 +459,10 @@ public sealed class GameProcessor
   /// </summary>
   public void On<T>(Action<T> handler) where T : GameEventArgs
   {
+    ArgumentNullException.ThrowIfNull(handler);
     lock (_lock)
     {
+      ObjectDisposedException.ThrowIf(_disposed, this);
       if (!_subscriptions.TryGetValue(typeof(T), out var list))
       {
         list = new List<Delegate>();
@@ -260,22 +476,25 @@ public sealed class GameProcessor
   /// Dispatches event args to all subscribers of type
   /// <typeparamref name="T"/>. Called by <see cref="GameContext.Emit{T}"/>.
   /// </summary>
-  internal void Dispatch<T>(T args, GameContext context) where T : GameEventArgs
+  internal void Dispatch<T>(T args, GameContext context, int? nonce = null) where T : GameEventArgs
   {
     List<Delegate> snapshot;
     lock (_lock)
     {
-      if (!_subscriptions.TryGetValue(typeof(T), out var list)) return;
+      if (_disposed || !_subscriptions.TryGetValue(typeof(T), out var list)) return;
       snapshot = new List<Delegate>(list);
     }
 
-    // Stamp context and nonce from the active snapshot.
+    // Correlation events use the server nonce; combined state events supply their own.
     args.Context = context;
-    args.Nonce = context.Current.Nonce;
+    args.Nonce = nonce ?? context.Current.Nonce;
 
     foreach (var handler in snapshot)
     {
-      try { ((Action<T>)handler)(args); }
+      try
+      {
+        ((Action<T>)handler)(args);
+      }
       catch (Exception ex)
       {
         Log.Error(ex, "Event handler failed for {0}.", typeof(T).Name);
@@ -286,24 +505,24 @@ public sealed class GameProcessor
   /// <summary>
   /// Adds a gameplay-status hook to the pending queue.
   /// Equal timestamps preserve arrival order.
-  /// Hooks are buffered even before processors register; the drain loop
-  /// waits for at least one <see cref="IGameStateProcessor"/> so that the
-  /// first snapshot is never silently dropped.
+  /// Hooks remain queued until <see cref="Ready"/> allows processing.
   /// </summary>
   public void EnqueuePendingHook(
     dynamic instance,
-    dynamic message,
-    (uint Game, DateTime Action) ts)
+    (uint Game, DateTime Action) ts,
+    RemoteBatchResult capture,
+    RemoteCaptureSequence? sequence = null)
   {
     lock (_lock)
     {
+      if (_disposed) return;
       if (!_pendingHooks.TryGetValue(ts.Game, out var queue))
       {
         queue = new Queue<PendingHook>();
         _pendingHooks[ts.Game] = queue;
       }
 
-      queue.Enqueue(new PendingHook(instance, message, ts.Game, ts.Action));
+      queue.Enqueue(new PendingHook(instance, ts.Game, ts.Action, capture, sequence));
 
       if (!_pendingDrainScheduled)
       {
@@ -323,14 +542,11 @@ public sealed class GameProcessor
     {
       while (true)
       {
-        // Wait for the holdback window OR a forced wakeup from
-        // WaitForPendingDrain (whichever comes first).
-        var wakeup = _drainWakeup.WaitAsync(s_hookReorderWindow);
-        await wakeup;
+        await _drainWakeup.WaitAsync(s_hookReorderWindow);
 
         // Dequeue under lock, process outside it.
         // Only one drain task runs at a time (_pendingDrainScheduled),
-        // so snapshot state is never accessed concurrently.
+        // so gameplay messages do not build snapshots concurrently.
         int processedThisCycle = 0;
         while (true)
         {
@@ -346,33 +562,24 @@ public sealed class GameProcessor
 
           ProcessGameplayStatus(
             pending.Instance,
-            pending.Message,
             pending.Timestamp,
             pending.ActionTimestamp,
+            pending.Capture,
+            pending.Sequence,
             processors);
 
-          // Yield between snapshots to prevent IPC request floods from
-          // monopolizing the Diver.  Each ProcessGameplayStatus call
-          // generates multiple IPC requests; processing them back-to-back
-          // (especially the initial burst after ReadyProcessor) starves
-          // the host process's UI thread of CPU time.
+          // Yield between bursts when several captures are queued.
           if (++processedThisCycle % 3 == 0)
             await Task.Delay(50);
         }
 
-        // Signal any drain barriers — all currently-pending hooks have
-        // been processed and their events have fired.
         lock (_lock)
         {
-          if (_drainBarriers.Count > 0)
-          {
-            foreach (var barrier in _drainBarriers) barrier.Set();
-            _drainBarriers.Clear();
-            _forceImmediateDrain = false;
-          }
-
           if (_pendingHooks.Count == 0)
           {
+            foreach (var waiter in _drainWaiters) waiter.TrySetResult(true);
+            _drainWaiters.Clear();
+            _forceImmediateDrain = false;
             _pendingDrainScheduled = false;
             return;
           }
@@ -383,13 +590,22 @@ public sealed class GameProcessor
     {
       lock (_lock)
       {
-        // Signal waiting barriers so they don't hang
-        foreach (var barrier in _drainBarriers) barrier.Set();
-        _drainBarriers.Clear();
+        foreach (var waiter in _drainWaiters) waiter.TrySetResult(false);
+        _drainWaiters.Clear();
         _forceImmediateDrain = false;
         _pendingDrainScheduled = false;
       }
       Log.Error(ex, "Hook drain loop failed.");
+    }
+    finally
+    {
+      bool release;
+      lock (_lock)
+      {
+        release = _disposed;
+        if (release) _pendingDrainScheduled = false;
+      }
+      if (release) ReleaseResources();
     }
   }
 
@@ -400,17 +616,14 @@ public sealed class GameProcessor
   private bool TryDequeueReadyHook(out PendingHook pending)
   {
     pending = null!;
-    if (_pendingHooks.Count == 0 || !IsInitialized)
+    if (_disposed || _pendingHooks.Count == 0 || !IsInitialized)
       return false;
 
     var first = _pendingHooks.First();
     var queue = first.Value;
     var next = queue.Peek();
 
-    // Adaptive holdback: if only one timestamp bucket exists the hooks
-    // arrived in order and no reordering is needed — process immediately.
-    // When multiple buckets exist, apply the full holdback window so
-    // out-of-order hooks have time to accumulate before we drain.
+    // Hold back when several timestamps are queued, unless a caller is waiting.
     if (!_forceImmediateDrain && _pendingHooks.Count > 1 &&
         DateTime.UtcNow - next.EnqueuedAtUtc < s_hookReorderWindow)
       return false;
@@ -423,194 +636,140 @@ public sealed class GameProcessor
   }
 
   /// <summary>
-  /// Builds a snapshot from a gameplay-status message, then dispatches
-  /// it to all registered analyzers.
+  /// Builds a snapshot from captured gameplay values, then dispatches
+  /// it to the registered state processors.
   /// Called from the single drain task — no concurrent access to snapshot state.
   /// </summary>
   private void ProcessGameplayStatus(
     dynamic instance,
-    dynamic message,
     uint ts,
     DateTime actionTs,
+    RemoteBatchResult capture,
+    RemoteCaptureSequence? sequence,
     List<IGameStateProcessor> processors)
   {
-    // Compute remote hashes (batches one IPC call instead of N)
-    // Returns flat [thingId₀, hash₀, thingId₁, hash₁, …]
-    int[] rawHashes = (int[])RemoteClient.InvokeMethod(
-      "MTGOSDK.Core.Remoting.Interop.CollectionHelpers",
-      "ComputeThingSnapshotHashes",
-      null,
-      (object)message.ThingElements,
-      s_hashExcludedPropertyNames);
+    var capturedPrompt = capture.Values["prompt"];
+    var identities = ((object?[])RemoteBatchObject.FromValue(capture.Values["players"])!)
+      .Cast<RemoteBatchObject>().ToArray();
+    var stateElements = ((object?[])RemoteBatchObject.FromValue(capture.Values["stateElements"])!)
+      .Cast<RemoteBatchObject>();
 
-    // Build current snapshot
+    // Hash captured properties locally and materialize only changed card and player rows.
     var current = new Dictionary<int, GameCard>();
     var currentHashes = new Dictionary<int, int>();
     var currentIneligibleHashes = new Dictionary<int, int>();
     var playerProperties = new Dictionary<int, PropertyContainer>();
-    int hashHits = 0;
-    int ineligibleSkips = 0;
 
     var indicesToMaterialize = new List<int>();
     var playerIndicesToMaterialize = new List<int>();
+    int revealedCollection = capture.Values["revealedZoneCollectionId"].GetScalar<int>();
+
+    foreach (var row in capture.Rows.Where(row => row.CollectionOperationId != revealedCollection))
     {
-      int dataPairs = rawHashes.Length / 2;
+      GameCardCapture.CheckRow(row);
 
-      for (int i = 0; i < dataPairs; i++)
+      int i = row.SourceIndex;
+      int thingId = row.Values["id"].GetScalar<int>();
+      if (thingId < 0) continue;
+      int currHash = PropertyContainer.GetSnapshotHash(row.Values["properties"]);
+
+      currentHashes[thingId] = currHash;
+
+      if (IsPlayerThing(thingId))
       {
-        int thingId  = rawHashes[i * 2];
-        int currHash = rawHashes[i * 2 + 1];
-
-        if (thingId < 0) continue;
-
-        currentHashes[thingId] = currHash;
-
-        if (IsPlayerThing(thingId))
-        {
-          currentIneligibleHashes[thingId] = currHash;
-          playerIndicesToMaterialize.Add(i);
-          ineligibleSkips++;
-          continue;
-        }
-
-        if (_previousIneligibleHashes.TryGetValue(thingId, out int prevIneligibleHash)
-            && prevIneligibleHash == currHash
-            && !_HiddenCards.ContainsKey(thingId))
-        {
-          currentIneligibleHashes[thingId] = currHash;
-          ineligibleSkips++;
-          continue;
-        }
-
-        if (_previousHashes.TryGetValue(thingId, out int prevHash)
-            && prevHash == currHash
-            && _previous.TryGetValue(thingId, out var cachedCard))
-        {
-          current[thingId] = cachedCard;
-          hashHits++;
-          continue;
-        }
-
-        indicesToMaterialize.Add(i);
+        currentIneligibleHashes[thingId] = currHash;
+        playerIndicesToMaterialize.Add(i);
+        continue;
       }
+
+      if (_previousIneligibleHashes.TryGetValue(thingId, out int prevIneligibleHash)
+          && prevIneligibleHash == currHash
+          && !_hiddenCards.ContainsKey(thingId))
+      {
+        currentIneligibleHashes[thingId] = currHash;
+        continue;
+      }
+
+      if (_previousHashes.TryGetValue(thingId, out int prevHash)
+          && prevHash == currHash
+          && _previous.TryGetValue(thingId, out var cachedCard))
+      {
+        current[thingId] = CopyCardForProcessing(cachedCard);
+        continue;
+      }
+
+      indicesToMaterialize.Add(i);
     }
 
-    if (playerIndicesToMaterialize.Count > 0)
-    {
-      dynamic thingElements = message.ThingElements;
-      foreach (int idx in playerIndicesToMaterialize)
-      {
-        dynamic thing = thingElements[idx];
-        PropertyContainer properties = new(thing.Properties);
-        int playerIndex = properties[MagicProperty.THINGNUMBER] ?? -1;
-        if (playerIndex >= 0 && IsPlayerThing(playerIndex))
-          playerProperties[playerIndex] = properties;
-      }
-    }
+    // Select detached rows from the native postfix before updating SDK caches.
+    // Decoding performs no IPC and cannot mutate native cards or zones.
+    var captured = GameCardCapture.Decode(capture,
+      indicesToMaterialize.ToArray(), playerIndicesToMaterialize.ToArray());
+    var revealedCards = GameCardCapture.DecodeRevealed(capture)
+      .Select(snapshot => References.CreateCard(snapshot.Properties, snapshot.Values))
+      .ToDictionary(card => ((GameCardPartial)Unbind(card)).LogicalAddress
+        ?? throw new InvalidOperationException("Revealed card capture has no logical address."));
 
-    if (indicesToMaterialize.Count > 0)
+    // Hidden cards can also receive target enrichment. Copy their local state
+    // after capture succeeds so previous snapshots retain their own adapters.
+    foreach (var (id, card) in _hiddenCards.ToArray())
+      _hiddenCards[id] = CopyCardForProcessing(card);
+
+    foreach (var snapshot in captured)
     {
-      dynamic thingElements = message.ThingElements;
-      foreach (int idx in indicesToMaterialize)
+      var props = snapshot.Properties;
+      int tid = props[MagicProperty.THINGNUMBER] ?? -1;
+      if (IsPlayerThing(tid))
       {
-        dynamic thing = thingElements[idx];
-        PropertyContainer props = new(thing.Properties);
-        int tid = props[MagicProperty.THINGNUMBER] ?? -1;
-        if (tid < 0 || IsPlayerThing(tid))
+        playerProperties[tid] = props;
+        continue;
+      }
+      if (tid < 0) continue;
+
+      var card = References.CreateCard(props, snapshot.Values);
+
+      // Keep unused faces in the hidden pool for cast correlation. Zone IDs
+      // identify instances, so compare resolved names rather than enum ordinals.
+      string? typeCode = (string?)props[MagicProperty.DIGITAL_OBJECT_TYPE_CODE_STRING];
+      if (typeCode == "SUBC")
+      {
+        _subCardIds.Add(tid);
+        var zoneName = card.Zone?.Name;
+        if (zoneName != "Stack" && zoneName != "Battlefield")
         {
-          if (tid >= 0 && currentHashes.TryGetValue(tid, out int ineligibleHash))
+          if (currentHashes.TryGetValue(tid, out int ineligibleHash))
             currentIneligibleHashes[tid] = ineligibleHash;
+          _hiddenCards[tid] = card;
           continue;
         }
-
-        var card = GameCard.FromProperties(props, instance, thing.FromZone);
-
-        // Filter out sub-cards (Adventures, Split faces, etc.) unless they're in play.
-        // Store them in HiddenCards so ZoneChangeTracker can correlate when cast.
-        // Use the resolved zone name rather than the raw zone ID (which is an MTGO
-        // instance ID and does not correspond to CardZone enum ordinals).
-        // Track SUBC status per ThingID. After a library shuffle, MTGO can
-        // reassign a ThingID that was previously SUBC to a regular card, so
-        // we must also remove stale entries.
-        string? typeCode = (string?)props[MagicProperty.DIGITAL_OBJECT_TYPE_CODE_STRING];
-        if (typeCode == "SUBC")
-        {
-          _subCardIds.Add(tid);
-          var zoneName = card.Zone?.Name;
-          if (zoneName != "Stack" && zoneName != "Battlefield")
-          {
-            if (currentHashes.TryGetValue(tid, out int ineligibleHash))
-              currentIneligibleHashes[tid] = ineligibleHash;
-            _HiddenCards[tid] = card;
-            continue;
-          }
-        }
-        else
-        {
-          // ThingID was previously SUBC but has been reassigned after a
-          // shuffle — remove stale entry so it's no longer filtered.
-          _subCardIds.Remove(tid);
-        }
-
-        // Identify "Library ghosts": revealed cards that either have no
-        // previous state, or whose ThingID was reassigned to a different
-        // physical card after a shuffle (detected by CTN change). Cards
-        // that moved to Library from another zone with the same CTN (e.g.
-        // tuck effects) are NOT ghosts — they need normal zone tracking.
-        bool isLibraryGhost = card.Zone?.Name == "Library" &&
-                              !_HiddenCards.ContainsKey(tid) &&
-                              (!_previous.ContainsKey(tid) ||
-                               (_previous[tid].Zone?.Name != "Library" &&
-                                _previous[tid].CTN != card.CTN));
-
-        if (IsTransientHiddenCard(card) || isLibraryGhost)
-        {
-          _HiddenCards[card.Id] = card;
-          continue;
-        }
-
-        _HiddenCards.Remove(card.Id);
-        current[tid] = card;
       }
-    }
-
-    // Resolve card definitions for newly materialized (or rematerialized) cards.
-    // CardDefinition is stable per-ThingID regardless of zone, so carry it
-    // forward from the previous partial when available.
-    foreach (var (tid, card) in current)
-    {
-      if (Unbind(card) is not GameCardPartial partial) continue;
-      if (partial.CardDefinition != null) continue; // hash-hit reuse — already set
-
-      // Rematerialized card: inherit definition from previous partial
-      if (_previous.TryGetValue(tid, out var prevCard)
-          && Unbind(prevCard) is GameCardPartial prevPartial)
+      else
       {
-        if (prevPartial.CardDefinition != null)
-        {
-          partial.CardDefinition = prevPartial.CardDefinition;
-          continue;
-        }
+        // A shuffle can reassign a former sub-card's ThingID.
+        _subCardIds.Remove(tid);
       }
 
-      // Newly seen card: resolve via CTN
-      int ctn = partial.Properties[MagicProperty.CARDTEXTURE_NUMBER] is int c ? c : 0;
-      if (ctn <= 0) continue;
+      // Newly exposed library identities belong in the hidden pool. Preserve
+      // normal zone tracking when a known card returns to the library.
+      bool isLibraryGhost = card.Zone?.Name == "Library" &&
+                            !_hiddenCards.ContainsKey(tid) &&
+                            (!_previous.ContainsKey(tid) ||
+                             (_previous[tid].Zone?.Name != "Library" &&
+                              _previous[tid].CTN != card.CTN));
 
-      if (!_definitionCache.TryGetValue(ctn, out var def))
+      if (IsTransientHiddenCard(card) || isLibraryGhost)
       {
-        try { def = Unbind(CollectionManager.GetCardByTextureId(ctn)); }
-        catch { def = null; }
-        _definitionCache[ctn] = def;
+        _hiddenCards[card.Id] = card;
+        continue;
       }
 
-      if (def != null)
-        partial.CardDefinition = def;
+      _hiddenCards.Remove(card.Id);
+      current[tid] = card;
     }
 
     // Prune stale entries from the hidden pool
-    var staleIds = _HiddenCards.Keys.Where(id => !currentHashes.ContainsKey(id)).ToList();
-    foreach (var id in staleIds) _HiddenCards.Remove(id);
+    var staleIds = _hiddenCards.Keys.Where(id => !currentHashes.ContainsKey(id)).ToList();
+    foreach (var id in staleIds) _hiddenCards.Remove(id);
 
     // Parse state elements by type.
     // Seed from previous snapshot so ticks without PlayerStatus (e.g. some
@@ -627,16 +786,18 @@ public sealed class GameProcessor
     string promptText = string.Empty;
     uint interactionTimestamp = 0;
 
+    var promptIdentity = (RemoteBatchObject?)RemoteBatchObject.FromValue(capturedPrompt);
+    bool hasPromptElement = false;
     StateElementType stateType = StateElementType.Invalid;
     var rawDamageAssignments = new List<DamageAssignmentPartial>();
-    foreach (var element in message.OtherStateElements)
+    foreach (var element in stateElements)
     {
-      stateType = Cast<StateElementType>(element.Type);
+      stateType = element.Get<StateElementType>("Type");
       switch (stateType)
       {
         case StateElementType.PlayerStatus:
           Dictionary<int, GamePlayerPartial> parsedPlayers =
-            GamePlayerPartial.ParseFromStatusElement((object) element, (object) instance);
+            GamePlayerPartial.ParseFromStatusElement(element, identities, References);
           foreach (var entry in parsedPlayers)
           {
             if (playerPartials.TryGetValue(entry.Key, out var prior))
@@ -649,41 +810,50 @@ public sealed class GameProcessor
           break;
         case StateElementType.TurnStep:
         case StateElementType.InteractState:
-          turnNumber = element.TurnNumber ?? 0;
-          currentPhase = Cast<GamePhase>(element.CurrentPhase ?? 0);
-          promptedPlayer = element.PromptedPlayer ?? byte.MaxValue;
+          hasPromptElement = true;
+          turnNumber = element.Get<int>("TurnNumber");
+          currentPhase = element.Get<GamePhase>("CurrentPhase");
+          promptedPlayer = element.Get<byte>("PromptedPlayer");
           promptText = MTGOSDK.API.MtgoTextNormalizer.NormalizeText(
-            GamePrompt.RemoveMarkup(element.PromptText ?? string.Empty));
-          interactionTimestamp = element.TimeStamp ?? 0;
+            GamePrompt.RemoveMarkup(element.Get<string?>("PromptText") ?? string.Empty));
+          interactionTimestamp = element.Get<uint>("TimeStamp");
           break;
         case StateElementType.DamageAssignment:
         {
           var distributions = new List<DistributionPartial>();
-          dynamic thingsToDamage = element.ThingsToDamage;
+          var thingsToDamage = element.Get<object?[]?>("ThingsToDamage");
           if (thingsToDamage != null)
           {
-            foreach (dynamic info in thingsToDamage)
+            foreach (RemoteBatchObject info in thingsToDamage)
             {
               distributions.Add(new DistributionPartial(
-                thingId: (int)info.ThingId,
-                amount:  (int)info.Amount,
-                minimum: (int)info.Minimum,
-                maximum: (int)info.Maximum));
+                thingId: info.Get<int>("ThingId"),
+                amount:  info.Get<int>("Amount"),
+                minimum: info.Get<int>("Minimum"),
+                maximum: info.Get<int>("Maximum")));
             }
           }
           rawDamageAssignments.Add(new DamageAssignmentPartial(
-            damagingThingId: (int)element.DamagingThingId,
-            damageToDeal:    (int)element.DamageToDeal,
+            damagingThingId: element.Get<int>("DamagingThingId"),
+            damageToDeal:    element.Get<int>("DamageToDeal"),
             distributions:   distributions));
           break;
         }
       }
     }
 
+    if (!hasPromptElement && promptIdentity != null)
+    {
+      turnNumber = promptIdentity.Get<int>("TurnNumber");
+      currentPhase = promptIdentity.Get<GamePhase>("CurrentPhase");
+      promptedPlayer = promptIdentity.Get<byte>("PromptedPlayer");
+      promptText = MtgoTextNormalizer.NormalizeText(GamePrompt.RemoveMarkup(promptIdentity.Get<string>("Text")));
+      interactionTimestamp = promptIdentity.Get<uint>("Timestamp");
+    }
     GamePlayerPartial.ApplyMessageState(
       playerPartials,
       playerProperties,
-      (int)message.PriorityPlayer);
+      capture.Values["priorityPlayer"].GetScalar<int>());
 
     // Convert GamePlayerPartial to GamePlayer wrappers
     var players = new Dictionary<int, GamePlayer>(playerPartials.Count);
@@ -706,11 +876,12 @@ public sealed class GameProcessor
       PromptedPlayer       = promptedPlayer,
       PromptText           = promptText,
       Cards                = current,
-      HiddenCards          = new Dictionary<int, GameCard>(_HiddenCards),
+      HiddenCards          = new Dictionary<int, GameCard>(_hiddenCards),
+      RevealedCards        = revealedCards,
       Players              = players,
     };
 
-    var previousSnapshot = new GameStateSnapshot
+    var previousSnapshot = _lastSnapshot ?? new GameStateSnapshot
     {
       Timestamp            = _lastProcessedTimestamp,
       ActionTimestamp      = actionTs,
@@ -722,112 +893,64 @@ public sealed class GameProcessor
       PromptedPlayer       = promptedPlayer,
       PromptText           = promptText,
       Cards                = _previous,
-      HiddenCards          = _previousHiddenCards,
+      HiddenCards          = new Dictionary<int, GameCard>(),
+      RevealedCards        = new Dictionary<ulong, GameCard>(),
       Players              = _previousPlayers,
     };
 
-    // Skip duplicate snapshots — MTGO sometimes resends the same game state.
-    // The nonce is deterministic from (InteractionTimestamp, PromptedPlayer,
-    // PromptText), so identical nonces mean identical interaction context.
-    // Hash computation and card materialization are already cheap for
-    // duplicates (all cache hits), but this avoids processor dispatch and
-    // downstream event handler work entirely.
-    int currentNonce = currentSnapshot.Nonce;
-    // Drain newly-revealed cards from the hook buffer and build the active list.
-    var revealedZoneCards = BuildRevealedZoneCards(instance);
-
-    if (currentNonce == _lastProcessedNonce && _lastProcessedTimestamp != 0)
-    {
-      // Card/player properties can still change within the same interaction context
-      // (e.g., IsAttacking going True during DeclareAttackers before the prompt
-      // advances). Run state-tracking processors to capture these intermediate
-      // transitions before updating the diff baseline.
-      var intermediateContext = new GameContext
-      {
-        Current          = currentSnapshot,
-        Previous         = previousSnapshot,
-        Processor        = this,
-        SubCardIds        = _subCardIds,
-        RevealedZoneCards = revealedZoneCards,
-      };
-
-      // Backfill action targets before PropertyChangeTracker runs.
-      foreach (var processor in processors)
-      {
-        if (processor is ActionProcessor ap)
-        {
-          ap.BackfillPendingTargets(intermediateContext);
-          break;
-        }
-      }
-
-      foreach (var processor in processors)
-      {
-        if (processor is IIntermediateTickProcessor)
-          processor.Process(intermediateContext);
-      }
-
-      // Still update diff baseline so the next real state change diffs
-      // correctly against the latest data.
-      _previous = current;
-      _previousHiddenCards = new Dictionary<int, GameCard>(_HiddenCards);
-      _previousPlayers = players;
-      _previousHashes.Clear();
-      foreach (var (tid, hash) in currentHashes)
-        _previousHashes[tid] = hash;
-      _previousIneligibleHashes = currentIneligibleHashes;
-      _lastProcessedTimestamp = ts;
-      return;
-    }
-    _lastProcessedNonce = currentNonce;
-
-    // Resolve damage assignment partials against the snapshot's card/player maps.
-    var damageAssignments = new List<CombatDamageAssignmentAction>();
-    foreach (var partial in rawDamageAssignments)
-    {
-      // Resolve source card
-      if (currentSnapshot.Cards.TryGetValue(partial.DamagingThingId, out var sourceCard))
-        partial.SourceCard = Unbind(sourceCard);
-
-      // Resolve each distribution target
-      foreach (var dist in partial.DistributionPartials)
-      {
-        if (currentSnapshot.Cards.TryGetValue(dist.ThingId, out var targetCard))
-          dist.TargetObject = Unbind(targetCard);
-        else if (currentSnapshot.Players.TryGetValue(dist.ThingId, out var targetPlayer))
-          dist.TargetObject = Unbind(targetPlayer);
-      }
-
-      damageAssignments.Add(new CombatDamageAssignmentAction(partial));
-    }
+    bool isIntermediate = currentSnapshot.Nonce == _lastProcessedNonce
+      && _lastProcessedTimestamp != 0;
 
     var context = new GameContext
     {
-      Current           = currentSnapshot,
-      Previous          = previousSnapshot,
-      Processor         = this,
-      SubCardIds        = _subCardIds,
-      DamageAssignments = damageAssignments,
-      RevealedZoneCards = revealedZoneCards,
+      Current    = currentSnapshot,
+      Previous   = previousSnapshot,
+      Processor  = this,
+      CapturedPrompt = capturedPrompt,
+      CaptureSequence = sequence,
+      SubCardIds = new HashSet<int>(_subCardIds),
     };
 
-    // Pre-pass: backfill action target IDs into card PropertyContainers
-    // before PropertyChangeTracker runs, so card change diffs see all targets.
-    foreach (var processor in processors)
+    // Intermediate ticks carry state changes within the same prompt. Damage
+    // assignments and interaction events are dispatched only for a new prompt.
+    if (!isIntermediate)
     {
-      if (processor is ActionProcessor actionProcessor)
+      _lastProcessedNonce = currentSnapshot.Nonce;
+
+      // Resolve damage assignment partials against the snapshot's card/player maps.
+      foreach (var partial in rawDamageAssignments)
       {
-        actionProcessor.BackfillPendingTargets(context);
-        break;
+        if (currentSnapshot.Cards.TryGetValue(partial.DamagingThingId, out var sourceCard))
+          partial.SourceCard = Unbind(sourceCard);
+
+        foreach (var dist in partial.DistributionPartials)
+        {
+          if (currentSnapshot.Cards.TryGetValue(dist.ThingId, out var targetCard))
+            dist.TargetObject = Unbind(targetCard);
+          else if (currentSnapshot.Players.TryGetValue(dist.ThingId, out var targetPlayer))
+            dist.TargetObject = Unbind(targetPlayer);
+        }
+
+        context.DamageAssignments.Add(new CombatDamageAssignmentAction(partial));
       }
     }
 
+    // Target backfills must precede property comparisons on every tick.
+    processors.OfType<ActionProcessor>().FirstOrDefault()?.BackfillPendingTargets(context);
     foreach (var processor in processors)
-      processor.Process(context);
+    {
+      if (!isIntermediate || processor is IIntermediateTickProcessor)
+      {
+        processor.Process(context);
+      }
+    }
 
-    // Save state for next diff
+    // Publish one combined update after every processor has applied this message.
+    processors.OfType<PromptProcessor>().FirstOrDefault()?.Complete(context);
+
+    // Retain the state used to compare the next message.
     _previous = current;
-    _previousHiddenCards = new Dictionary<int, GameCard>(_HiddenCards);
+    _lastSnapshot = currentSnapshot;
     _previousPlayers = players;
     _previousHashes.Clear();
     foreach (var (tid, hash) in currentHashes)
@@ -835,6 +958,10 @@ public sealed class GameProcessor
     _previousIneligibleHashes = currentIneligibleHashes;
     _lastProcessedTimestamp = ts;
   }
+
+  // Cached native values need no recapture, but processor enrichment is per tick.
+  private static GameCard CopyCardForProcessing(GameCard card) =>
+    new(((GameCardPartial)Unbind(card)).CopyForProcessing());
 
   /// <summary>
   /// Matches MTGO's <c>Game.IsPlayer(int)</c> logic.
@@ -856,6 +983,52 @@ public sealed class GameProcessor
   // Static routing
   //
 
+  internal static event Action<GameCard, IReadOnlyList<CardAction>>? CardActionsChanged;
+
+  private static void ClearScopes(object? sender, EventArgs args)
+  {
+    GameProcessor[] scopes;
+    lock (s_scopeLock)
+      scopes = s_scopes.Select(pair => pair.Value).ToArray();
+    foreach (var scope in scopes)
+      scope.Dispose();
+
+    s_bufferedHooks.Clear();
+    s_notifiedGames.Clear();
+  }
+
+  internal static void ObserveCardActions()
+  {
+    EnsureHookInitialized();
+    foreach (var processing in s_activeProcessors.Values)
+    {
+      lock (processing._lock)
+      {
+        if (!processing._disposed)
+          _ = processing.CardActions;
+      }
+    }
+  }
+
+  private static void NotifyCardActionsChanged(
+    (GameCard Card, IReadOnlyList<CardAction> Actions) update)
+  {
+    var handlers = CardActionsChanged;
+    if (handlers is null) return;
+
+    foreach (Action<GameCard, IReadOnlyList<CardAction>> handler in handlers.GetInvocationList())
+    {
+      try
+      {
+        handler(update.Card, update.Actions);
+      }
+      catch (Exception error)
+      {
+        Log.Error(error, "GameCard.ActionsChanged handler failed.");
+      }
+    }
+  }
+
   /// <summary>
   /// Maps game IDs to their active <see cref="GameProcessor"/> instances
   /// so the static <c>HandleGamePlayStatus</c> hook can route to the
@@ -869,7 +1042,7 @@ public sealed class GameProcessor
   /// processor is activated. Replayed by <see cref="Activate"/> so that
   /// the first snapshot is never silently dropped.
   /// </summary>
-  private static readonly ConcurrentDictionary<int, ConcurrentQueue<(object Instance, object Message, (uint Game, DateTime Action) Ts)>>
+  private static readonly ConcurrentDictionary<int, ConcurrentQueue<PendingHook>>
     s_bufferedHooks = new();
 
   /// <summary>
@@ -879,27 +1052,85 @@ public sealed class GameProcessor
   /// </summary>
   internal static void Activate(int gameId, GameProcessor processor)
   {
+    processor.Initialize();
     s_activeProcessors[gameId] = processor;
-    s_handleGamePlayStatus.EnsureInitialize();
-    s_handleRevealedCard.EnsureInitialize();
 
     // Replay any hooks that arrived before the processor was activated.
     if (s_bufferedHooks.TryRemove(gameId, out var queue))
     {
       while (queue.TryDequeue(out var hook))
       {
-        processor.EnqueuePendingHook(hook.Instance, hook.Message, hook.Ts);
+        processor.EnqueuePendingHook((object)hook.Instance,
+          (hook.Timestamp, hook.ActionTimestamp), hook.Capture, hook.Sequence);
       }
     }
   }
 
   /// <summary>
-  /// Removes a processor from the static routing table.
+  /// Ends this scope, clears its event handlers and routing, and releases owned
+  /// components after any snapshot already in progress finishes.
   /// </summary>
-  internal static void Deactivate(int gameId)
+  public void Dispose()
   {
-    s_activeProcessors.TryRemove(gameId, out _);
-    s_bufferedHooks.TryRemove(gameId, out _);
+    Action[] cleanup;
+    bool release;
+    lock (_lock)
+    {
+      if (_disposed) return;
+      _references?.StopSharing();
+      _disposed = true;
+      if (_activeGameId is int gameId
+        && ((ICollection<KeyValuePair<int, GameProcessor>>)s_activeProcessors)
+          .Remove(new(gameId, this)))
+        s_bufferedHooks.TryRemove(gameId, out _);
+      cleanup = _eventCleanup.ToArray();
+      _eventCleanup.Clear();
+      _subscriptions.Clear();
+      _pendingHooks.Clear();
+      foreach (var waiter in _drainWaiters) waiter.TrySetResult(false);
+      _drainWaiters.Clear();
+      release = !_pendingDrainScheduled;
+    }
+    lock (s_scopeLock)
+    {
+      if (s_scopes.TryGetValue(Game, out var scope) && ReferenceEquals(scope, this))
+        s_scopes.Remove(Game);
+    }
+    foreach (var clear in cleanup) clear();
+    if (release) ReleaseResources();
+  }
+
+  private void ReleaseResources()
+  {
+    List<IDisposable> resources;
+    lock (_lock)
+    {
+      if (_resourcesReleased) return;
+      _resourcesReleased = true;
+      resources = _processors.OfType<IDisposable>().ToList();
+      if (_cardActions is not null) resources.Add(_cardActions);
+      if (_interactionState is not null) resources.Add(_interactionState);
+      if (_references is not null) resources.Add(_references);
+      _processors.Clear();
+      _previous = new();
+      _lastSnapshot = null;
+      _previousHashes.Clear();
+      _previousIneligibleHashes.Clear();
+      _hiddenCards.Clear();
+      _subCardIds.Clear();
+      _previousPlayers = new();
+    }
+    foreach (var resource in resources)
+    {
+      try
+      {
+        resource.Dispose();
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Failed to dispose game processing component.");
+      }
+    }
   }
 
   /// <summary>
@@ -911,13 +1142,49 @@ public sealed class GameProcessor
   public static event Action<Game>? OnNewGame;
 
   /// <summary>
-  /// Ensures the static <c>HandleGamePlayStatus</c> hook is installed
-  /// so that game detection and routing are active.
+  /// Installs game-opening and gameplay hooks for detection and state routing.
   /// </summary>
   public static void EnsureHookInitialized()
   {
+    foreach (var hook in s_gameOpeningHooks) hook.EnsureInitialize();
     s_handleGamePlayStatus.EnsureInitialize();
-    s_handleRevealedCard.EnsureInitialize();
+  }
+
+  // Capture the existing IDs before native creation. Reading Games later in
+  // the callback would see the newly inserted game and miss its opening.
+  private static readonly EventHookProxy<int, DateTime>[] s_gameOpeningHooks =
+  [
+    CreateOpeningHook("MatchEvent.Match+MatchBaseState"),
+    CreateOpeningHook("LeagueMatchEvent.LeagueMatch+LeagueMatchBaseState"),
+    CreateOpeningHook("TournamentMatchEvent.TournamentMatch+TournamentMatchBaseState")
+  ];
+
+  private static EventHookProxy<int, DateTime> CreateOpeningHook(string stateType) =>
+    new("WotC.MtGO.Client.Model.Play." + stateType,
+      "CreateGameFromFlsMatchGameStartedMessage",
+      new CapturedEventHook((context, _, _) =>
+      {
+        var values = (context.Capture
+          ?? throw new InvalidOperationException("Game opening capture is missing.")).Values;
+        int id = values["gameId"].GetScalar<int>();
+        if (!values["games"].Items.Any(game => game.Members["id"].GetScalar<int>() == id))
+        {
+          s_startTimes.AddOrUpdate(id, context.Timestamp,
+            (_, existing) => existing < context.Timestamp ? existing : context.Timestamp);
+        }
+        return (id, context.Timestamp);
+      }), CreateOpeningCapture(), HarmonyPatchPosition.Prefix);
+
+  private static RemoteHookCapture CreateOpeningCapture()
+  {
+    var batch = new RemoteBatch();
+    var message = batch.Input(ObjectOrRemoteAddress.Null);
+    var match = batch.Input(ObjectOrRemoteAddress.Null);
+    batch.Output("gameId", batch.Read(message, "GameID"));
+    batch.Output("games", batch.Read(match, "Games"),
+      RemoteBatchProjection.Sequence(RemoteBatchProjection.Object(
+        ("id", "Id", RemoteBatchProjection.Value()))));
+    return new RemoteHookCapture { Batch = batch.ToRequest(), Inputs = [0, 1] };
   }
 
   /// <summary>
@@ -928,109 +1195,6 @@ public sealed class GameProcessor
     s_notifiedGames = new();
 
   /// <summary>
-  /// Drains <see cref="_pendingReveals"/> into <see cref="_activeReveals"/>
-  /// and builds a synthetic <see cref="GameCard"/> list for each active reveal.
-  /// <para>
-  /// Departure is detected by a tick-count gate: revealed cards stay active
-  /// as long as new <c>HandleRevealedCard</c> callbacks keep arriving. Once
-  /// <see cref="RevealDepartureThreshold"/> consecutive ticks pass with no new
-  /// arrivals the list is cleared. This avoids querying ThingElements, which
-  /// never contains Revealed-zone entries (MTGO sends them via the separate
-  /// <c>GAME_PLAYER_REVEALS_CARD</c> message, not via the game-state snapshot).
-  /// </para>
-  /// </summary>
-  internal List<GameCard> BuildRevealedZoneCards(dynamic instance)
-  {
-    bool anyNewArrivals = false;
-    while (_pendingReveals.TryDequeue(out var item))
-    {
-      anyNewArrivals = true;
-      if (!_activeReveals.Any(r => r.PlayerNum == item.PlayerNum && r.CTN == item.CTN))
-        _activeReveals.Add(item);
-    }
-
-    if (_activeReveals.Count == 0)
-    {
-      _noRevealTicks = 0;
-      return new List<GameCard>();
-    }
-
-    if (anyNewArrivals)
-    {
-      _noRevealTicks = 0;
-    }
-    else if (++_noRevealTicks >= RevealDepartureThreshold)
-    {
-      Log.Debug("[GameProcessor] Reveal zone cleared after {0} quiet ticks.", RevealDepartureThreshold);
-      _activeReveals.Clear();
-      _noRevealTicks = 0;
-      return new List<GameCard>();
-    }
-
-    var result = new List<GameCard>(_activeReveals.Count);
-    foreach (var item in _activeReveals)
-    {
-      int syntheticId = -(item.PlayerNum * 100000 + item.CTN);
-      var props = new PropertyContainer(new Dictionary<MagicProperty, dynamic>
-      {
-        [MagicProperty.THINGNUMBER]           = syntheticId,
-        [MagicProperty.CARDTEXTURE_NUMBER]    = item.CTN,
-        [MagicProperty.ZONE]                  = (int)16777215u,
-        [MagicProperty.OWNER]                 = item.PlayerNum,
-        [MagicProperty.CONTROLLER]            = item.PlayerNum,
-        [MagicProperty.CARDNAME_STRING]       = item.Name,
-        [MagicProperty.SRC_THING_ID]          = -1,
-        [MagicProperty.CREATION_MODTIMESTAMP] = 0,
-      });
-      result.Add(GameCard.FromProperties(props, instance, null));
-    }
-    return result;
-  }
-
-  /// <summary>
-  /// Static hook on <c>HandleRevealedCard</c> that buffers the revealed card's
-  /// player index and CTN for the next <see cref="ProcessGameplayStatus"/> tick.
-  /// <para>
-  /// MTGO's message pump processes <c>HandleRevealedCard</c> before the paired
-  /// <c>HandleGamePlayStatus</c> on the same thread, but both hook callbacks are
-  /// dispatched to <see cref="MTGOSDK.Core.SyncThread"/> without a group ID — a concurrent
-  /// thread pool with no ordering guarantee. In practice the reveal IPC almost
-  /// always arrives first (the messages fire microseconds apart), but on rare
-  /// occasions the reveal may land one snapshot tick late. This is acceptable
-  /// for a display-only overlay; no game data is lost.
-  /// </para>
-  /// </summary>
-  private static readonly EventHookProxy<int, int>
-    s_handleRevealedCard = new(
-      "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
-      "HandleRevealedCard",
-      new((instance, args) =>
-      {
-        int gameId = (int)instance.Id;
-        if (!s_activeProcessors.TryGetValue(gameId, out var processor)) return null;
-
-        try
-        {
-          dynamic message = args[0];
-          int playerNum = (int)(uint)message.PlayerNum;
-          int ctn       = (int)(uint)message.CardID;
-
-          // Name is resolved from ThingElements later via GameCard.Name — skip
-          // the expensive m_digitalThings scan here since the hook fires on the
-          // SyncThread (serialised with HandleGamePlayStatus) and must be fast.
-          processor._pendingReveals.Enqueue(new RevealedCardItem(playerNum, ctn, ""));
-        }
-        catch (Exception ex)
-        {
-          Log.Warning(ex, "[GameProcessor] HandleRevealedCard hook failed for game {Id}", gameId);
-        }
-
-        return (gameId, 0);
-      })
-    );
-
-
-  /// <summary>
   /// Static hook on <c>HandleGamePlayStatus</c> that detects new games
   /// and routes incoming gameplay-status messages to the correct per-game
   /// processor.
@@ -1039,11 +1203,19 @@ public sealed class GameProcessor
     s_handleGamePlayStatus = new(
       "WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game",
       "HandleGamePlayStatus",
-      new((instance, args) =>
+      new CapturedEventHook((capture, instance, args) =>
       {
-        dynamic message = args[0];
-        int gameId = (int)(uint)message.GameID;
-        var ts = ((uint)message.GameStateTimestamp, (DateTime)instance.__timestamp);
+        var captured = capture.Capture
+          ?? throw new InvalidOperationException("Gameplay hook did not provide its capture.");
+        var values = captured.Values;
+        int gameId = (int)values["gameId"].GetScalar<uint>();
+        var ts = (values["timestamp"].GetScalar<uint>(), capture.Timestamp);
+        var prompt = values["prompt"];
+        if (prompt.Kind != RemoteBatchValueKind.Null)
+        {
+          prompt.Members["TurnNumber"] = values["turnNumber"];
+          prompt.Members["CurrentPhase"] = values["phase"];
+        }
 
         // Notify subscribers of new games exactly once.
         // The subscriber's event subscriptions call Activate() synchronously,
@@ -1054,19 +1226,33 @@ public sealed class GameProcessor
           OnNewGame?.Invoke(new Game(instance));
         }
 
+        // A global card subscription also observes games without per-game subscribers.
+        // Reuse an active scope so the same capture is not processed twice.
+        if (CardActionsChanged is not null)
+        {
+          if (!s_activeProcessors.TryGetValue(gameId, out var processing))
+            processing = ForGame(new Game(instance));
+          lock (processing._lock)
+          {
+            if (!processing._disposed)
+              _ = processing.CardActions;
+          }
+        }
+
         if (s_activeProcessors.TryGetValue(gameId, out var processor))
         {
-          processor.EnqueuePendingHook(instance, message, ts);
+          processor.EnqueuePendingHook(instance, ts, captured, capture.CaptureSequence);
         }
         else
         {
           // Buffer for replay when Activate() is called.
-          var queue = s_bufferedHooks.GetOrAdd(gameId,
-            _ => new ConcurrentQueue<(object, object, (uint, DateTime))>());
-          queue.Enqueue((instance, message, ts));
+          var queue = s_bufferedHooks.GetOrAdd(gameId, _ => new());
+          queue.Enqueue(new PendingHook(instance, ts.Item1, ts.Item2,
+            captured, capture.CaptureSequence));
         }
 
         return (gameId, ts);
-      })
+      }),
+      PromptProcessor.CreateGameplayCapture(), HarmonyPatchPosition.Postfix
     );
 }

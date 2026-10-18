@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 /// <summary>
 /// A single tick's worth of game state: timing, phase, and entity snapshots.
@@ -20,7 +20,7 @@ public sealed class GameStateSnapshot
   public required uint Timestamp { get; init; }
 
   /// <summary>
-  /// When this state representation was logged by the server.
+  /// The timestamp recorded at the native gameplay-hook capture.
   /// </summary>
   public required DateTime ActionTimestamp { get; init; }
 
@@ -64,19 +64,8 @@ public sealed class GameStateSnapshot
   /// A deterministic nonce derived from the prompt state, used to correlate
   /// this snapshot with the corresponding <see cref="GamePrompt"/> event.
   /// </summary>
-  public int Nonce => ComputeNonce(InteractionTimestamp, PromptedPlayer, PromptText);
-
-  /// <summary>
-  /// Computes a deterministic hash from prompt state fields.
-  /// </summary>
-  public static int ComputeNonce(uint timestamp, byte promptedPlayer, string promptText)
-  {
-    var hash = new HashCode();
-    hash.Add(timestamp);
-    hash.Add(promptedPlayer);
-    hash.Add(promptText ?? string.Empty, StringComparer.Ordinal);
-    return hash.ToHashCode();
-  }
+  public int Nonce =>
+    GamePrompt.ComputeNonce(InteractionTimestamp, PromptedPlayer, PromptText);
 
   /// <summary>
   /// Visible cards keyed by ThingID.
@@ -87,6 +76,12 @@ public sealed class GameStateSnapshot
   /// Transient hidden cards keyed by ThingID.
   /// </summary>
   public required Dictionary<int, GameCard> HiddenCards { get; init; }
+
+  /// <summary>
+  /// Cards in the native revealed zones, keyed by their logical addresses.
+  /// These client-side objects can share an unassigned server ID.
+  /// </summary>
+  public required Dictionary<ulong, GameCard> RevealedCards { get; init; }
 
   /// <summary>
   /// Player snapshots keyed by player index.

@@ -9,7 +9,9 @@ using System.Dynamic;
 using System.Linq;
 
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.API.Users;
+using MTGOSDK.Core.Remoting.Batching;
 
 
 namespace MTGOSDK.API.Play.Games.Processors.Partials;
@@ -144,89 +146,46 @@ public class GamePlayerPartial : DynamicObject
   }
 
   /// <summary>
-  /// Parses all players from a PlayerStatusElement and the game instance.
-  /// Returns a dictionary keyed by player index.
+  /// Builds player state from the detached status element and captured roster.
+  /// Live User references are resolved once through the game's reference cache.
   /// </summary>
-  public static Dictionary<int, GamePlayerPartial> ParseFromStatusElement(
-    dynamic playerStatusElement,
-    dynamic gameInstance)
+  internal static Dictionary<int, GamePlayerPartial> ParseFromStatusElement(
+    RemoteBatchObject element, IReadOnlyList<RemoteBatchObject> identities,
+    GameReferenceResolver references)
   {
     var players = new Dictionary<int, GamePlayerPartial>();
-    dynamic game = gameInstance;
+    int activePlayer = element.Get<byte>("ActivePlayer");
+    var lifes = element.GetSequence<short>("Lifes");
+    var handCounts = element.GetSequence<short>("HandCounts");
+    var libraryCounts = element.GetSequence<short>("LibraryCounts");
+    var graveyardCounts = element.GetSequence<short>("GraveyardCounts");
+    var timeLeft = element.GetSequence<int>("TimeLeft");
+    int parseCount = Math.Max(identities.Count > 0 ? identities.Count : 16, activePlayer + 1);
 
-    try
+    for (int i = 0; i < parseCount; i++)
     {
-      int activePlayer = (int)(playerStatusElement.ActivePlayer ?? 0);
-      int gamePlayerCount = 0;
-      try { gamePlayerCount = (int)game.PlayersInServerOrder.Count; }
-      catch (Exception ex)
+      int life = i < lifes.Count ? lifes[i] : 0;
+      int handCount = i < handCounts.Count ? handCounts[i] : 0;
+      int libraryCount = i < libraryCounts.Count ? libraryCounts[i] : 0;
+      int graveyardCount = i < graveyardCounts.Count ? graveyardCounts[i] : 0;
+      if (life == 0 && handCount == 0 && libraryCount == 0 && i != activePlayer)
+        continue;
+
+      var user = i < identities.Count ? references.ResolvePlayer(i)?.User : null;
+      string name = i < identities.Count
+        ? identities[i].Get<string?>("Name") ?? $"Player {i}" : $"Player {i}";
+      players[i] = new GamePlayerPartial(i, name, references.RawGame)
       {
-        MTGOSDK.Core.Logging.Log.Warning(ex,
-          "[GamePlayerPartial] Failed to get Players.Count: {Error}", ex.Message);
-      }
-
-      // PlayerStatusElement exposes short[16] for counts, int[8] for time
-      short[] lifes = playerStatusElement.Lifes;
-      short[] handCounts = playerStatusElement.HandCounts;
-      short[] libraryCounts = playerStatusElement.LibraryCounts;
-      short[] graveyardCounts = playerStatusElement.GraveyardCounts;
-      int[] timeLeft = playerStatusElement.TimeLeft;
-
-      // Determine how many players to parse
-      int parseCount = gamePlayerCount > 0 ? gamePlayerCount : 16;
-      parseCount = Math.Max(parseCount, activePlayer + 1);
-
-      // Player status and card ownership are indexed in server order.
-      var users = new User?[parseCount];
-      for (int i = 0; i < Math.Min(parseCount, gamePlayerCount); i++)
-      {
-        try
-        {
-          dynamic player = game.PlayersInServerOrder[i];
-          users[i] = new User(player.User);
-        }
-        catch (Exception ex)
-        {
-          MTGOSDK.Core.Logging.Log.Warning(ex,
-            "[GamePlayerPartial] Failed to get player {Index} info: {Error}",
-            i, ex.Message);
-        }
-      }
-
-      // Build player partials for relevant player indices
-      for (int i = 0; i < parseCount; i++)
-      {
-        int life = i < lifes.Length ? lifes[i] : 0;
-        int handCount = i < handCounts.Length ? handCounts[i] : 0;
-        int libraryCount = i < libraryCounts.Length ? libraryCounts[i] : 0;
-        int graveyardCount = i < graveyardCounts.Length ? graveyardCounts[i] : 0;
-
-        // Only include players with non-zero data or the active player
-        if (life == 0 && handCount == 0 && libraryCount == 0 && i != activePlayer)
-          continue;
-
-        var user = i < users.Length ? users[i] : null;
-        var chessClock = TimeSpan.FromSeconds(
-          (i < timeLeft.Length ? timeLeft[i] : 0) / ClockTicksPerSecond);
-
-        players[i] = new GamePlayerPartial(i, user?.Name ?? $"Player {i}", game)
-        {
-          _user = user,
-          Life = life,
-          HandCount = handCount,
-          LibraryCount = libraryCount,
-          GraveyardCount = graveyardCount,
-          IsActivePlayer = i == activePlayer,
-          ChessClock = chessClock,
-        };
-      }
+        _user          = user,
+        Life           = life,
+        HandCount      = handCount,
+        LibraryCount   = libraryCount,
+        GraveyardCount = graveyardCount,
+        IsActivePlayer = i == activePlayer,
+        ChessClock     = TimeSpan.FromSeconds(
+          (i < timeLeft.Count ? timeLeft[i] : 0) / ClockTicksPerSecond),
+      };
     }
-    catch (Exception ex)
-    {
-      MTGOSDK.Core.Logging.Log.Warning(ex,
-        "[GamePlayerPartial] Failed to parse player status element");
-    }
-
     return players;
   }
 
@@ -317,46 +276,25 @@ public class GamePlayerPartial : DynamicObject
   /// <summary>
   /// Updates a player's mana pool from a ManaPoolElement.
   /// </summary>
-  public static void UpdateManaPool(
-    Dictionary<int, GamePlayerPartial> players,
-    dynamic manaPoolElement)
+  internal static void UpdateManaPool(
+    Dictionary<int, GamePlayerPartial> players, RemoteBatchObject element)
   {
-    try
+    if (!players.TryGetValue(element.Get<int>("PlayerNumber"), out var player))
+      return;
+
+    var amounts = new Dictionary<int, int>();
+    foreach (var mana in element.GetSequence<RemoteBatchObject>("Mana"))
     {
-      int playerNumber = (int)manaPoolElement.PlayerNumber;
-      if (!players.TryGetValue(playerNumber, out var player)) return;
-
-      var manaPoolByColor = new Dictionary<int, int>();
-      try
-      {
-        dynamic manaList = manaPoolElement.Mana;
-        int count = (int)manaList.Count;
-        for (int i = 0; i < count; i++)
-        {
-          dynamic mana = manaList[i];
-          int color = (int)mana.Color;
-          int amount = (int)mana.Amount;
-
-          if (amount <= 0) continue;
-
-          manaPoolByColor.TryGetValue(color, out int existing);
-          manaPoolByColor[color] = existing + amount;
-        }
-      }
-      catch { }
-
-      player._manaPool.Clear();
-      foreach (var (color, amount) in manaPoolByColor.OrderBy(kvp => kvp.Key))
-      {
-        if (amount <= 0) continue;
-        var manaPartial = new ManaPartial(color, amount);
-        player._manaPool.Add(new Mana(manaPartial));
-      }
+      int color = mana.Get<int>("Color");
+      int amount = mana.Get<int>("Amount");
+      if (amount <= 0) continue;
+      amounts.TryGetValue(color, out int existing);
+      amounts[color] = existing + amount;
     }
-    catch
-    {
-      // Swallow parsing errors
-    }
+
+    player._manaPool.Clear();
+    foreach (var (color, amount) in amounts.OrderBy(pair => pair.Key))
+      player._manaPool.Add(new Mana(new ManaPartial(color, amount)));
   }
 
   public override bool Equals(object? obj) =>

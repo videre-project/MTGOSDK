@@ -3,8 +3,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
-namespace MTGOSDK.API.Play.Games.Processors.EventArgs;
+
+namespace MTGOSDK.API.Play.Games.Processors.Events;
 
 /// <summary>
 /// Event args for a correlated snapshot/prompt pair.

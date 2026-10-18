@@ -1233,11 +1233,9 @@ public abstract class DLRWrapper : SerializableBase
 /// A wrapper for dynamic objects that implement an interface at runtime.
 /// </summary>
 /// <remarks>
-/// This class exposes an overrideable <c>obj</c> property that is used
-/// to capture dynamic objects passed to the constructor. This allows derived
-/// classes to defer dynamic dispatching of class constructors until after
-/// the base class constructor has completed, exposing the captured dynamic
-/// object to derived classes with the <c>@base</c> property.
+/// The wrapped object can be supplied to the constructor or through the
+/// overrideable <c>obj</c> property. Binding is deferred until <c>@base</c>
+/// is accessed.
 /// </remarks>
 /// <typeparam name="I">The interface type to wrap.</typeparam>
 public class DLRWrapper<I>: DLRWrapper where I : class
@@ -1245,6 +1243,15 @@ public class DLRWrapper<I>: DLRWrapper where I : class
   public DLRWrapper() : base()
   {
     InitializeEventWrappers();
+  }
+
+  /// <summary>
+  /// Wraps an existing object, binding it to the interface when first accessed.
+  /// </summary>
+  /// <param name="obj">The object or wrapper to bind.</param>
+  public DLRWrapper(object obj) : this()
+  {
+    _instance = obj ?? throw new ArgumentNullException(nameof(obj));
   }
 
   /// <summary>
@@ -1283,6 +1290,8 @@ public class DLRWrapper<I>: DLRWrapper where I : class
   // Internal fields and properties for the wrapped object.
   //
 
+  private readonly object? _instance;
+
   /// <summary>
   /// The internal reference for the binding type for the wrapped object.
   /// </summary>
@@ -1296,11 +1305,11 @@ public class DLRWrapper<I>: DLRWrapper where I : class
   /// This is the internal reference for any dynamic or derived class objects.
   /// </summary>
   /// <remarks>
-  /// Derived classes must override this property to capture dynamic objects.
+  /// Derived classes can override this property to supply their wrapped object.
   /// </remarks>
-  internal virtual dynamic obj =>
-    throw new ArgumentException(
-        $"{nameof(DLRWrapper<I>)}.obj must capture a {type.Name} type.");
+  internal virtual dynamic obj => Bind<I>(_instance
+    ?? throw new ArgumentException(
+        $"{nameof(DLRWrapper<I>)}.obj must capture a {type.Name} type."));
 
   /// <summary>
   /// Internal unwrapped reference to any captured dynamic objects.

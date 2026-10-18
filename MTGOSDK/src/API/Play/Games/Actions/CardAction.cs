@@ -22,7 +22,7 @@ namespace MTGOSDK.API.Play.Games;
 public class CardAction(dynamic cardAction) : GameAction, IDisposable
 {
   /// <summary>
-  /// Stores an internal reference to the IGameCard object.
+  /// Stores an internal reference to the ICardAction object.
   /// </summary>
   internal override dynamic obj => Bind<ICardAction>(cardAction);
 
@@ -45,7 +45,7 @@ public class CardAction(dynamic cardAction) : GameAction, IDisposable
 
     // Some remote CardAction instances throw during early target set materialization
     // (for example while targets are still mutating). Do not fail action wrapping.
-    _targetSets = Try<IList<TargetSet>>(() => Map<IList, TargetSet>(cardAction.Targets))
+    _targetSets = Try<IList<TargetSet>>(() => Map<IList, TargetSet>(Unbind(this).Targets))
       ?? new List<TargetSet>();
     return _targetSets;
   }

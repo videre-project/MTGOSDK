@@ -24,4 +24,8 @@ public enum ActionType
   CardSelector = 12,
   //#pragma import enum WotC.MtGO.Client.Model.Play.ActionType end
 
+  /// <summary>
+  /// SDK-only client prompt button without a native game action.
+  /// </summary>
+  PromptControl = int.MaxValue
 }

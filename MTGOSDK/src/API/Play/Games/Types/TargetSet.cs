@@ -16,12 +16,12 @@ public sealed class TargetSet(dynamic targetSet) : DLRWrapper<ITargetSet>
 {
   internal override dynamic obj => Bind<ITargetSet>(targetSet);
 
-  internal CardAction Action = new(targetSet.Action);
+  internal CardAction Action => field ??= new(targetSet.Action);
 
   internal CardAction.TargetSetChange? Delta = null;
 
-  internal int Index => Unbind(Action).Targets.IndexOf(Unbind(this));
-
+  internal int Index => HasMember(targetSet, nameof(Index))
+    ? (int)targetSet.Index : Unbind(Action).Targets.IndexOf(Unbind(this));
 
   //
   // ITargetSet wrapper properties
@@ -49,4 +49,13 @@ public sealed class TargetSet(dynamic targetSet) : DLRWrapper<ITargetSet>
 
   public ActionTargetRequirements TargetRequirements =>
     Cast<ActionTargetRequirements>(Unbind(this).TargetRequirements);
+
+  public bool IsDistributedAmongTargets => @base.IsDistributedAmongTargets;
+
+  public int TotalToAssign => @base.TotalToAssign;
+
+  public int DoubleAmountAfter => @base.DoubleAmountAfter;
+
+  public IList<Distribution> Distributions =>
+    Map<Distribution>((object)Unbind(this).Distributions.Values).ToList();
 }

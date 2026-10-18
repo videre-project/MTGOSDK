@@ -3,8 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System.Collections;
-
 using WotC.MtGO.Client.Model.Play;
 
 
@@ -13,7 +11,7 @@ namespace MTGOSDK.API.Play.Games;
 public sealed class CardSelectorAction(dynamic cardSelectorAction) : GameAction
 {
   /// <summary>
-  /// Stores an internal reference to the IGameCard object.
+  /// Stores an internal reference to the ICardSelectorAction object.
   /// </summary>
   internal override dynamic obj => Bind<ICardSelectorAction>(cardSelectorAction);
 
@@ -28,7 +26,8 @@ public sealed class CardSelectorAction(dynamic cardSelectorAction) : GameAction
   //
 
   public List<CardSelectorChoice> Choices =>
-    Map<IList, CardSelectorChoice>(Unbind(this).Choices);
+    Map<CardSelectorChoice>((object)Unbind(this).Choices,
+      item => new CardSelectorChoice(item)).ToList();
 
   // TODO: Map CTN to GameCard
   //       (i.e. ICardDataManager.GetCardDefinitionForTextureNumber(CTN))

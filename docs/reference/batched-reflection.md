@@ -269,8 +269,8 @@ are local to each execution. Rows and intermediate results are never pinned.
 V1 supports synchronous constructors/methods. Task/ValueTask-returning methods,
 `ref`/`out`, open generic parameters, scripts, and conditional control flow are
 unsupported. Native copying and synchronization are caller-described operations.
-Native game interpretation, schemas, acceptance policies, and the existing
-game-specific hash helper remain outside this extension.
+Native game interpretation, schemas, acceptance policies, and snapshot change
+detection remain in the SDK game layer.
 
 ## Synchronous capture in native hooks
 

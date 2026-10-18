@@ -7,25 +7,25 @@ using System.Collections.Generic;
 using System.Linq;
 
 using MTGOSDK.API.Play.Games.Processors.Partials;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
-namespace MTGOSDK.API.Play.Games.Processors;
+namespace MTGOSDK.API.Play.Games.Processors.Intermediate;
 
 /// <summary>
 /// Cross-links combat orders (attacking/blocking) on GameCardPartial snapshots.
-/// Must run before PropertyChangeTracker so that combat order changes are
+/// Must run before PropertyChangeProcessor so that combat order changes are
 /// detected via GameCardPartial.Equals.
 /// </summary>
 public sealed class CombatProcessor : IIntermediateTickProcessor
 {
-  public void Initialize(Game game) { }
-
   public void Process(GameContext context)
   {
     // Clear all combat orders first
     foreach (var card in context.Current.Cards.Values)
     {
-      if ((object)GameCard.Unbind(card) is not GameCardPartial partial) continue;
+      if ((object)GameCard.Unbind(card) is not GameCardPartial partial)
+        continue;
       partial.AttackingOrders.Clear();
       partial.BlockingOrders.Clear();
     }
@@ -33,15 +33,18 @@ public sealed class CombatProcessor : IIntermediateTickProcessor
     // Populate attackers from ATTACKING* properties
     foreach (var card in context.Current.Cards.Values)
     {
-      if (!card.IsAttacking) continue;
-      if ((object)GameCard.Unbind(card) is not GameCardPartial partial) continue;
+      if (!card.IsAttacking)
+        continue;
+      if ((object)GameCard.Unbind(card) is not GameCardPartial partial)
+        continue;
 
       var attackingTids = new Dictionary<int, int>();
       var attackingSorts = new Dictionary<int, int>();
 
       foreach (var (prop, val) in partial.Properties.AllProperties)
       {
-        if (val is not int intVal) continue;
+        if (val is not int intVal)
+          continue;
 
         string name = partial.Properties.GetPropertyName(prop);
         if (TryParseIndexedProperty(name, "ATTACKING_SORT", out int sIdx))
@@ -54,26 +57,31 @@ public sealed class CombatProcessor : IIntermediateTickProcessor
 
       for (int i = 0; i < 256; i++)
       {
-        if (!attackingTids.TryGetValue(i, out int defenderTid)) break;
-        if (!context.Current.Cards.TryGetValue(defenderTid, out var defender)) continue;
+        if (!attackingTids.TryGetValue(i, out int defenderTid))
+          break;
+        if (!context.Current.Cards.TryGetValue(defenderTid, out var defender))
+          continue;
 
         int sortOrder = attackingSorts.TryGetValue(i, out int s) ? s : i + 1;
-        partial.AttackingOrders.Add(new GameCard.OrderedCombatParticipant(sortOrder, defender));
+        partial.AttackingOrders.Add(new OrderedCombatParticipant(sortOrder, defender));
       }
     }
 
     // Populate blockers from BLOCKING* properties and mirror to attackers
     foreach (var card in context.Current.Cards.Values)
     {
-      if (!card.IsBlocking) continue;
-      if ((object)GameCard.Unbind(card) is not GameCardPartial partial) continue;
+      if (!card.IsBlocking)
+        continue;
+      if ((object)GameCard.Unbind(card) is not GameCardPartial partial)
+        continue;
 
       var blockingTids = new Dictionary<int, int>();
       var blockingSorts = new Dictionary<int, int>();
 
       foreach (var (prop, val) in partial.Properties.AllProperties)
       {
-        if (val is not int intVal) continue;
+        if (val is not int intVal)
+          continue;
 
         string name = partial.Properties.GetPropertyName(prop);
         if (TryParseIndexedProperty(name, "BLOCKING_SORT", out int sIdx))
@@ -84,14 +92,16 @@ public sealed class CombatProcessor : IIntermediateTickProcessor
           blockingTids[bIdx] = intVal;
       }
 
-      var orders = new List<GameCard.OrderedCombatParticipant>();
+      var orders = new List<OrderedCombatParticipant>();
       for (int i = 0; i < 256; i++)
       {
-        if (!blockingTids.TryGetValue(i, out int attackerTid)) break;
-        if (!context.Current.Cards.TryGetValue(attackerTid, out var attacker)) continue;
+        if (!blockingTids.TryGetValue(i, out int attackerTid))
+          break;
+        if (!context.Current.Cards.TryGetValue(attackerTid, out var attacker))
+          continue;
 
         int sortOrder = blockingSorts.TryGetValue(i, out int s) ? s : 1;
-        orders.Add(new GameCard.OrderedCombatParticipant(sortOrder, attacker));
+        orders.Add(new OrderedCombatParticipant(sortOrder, attacker));
 
         // Mirror to attacker's list
         if ((object)GameCard.Unbind(attacker) is GameCardPartial attackerPartial)
@@ -101,7 +111,7 @@ public sealed class CombatProcessor : IIntermediateTickProcessor
           if (!exists)
           {
             attackerPartial.AttackingOrders.Add(
-              new GameCard.OrderedCombatParticipant(i + 1, card));
+              new OrderedCombatParticipant(i + 1, card));
           }
         }
       }

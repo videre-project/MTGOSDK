@@ -8,7 +8,7 @@ using System.Collections;
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.API.Play.Games.Processors;
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Events;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Remoting;
 
@@ -135,7 +135,25 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// <summary>
   /// The start time of the game.
   /// </summary>
-  public DateTime StartTime => @base.StartTime;
+  /// <remarks>
+  /// Note that this is set to the match start time by MTGO, which will not
+  /// reflect the true start time for later games in a match. Call
+  /// GameProcessor.Initialize() or subscribe to processor events to establish
+  /// the individual game's opening from observed events or channel history.
+  /// </remarks>
+  public DateTime StartTime
+  {
+    get => _startTime ?? @base.StartTime;
+    set => _startTime = value;
+  }
+  private DateTime? _startTime;
+
+  /// <summary>
+  /// The game outcomes retained by the match server.
+  /// </summary>
+  [NonSerializable]
+  public IList<GamePlayerResult> Results =>
+    ResultProcessor.ReadGameResults(this);
 
   /// <summary>
   /// The end time of the game.
@@ -265,84 +283,11 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public void SetCardMouseOver(int cardId, bool isFocused = true) =>
     @base.SetCardMouseOver(cardId, isFocused);
 
-  //
-  // Processor infrastructure
-  //
-
-  private GameProcessor? _processor;
-
-  /// <summary>
-  /// Gets or creates the <see cref="GameProcessor"/> for this game and
-  /// registers it in the static routing table so that
-  /// <c>HandleGamePlayStatus</c> hooks are routed here automatically.
-  /// </summary>
-  internal GameProcessor EnsureProcessor()
-  {
-    if (_processor == null)
-    {
-      _processor = new GameProcessor(this);
-      GameProcessor.Activate(this.Id, _processor);
-    }
-    return _processor;
-  }
-
-  /// <summary>
-  /// Signals that all <see cref="ProcessorEvent{T}"/> subscriptions are
-  /// complete and the <see cref="GameProcessor"/> may begin draining queued
-  /// hooks. Must be called after subscribing to all processor events.
-  /// </summary>
-  public void ReadyProcessor()
-  {
-    if (_processor != null)
-      _processor.IsInitialized = true;
-  }
-
-  /// <summary>
-  /// Blocks the calling thread until the <see cref="GameProcessor"/> has
-  /// processed all currently-pending hooks AND the <see cref="PromptProcessor"/>
-  /// has correlated any pending snapshots with their prompts (which arrive
-  /// via a separate <c>set_Prompt</c> IPC call). Returns immediately if no
-  /// processor is active or nothing is pending.
-  /// </summary>
-  /// <param name="timeout">Maximum time to wait.</param>
-  /// <returns><c>true</c> if processing completed within the timeout.</returns>
-  public bool WaitForPendingProcessing(TimeSpan timeout)
-  {
-    if (_processor == null) return true;
-
-    // Wait for the drain loop to process all pending hooks.
-    if (!_processor.WaitForPendingDrain(timeout))
-      return false;
-
-    // Wait for prompt correlation. After the drain loop processes
-    // a snapshot, the set_Prompt IPC may still be in flight. The
-    // PromptProcessor signals PromptCorrelated when the prompt arrives and
-    // the pending snapshot is matched.
-    var promptProcessor = _processor.GetProcessor<PromptProcessor>();
-    return promptProcessor?.PromptCorrelated.Wait(timeout) ?? true;
-  }
-
   /// <inheritdoc />
   public override void ClearEvents()
   {
-    base.ClearEvents();
-
-    if (_processor != null)
-    {
-      // Clear all ProcessorEvent handlers so dispatched events are no-ops.
-      OnZoneChanged.Clear();
-      OnCardChanged.Clear();
-      OnPlayerChanged.Clear();
-      OnActionFinalized.Clear();
-      OnPromptChanged.Clear();
-      OnLogMessage.Clear();
-      OnDamageAssignment.Clear();
-      OnRevealedCards.Clear();
-      // Remove from the static routing table so HandleGamePlayStatus
-      // messages for this game are no longer dispatched.
-      GameProcessor.Deactivate(this.Id);
-      _processor = null;
-    }
+    try { base.ClearEvents(); }
+    finally { GameProcessor.ClearEvents(this); }
   }
 
   //
@@ -354,7 +299,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<ZoneChangeEventArgs> OnZoneChanged
   {
-    get => field ??= new(this, typeof(ZoneChangeTracker), () => new ZoneChangeTracker());
+    get => field ??= GameProcessor.ZoneChanged(this);
     set => field = value;
   }
 
@@ -363,14 +308,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<CardChangedEventArgs> OnCardChanged
   {
-    get => field ??= new(this, typeof(PropertyChangeTracker), () =>
-    {
-      // CombatProcessor must populate AttackingOrders/BlockingOrders before
-      // PropertyChangeTracker diffs them.
-      EnsureProcessor().EnsureRegistered(
-        typeof(CombatProcessor), () => new CombatProcessor());
-      return new PropertyChangeTracker();
-    });
+    get => field ??= GameProcessor.CardChanged(this);
     set => field = value;
   }
 
@@ -379,7 +317,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<PlayerChangedEventArgs> OnPlayerChanged
   {
-    get => field ??= new(this, typeof(PropertyChangeTracker), () => new PropertyChangeTracker());
+    get => field ??= GameProcessor.PlayerChanged(this);
     set => field = value;
   }
 
@@ -388,7 +326,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<ActionFinalizedEventArgs> OnActionFinalized
   {
-    get => field ??= new(this, typeof(ActionProcessor), () => new ActionProcessor());
+    get => field ??= GameProcessor.ActionFinalized(this);
     set => field = value;
   }
 
@@ -397,7 +335,16 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<PromptChangedEventArgs> OnPromptChanged
   {
-    get => field ??= new(this, typeof(PromptProcessor), () => new PromptProcessor());
+    get => field ??= GameProcessor.PromptChanged(this);
+    set => field = value;
+  }
+
+  /// <summary>
+  /// Event triggered when correlated gameplay or captured local interaction state changes.
+  /// </summary>
+  public ProcessorEvent<GameStateChangedEventArgs> OnStateChanged
+  {
+    get => field ??= GameProcessor.StateChanged(this);
     set => field = value;
   }
 
@@ -406,7 +353,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<LogMessageCorrelatedEventArgs> OnLogMessage
   {
-    get => field ??= new(this, typeof(LogMessageProcessor), () => new LogMessageProcessor());
+    get => field ??= GameProcessor.LogMessage(this);
     set => field = value;
   }
 
@@ -415,7 +362,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<DamageAssignmentEventArgs> OnDamageAssignment
   {
-    get => field ??= new(this, typeof(DamageAssignmentProcessor), () => new DamageAssignmentProcessor());
+    get => field ??= GameProcessor.DamageAssignment(this);
     set => field = value;
   }
 
@@ -424,7 +371,7 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   /// </summary>
   public ProcessorEvent<RevealedCardsEventArgs> OnRevealedCards
   {
-    get => field ??= new(this, typeof(RevealedZoneTracker), () => new RevealedZoneTracker());
+    get => field ??= GameProcessor.RevealedCards(this);
     set => field = value;
   }
 
@@ -444,50 +391,25 @@ public sealed class Game(dynamic game) : DLRWrapper<IGame>
   public EventHookWrapper<IList<GamePlayerResult>> OnGameResultsChanged =
     new(GameResultsChanged, new Filter<IList<GamePlayerResult>>((s,_) => s.Id == game.Id));
 
+  /// <summary>
+  /// Event triggered when match-server rankings for this game change.
+  /// </summary>
+  public EventHookWrapper<IList<GamePlayerResult>> OnPlayerRankingsChanged =
+    new(PlayerRankingsChanged, new((sender, _) => sender.Id == game.Id));
+
   //
   // IGame static events
   //
 
   /// <summary>
-  /// Event triggered when the game results for the current game update.
+  /// Reports game-server results, including play/draw information.
   /// </summary>
   public static EventHookProxy<Game, IList<GamePlayerResult>> GameResultsChanged =
-    new(
-      new TypeProxy<WotC.MtGO.Client.Model.Play.InProgressGameEvent.Game>(),
-      "CompileWinningPlayers",
-      new((instance, args) =>
-      {
-        Game game = new(instance);
-        if (game == null) return null; // Ignore invalid game objects.
-        if (game.IsReplay) return null; // Ignore replay games.
+    ResultProcessor.GameResultsChanged;
 
-        dynamic message = args[1];
-        if (message == null) return null; // Ignore invalid messages.
-
-        // Always compute elapsed game time for the clock field.
-        // GameResultsInfo_t.PlayingTime is unreliable -- it reports
-        // sentinel values or garbage for untimed matches, and for
-        // timed matches it represents time remaining and not elapsed.
-        TimeSpan elapsed = game.CompletedDuration
-          ?? (game.EndTime is DateTime endTime && endTime > game.StartTime
-              ? endTime - game.StartTime
-              : DateTime.Now - game.StartTime);
-
-        List<GamePlayerResult> results = new();
-        foreach(var entry in message.GameResults)
-        {
-          int i = results.Count;
-          GamePlayer player = new(instance.GetPlayerByServerIndex(i));
-          PlayDrawResult playDrawResult = i == message.MovedFirst
-            ? PlayDrawResult.Play
-            : PlayDrawResult.Draw;
-
-          GameResult result = Cast<GameResult>(entry.Results);
-
-          results.Add(new(player, playDrawResult, result, elapsed));
-        }
-
-        return (game, results); // Return a tuple of (Game, IList<GamePlayerResult>)
-      })
-    );
+  /// <summary>
+  /// Reports match-server game outcomes, without play/draw information.
+  /// </summary>
+  public static EventHookProxy<Game, IList<GamePlayerResult>> PlayerRankingsChanged =
+    ResultProcessor.PlayerRankingsChanged;
 }

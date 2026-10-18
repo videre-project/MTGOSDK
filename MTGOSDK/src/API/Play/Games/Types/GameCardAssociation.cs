@@ -16,6 +16,15 @@ namespace MTGOSDK.API.Play.Games;
 public class GameCardAssociation(dynamic gameCardAssociation)
     : DLRWrapper<IGameCardAssociation>
 {
+  private readonly CardAssociation? _association;
+  private readonly int _targetId;
+
+  internal GameCardAssociation(CardAssociation association, int targetId) : this((object?)null)
+  {
+    _association = association;
+    _targetId = targetId;
+  }
+
   internal override dynamic obj =>
     Bind<IGameCardAssociation>(gameCardAssociation);
 
@@ -27,10 +36,11 @@ public class GameCardAssociation(dynamic gameCardAssociation)
   /// Represents a card association (e.g. ChosenPlayer, TriggeringSource, etc.).
   /// </summary>
   public CardAssociation Association =>
-    Cast<CardAssociation>(Unbind(this).Value);
+    _association ?? Cast<CardAssociation>(Unbind(this).Value);
 
   /// <summary>
   /// The ID of the associated target.
   /// </summary>
-  public int TargetId => @base.AssociatedTarget.Id;
+  public int TargetId => _association != null ? _targetId
+    : Unbind(this).AssociatedTarget.Id;
 }

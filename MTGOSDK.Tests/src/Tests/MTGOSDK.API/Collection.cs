@@ -263,7 +263,7 @@ public class Collection : CollectionValidationFixture
     Assert.That(card.Subtypes, Is.EquivalentTo(new string[] { "Dinosaur" }));
     Assert.That(card.Artist, Is.EqualTo("Jesper Ejsing"));
     Assert.That(card.ArtId, Is.EqualTo(402333));
-    Assert.That(card.Set.Code, Is.EqualTo("XLN"));
+    Assert.That(card.Set?.Code, Is.EqualTo("XLN"));
     Assert.That(card.CollectorInfo, Is.EqualTo("180/279"));
     Assert.That(card.CollectorNumber, Is.EqualTo(180));
     Assert.That(card.FlavorText,
@@ -413,7 +413,7 @@ public abstract class CollectionValidationFixture : BaseFixture
     Assert.That(card.Subtypes.Count, Is.GreaterThanOrEqualTo(0));
     Assert.That(card.Artist, Is.Not.Empty);
     Assert.That(card.ArtId, Is.GreaterThan(0));
-    Assert.That(card.Set.Code, Is.Not.Empty);
+    Assert.That(card.Set?.Code, Is.Not.Null.And.Not.Empty);
     Assert.That(card.CollectorInfo, Is.Not.Empty);
     Assert.That(card.CollectorNumber, Is.GreaterThanOrEqualTo(0));
     Assert.That((string?)card.FlavorText, Is.Not.Null);

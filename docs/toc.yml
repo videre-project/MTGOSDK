@@ -52,6 +52,8 @@ items:
       href: reference/debugging.md
     - name: Generated Types
       href: reference/generated-types.md
+    - name: Game State Capture
+      href: reference/game-state-capture.md
     - name: Batched Reflection
       href: reference/batched-reflection.md
     - name: Object Provider

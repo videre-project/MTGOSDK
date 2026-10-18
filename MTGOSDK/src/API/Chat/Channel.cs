@@ -8,6 +8,11 @@ using System.Collections;
 using MTGOSDK.API.Users;
 using MTGOSDK.API.Interface.ViewModels;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Remoting.Batching;
+using MTGOSDK.Core.Remoting.Hooking;
+using MTGOSDK.Core.Remoting.Interop;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Batching;
+using MTGOSDK.Core.Remoting.Interop.Interactions.Callbacks;
 
 using WotC.MtGO.Client.Model.Chat;
 
@@ -151,18 +156,41 @@ public sealed class Channel(dynamic chatChannel)
       typeof(WotC.MtGO.Client.Model.Chat.LoggableChatChannel).GetMethod(
         "SendMessage",
         [typeof(string), typeof(string)])!,
-      new((instance, args) =>
+      new CapturedEventHook((context, instance, args) =>
       {
+        var values = (context.Capture
+          ?? throw new InvalidOperationException("Channel message capture is missing.")).Values;
         var message = new Message(new
         {
-          Message = args[0],
+          Message = values["text"].GetScalar<string>(),
           FromUser = Optional<User>(args[1],
                                     Lambda<bool>(o => !string.IsNullOrEmpty(o))),
-          Timestamp = instance.__timestamp,
-          __timestamp = instance.__timestamp,
+          Timestamp = values["timestamp"].GetScalar<DateTime>(),
+          __timestamp = context.Timestamp,
         });
 
         return (new Channel(instance), message);
-      })
+      }), CreateMessageCapture(), HarmonyPatchPosition.Prefix
     );
+
+  private static RemoteHookCapture CreateMessageCapture()
+  {
+    var batch = new RemoteBatch();
+    var channel = batch.Input(ObjectOrRemoteAddress.Null);
+    var messageType = new RemoteBatchType(
+      "WotC.MtGO.Client.Model.Chat.IChatMessage", "WotC.MtGO.Client.Model.Reference");
+    var enumerableType = new RemoteBatchType("System.Collections.Generic.IEnumerable`1")
+    {
+      GenericArguments = [messageType]
+    };
+    var last = new RemoteBatchMethod(new("System.Linq.Enumerable", "System.Core"),
+      "Last", enumerableType) { GenericArguments = [messageType] };
+    // Every native caller appends to Messages before SendMessage. Read the last
+    // item synchronously here, before another append or delayed callback delivery.
+    var message = batch.CallStatic(last, batch.Read(channel, "Messages"));
+    batch.Output("timestamp", batch.Read(message, "Timestamp"));
+    batch.Output("text", batch.Read(message, "Message"));
+    return new RemoteHookCapture { Batch = batch.ToRequest(), Inputs = [-1] };
+  }
+
 }
