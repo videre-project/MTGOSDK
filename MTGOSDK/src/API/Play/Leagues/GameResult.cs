@@ -41,7 +41,7 @@ public sealed class GameResult(dynamic leagueGameResult)
   /// <summary>
   /// The opponent user who played the game.
   /// </summary>
-  public User Opponent => new(@base.Opponent);
+  public User Opponent => new((string)@base.OpponentName);
 
   /// <summary>
   /// The type of game result (None, Win, Loss, Draw)
@@ -49,17 +49,39 @@ public sealed class GameResult(dynamic leagueGameResult)
   public string Result => Unbind(this).GameResult.ToString();
 
   /// <summary>
-  /// The last time the game result was modified.
+  /// Whether MTGO reports a win for this match.
+  /// </summary>
+  public bool IsWin => @base.MatchResultIsWin;
+
+  /// <summary>
+  /// The player's match-clock usage, in minutes, when this game ended.
+  /// </summary>
+  /// <remarks>
+  /// Includes time used in earlier games of the match.
+  /// </remarks>
+  public int MinutesPlayed => @base.MinutesPlayed;
+
+  /// <summary>
+  /// The match number in the player's league entry, starting at one.
+  /// </summary>
+  /// <remarks>
+  /// Numbering continues across stages.
+  /// </remarks>
+  public int MatchNumber =>
+    League.GetMatchNumber(
+      Bind<ILeague>(@base.League),
+      Bind<ILeagueStage>(@base.StageMatch.Parent),
+      @base.StageMatch.Index
+    );
+
+  /// <summary>
+  /// The time of the last recorded match result override.
   /// </summary>
   public DateTime MatchModificationTime => @base.MatchModificationTime;
 
   /// <summary>
-  /// The number of minutes played in the game.
+  /// The change applied to this match's recorded result.
   /// </summary>
-  public int MinutesPlayed => @base.MinutesPlayed;
-
-  /// <summary>
-  /// Whether the game result is a win for the current user.
-  /// </summary>
-  public bool IsWin => @base.MatchResultIsWin;
+  public MatchResultOverride ResultOverride =>
+    Cast<MatchResultOverride>(Unbind(this).MatchModificationState);
 }

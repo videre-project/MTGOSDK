@@ -6,6 +6,7 @@
 using System.Collections;
 
 using MTGOSDK.API.Collection;
+using MTGOSDK.Core.Remoting.Hooking;
 
 using WotC.MtGO.Client.Model.Play;
 
@@ -31,6 +32,15 @@ public sealed class League(dynamic league) : Event
   /// </summary>
   private ILeagueLocalParticipant LeagueUser =>
     field ??= @base.LocalUserInLeague;
+
+  internal static int GetMatchNumber(ILeague league, ILeagueStage? currentStage, int matchNumber) =>
+    currentStage == null
+      ? 0
+      : league.Steps
+          .SelectMany(step => step.Stages)
+          .TakeWhile(stage => stage.Id != currentStage.Id)
+          .Sum(stage => stage.StageMatches.Count())
+            + matchNumber;
 
   //
   // ILeague wrapper properties
@@ -114,9 +124,18 @@ public sealed class League(dynamic league) : Event
     Map<IList, GameResult>(LeagueUser.GameHistory);
 
   /// <summary>
-  /// The current match number within the current league.
+  /// The current match number in the player's league entry, starting at one.
   /// </summary>
-  public int MatchNumber => LeagueUser.CurrentMatchNumberWithinStage;
+  /// <remarks>
+  /// Numbering continues across stages. Returns zero if no stage is assigned.
+  /// </remarks>
+  public int MatchNumber =>
+    GetMatchNumber(@base, LeagueUser.CurrentStage, StageMatchNumber);
+
+  /// <summary>
+  /// The current match number within the stage, starting at one.
+  /// </summary>
+  public int StageMatchNumber => LeagueUser.CurrentMatchNumberWithinStage;
 
   /// <summary>
   /// The number of matches remaining in the current league.
@@ -187,4 +206,14 @@ public sealed class League(dynamic league) : Event
 
   public EventProxy<LeagueStateEventArgs> StateChanged =
     new(/* ILeague */ league, nameof(StateChanged));
+
+  /// <summary>
+  /// The player's league history has finished updating.
+  /// </summary>
+  public static EventHookProxy<League> GameHistoryChanged = new(
+    new TypeProxy<WotC.MtGO.Client.Model.Play.LeagueLocalParticipant>(),
+    "UpdateMatchHistory",
+    new((instance, args) => new League(instance.League)),
+    HarmonyPatchPosition.Postfix
+  );
 }
