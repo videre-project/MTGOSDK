@@ -20,7 +20,7 @@
     <ILRepackOutput>$(SolutionDir)dist/$(Configuration)/$(RuntimeIdentifier)/$(ILRepackTarget).dll</ILRepackOutput>
     <UnmergedArtifactOutput>$(SolutionDir)dist/$(Configuration)/unmerged/$(AssemblyName).dll</UnmergedArtifactOutput>
     <SystemValueTuplePayloadVersion>4.5.0</SystemValueTuplePayloadVersion>
-    <SystemValueTuplePayloadDll>$(NuGetPackageRoot)system.valuetuple\$(SystemValueTuplePayloadVersion)\lib\net461\System.ValueTuple.dll</SystemValueTuplePayloadDll>
+    <SystemValueTuplePayloadDll>$(NuGetPackageRoot)/system.valuetuple\$(SystemValueTuplePayloadVersion)\lib\net461\System.ValueTuple.dll</SystemValueTuplePayloadDll>
   </PropertyGroup>
 
   <!-- Ensure Harmony is internalized into the single ClrMD injection payload. -->
