@@ -59,9 +59,9 @@ This project consists of three main components:
 
 ## How the SDK Works
 
-MTGOSDK connects to the running MTGO process and inspects its memory to access internal objects. Rather than modifying or patching the client code, the SDK uses Microsoft's ClrMD (Common Language Runtime Debugging) library to read .NET objects directly from the managed heap.
+MTGOSDK loads ScubaDiver into the running MTGO process. Ordinary object access uses managed reflection and per-client object tokens held by Diver. Optional heap discovery and diagnostics use Microsoft's ClrMD to inspect live process memory.
 
-The connection works through a component called ScubaDiver, which is injected into the MTGO process. ScubaDiver runs as a TCP server inside MTGO, responding to requests from the SDK to locate objects, read properties, and invoke methods. Communication uses MessagePack for efficient binary serialization between the SDK and ScubaDiver. ScubaDiver itself performs minimal reflection by design; the SDK handles most reflection work locally using type metadata fetched from the process.
+The connection works through a component called ScubaDiver, which is injected into the MTGO process. ScubaDiver runs as a TCP server inside MTGO, responding to requests from the SDK to locate objects, read properties, and invoke methods. Communication uses MessagePack for efficient binary serialization between the SDK and ScubaDiver. ScubaDiver performs reflection inside MTGO; the SDK builds local proxies from the returned type metadata.
 
 ```mermaid
 flowchart LR
@@ -79,7 +79,8 @@ flowchart LR
 
     Client --> RemoteClient
     RemoteClient -->|MessagePack/TCP| ScubaDiver
-    ScubaDiver --> ClrMD
+    ScubaDiver -->|Reflection and pinned objects| Heap
+    ScubaDiver -->|Optional heap inspection| ClrMD
     ClrMD --> Heap
     ScubaDiver -->|Object Data| RemoteClient
     RemoteClient --> DLRWrapper
@@ -87,8 +88,8 @@ flowchart LR
 
 When you access an MTGO object through the API (like `CollectionManager.Decks`), the SDK:
 
-1. Sends a request to ScubaDiver to find the object in MTGO's heap
-2. ScubaDiver uses ClrMD to locate and serialize the object's data
+1. Sends a request to ScubaDiver to resolve an object, normally through MTGO's service locator
+2. ScubaDiver holds a managed reference and returns an object token and metadata
 3. The SDK wraps the response in a `DynamicRemoteObject` for property access
 4. The `DLRWrapper` class binds an interface to provide compile-time type safety
 
@@ -195,7 +196,7 @@ When MTGO updates, you can regenerate these reference assemblies to pick up any 
 
 The main library exposes high-level abstractions over MTGO's internal services. Rather than dealing directly with memory inspection, you work with classes like `Client`, `CollectionManager`, and `EventManager` that provide clean APIs for common tasks.
 
-The library injects ScubaDiver into the MTGO process using ClrMD, then communicates over TCP using MessagePack serialization. All remote objects are wrapped in `DynamicRemoteObject` instances and optionally bound to interfaces through `DLRWrapper<T>`.
+The library bootstraps ScubaDiver through the CLR hosting API, then communicates over TCP using MessagePack serialization. All remote objects are wrapped in `DynamicRemoteObject` instances and optionally bound to interfaces through `DLRWrapper<T>`.
 
 Performance is a priority. The SDK caches object references, batches property fetches where possible, and avoids blocking MTGO's UI thread by executing calls on it's own background thread. Long-running or UI-dependent operations use async patterns to prevent any potential degradation of the player experience wherever possible.
 
@@ -213,6 +214,16 @@ These tasks are wired up automatically when you reference the MTGOSDK package. T
 Low-level Windows API definitions used by the SDK. This includes functions for process enumeration, window management, memory operations, and COM interop.
 
 The library provides C# wrappers around Win32 functions that aren't exposed by the .NET BCL, ensuring consistent behavior across Windows versions. It's not intended for direct use by SDK consumers.
+
+### CLR injection and heap inspection
+
+The injector selects an instruction encoder using PE headers from `mscoree.dll` in the target process. An AnyCPU executable's PE header does not identify CLR architecture. Iced encodes x86/x64 instructions, and AsmArm64 encodes Windows ARM64 instructions. Argument staging and process operations are shared.
+
+The ARM64 bootstrap preserves FP/LR and stack alignment, leaves x18 untouched, and registers packed unwind information through `RtlAddFunctionTable` before entering the CLR. Code is written to RW memory, changed to RX, and synchronized with `FlushInstructionCache`. Failed setup releases staged allocations. After thread creation, code and function tables remain allocated for the target process lifetime. `InjectorBase.Inject` returns at thread creation; callers must verify that Diver is responding.
+
+Heap inspection initializes ClrMD on demand through `CurrentProcessDataReader.AttachToCurrentProcess`. The reader implements ClrMD's public `IDataReader` contract and uses Windows memory APIs on native Windows and Wine. Direct attachment avoids Windows PSS APIs, preserving Wine compatibility introduced in [PR #38](https://github.com/videre-project/MTGOSDK/pull/38).
+
+The reader does not freeze the process; heap operations retain existing runtime locking and GC coordination. Reflection and pinned-object calls do not initialize ClrMD.
 
 ---
 
