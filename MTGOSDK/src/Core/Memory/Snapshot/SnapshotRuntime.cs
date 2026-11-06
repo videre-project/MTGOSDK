@@ -7,7 +7,6 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -19,14 +18,12 @@ using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting.Interop;
 using MTGOSDK.Core.Remoting.Interop.Interactions.Dumps;
-using MTGOSDK.Win32.API;
 
 
 namespace MTGOSDK.Core.Memory.Snapshot;
 
 /// <summary>
-/// The snapshot runtime used to interact with the ClrMD runtime and snapshot
-/// to perform runtime analysis and exploration on objects in heap memory.
+/// Coordinates live CLR inspection and managed object tracking in this process.
 /// </summary>
 public class SnapshotRuntime : IDisposable
 {
@@ -34,9 +31,9 @@ public class SnapshotRuntime : IDisposable
     new(LockRecursionPolicy.SupportsRecursion);
   public virtual object clrLock => _lock;
 
-  // Internal ClrMD runtime and data target objects to manage the snapshot.
+  // ClrMD state for live heap inspection.
   private DataTarget _dt;
-  private ClrRuntime _runtime;
+  private Lazy<ClrRuntime> _runtime;
 
   /// <summary>
   /// The unified application domain object used to resolve type reflection.
@@ -97,7 +94,8 @@ public class SnapshotRuntime : IDisposable
 
   public SnapshotRuntime(bool useDomainSearch = false)
   {
-    this.CreateRuntime();
+    // Defer ClrMD initialization until heap or CLR domain inspection needs it.
+    _runtime = new Lazy<ClrRuntime>(CreateClrRuntime);
     _unifiedAppDomain = new UnifiedAppDomain(useDomainSearch ? this : null);
   }
 
@@ -411,23 +409,38 @@ public class SnapshotRuntime : IDisposable
   //
 
   /// <summary>
-  /// Creates the ClrMD runtime and data target (snapshot process).
+  /// Creates ClrMD state for live inspection of this process.
+  /// </summary>
+  /// <remarks>Called under the runtime lock during lazy initialization.</remarks>
+  private ClrRuntime CreateClrRuntime()
+  {
+    var target = CurrentProcessDataReader.AttachToCurrentProcess();
+    try
+    {
+      var runtime = target.ClrVersions.Single().CreateRuntime();
+      _dt = target;
+      return runtime;
+    }
+    catch
+    {
+      target.Dispose();
+      throw;
+    }
+  }
+
+  /// <summary>
+  /// Initializes ClrMD for live inspection.
   /// </summary>
   /// <remarks>
-  /// This works like 'fork()': it creates a secondary snapshot process which is
-  /// a copy of the current one, but without any running threads. Then our
-  /// process attaches to the snapshot process and reads its memory.
-  /// <para>
-  /// This method is thread-safe and should be called before any runtime access.
-  /// </para>
+  /// Heap operations also initialize it on demand. Reads live process memory
+  /// on native Windows and Wine without creating a process snapshot.
   /// </remarks>
   public void CreateRuntime()
   {
     _lock.EnterWriteLock();
     try
     {
-      _dt = DataTarget.AttachToProcess(Process.GetCurrentProcess().Id, suspend: false);
-      _runtime = _dt.ClrVersions.Single().CreateRuntime();
+      _ = _runtime.Value;
     }
     finally
     {
@@ -436,7 +449,7 @@ public class SnapshotRuntime : IDisposable
   }
 
   /// <summary>
-  /// Disposes the ClrMD runtime and data target (snapshot process).
+  /// Disposes ClrMD state used for live inspection.
   /// </summary>
   /// <remarks>
   /// This method is thread-safe and can be called even if no runtime exists.
@@ -446,11 +459,17 @@ public class SnapshotRuntime : IDisposable
     _lock.EnterWriteLock();
     try
     {
-      _runtime?.Dispose();
-      _runtime = null;
-
-      _dt?.Dispose();
-      _dt = null;
+      try
+      {
+        if (_runtime.IsValueCreated) _runtime.Value.Dispose();
+      }
+      finally
+      {
+        _runtime = new Lazy<ClrRuntime>(CreateClrRuntime);
+        var target = _dt;
+        _dt = null;
+        target?.Dispose();
+      }
     }
     finally
     {
@@ -459,11 +478,11 @@ public class SnapshotRuntime : IDisposable
   }
 
   /// <summary>
-  /// Refreshes the ClrMD runtime and data target (snapshot process).
+  /// Refreshes ClrMD state used for live inspection.
   /// </summary>
   /// <remarks>
   /// Refer to the <see cref="CreateRuntime"/> and <see cref="DisposeRuntime"/>
-  /// methods for more information on the snapshot process lifecycle.
+  /// methods for more information on the data target lifecycle.
   /// <para>
   /// This method is thread-safe and should be called to refresh the runtime
   /// after any changes to the target process or runtime state.
@@ -520,7 +539,7 @@ public class SnapshotRuntime : IDisposable
     _lock.EnterReadLock();
     try
     {
-      return _runtime.Heap.GetObject(objAddr);
+      return _runtime.Value.Heap.GetObject(objAddr);
     }
     finally
     {
@@ -533,7 +552,7 @@ public class SnapshotRuntime : IDisposable
     _lock.EnterReadLock();
     try
     {
-      return _runtime.AppDomains;
+      return _runtime.Value.AppDomains;
     }
     finally
     {
@@ -551,14 +570,11 @@ public class SnapshotRuntime : IDisposable
   /// <returns>The object instance and pinned address.</returns>
   /// <exception cref="Exception">Thrown when the object is not found.</exception>
   /// <remarks>
-  /// This method is used to retrieve an object from the heap based on its
-  /// location in the ClrMD snapshot. It will attempt to resolve the object by
-  /// its type name and hash code, and will fallback to searching by using the
-  /// last known object type if the object has moved.
+  /// Resolves heap objects by address and type, with an optional hash-code lookup
+  /// if the object has moved.
   /// <para>
-  /// Any objects that have been pinned will be returned directly from the
-  /// frozen objects collection. Otherwise, the object will be resolved from the
-  /// snapshot and converted to an object instance.
+  /// Retained objects are returned from the pinned-object pool. Other addresses
+  /// are read through ClrMD and converted to managed object references.
   /// </para>
   /// </remarks>
   public (object instance, ulong pinnedAddress) GetHeapObject(
@@ -653,7 +669,7 @@ public class SnapshotRuntime : IDisposable
       _lock.EnterReadLock(); // Need read lock for heap enumeration
       try
       {
-        foreach (ClrObject currentObj in _runtime.Heap.EnumerateObjects())
+        foreach (ClrObject currentObj in _runtime.Value.Heap.EnumerateObjects())
         {
           if (currentObj.IsFree || currentObj.Type == null ||
               !currentObj.Type.Name.Contains(expectedTypeName))
@@ -740,7 +756,7 @@ public class SnapshotRuntime : IDisposable
         _lock.ExitWriteLock();
         _lock.EnterReadLock();
 
-        foreach (ClrObject clrObj in _runtime.Heap.EnumerateObjects())
+        foreach (ClrObject clrObj in _runtime.Value.Heap.EnumerateObjects())
         {
           if (clrObj.IsFree || clrObj.Type == null)
             continue;
@@ -873,7 +889,7 @@ public class SnapshotRuntime : IDisposable
         _lock.ExitWriteLock();
         _lock.EnterReadLock();
 
-        var heap = _runtime.Heap;
+        var heap = _runtime.Value.Heap;
 
         foreach (ClrObject obj in heap.EnumerateObjects())
         {
@@ -1034,7 +1050,7 @@ public class SnapshotRuntime : IDisposable
         _lock.ExitWriteLock();
         _lock.EnterReadLock();
 
-        var heap = _runtime.Heap;
+        var heap = _runtime.Value.Heap;
 
         for (int depth = 0; depth < maxDepth && currentTargets.Count > 0; depth++)
         {
@@ -1175,7 +1191,7 @@ public class SnapshotRuntime : IDisposable
         _lock.ExitWriteLock();
         _lock.EnterReadLock();
 
-        var heap = _runtime.Heap;
+        var heap = _runtime.Value.Heap;
 
         const long MaxSingleObjectBytes = 2L * 1024 * 1024 * 1024;
 
@@ -1201,7 +1217,7 @@ public class SnapshotRuntime : IDisposable
           new List<(string HolderType, string FieldName, ClrObject Target)>();
         var seenMethodTables = new HashSet<ulong>();
 
-        foreach (var module in _runtime.EnumerateModules())
+        foreach (var module in _runtime.Value.EnumerateModules())
         {
           IEnumerable<(ulong MethodTable, int Token)> typeDefs;
           try { typeDefs = module.EnumerateTypeDefToMethodTableMap(); }
@@ -1212,7 +1228,7 @@ public class SnapshotRuntime : IDisposable
             if (mt == 0 || !seenMethodTables.Add(mt)) continue;
 
             ClrType type;
-            try { type = _runtime.GetTypeByMethodTable(mt); }
+            try { type = _runtime.Value.GetTypeByMethodTable(mt); }
             catch { continue; }
             if (type?.Name == null) continue;
 
@@ -1224,7 +1240,7 @@ public class SnapshotRuntime : IDisposable
             foreach (var field in statics)
             {
               if (field == null || !field.IsObjectReference) continue;
-              foreach (var domain in _runtime.AppDomains)
+              foreach (var domain in _runtime.Value.AppDomains)
               {
                 try
                 {

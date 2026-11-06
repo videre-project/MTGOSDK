@@ -24,15 +24,15 @@
   <ItemGroup Label="PackageVersions">
     <!-- MTGOSDK -->
     <PackageVersion Include="System.Diagnostics.DiagnosticSource"
-                    Version="10.0.1" />
+                    Version="10.0.9" />
     <PackageVersion Include="System.Threading.Channels"
                     Version="10.0.1" />
     <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces"
-                    Version="10.0.1" />
+                    Version="10.0.9" />
 		<PackageVersion Include="Microsoft.CSharp"
                     Version="4.7.0" />
     <PackageVersion Include="Microsoft.Diagnostics.Runtime"
-                    Version="4.0.0-beta.24360.3" />
+                    Version="4.2.751201" />
     <PackageVersion Include="Microsoft.Extensions.Logging"
                     Version="$(DotNetSdkVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console"
@@ -57,9 +57,9 @@
                     Version="4.0.30319" />
     <!-- MTGOSDK/lib/ScubaDiver -->
     <PackageVersion Include="System.IO.Pipelines"
-                    Version="10.0.1" />
+                    Version="10.0.9" />
     <PackageVersion Include="System.ValueTuple"
-            Version="4.6.1" />
+                    Version="4.6.2" />
     <PackageVersion Include="Lib.Harmony"
                     Version="2.4.1" />
     <!-- MTGOSDK.MSBuild -->
