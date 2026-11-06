@@ -202,8 +202,15 @@
       "mtgosdk.win32": {
         "type": "Project",
         "dependencies": {
+          "AsmArm64": "[2.4.0, )",
           "Iced": "[1.21.0, )"
         }
+      },
+      "AsmArm64": {
+        "type": "CentralTransitive",
+        "requested": "[2.4.0, )",
+        "resolved": "2.4.0",
+        "contentHash": "XXGeH59SItp+QQ8K4mqPI001FdNhODjI7zPWulsY4DOp/DlroYfp+G+tB1jyLkmvTNsH935YJGn23K5yZp6yeQ=="
       },
       "Iced": {
         "type": "CentralTransitive",
