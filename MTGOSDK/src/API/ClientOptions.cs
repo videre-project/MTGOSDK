@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using MTGOSDK.Core.Remoting;
+
 
 namespace MTGOSDK.API;
 
@@ -18,6 +20,11 @@ public struct ClientOptions()
   /// This will also kill any existing MTGO process when starting a new one.
   /// </remarks>
   public bool CreateProcess { get; init; } = false;
+
+  /// <summary>
+  /// Receives update and startup progress when creating an MTGO process.
+  /// </summary>
+  public IProgress<LaunchProgress>? LaunchProgress { get; init; }
 
   /// <summary>
   /// Whether to start the MTGO process minimized.

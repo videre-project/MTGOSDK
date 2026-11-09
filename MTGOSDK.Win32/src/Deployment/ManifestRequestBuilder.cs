@@ -11,8 +11,7 @@ using System.Net;
 namespace MTGOSDK.Win32.Deployment;
 
 /// <summary>
-/// Bypasses cached deployment manifests for a registered URL in the current
-/// application domain.
+/// Requests fresh deployment manifests without changing their registered URLs.
 /// </summary>
 internal sealed class ManifestRequestBuilder(string manifestUrl) : IWebRequestCreate
 {
@@ -47,15 +46,11 @@ internal sealed class ManifestRequestBuilder(string manifestUrl) : IWebRequestCr
     if (uri.GetLeftPart(UriPartial.Path) != manifestUrl)
       return WebRequest.CreateDefault(uri);
 
-    string nonce = $"mtgosdkNonce={Guid.NewGuid():N}";
-    var requestUri = new UriBuilder(uri)
-    {
-      Query = uri.Query.Length > 1
-        ? $"{uri.Query.Substring(1)}&{nonce}"
-        : nonce
-    };
-
-    // Use the scheme's factory rather than invoking this URL's factory again.
-    return WebRequest.CreateDefault(requestUri.Uri);
+    // Revalidate without changing the URI. A cache-busting query makes ClickOnce
+    // follow the canonical deployment provider and download the manifest again.
+    var request = WebRequest.CreateDefault(uri);
+    request.Headers[HttpRequestHeader.CacheControl] = "no-cache";
+    request.Headers[HttpRequestHeader.Pragma] = "no-cache";
+    return request;
   }
 }

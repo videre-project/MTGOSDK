@@ -1,6 +1,6 @@
 # MTGOSDK.Core.Remoting.RemoteClient
 
-The [`RemoteClient`](/MTGOSDK/src/Core/Remoting/RemoteClient.cs) class is a static class that manages the connection to the MTGO client, providing a way to access remote objects in client memory. This class is used to bootstrap a connection to the MTGO client and create DynamicRemoteObject instances that can be used to proxy interactions with remote objects.
+[`RemoteClient`](/MTGOSDK/src/Core/Remoting/RemoteClient.cs) provides static entry points for starting MTGO and accessing a shared connection to the client. Remote objects are exposed through `DynamicRemoteObject` proxies, which forward reflection and method calls to the Diver running in MTGO.
 
 Below is a UML diagram of the RemoteClient class, which contains methods for creating, retrieving, and invoking remote objects. For now, we'll focus only on a subset of APIs for fetching and creating remote objects.
 
@@ -52,6 +52,48 @@ direction LR
 ```
 
 Here we use the RemoteClient to inject ClrMD into the MTGO process, allowing us to start the Snapshot Runtime to locate and interact with remote objects using reflection. The corresponding DynamicRemoteObject class is used to proxy interactions with remote objects, providing a way to interact with objects between processes.
+
+## Starting MTGO
+
+`RemoteClient.StartProcess` checks MTGO's deployment manifest before activating an installed ClickOnce deployment. An up-to-date deployment proceeds to startup without installation. If an update fails, startup can fall back to the installed deployment without another provider request.
+
+Pass an `IProgress<LaunchProgress>` to display installation and startup progress:
+
+```C#
+using MTGOSDK.Core.Remoting;
+
+var progress = new Progress<LaunchProgress>(update =>
+{
+  if (update.Stage == LaunchStage.Downloading && update.Percentage is int percentage)
+    Console.WriteLine($"Downloading MTGO: {percentage}%");
+  else
+    Console.WriteLine(update.Stage);
+});
+
+await RemoteClient.StartProcess(progress);
+```
+
+Progress reports include a deployment version, download percentage and byte counts when available. An installation or update reports `UpdateCompleted` before `Started`; an up-to-date deployment proceeds to startup without that installation stage. Await `StartProcess` to handle failures that prevent MTGO from starting.
+
+To receive progress while creating a `Client`, set `ClientOptions.LaunchProgress` and enable `CreateProcess`. For installation without starting MTGO, call `InstallOrUpdate(progress)`.
+
+Construct `Progress<LaunchProgress>` on the UI thread when callbacks need to update controls there. Handle exceptions inside asynchronous callbacks, since they do not propagate through the startup task. Exceptions thrown directly by a custom `IProgress<LaunchProgress>.Report` implementation are logged without interrupting startup.
+
+### Standalone Launcher
+
+MTGOSDK includes a .NET Framework launcher that native hosts can run as a separate process:
+
+```text
+Launcher.exe --progress-json --start-and-wait
+```
+
+With `--progress-json`, stdout contains UTF-8 diagnostic lines and newline-delimited JSON progress records. Parse records by their numeric `stage` and allow optional fields to be absent; retain other lines as diagnostic output.
+
+With `--start-and-wait`, the launcher reports `Started` after finding MTGO's application window and remains running until MTGO exits. A host can therefore track MTGO's lifetime by waiting for the launcher process. If startup fails, the process reports `Failed`, writes exception details to stderr and returns a nonzero exit code.
+
+Hosts that already know the current MTGO version can pass `--expected-version <version>` after `--start-and-wait`. When the installed subscription is at that version or newer, activation uses the current ClickOnce bind without a provider request; otherwise startup follows the normal update path.
+
+A deployment-manifest URI and an `.appref-ms` path may follow those options to override MTGO's defaults.
 
 ## Fetching Remote Objects
 

@@ -240,7 +240,7 @@ public sealed class Client : DLRWrapper<ISession>, IDisposable
           throw new SetupFailureException("Unable to close existing MTGO processes.");
 
         // Start a new MTGO process.
-        await RemoteClient.StartProcess();
+        await RemoteClient.StartProcess(options.LaunchProgress);
       }
       else if (process != null)
       {
