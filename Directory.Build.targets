@@ -195,12 +195,10 @@
       <PrereleaseSpecifier>*-preview.*</PrereleaseSpecifier>
     </PropertyGroup>
     <ItemGroup>
-      <PackageReference Update="MTGOSDK"
-                        VersionOverride="$(PrereleaseSpecifier)" />
-      <PackageReference Update="MTGOSDK.MSBuild"
-                        VersionOverride="$(PrereleaseSpecifier)" />
-      <PackageReference Update="MTGOSDK.Win32"
-                        VersionOverride="$(PrereleaseSpecifier)" />
+      <PackageReference VersionOverride="$(PrereleaseSpecifier)"
+                        Condition="'%(PackageReference.Identity)' == 'MTGOSDK' Or
+                                   '%(PackageReference.Identity)' == 'MTGOSDK.MSBuild' Or
+                                   '%(PackageReference.Identity)' == 'MTGOSDK.Win32'" />
     </ItemGroup>
   </Target>
 

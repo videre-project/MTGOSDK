@@ -142,7 +142,15 @@ jobs:
           } else {
             "{0:F2}s" -f $duration
           }
-          $runPassed = $testRun.result -eq 'Passed'
+          $fixtureFailure = $results.SelectSingleNode("//test-suite[@result='Failed' and (@site='SetUp' or @site='TearDown')]")
+          # NUnit can report Skipped when a run contains passing and ignored tests.
+          $runPassed = (
+            $testRun.result -in @('Passed', 'Skipped') -and
+            $successCount -gt 0 -and
+            [int]$testRun.failed -eq 0 -and
+            [int]$testRun.inconclusive -eq 0 -and
+            $null -eq $fixtureFailure
+          )
           $label = if (-not $runPassed) {
             "Failing after $formattedDuration"
           } elseif ($env:TEST_RESULT -eq 'success') {
@@ -152,7 +160,6 @@ jobs:
           }
 
           $description = "$successCount/$testCount tests passed"
-          $fixtureFailure = $results.SelectSingleNode("//test-suite[@result='Failed' and (@site='SetUp' or @site='TearDown')]")
           if ($fixtureFailure) {
             $phase = if ($fixtureFailure.site -eq 'SetUp') { 'setup' } else { 'teardown' }
             Write-Output "::error title=Test $phase failed::See the NUnit $phase exception in the test output and test-results artifact."
