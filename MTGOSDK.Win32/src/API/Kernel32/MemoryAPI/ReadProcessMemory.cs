@@ -46,4 +46,51 @@ public static partial class Kernel32
     /// </summary>
     out nuint lpNumberOfBytesRead
   );
+
+  /// <summary>
+  /// Reads process memory into an unmanaged buffer.
+  /// </summary>
+  /// <returns>
+  /// If the function succeeds, the return value is nonzero.
+  /// If the function fails, the return value is zero. To get extended error
+  /// information, call <see cref="GetLastError"/>.
+  /// </returns>
+  /// <remarks>
+  /// A failed read may still transfer some bytes. Check lpNumberOfBytesRead
+  /// before discarding a partial result.
+  /// <para>
+  /// Refer to https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory
+  /// for more information.
+  /// </para>
+  /// </remarks>
+  [DllImport("kernel32", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  public static extern bool ReadProcessMemory(
+    /// <summary>
+    /// A handle to the process with memory that is being read.
+    /// </summary>
+    /// <remarks>
+    /// The handle must have PROCESS_VM_READ access to the process.
+    /// </remarks>
+    [In] IntPtr hProcess,
+    /// <summary>
+    /// A pointer to the base address in the specified process from which to read.
+    /// </summary>
+    [In] IntPtr lpBaseAddress,
+    /// <summary>
+    /// A pointer to a buffer that receives data read from the process.
+    /// </summary>
+    /// <remarks>
+    /// The buffer must have room for nSize bytes.
+    /// </remarks>
+    [Out] IntPtr lpBuffer,
+    /// <summary>
+    /// The number of bytes to read.
+    /// </summary>
+    [In] nuint nSize,
+    /// <summary>
+    /// The number of bytes read from the process, including partial reads.
+    /// </summary>
+    [Out] out nuint lpNumberOfBytesRead
+  );
 }

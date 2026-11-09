@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Win32.Registry" />
     <PackageReference Include="Iced" />
+    <PackageReference Include="AsmArm64" />
   </ItemGroup>
 
   <!-- Import MTGOSDK.Win32 package properties -->

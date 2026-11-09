@@ -5,6 +5,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
 
 
 namespace MTGOSDK.Win32.Utilities;
@@ -33,6 +35,36 @@ public static class PEReader
     public uint AddressOfNames;
     public uint AddressOfNameOrdinals;
 #pragma warning restore CS0649
+  }
+
+  /// <summary>
+  /// Reads a PE header to identify native module architecture.
+  /// </summary>
+  /// <exception cref="InvalidDataException">The DOS or PE header is incomplete or invalid.</exception>
+  /// <exception cref="PlatformNotSupportedException">The machine type is unsupported.</exception>
+  internal static Architecture GetArchitecture(IntPtr hProc, IntPtr hMod)
+  {
+    var reader = new CReader(hProc, hMod);
+    byte[] dos = reader.ReadBytes(0, 0x40);
+    if (dos.Length != 0x40 || BitConverter.ToUInt16(dos, 0) != 0x5A4D)
+      throw new InvalidDataException("The target module has an incomplete or invalid DOS header.");
+
+    int offset = BitConverter.ToInt32(dos, 0x3C);
+    if (offset < 0x40 || offset > int.MaxValue - 6)
+      throw new InvalidDataException("The target module has an invalid PE header offset.");
+
+    byte[] header = reader.ReadBytes(offset, 6);
+    if (header.Length != 6 || BitConverter.ToUInt32(header, 0) != 0x00004550)
+      throw new InvalidDataException("The target module has an incomplete or invalid PE header.");
+
+    ushort machine = BitConverter.ToUInt16(header, 4);
+    return machine switch
+    {
+      0x014C => Architecture.X86,
+      0x8664 => Architecture.X64,
+      0xAA64 => Architecture.Arm64,
+      _ => throw new PlatformNotSupportedException($"Unsupported target PE machine: 0x{machine:X4}.")
+    };
   }
 
   /// <summary>
