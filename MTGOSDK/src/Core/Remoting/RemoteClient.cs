@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text;
 
 using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
@@ -106,9 +107,6 @@ public sealed class RemoteClient : DLRWrapper
   /// <summary>
   /// The port to manage the connection to the MTGO client process.
   /// </summary>
-  /// <summary>
-  /// The port to manage the connection to the MTGO client process.
-  /// </summary>
   public static ushort? Port = null;
 
 #if MTGOSDK_TRACING
@@ -176,7 +174,7 @@ public sealed class RemoteClient : DLRWrapper
     // terminated abruptly.
     //
     // MTGOAppDirectory will always point to the most recent launch directory,
-    // as it sorts all ClickOnce application directories by their creation time.
+    // as it sorts ClickOnce directories containing MTGO.exe by modification time.
     //
     // Note: MTGOAppDirectory returns null if MTGO has never been installed.
     //
@@ -279,86 +277,89 @@ public sealed class RemoteClient : DLRWrapper
   public static bool HasStarted => MTGOProcess() is not null;
 
   /// <summary>
-  /// Starts a shell process and logs the output.
+  /// Runs the ClickOnce launcher and forwards output and progress reports.
   /// </summary>
-  /// <param name="path">The path to the executable.</param>
-  /// <param name="args">The arguments to pass to the executable.</param>
+  /// <param name="args">The arguments passed to the ClickOnce launcher.</param>
   /// <param name="timeout">The timeout to wait for the process to exit.</param>
-  /// <param name="captureOutput">Whether to capture and consume standard output.</param>
-  private static async Task StartShellProcess(
-    string path,
-    string args = "",
-    TimeSpan? timeout = null,
-    bool captureOutput = false)
+  /// <param name="progress">Receives structured launcher progress.</param>
+  private static async Task RunLauncher(
+    string args,
+    TimeSpan timeout,
+    IProgress<LaunchProgress>? progress = null)
   {
+    string path = GetLauncherPath();
     var startInfo = new ProcessStartInfo()
     {
       FileName = path,
       Arguments = args,
-      UseShellExecute = !captureOutput,
+      UseShellExecute = false,
       CreateNoWindow = false,
       WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty,
+      RedirectStandardOutput = true,
+      RedirectStandardError = true,
+      // --progress-json writes UTF-8 independently of the console code page.
+      StandardOutputEncoding = Encoding.UTF8,
     };
-
-    if (captureOutput)
-    {
-      startInfo.RedirectStandardOutput = true;
-      startInfo.RedirectStandardError = true;
-    }
 
     using var process = new Process()
     {
       StartInfo = startInfo,
+      EnableRaisingEvents = true,
     };
 
+    var exited = new TaskCompletionSource<bool>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
     var outputCompleted = new TaskCompletionSource<bool>(
         TaskCreationOptions.RunContinuationsAsynchronously);
     var errorCompleted = new TaskCompletionSource<bool>(
         TaskCreationOptions.RunContinuationsAsynchronously);
 
-    if (captureOutput)
+    process.Exited += (_, _) => exited.TrySetResult(true);
+    process.OutputDataReceived += (_, e) =>
     {
-      process.OutputDataReceived += (_, e) =>
-      {
-        if (e.Data is null)
-          outputCompleted.TrySetResult(true);
-      };
+      if (e.Data is null)
+        outputCompleted.TrySetResult(true);
+      else if (LaunchProgressProtocol.TryRead(e.Data, out var update))
+        ReportLaunchProgress(progress, update!);
+      else if (!string.IsNullOrWhiteSpace(e.Data))
+        Log.Debug("{Line}", e.Data);
+    };
 
-      process.ErrorDataReceived += (_, e) =>
-      {
-        if (e.Data is null)
-          errorCompleted.TrySetResult(true);
-        else
-          HandleLauncherError(e.Data);
-      };
-    }
+    process.ErrorDataReceived += (_, e) =>
+    {
+      if (e.Data is null)
+        errorCompleted.TrySetResult(true);
+      else if (!string.IsNullOrWhiteSpace(e.Data))
+        Log.Error("{Line}", e.Data);
+    };
 
     if (!process.Start())
       throw new ExternalErrorException($"The process '{path}' could not be started.");
 
-    if (captureOutput)
-    {
-      process.BeginOutputReadLine();
-      process.BeginErrorReadLine();
-    }
+    process.BeginOutputReadLine();
+    process.BeginErrorReadLine();
 
-    // Return early when the caller explicitly does not want to wait.
-    if (timeout == TimeSpan.Zero) return;
-
-    // Wait for the process to exit or timeout
-    using var cts = new CancellationTokenSource(
-        timeout ?? TimeSpan.FromSeconds(10));
+    // Process exit and final output share one timeout on both Framework and modern .NET.
+    using var cts = new CancellationTokenSource(timeout);
     try
     {
-      await process.WaitForExitAsync(cts.Token);
+      await Task.WhenAll(exited.Task, outputCompleted.Task, errorCompleted.Task)
+        .WaitAsync(cts.Token);
     }
-    catch (OperationCanceledException)
+    catch (OperationCanceledException) when (cts.IsCancellationRequested)
     {
-      throw new ExternalErrorException($"The process '{path}' timed out after {cts.Token} seconds.");
-    }
+      // Finish this operation before a caller retries cached activation.
+      if (!process.HasExited)
+      {
+        try { process.Kill(); }
+        catch (InvalidOperationException) when (process.HasExited) { }
 
-    if (captureOutput)
-      await Task.WhenAll(outputCompleted.Task, errorCompleted.Task);
+        await exited.Task;
+      }
+
+      throw new ExternalErrorException(
+        $"The process '{path}' timed out after {timeout.TotalSeconds:0} seconds.");
+    }
 
     if (process.ExitCode != 0)
     {
@@ -367,10 +368,16 @@ public sealed class RemoteClient : DLRWrapper
     }
   }
 
-  private static void HandleLauncherError(string line)
+  private static void ReportLaunchProgress(
+    IProgress<LaunchProgress>? progress,
+    LaunchProgress update)
   {
-    if (!string.IsNullOrWhiteSpace(line))
-      Log.Error("{Line}", line);
+    try { progress?.Report(update); }
+    catch (Exception exception)
+    {
+      // A synchronous progress receiver must not interrupt installation or startup.
+      Log.Warning("Could not report launcher progress: {Error}", exception.Message);
+    }
   }
 
   private static string GetLauncherPath()
@@ -384,51 +391,51 @@ public sealed class RemoteClient : DLRWrapper
   /// <summary>
   /// Installs or updates the MTGO client.
   /// </summary>
-  public static async Task InstallOrUpdate()
-  {
-    string launcherPath = GetLauncherPath();
+  public static Task InstallOrUpdate() => InstallOrUpdate(progress: null);
 
-    // Check if there are any updates first before starting MTGO.
-    // This will also create a new MTGO installation if one does not exist.
+  /// <summary>
+  /// Installs or updates MTGO and reports deployment progress.
+  /// </summary>
+  /// <param name="progress">Receives update progress from ClickOnce.</param>
+  public static async Task InstallOrUpdate(IProgress<LaunchProgress>? progress)
+  {
+    // ClickOnce also creates an installation when no deployment is present.
     Log.Debug("Checking for MTGO updates from {ApplicationUri}.", ApplicationUri);
-    await StartShellProcess(launcherPath, ApplicationUri,
-                            timeout: TimeSpan.FromMinutes(5),
-                            captureOutput: true);
+    await RunLauncher($"--progress-json \"{ApplicationUri}\"",
+                      timeout: TimeSpan.FromMinutes(5), progress: progress);
     Log.Debug("MTGO update check completed.");
 
-    await EnsureClickOnceService();
+    EnsureClickOnceService();
   }
 
-  private static async Task EnsureClickOnceService()
+  private static void EnsureClickOnceService()
   {
-    //
-    // Its possible for the ClickOnce service to not be running after a new
-    // installation of MTGO (usually on Windows Server i.e. Datacenter builds).
-    //
-    // This is a workaround to ensure that the ClickOnce service is running
-    // before trying to start the MTGO process (which will fail if not running).
-    //
-    if (Process.GetProcessesByName("dfsvc").Length == 0)
+    // Windows Server can finish installation without starting the ClickOnce service.
+    Process[] services = Process.GetProcessesByName("dfsvc");
+    foreach (Process service in services) service.Dispose();
+    if (services.Length != 0) return;
+
+    Log.Debug("The ClickOnce service is not running. Starting it now.");
+    using var started = Process.Start(new ProcessStartInfo()
     {
-      Log.Debug("The ClickOnce service is not running. Starting it now.");
-      await StartShellProcess(ClickOncePaths.ClickOnceServiceExecutable,
-                              // Do not wait for the service to exit.
-                              timeout: TimeSpan.Zero);
-    }
+      FileName = ClickOncePaths.ClickOnceServiceExecutable,
+      UseShellExecute = true,
+      WorkingDirectory = Path.GetDirectoryName(ClickOncePaths.ClickOnceServiceExecutable) ?? string.Empty,
+    });
+    if (started is null)
+      throw new ExternalErrorException("The ClickOnce service could not be started.");
   }
 
   /// <summary>
   /// Starts the MTGO client process.
   /// </summary>
   /// <remarks>
-  /// Note: This method will close any existing MTGO processes when called.
-  /// <para/>
   /// If no MTGO installation exists or is out of date, this method will
   /// attempt to install or update the client before activating its installed
   /// ClickOnce deployment. If the update fails, an existing deployment can
   /// still be activated without another provider request.
   /// </remarks>
-  /// <returns>True if the MTGO client process was started.</returns>
+  /// <returns>A task that completes after MTGO opens its application window.</returns>
   /// <exception cref="SetupFailureException">
   /// Thrown when the MTGO installation has failed.
   /// </exception>
@@ -436,7 +443,14 @@ public sealed class RemoteClient : DLRWrapper
   /// Thrown when the MTGO process failed to start.
   /// </exception>
   public static Task StartProcess() =>
-    StartProcess(checkForUpdates: true);
+    StartProcess(checkForUpdates: true, progress: null);
+
+  /// <summary>
+  /// Starts MTGO and reports update and startup progress.
+  /// </summary>
+  /// <param name="progress">Receives update and startup progress.</param>
+  public static Task StartProcess(IProgress<LaunchProgress>? progress) =>
+    StartProcess(checkForUpdates: true, progress: progress);
 
   /// <summary>
   /// Restarts MTGO using the deployment installed by the preceding
@@ -444,24 +458,22 @@ public sealed class RemoteClient : DLRWrapper
   /// manifest again.
   /// </summary>
   internal static Task StartInstalledProcess() =>
-    StartProcess(checkForUpdates: false);
+    StartProcess(checkForUpdates: false, progress: null);
 
-  private static async Task ActivateCachedDeployment()
+  private static async Task ActivateCachedDeployment(IProgress<LaunchProgress>? progress)
   {
     if (!File.Exists(AppRefPath))
       throw new SetupFailureException(
         "Cannot activate MTGO without an existing ClickOnce deployment.");
 
-    string launcherPath = GetLauncherPath();
-    string launcherArguments = $"--activate-cached \"{AppRefPath}\"";
+    EnsureClickOnceService();
+    ReportLaunchProgress(progress, new LaunchProgress(LaunchStage.Starting));
+    string launcherArguments = $"--progress-json --activate-cached \"{AppRefPath}\"";
     Log.Debug("Activating the installed MTGO deployment from {AppRefPath}.", AppRefPath);
 
-    await EnsureClickOnceService();
-    await StartShellProcess(
-      launcherPath,
+    await RunLauncher(
       launcherArguments,
-      timeout: TimeSpan.FromSeconds(30),
-      captureOutput: true);
+      timeout: TimeSpan.FromSeconds(30));
 
     if (!await WaitUntil(() => HasStarted, delay: 500, retries: 20)) // 10s
       throw new ExternalErrorException(
@@ -470,7 +482,7 @@ public sealed class RemoteClient : DLRWrapper
     Log.Debug("Installed MTGO deployment activated.");
   }
 
-  private static async Task StartProcess(bool checkForUpdates)
+  private static async Task StartProcess(bool checkForUpdates, IProgress<LaunchProgress>? progress)
   {
     using var activity = s_activitySource.StartActivity("RemoteClient.StartProcess");
     activity?.SetTag("thread.id", Thread.CurrentThread.ManagedThreadId.ToString());
@@ -480,8 +492,8 @@ public sealed class RemoteClient : DLRWrapper
       try
       {
         // Update the ClickOnce deployment before activating its installed bind.
-        await InstallOrUpdate();
-        await ActivateCachedDeployment();
+        await InstallOrUpdate(progress);
+        await ActivateCachedDeployment(progress);
       }
       //
       // If an update or activation fails after a deployment is present, retry
@@ -497,7 +509,7 @@ public sealed class RemoteClient : DLRWrapper
           exception.Message);
         try
         {
-          await ActivateCachedDeployment();
+          await ActivateCachedDeployment(progress);
         }
         catch (Exception fallbackException)
         {
@@ -512,13 +524,32 @@ public sealed class RemoteClient : DLRWrapper
     {
       // Use the ClickOnce store's current bind to preserve the activation
       // context without asking the deployment provider for an update.
-      await ActivateCachedDeployment();
+      await ActivateCachedDeployment(progress);
     }
 
-    // Wait for the MTGO process UI to start and open kicker window.
-    Process process = MTGOProcess()!;
+    // Keep the caller's UI responsive while MTGO initializes its message loop.
+    Process process = MTGOProcess(throwOnFailure: true)!;
+    await Task.Run(() => process.WaitForInputIdle());
+
+    bool windowReady = await WaitUntil(() =>
+      MTGOProcess() is Process candidate &&
+      candidate.MainWindowHandle != IntPtr.Zero &&
+      !string.IsNullOrEmpty(candidate.MainWindowTitle), retries: 40);
+    if (!windowReady)
+    {
+      if (!Environment.UserInteractive)
+        throw new ExternalErrorException(
+          "Could not launch MTGO in user interactive mode.");
+
+      // Preserve the title-only fallback when handle detection fails, but never
+      // publish Started for a process whose window has not initialized.
+      if (string.IsNullOrEmpty(Try(() => MTGOProcess()?.MainWindowTitle)))
+        throw new SetupFailureException("The MTGO process failed to initialize.");
+    }
+
+    // Invalid-activation windows can appear after the process is first detected.
     if (string.Equals(
-          process.MainWindowTitle,
+          Try(() => MTGOProcess()?.MainWindowTitle),
           InvalidProgramLaunchTitle,
           StringComparison.OrdinalIgnoreCase))
     {
@@ -526,26 +557,7 @@ public sealed class RemoteClient : DLRWrapper
         "MTGO was found, but its ClickOnce activation context was invalid.");
     }
 
-    process.WaitForInputIdle();
-    await WaitUntil(() => !string.IsNullOrEmpty(MTGOProcess().MainWindowTitle));
-    if (!await WaitUntil(() => MTGOProcess().MainWindowHandle != IntPtr.Zero))
-    {
-      // Check to see if the MTGO process has any windows associated with it.
-      if (!Environment.UserInteractive)
-        throw new ExternalErrorException(
-          "Could not launch MTGO in user interactive mode.");
-
-      //
-      // Otherwise, we'll assume that MTGO was launched using native Win32 APIs
-      // which may not be reflected in the HWND returned from COM APIs. This is
-      // after 10 seconds of waiting for the process's HWND to be refreshed.
-      //
-      // The best we can do in this case is simply check if the window title is
-      // unset to indicate that the application entrypoint has not finished.
-      //
-      if (!string.IsNullOrEmpty(Try(() => MTGOProcess().MainWindowTitle)))
-        throw new SetupFailureException("The MTGO process failed to initialize.");
-    }
+    ReportLaunchProgress(progress, new LaunchProgress(LaunchStage.Started));
   }
 
   /// <summary>
