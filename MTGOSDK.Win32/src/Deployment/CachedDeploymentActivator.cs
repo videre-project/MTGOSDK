@@ -35,19 +35,77 @@ internal static class CachedDeploymentActivator
   /// <param name="appRefPath">The path to the MTGO appref-ms file.</param>
   public static void Activate(string appRefPath)
   {
-    string subscriptionId = ReadSubscriptionId(appRefPath);
-    Assembly deploymentAssembly = LoadDeploymentAssembly();
+    object currentBind = GetCurrentBind(ReadSubscriptionId(appRefPath))
+      ?? throw new InvalidOperationException(
+          "The ClickOnce subscription has no current application bind.");
+    Type managerType = GetRequiredType(
+        currentBind.GetType().Assembly,
+        "System.Deployment.Application.DeploymentManager");
 
+    object manager = InvokeConstructor(
+        GetRequiredConstructor(managerType, typeof(string)),
+        new object[] { currentBind.ToString()! });
+
+    using ((IDisposable)manager)
+    {
+      Invoke(
+          GetRequiredMethod(managerType, "Bind", InstanceFlags),
+          manager,
+          null);
+      Invoke(
+          GetRequiredMethod(managerType, "ExecuteNewProcess", InstanceFlags),
+          manager,
+          null);
+    }
+  }
+
+  /// <summary>
+  /// Checks whether an application identity matches the current subscription bind.
+  /// </summary>
+  /// <param name="subscriptionId">The ClickOnce subscription identity.</param>
+  /// <param name="applicationIdentity">The application identity from the deployment manifest.</param>
+  public static bool IsCurrent(string subscriptionId, string applicationIdentity)
+  {
+    object? currentBind = GetCurrentBind(subscriptionId);
+    if (currentBind is null)
+      return false;
+
+    object identity = InvokeConstructor(
+        GetRequiredConstructor(currentBind.GetType(), typeof(string)),
+        new object[] { applicationIdentity });
+    return currentBind.Equals(identity);
+  }
+
+  /// <summary>
+  /// Gets the deployment version bound in the current ClickOnce subscription.
+  /// </summary>
+  /// <param name="appRefPath">The path to the MTGO appref-ms file.</param>
+  /// <returns>The installed version, or null when no deployment is bound.</returns>
+  public static Version? GetCurrentVersion(string appRefPath)
+  {
+    if (!File.Exists(appRefPath))
+      return null;
+
+    object? currentBind = GetCurrentBind(ReadSubscriptionId(appRefPath));
+    if (currentBind is null)
+      return null;
+
+    object deployment = GetRequiredProperty(currentBind.GetType(), "DeploymentIdentity", InstanceFlags)
+      .GetValue(currentBind)
+      ?? throw new InvalidOperationException("The current deployment identity is unavailable.");
+    return (Version?)GetRequiredProperty(deployment.GetType(), "Version", InstanceFlags)
+      .GetValue(deployment);
+  }
+
+  private static object? GetCurrentBind(string subscriptionId)
+  {
+    Assembly deploymentAssembly = LoadDeploymentAssembly();
     Type storeType = GetRequiredType(
         deploymentAssembly,
         "System.Deployment.Application.SubscriptionStore");
     Type identityType = GetRequiredType(
         deploymentAssembly,
         "System.Deployment.Application.DefinitionIdentity");
-    Type managerType = GetRequiredType(
-        deploymentAssembly,
-        "System.Deployment.Application.DeploymentManager");
-
     object store = GetRequiredProperty(storeType, "CurrentUser", StaticFlags)
       .GetValue(null)
       ?? throw new InvalidOperationException(
@@ -66,29 +124,8 @@ internal static class CachedDeploymentActivator
         new object[] { identity })
       ?? throw new InvalidOperationException(
           "The ClickOnce subscription state could not be read.");
-    object currentBind = GetRequiredProperty(
-            state.GetType(),
-            "CurrentBind",
-            InstanceFlags)
-        .GetValue(state)
-        ?? throw new InvalidOperationException(
-            "The ClickOnce subscription has no current application bind.");
-
-    object manager = InvokeConstructor(
-        GetRequiredConstructor(managerType, typeof(string)),
-        new object[] { currentBind.ToString()! });
-
-    using ((IDisposable)manager)
-    {
-      Invoke(
-          GetRequiredMethod(managerType, "Bind", InstanceFlags),
-          manager,
-          null);
-      Invoke(
-          GetRequiredMethod(managerType, "ExecuteNewProcess", InstanceFlags),
-          manager,
-          null);
-    }
+    return GetRequiredProperty(state.GetType(), "CurrentBind", InstanceFlags)
+      .GetValue(state);
   }
 
   private static Assembly LoadDeploymentAssembly()

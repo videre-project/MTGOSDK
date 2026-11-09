@@ -3,8 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
 using System.IO;
+using System.Linq;
 
 using MTGOSDK.Win32.Deployment;
 using MTGOSDK.Win32.FileSystem;
@@ -20,18 +20,12 @@ public static class Constants
   /// <summary>
   /// The Start Menu shortcut path for MTGO.
   /// </summary>
-  public static string AppRefPath =
-    Path.Combine(
-      Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-      "Daybreak Game Company LLC",
-      "Magic The Gathering Online .appref-ms"
-    );
+  public static string AppRefPath = DeploymentDefaults.AppRefPath;
 
   /// <summary>
   /// The MTGO application manifest uri for ClickOnce deployment.
   /// </summary>
-  public static string ApplicationUri =
-    "http://mtgo.patch.daybreakgames.com/patch/mtg/live/client/MTGO.application";
+  public static string ApplicationUri = DeploymentDefaults.ApplicationUri;
 
   /// <summary>
   /// The current application directory for MTGO.
@@ -41,7 +35,10 @@ public static class Constants
   /// </remarks>
   public static string? MTGOAppDirectory =>
     ClickOncePaths.ApplicationDirectory is string appDir
-        ? new Glob(@$"{appDir}\mtgo..tion_*")
+        ? new Glob(@$"{appDir}\mtgo..tion_*").Matches
+            .Where(path => File.Exists(Path.Combine(path, "MTGO.exe")))
+            .OrderByDescending(Directory.GetLastWriteTimeUtc)
+            .FirstOrDefault()
         : null;
 
   /// <summary>
